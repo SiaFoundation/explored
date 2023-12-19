@@ -11,6 +11,7 @@ type Explorer struct {
 	s Store
 }
 
+// NewExplorer returns a Sia explorer.
 func NewExplorer(s Store) *Explorer {
 	return &Explorer{s}
 }

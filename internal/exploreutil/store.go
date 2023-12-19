@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"strings"
 
+	// sqlite driver for database/sql
 	_ "github.com/mattn/go-sqlite3"
 )
 
