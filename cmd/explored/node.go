@@ -15,9 +15,10 @@ import (
 	"go.sia.tech/core/gateway"
 	"go.sia.tech/core/types"
 	"go.sia.tech/explored/explorer"
-	"go.sia.tech/explored/internal/exploreutil"
 	"go.sia.tech/explored/internal/syncerutil"
+	"go.sia.tech/explored/persist/sqlite"
 	"go.sia.tech/explored/syncer"
+	"go.uber.org/zap"
 	"lukechampine.com/upnp"
 )
 
@@ -129,7 +130,7 @@ type node struct {
 	Start func() (stop func())
 }
 
-func newNode(addr, dir string, chainNetwork string, useUPNP bool) (*node, error) {
+func newNode(addr, dir string, chainNetwork string, useUPNP bool, logger *zap.Logger) (*node, error) {
 	var network *consensus.Network
 	var genesisBlock types.Block
 	var bootstrapPeers []string
@@ -146,7 +147,7 @@ func newNode(addr, dir string, chainNetwork string, useUPNP bool) (*node, error)
 
 	bdb, err := bolt.Open(filepath.Join(dir, "consensus.db"), 0600, nil)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	db := &boltDB{db: bdb}
 	dbstore, tipState, err := chain.NewDBStore(db, network, genesisBlock)
@@ -155,7 +156,7 @@ func newNode(addr, dir string, chainNetwork string, useUPNP bool) (*node, error)
 	}
 	cm := chain.NewManager(dbstore, tipState)
 
-	store, err := exploreutil.NewStore("./explore.db")
+	store, err := sqlite.OpenDatabase("./explore.db", logger)
 	if err != nil {
 		panic(err)
 	}
@@ -170,21 +171,21 @@ func newNode(addr, dir string, chainNetwork string, useUPNP bool) (*node, error)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if d, err := upnp.Discover(ctx); err != nil {
-			log.Println("WARN: couldn't discover UPnP device:", err)
+			logger.Warn("WARN: couldn't discover UPnP device:", zap.Error(err))
 		} else {
 			_, portStr, _ := net.SplitHostPort(addr)
 			port, _ := strconv.Atoi(portStr)
 			if !d.IsForwarded(uint16(port), "TCP") {
 				if err := d.Forward(uint16(port), "TCP", "explored"); err != nil {
-					log.Println("WARN: couldn't forward port:", err)
+					logger.Warn("WARN: couldn't forward port:", zap.Error(err))
 				} else {
-					log.Println("p2p: Forwarded port", port)
+					logger.Info("p2p: Forwarded port", zap.Int("port", port))
 				}
 			}
 			if ip, err := d.ExternalIP(); err != nil {
-				log.Println("WARN: couldn't determine external IP:", err)
+				logger.Warn("WARN: couldn't determine external IP:", zap.Error(err))
 			} else {
-				log.Println("p2p: External IP is", ip)
+				logger.Info("p2p: External IP is", zap.String("ip", ip))
 				syncerAddr = net.JoinHostPort(ip, portStr)
 			}
 		}
@@ -197,7 +198,7 @@ func newNode(addr, dir string, chainNetwork string, useUPNP bool) (*node, error)
 
 	ps, err := syncerutil.NewJSONPeerStore(filepath.Join(dir, "peers.json"))
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	for _, peer := range bootstrapPeers {
 		ps.AddPeer(peer)
