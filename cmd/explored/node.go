@@ -161,6 +161,7 @@ func newNode(addr, dir string, chainNetwork string, useUPNP bool, logger *zap.Lo
 		panic(err)
 	}
 	e := explorer.NewExplorer(store)
+	cm.AddSubscriber(e, cm.Tip())
 
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
