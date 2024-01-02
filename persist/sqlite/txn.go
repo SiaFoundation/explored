@@ -26,9 +26,17 @@ func encode(obj types.EncoderTo) []byte {
 	return buf.Bytes()
 }
 
+func encodeUint64(x uint64) []byte {
+	var buf bytes.Buffer
+	e := types.NewEncoder(&buf)
+	e.WriteUint64(x)
+	e.Flush()
+	return buf.Bytes()
+}
+
 // AddBlock implements explorer.Transaction.
 func (tx *explorerTxn) AddBlock(b types.Block, height uint64) error {
-	_, err := tx.tx.Exec("INSERT INTO Blocks(id, height, parent_id, nonce, timestamp) VALUES (?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), b.Nonce, b.Timestamp.Unix())
+	_, err := tx.tx.Exec("INSERT INTO Blocks(id, height, parent_id, nonce, timestamp) VALUES (?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encodeUint64(b.Nonce), b.Timestamp.Unix())
 	return err
 }
 
@@ -40,4 +48,10 @@ func (tx *explorerTxn) AddMinerPayouts(bid types.BlockID, scos []types.SiacoinOu
 		}
 	}
 	return nil
+}
+
+// DeleteBlock implements explorer.Transaction.
+func (tx *explorerTxn) DeleteBlock(bid types.BlockID) error {
+	_, err := tx.tx.Exec("DELETE FROM Blocks WHERE id = ?", encode(bid))
+	return err
 }

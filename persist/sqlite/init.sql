@@ -7,12 +7,12 @@ CREATE TABLE Blocks (
         id BINARY(32) NOT NULL PRIMARY KEY,
         height INTEGER NOT NULL,
         parent_id BINARY(32) NOT NULL,
-        nonce INTEGER NOT NULL,
+        nonce BINARY(8) NOT NULL,
         timestamp INTEGER NOT NULL
 );
 
 CREATE TABLE MinerPayouts (
-        block_id REFERENCES Blocks(id),
+        block_id REFERENCES Blocks(id) ON DELETE CASCADE,
         block_order INTEGER NOT NULL,
         address BINARY(32) NOT NULL,
         value BINARY(16) NOT NULL
