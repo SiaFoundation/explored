@@ -158,11 +158,17 @@ func newNode(addr, dir string, chainNetwork string, useUPNP bool, logger *zap.Lo
 
 	store, err := sqlite.OpenDatabase("./explore.db", logger)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	e := explorer.NewExplorer(store)
-	// eventually make the tip equal the latest block in the DB
-	cm.AddSubscriber(store, cm.Tip())
+	tip, err := store.Tip()
+	if err != nil {
+		tip = types.ChainIndex{
+			ID:     genesisBlock.ID(),
+			Height: 0,
+		}
+	}
+	cm.AddSubscriber(store, tip)
 
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
