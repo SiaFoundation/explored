@@ -1,6 +1,8 @@
 package api
 
 import (
+	"fmt"
+
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 	"go.sia.tech/jape"
@@ -62,5 +64,11 @@ func (c *Client) SyncerBroadcastBlock(b types.Block) (err error) {
 // Tip returns the current tip of the explorer.
 func (c *Client) Tip() (resp types.ChainIndex, err error) {
 	err = c.c.GET("/explorer/tip", &resp)
+	return
+}
+
+// Block returns a block with the given block ID.
+func (c *Client) Block(id types.BlockID) (resp types.Block, err error) {
+	err = c.c.GET(fmt.Sprintf("/explorer/block/%s", id), &resp)
 	return
 }

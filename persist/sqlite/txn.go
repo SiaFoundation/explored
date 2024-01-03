@@ -24,6 +24,7 @@ func encodeUint64(x uint64) []byte {
 }
 
 func (s *Store) addBlock(b types.Block, height uint64) error {
+	// nonce is encoded because database/sql doesn't support uint64 with high bit set
 	_, err := s.exec("INSERT INTO Blocks(id, height, parent_id, nonce, timestamp) VALUES (?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encodeUint64(b.Nonce), b.Timestamp.Unix())
 	return err
 }

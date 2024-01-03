@@ -40,6 +40,7 @@ type (
 	// Explorer implements a Sia explorer.
 	Explorer interface {
 		Tip() (types.ChainIndex, error)
+		Block(id types.BlockID) (types.Block, error)
 	}
 )
 
@@ -132,8 +133,22 @@ func (s *server) txpoolBroadcastHandler(jc jape.Context) {
 
 func (s *server) explorerTipHandler(jc jape.Context) {
 	tip, err := s.e.Tip()
-	jc.Check("failed to get tip", err)
+	if jc.Check("failed to get tip", err) != nil {
+		return
+	}
 	jc.Encode(tip)
+}
+
+func (s *server) explorerBlockHandler(jc jape.Context) {
+	var id types.BlockID
+	if jc.DecodeParam("id", &id) != nil {
+		return
+	}
+	block, err := s.e.Block(id)
+	if jc.Check("failed to get block", err) != nil {
+		return
+	}
+	jc.Encode(block)
 }
 
 // NewServer returns an HTTP handler that serves the explored API.
@@ -152,6 +167,7 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET    /txpool/fee":          srv.txpoolFeeHandler,
 		"POST   /txpool/broadcast":    srv.txpoolBroadcastHandler,
 
-		"GET    /explorer/tip": srv.explorerTipHandler,
+		"GET    /explorer/tip":       srv.explorerTipHandler,
+		"GET    /explorer/block/:id": srv.explorerBlockHandler,
 	})
 }
