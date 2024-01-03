@@ -22,3 +22,7 @@ type Explorer struct {
 func NewExplorer(s Store) *Explorer {
 	return &Explorer{s: s}
 }
+
+func (e *Explorer) Tip() (types.ChainIndex, error) {
+	return e.s.Tip()
+}

@@ -36,10 +36,16 @@ type (
 		BroadcastV2TransactionSet(txns []types.V2Transaction)
 		BroadcastV2BlockOutline(bo gateway.V2BlockOutline)
 	}
+
+	// Explorer implements a Sia explorer.
+	Explorer interface {
+		Tip() (types.ChainIndex, error)
+	}
 )
 
 type server struct {
 	cm ChainManager
+	e  Explorer
 	s  Syncer
 
 	mu sync.Mutex
@@ -124,10 +130,17 @@ func (s *server) txpoolBroadcastHandler(jc jape.Context) {
 	}
 }
 
+func (s *server) explorerTipHandler(jc jape.Context) {
+	tip, err := s.e.Tip()
+	jc.Check("failed to get tip", err)
+	jc.Encode(tip)
+}
+
 // NewServer returns an HTTP handler that serves the explored API.
-func NewServer(cm ChainManager, s Syncer) http.Handler {
+func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 	srv := server{
 		cm: cm,
+		e:  e,
 		s:  s,
 	}
 	return jape.Mux(map[string]jape.Handler{
@@ -138,5 +151,7 @@ func NewServer(cm ChainManager, s Syncer) http.Handler {
 		"GET    /txpool/transactions": srv.txpoolTransactionsHandler,
 		"GET    /txpool/fee":          srv.txpoolFeeHandler,
 		"POST   /txpool/broadcast":    srv.txpoolBroadcastHandler,
+
+		"GET    /explorer/tip": srv.explorerTipHandler,
 	})
 }

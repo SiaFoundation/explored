@@ -58,3 +58,9 @@ func (c *Client) SyncerBroadcastBlock(b types.Block) (err error) {
 	err = c.c.POST("/syncer/broadcast/block", b, nil)
 	return
 }
+
+// Tip returns the current tip of the explorer.
+func (c *Client) Tip() (resp types.ChainIndex, err error) {
+	err = c.c.GET("/explorer/tip", &resp)
+	return
+}
