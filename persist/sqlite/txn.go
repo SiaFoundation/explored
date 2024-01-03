@@ -75,9 +75,5 @@ func (s *Store) ProcessChainRevertUpdate(cru *chain.RevertUpdate) error {
 	if err := s.applyUpdates(); err != nil {
 		return err
 	}
-	if err := s.deleteBlock(cru.Block.ID()); err != nil {
-		return err
-	}
-
-	return nil
+	return s.deleteBlock(cru.Block.ID())
 }

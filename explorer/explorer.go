@@ -24,10 +24,12 @@ func NewExplorer(s Store) *Explorer {
 	return &Explorer{s: s}
 }
 
+// Tip returns the tip of the best known valid chain.
 func (e *Explorer) Tip() (types.ChainIndex, error) {
 	return e.s.Tip()
 }
 
+// Block returns the block with the specified ID.
 func (e *Explorer) Block(id types.BlockID) (types.Block, error) {
 	return e.s.Block(id)
 }
