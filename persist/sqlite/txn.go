@@ -3,20 +3,9 @@ package sqlite
 import (
 	"bytes"
 
+	"go.sia.tech/core/chain"
 	"go.sia.tech/core/types"
-	"go.sia.tech/explored/explorer"
 )
-
-type explorerTxn struct {
-	tx txn
-}
-
-// Transaction implements explorer.Store.
-func (s *Store) Transaction(fn func(tx explorer.Transaction) error) error {
-	return s.transaction(func(tx txn) error {
-		return fn(&explorerTxn{tx: tx})
-	})
-}
 
 func encode(obj types.EncoderTo) []byte {
 	var buf bytes.Buffer
@@ -34,24 +23,60 @@ func encodeUint64(x uint64) []byte {
 	return buf.Bytes()
 }
 
-// AddBlock implements explorer.Transaction.
-func (tx *explorerTxn) AddBlock(b types.Block, height uint64) error {
-	_, err := tx.tx.Exec("INSERT INTO Blocks(id, height, parent_id, nonce, timestamp) VALUES (?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encodeUint64(b.Nonce), b.Timestamp.Unix())
+func (s *Store) addBlock(b types.Block, height uint64) error {
+	_, err := s.exec("INSERT INTO Blocks(id, height, parent_id, nonce, timestamp) VALUES (?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encodeUint64(b.Nonce), b.Timestamp.Unix())
 	return err
 }
 
-// AddMinerPayouts implements explorer.Transaction.
-func (tx *explorerTxn) AddMinerPayouts(bid types.BlockID, scos []types.SiacoinOutput) error {
+func (s *Store) addMinerPayouts(bid types.BlockID, scos []types.SiacoinOutput) error {
 	for i, sco := range scos {
-		if _, err := tx.tx.Exec("INSERT INTO MinerPayouts(block_id, block_order, address, value) VALUES (?, ?, ?, ?);", encode(bid), i, encode(sco.Address), encode(sco.Value)); err != nil {
+		if _, err := s.exec("INSERT INTO MinerPayouts(block_id, block_order, address, value) VALUES (?, ?, ?, ?);", encode(bid), i, encode(sco.Address), encode(sco.Value)); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// DeleteBlock implements explorer.Transaction.
-func (tx *explorerTxn) DeleteBlock(bid types.BlockID) error {
-	_, err := tx.tx.Exec("DELETE FROM Blocks WHERE id = ?", encode(bid))
+func (s *Store) deleteBlock(bid types.BlockID) error {
+	_, err := s.exec("DELETE FROM Blocks WHERE id = ?", encode(bid))
 	return err
+}
+
+func (s *Store) applyUpdates() error {
+	for _, update := range s.pendingUpdates {
+		if err := s.addBlock(update.Block, update.State.Index.Height); err != nil {
+			return err
+		} else if err := s.addMinerPayouts(update.Block.ID(), update.Block.MinerPayouts); err != nil {
+			return err
+		}
+	}
+	s.pendingUpdates = s.pendingUpdates[:0]
+	return nil
+}
+
+// ProcessChainApplyUpdate implements chain.Subscriber.
+func (s *Store) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.pendingUpdates = append(s.pendingUpdates, cau)
+	if mayCommit {
+		return s.applyUpdates()
+	}
+	return nil
+}
+
+// ProcessChainRevertUpdate implements chain.Subscriber.
+func (s *Store) ProcessChainRevertUpdate(cru *chain.RevertUpdate) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.applyUpdates(); err != nil {
+		return err
+	}
+	if err := s.deleteBlock(cru.Block.ID()); err != nil {
+		return err
+	}
+
+	return nil
 }

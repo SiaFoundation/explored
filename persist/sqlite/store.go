@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mattn/go-sqlite3"
+	"go.sia.tech/core/chain"
 	"go.uber.org/zap"
 	"lukechampine.com/frand"
 )
@@ -19,6 +21,9 @@ type (
 	Store struct {
 		db  *sql.DB
 		log *zap.Logger
+
+		mu             sync.Mutex
+		pendingUpdates []*chain.ApplyUpdate
 	}
 )
 

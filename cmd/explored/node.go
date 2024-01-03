@@ -162,7 +162,7 @@ func newNode(addr, dir string, chainNetwork string, useUPNP bool, logger *zap.Lo
 	}
 	e := explorer.NewExplorer(store)
 	// eventually make the tip equal the latest block in the DB
-	cm.AddSubscriber(e, cm.Tip())
+	cm.AddSubscriber(store, cm.Tip())
 
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
