@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - master
+env:
+  CGO_ENABLED: 1
 
 jobs:
   test:
@@ -25,4 +27,6 @@ jobs:
       - name: Test
         uses: ./.github/actions/test
       - name: Build
-        run: CGO_ENABLED=1 go install github.com/mattn/go-sqlite3 && go build -o bin/ ./cmd/explored
+        run: |
+          go install github.com/mattn/go-sqlite3
+          go build -o bin/ ./cmd/explored
