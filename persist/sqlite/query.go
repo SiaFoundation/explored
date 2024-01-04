@@ -73,3 +73,18 @@ func (s *Store) Block(id types.BlockID) (result types.Block, err error) {
 
 	return
 }
+
+// BlockHeight implements explorer.Store.
+func (s *Store) BlockHeight(height uint64) (result types.Block, err error) {
+	var data []byte
+	if err = s.queryRow("SELECT id FROM Blocks WHERE height = ?", height).Scan(&data); err != nil {
+		return
+	}
+
+	var bid types.BlockID
+	if err = decode(&bid, data); err != nil {
+		return
+	}
+	result, err = s.Block(bid)
+	return
+}

@@ -41,6 +41,7 @@ type (
 	Explorer interface {
 		Tip() (types.ChainIndex, error)
 		Block(id types.BlockID) (types.Block, error)
+		BlockHeight(height uint64) (types.Block, error)
 	}
 )
 
@@ -151,6 +152,18 @@ func (s *server) explorerBlockHandler(jc jape.Context) {
 	jc.Encode(block)
 }
 
+func (s *server) explorerBlockHeightHandler(jc jape.Context) {
+	var height uint64
+	if jc.DecodeParam("height", &height) != nil {
+		return
+	}
+	block, err := s.e.BlockHeight(height)
+	if jc.Check("failed to get block", err) != nil {
+		return
+	}
+	jc.Encode(block)
+}
+
 // NewServer returns an HTTP handler that serves the explored API.
 func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 	srv := server{
@@ -167,7 +180,8 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET    /txpool/fee":          srv.txpoolFeeHandler,
 		"POST   /txpool/broadcast":    srv.txpoolBroadcastHandler,
 
-		"GET    /explorer/tip":       srv.explorerTipHandler,
-		"GET    /explorer/block/:id": srv.explorerBlockHandler,
+		"GET    /explorer/tip":                  srv.explorerTipHandler,
+		"GET    /explorer/block/id/:id":         srv.explorerBlockHandler,
+		"GET    /explorer/block/height/:height": srv.explorerBlockHeightHandler,
 	})
 }

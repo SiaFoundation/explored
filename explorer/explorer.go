@@ -12,6 +12,7 @@ type Store interface {
 
 	Tip() (types.ChainIndex, error)
 	Block(id types.BlockID) (types.Block, error)
+	BlockHeight(height uint64) (types.Block, error)
 }
 
 // Explorer implements a Sia explorer.
@@ -32,4 +33,9 @@ func (e *Explorer) Tip() (types.ChainIndex, error) {
 // Block returns the block with the specified ID.
 func (e *Explorer) Block(id types.BlockID) (types.Block, error) {
 	return e.s.Block(id)
+}
+
+// BlockHeight returns the block with the specified height.
+func (e *Explorer) BlockHeight(height uint64) (types.Block, error) {
+	return e.s.BlockHeight(height)
 }

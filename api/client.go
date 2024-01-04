@@ -67,8 +67,14 @@ func (c *Client) Tip() (resp types.ChainIndex, err error) {
 	return
 }
 
-// Block returns a block with the given block ID.
+// Block returns the block with the specified ID.
 func (c *Client) Block(id types.BlockID) (resp types.Block, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/block/%s", id), &resp)
+	err = c.c.GET(fmt.Sprintf("/explorer/block/id/%s", id), &resp)
+	return
+}
+
+// BlockHeight returns the block with the specified height.
+func (c *Client) BlockHeight(height uint64) (resp types.Block, err error) {
+	err = c.c.GET(fmt.Sprintf("/explorer/block/height/%d", height), &resp)
 	return
 }
