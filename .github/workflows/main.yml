@@ -27,6 +27,4 @@ jobs:
       - name: Test
         uses: ./.github/actions/test
       - name: Build
-        run: |
-          go install github.com/mattn/go-sqlite3
-          go build -o bin/ ./cmd/explored
+        run: go build -o bin/ ./cmd/explored
