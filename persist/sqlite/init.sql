@@ -4,18 +4,19 @@ CREATE TABLE global_settings (
 );
 
 CREATE TABLE blocks (
-        id BINARY(32) NOT NULL PRIMARY KEY,
+        id BLOB NOT NULL PRIMARY KEY,
         height INTEGER NOT NULL,
-        parent_id BINARY(32) NOT NULL,
-        nonce BINARY(8) NOT NULL,
+        parent_id BLOB NOT NULL,
+        nonce BLOB NOT NULL,
         timestamp INTEGER NOT NULL
 );
 
 CREATE TABLE miner_payouts (
-        block_id REFERENCES blocks(id) ON DELETE CASCADE,
+        block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL PRIMARY KEY,
         block_order INTEGER NOT NULL,
-        address BINARY(32) NOT NULL,
-        value BINARY(16) NOT NULL
+        address BLOB NOT NULL,
+        value BLOB NOT NULL,
+        UNIQUE(block_id, block_order)
 );
 
 
