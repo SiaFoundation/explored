@@ -26,13 +26,13 @@ func encodeUint64(x uint64) []byte {
 
 func (s *Store) addBlock(tx txn, b types.Block, height uint64) error {
 	// nonce is encoded because database/sql doesn't support uint64 with high bit set
-	_, err := tx.Exec("INSERT INTO Blocks(id, height, parent_id, nonce, timestamp) VALUES (?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encodeUint64(b.Nonce), b.Timestamp.Unix())
+	_, err := tx.Exec("INSERT INTO blocks(id, height, parent_id, nonce, timestamp) VALUES (?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encodeUint64(b.Nonce), b.Timestamp.Unix())
 	return err
 }
 
 func (s *Store) addMinerPayouts(tx txn, bid types.BlockID, scos []types.SiacoinOutput) error {
 	for i, sco := range scos {
-		if _, err := tx.Exec("INSERT INTO MinerPayouts(block_id, block_order, address, value) VALUES (?, ?, ?, ?);", encode(bid), i, encode(sco.Address), encode(sco.Value)); err != nil {
+		if _, err := tx.Exec("INSERT INTO miner_payouts(block_id, block_order, address, value) VALUES (?, ?, ?, ?);", encode(bid), i, encode(sco.Address), encode(sco.Value)); err != nil {
 			return err
 		}
 	}
@@ -40,7 +40,7 @@ func (s *Store) addMinerPayouts(tx txn, bid types.BlockID, scos []types.SiacoinO
 }
 
 func (s *Store) deleteBlock(tx txn, bid types.BlockID) error {
-	_, err := tx.Exec("DELETE FROM Blocks WHERE id = ?", encode(bid))
+	_, err := tx.Exec("DELETE FROM blocks WHERE id = ?", encode(bid))
 	return err
 }
 

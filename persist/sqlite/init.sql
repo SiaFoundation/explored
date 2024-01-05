@@ -3,7 +3,7 @@ CREATE TABLE global_settings (
         db_version INTEGER NOT NULL -- used for migrations
 );
 
-CREATE TABLE Blocks (
+CREATE TABLE blocks (
         id BINARY(32) NOT NULL PRIMARY KEY,
         height INTEGER NOT NULL,
         parent_id BINARY(32) NOT NULL,
@@ -11,8 +11,8 @@ CREATE TABLE Blocks (
         timestamp INTEGER NOT NULL
 );
 
-CREATE TABLE MinerPayouts (
-        block_id REFERENCES Blocks(id) ON DELETE CASCADE,
+CREATE TABLE miner_payouts (
+        block_id REFERENCES blocks(id) ON DELETE CASCADE,
         block_order INTEGER NOT NULL,
         address BINARY(32) NOT NULL,
         value BINARY(16) NOT NULL

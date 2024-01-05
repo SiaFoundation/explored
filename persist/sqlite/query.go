@@ -1,9 +1,18 @@
 package sqlite
 
 import (
+	"database/sql"
+	"errors"
 	"time"
 
 	"go.sia.tech/core/types"
+)
+
+var (
+	// ErrNoTip is returned when Tip() is unable to find any blocks in the
+	// database and thus there is no tip. It does not mean there was an
+	// error in the underlying database.
+	ErrNoTip = errors.New("no tip found")
 )
 
 func decode(obj types.DecoderFrom, data []byte) error {
@@ -23,7 +32,11 @@ func decodeUint64(x *uint64, data []byte) error {
 // Tip implements explorer.Store.
 func (s *Store) Tip() (result types.ChainIndex, err error) {
 	var data []byte
-	if err = s.queryRow("SELECT id, height FROM Blocks WHERE height = (SELECT MAX(height) from Blocks)").Scan(&data, &result.Height); err != nil {
+	err = s.queryRow("SELECT id, height FROM blocks WHERE height = (SELECT MAX(height) from blocks)").Scan(&data, &result.Height)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = ErrNoTip
+		return
+	} else if err != nil {
 		return
 	}
 	if err = decode(&result.ID, data); err != nil {
@@ -32,12 +45,12 @@ func (s *Store) Tip() (result types.ChainIndex, err error) {
 	return
 }
 
-// Block implements explorer.Store.
-func (s *Store) Block(id types.BlockID) (result types.Block, err error) {
+// BlockByID implements explorer.Store.
+func (s *Store) BlockByID(id types.BlockID) (result types.Block, err error) {
 	{
 		var timestamp int64
 		var parentID, nonce []byte
-		if err = s.queryRow("SELECT parent_id, nonce, timestamp FROM Blocks WHERE id = ?", encode(id)).Scan(&parentID, &nonce, &timestamp); err != nil {
+		if err = s.queryRow("SELECT parent_id, nonce, timestamp FROM blocks WHERE id = ?", encode(id)).Scan(&parentID, &nonce, &timestamp); err != nil {
 			return
 		}
 		result.Timestamp = time.Unix(timestamp, 0).UTC()
@@ -51,7 +64,7 @@ func (s *Store) Block(id types.BlockID) (result types.Block, err error) {
 
 	{
 		var rows *loggedRows
-		if rows, err = s.query("SELECT address, value FROM MinerPayouts WHERE block_id = ? ORDER BY block_order", encode(id)); err != nil {
+		if rows, err = s.query("SELECT address, value FROM miner_payouts WHERE block_id = ? ORDER BY block_order", encode(id)); err != nil {
 			return
 		}
 		defer rows.Close()
@@ -75,10 +88,10 @@ func (s *Store) Block(id types.BlockID) (result types.Block, err error) {
 	return
 }
 
-// BlockHeight implements explorer.Store.
-func (s *Store) BlockHeight(height uint64) (result types.Block, err error) {
+// BlockByHeight implements explorer.Store.
+func (s *Store) BlockByHeight(height uint64) (result types.Block, err error) {
 	var data []byte
-	if err = s.queryRow("SELECT id FROM Blocks WHERE height = ?", height).Scan(&data); err != nil {
+	if err = s.queryRow("SELECT id FROM blocks WHERE height = ?", height).Scan(&data); err != nil {
 		return
 	}
 
@@ -86,6 +99,6 @@ func (s *Store) BlockHeight(height uint64) (result types.Block, err error) {
 	if err = decode(&bid, data); err != nil {
 		return
 	}
-	result, err = s.Block(bid)
+	result, err = s.BlockByID(bid)
 	return
 }

@@ -162,11 +162,13 @@ func newNode(addr, dir string, chainNetwork string, useUPNP bool, logger *zap.Lo
 	}
 	e := explorer.NewExplorer(store)
 	tip, err := store.Tip()
-	if err != nil {
+	if errors.Is(err, sqlite.ErrNoTip) {
 		tip = types.ChainIndex{
 			ID:     genesisBlock.ID(),
 			Height: 0,
 		}
+	} else if err != nil {
+		return nil, err
 	}
 	cm.AddSubscriber(store, tip)
 

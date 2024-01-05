@@ -40,8 +40,8 @@ type (
 	// Explorer implements a Sia explorer.
 	Explorer interface {
 		Tip() (types.ChainIndex, error)
-		Block(id types.BlockID) (types.Block, error)
-		BlockHeight(height uint64) (types.Block, error)
+		BlockByID(id types.BlockID) (types.Block, error)
+		BlockByHeight(height uint64) (types.Block, error)
 	}
 )
 
@@ -145,7 +145,7 @@ func (s *server) explorerBlockHandler(jc jape.Context) {
 	if jc.DecodeParam("id", &id) != nil {
 		return
 	}
-	block, err := s.e.Block(id)
+	block, err := s.e.BlockByID(id)
 	if jc.Check("failed to get block", err) != nil {
 		return
 	}
@@ -157,7 +157,7 @@ func (s *server) explorerBlockHeightHandler(jc jape.Context) {
 	if jc.DecodeParam("height", &height) != nil {
 		return
 	}
-	block, err := s.e.BlockHeight(height)
+	block, err := s.e.BlockByHeight(height)
 	if jc.Check("failed to get block", err) != nil {
 		return
 	}
