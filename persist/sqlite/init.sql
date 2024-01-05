@@ -12,13 +12,14 @@ CREATE TABLE blocks (
 );
 
 CREATE TABLE miner_payouts (
-        block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL PRIMARY KEY,
+        block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
         block_order INTEGER NOT NULL,
         address BLOB NOT NULL,
         value BLOB NOT NULL,
         UNIQUE(block_id, block_order)
 );
 
+CREATE INDEX miner_payouts_index ON miner_payouts(block_id);
 
 -- initialize the global settings table
 INSERT INTO global_settings (id, db_version) VALUES (0, 0); -- should not be changed
