@@ -54,6 +54,7 @@ func (s *Store) Block(id types.BlockID) (result types.Block, err error) {
 		if rows, err = s.query("SELECT address, value FROM MinerPayouts WHERE block_id = ? ORDER BY block_order", encode(id)); err != nil {
 			return
 		}
+		defer rows.Close()
 
 		var address, value []byte
 		for rows.Next() {
