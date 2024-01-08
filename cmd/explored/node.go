@@ -156,7 +156,7 @@ func newNode(addr, dir string, chainNetwork string, useUPNP bool, logger *zap.Lo
 	}
 	cm := chain.NewManager(dbstore, tipState)
 
-	store, err := sqlite.OpenDatabase("./explore.db", logger)
+	store, err := sqlite.OpenDatabase(filepath.Join(dir, "./explore.db"), logger)
 	if err != nil {
 		return nil, err
 	}
