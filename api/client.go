@@ -1,6 +1,8 @@
 package api
 
 import (
+	"fmt"
+
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 	"go.sia.tech/jape"
@@ -56,5 +58,23 @@ func (c *Client) SyncerConnect(addr string) (err error) {
 // SyncerBroadcastBlock broadcasts a block to all peers.
 func (c *Client) SyncerBroadcastBlock(b types.Block) (err error) {
 	err = c.c.POST("/syncer/broadcast/block", b, nil)
+	return
+}
+
+// Tip returns the current tip of the explorer.
+func (c *Client) Tip() (resp types.ChainIndex, err error) {
+	err = c.c.GET("/explorer/tip", &resp)
+	return
+}
+
+// Block returns the block with the specified ID.
+func (c *Client) Block(id types.BlockID) (resp types.Block, err error) {
+	err = c.c.GET(fmt.Sprintf("/explorer/block/id/%s", id), &resp)
+	return
+}
+
+// BlockHeight returns the block with the specified height.
+func (c *Client) BlockHeight(height uint64) (resp types.Block, err error) {
+	err = c.c.GET(fmt.Sprintf("/explorer/block/height/%d", height), &resp)
 	return
 }

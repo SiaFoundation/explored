@@ -36,10 +36,18 @@ type (
 		BroadcastV2TransactionSet(txns []types.V2Transaction)
 		BroadcastV2BlockOutline(bo gateway.V2BlockOutline)
 	}
+
+	// Explorer implements a Sia explorer.
+	Explorer interface {
+		Tip() (types.ChainIndex, error)
+		BlockByID(id types.BlockID) (types.Block, error)
+		BlockByHeight(height uint64) (types.Block, error)
+	}
 )
 
 type server struct {
 	cm ChainManager
+	e  Explorer
 	s  Syncer
 
 	mu sync.Mutex
@@ -124,10 +132,43 @@ func (s *server) txpoolBroadcastHandler(jc jape.Context) {
 	}
 }
 
+func (s *server) explorerTipHandler(jc jape.Context) {
+	tip, err := s.e.Tip()
+	if jc.Check("failed to get tip", err) != nil {
+		return
+	}
+	jc.Encode(tip)
+}
+
+func (s *server) explorerBlockHandler(jc jape.Context) {
+	var id types.BlockID
+	if jc.DecodeParam("id", &id) != nil {
+		return
+	}
+	block, err := s.e.BlockByID(id)
+	if jc.Check("failed to get block", err) != nil {
+		return
+	}
+	jc.Encode(block)
+}
+
+func (s *server) explorerBlockHeightHandler(jc jape.Context) {
+	var height uint64
+	if jc.DecodeParam("height", &height) != nil {
+		return
+	}
+	block, err := s.e.BlockByHeight(height)
+	if jc.Check("failed to get block", err) != nil {
+		return
+	}
+	jc.Encode(block)
+}
+
 // NewServer returns an HTTP handler that serves the explored API.
-func NewServer(cm ChainManager, s Syncer) http.Handler {
+func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 	srv := server{
 		cm: cm,
+		e:  e,
 		s:  s,
 	}
 	return jape.Mux(map[string]jape.Handler{
@@ -138,5 +179,9 @@ func NewServer(cm ChainManager, s Syncer) http.Handler {
 		"GET    /txpool/transactions": srv.txpoolTransactionsHandler,
 		"GET    /txpool/fee":          srv.txpoolFeeHandler,
 		"POST   /txpool/broadcast":    srv.txpoolBroadcastHandler,
+
+		"GET    /explorer/tip":                  srv.explorerTipHandler,
+		"GET    /explorer/block/id/:id":         srv.explorerBlockHandler,
+		"GET    /explorer/block/height/:height": srv.explorerBlockHeightHandler,
 	})
 }

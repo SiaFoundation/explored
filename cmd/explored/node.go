@@ -156,11 +156,21 @@ func newNode(addr, dir string, chainNetwork string, useUPNP bool, logger *zap.Lo
 	}
 	cm := chain.NewManager(dbstore, tipState)
 
-	store, err := sqlite.OpenDatabase("./explore.db", logger)
+	store, err := sqlite.OpenDatabase(filepath.Join(dir, "./explore.db"), logger)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	e := explorer.NewExplorer(store)
+	tip, err := store.Tip()
+	if errors.Is(err, sqlite.ErrNoTip) {
+		tip = types.ChainIndex{
+			ID:     genesisBlock.ID(),
+			Height: 0,
+		}
+	} else if err != nil {
+		return nil, err
+	}
+	cm.AddSubscriber(store, tip)
 
 	l, err := net.Listen("tcp", addr)
 	if err != nil {

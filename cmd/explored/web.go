@@ -10,7 +10,7 @@ import (
 )
 
 func startWeb(l net.Listener, node *node, password string) error {
-	renter := api.NewServer(node.cm, node.s)
+	renter := api.NewServer(node.e, node.cm, node.s)
 	api := jape.BasicAuth(password)(renter)
 	return http.Serve(l, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api") {
