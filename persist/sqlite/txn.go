@@ -84,8 +84,9 @@ func (s *Store) ProcessChainRevertUpdate(cru *chain.RevertUpdate) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if err := s.applyUpdates(); err != nil {
-		return err
+	if len(s.pendingUpdates) > 0 && s.pendingUpdates[len(s.pendingUpdates)-1].Block.ID() == cru.Block.ID() {
+		s.pendingUpdates = s.pendingUpdates[:len(s.pendingUpdates)-1]
+		return nil
 	}
 	return s.revertUpdate(cru)
 }
