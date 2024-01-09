@@ -42,6 +42,7 @@ type (
 		Tip() (types.ChainIndex, error)
 		BlockByID(id types.BlockID) (types.Block, error)
 		BlockByHeight(height uint64) (types.Block, error)
+		Transaction(id types.TransactionID) (types.Transaction, error)
 	}
 )
 
@@ -164,6 +165,18 @@ func (s *server) explorerBlockHeightHandler(jc jape.Context) {
 	jc.Encode(block)
 }
 
+func (s *server) explorerTransactionsIDHandler(jc jape.Context) {
+	var id types.TransactionID
+	if jc.DecodeParam("id", &id) != nil {
+		return
+	}
+	txn, err := s.e.Transaction(id)
+	if jc.Check("failed to get transaction", err) != nil {
+		return
+	}
+	jc.Encode(txn)
+}
+
 // NewServer returns an HTTP handler that serves the explored API.
 func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 	srv := server{
@@ -183,5 +196,6 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET    /explorer/tip":                  srv.explorerTipHandler,
 		"GET    /explorer/block/id/:id":         srv.explorerBlockHandler,
 		"GET    /explorer/block/height/:height": srv.explorerBlockHeightHandler,
+		"GET    /explorer/transactions/:id":     srv.explorerTransactionsIDHandler,
 	})
 }
