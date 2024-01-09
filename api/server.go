@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"sync"
 
@@ -177,6 +178,30 @@ func (s *server) explorerTransactionsIDHandler(jc jape.Context) {
 	jc.Encode(txn)
 }
 
+func (s *server) explorerTransactionsHandler(jc jape.Context) {
+	var (
+		errTooManyIDs = errors.New("too many IDs provided (provide less than 5000)")
+	)
+
+	var ids []types.TransactionID
+	if jc.Decode(&ids) != nil {
+		return
+	} else if len(ids) > 5000 {
+		jc.Error(errTooManyIDs, http.StatusBadRequest)
+		return
+	}
+
+	var txns []types.Transaction
+	for _, id := range ids {
+		txn, err := s.e.Transaction(id)
+		if jc.Check("failed to get transaction", err) != nil {
+			return
+		}
+		txns = append(txns, txn)
+	}
+	jc.Encode(txns)
+}
+
 // NewServer returns an HTTP handler that serves the explored API.
 func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 	srv := server{
@@ -197,5 +222,6 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET    /explorer/block/id/:id":         srv.explorerBlockHandler,
 		"GET    /explorer/block/height/:height": srv.explorerBlockHeightHandler,
 		"GET    /explorer/transactions/:id":     srv.explorerTransactionsIDHandler,
+		"POST   /explorer/transactions":         srv.explorerTransactionsHandler,
 	})
 }

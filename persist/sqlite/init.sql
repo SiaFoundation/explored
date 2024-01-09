@@ -26,6 +26,8 @@ CREATE TABLE transactions (
         transaction_id BLOB UNIQUE NOT NULL
 );
 
+CREATE INDEX transactions_index ON transactions(transaction_id);
+
 CREATE TABLE block_transactions (
         block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
         transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,

@@ -84,3 +84,9 @@ func (c *Client) Transaction(id types.TransactionID) (resp types.Transaction, er
 	err = c.c.GET(fmt.Sprintf("/explorer/transactions/%s", id), &resp)
 	return
 }
+
+// Transactions returns the transactions with the specified IDs.
+func (c *Client) Transactions(ids []types.TransactionID) (resp []types.Transaction, err error) {
+	err = c.c.POST("/explorer/transactions", ids, &resp)
+	return
+}
