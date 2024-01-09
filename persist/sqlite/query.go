@@ -29,6 +29,28 @@ func decodeUint64(x *uint64, data []byte) error {
 	return d.Err()
 }
 
+// transactionByID returns the transaction with the given integer ID in the
+// database (not its Sia ID).
+func (s *Store) transactionByID(txnID int64) (result types.Transaction, err error) {
+	{
+		var rows *loggedRows
+		if rows, err = s.query("SELECT data FROM arbitrary_data WHERE transaction_id = ? ORDER BY transaction_order", txnID); err != nil {
+			return
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var data []byte
+			if err = rows.Scan(&data); err != nil {
+				return
+			}
+			result.ArbitraryData = append(result.ArbitraryData, data)
+		}
+	}
+
+	return
+}
+
 // Tip implements explorer.Store.
 func (s *Store) Tip() (result types.ChainIndex, err error) {
 	var data []byte
@@ -82,6 +104,26 @@ func (s *Store) BlockByID(id types.BlockID) (result types.Block, err error) {
 				return
 			}
 			result.MinerPayouts = append(result.MinerPayouts, minerPayout)
+		}
+	}
+
+	{
+		var rows *loggedRows
+		if rows, err = s.query("SELECT transaction_id FROM block_transactions WHERE block_id = ? ORDER BY block_order", encode(id)); err != nil {
+			return
+		}
+		defer rows.Close()
+
+		var txnID int64
+		for rows.Next() {
+			if err = rows.Scan(&txnID); err != nil {
+				return
+			}
+			var txn types.Transaction
+			if txn, err = s.transactionByID(txnID); err != nil {
+				return
+			}
+			result.Transactions = append(result.Transactions, txn)
 		}
 	}
 

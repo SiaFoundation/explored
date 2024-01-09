@@ -39,6 +39,34 @@ func (s *Store) addMinerPayouts(tx txn, bid types.BlockID, scos []types.SiacoinO
 	return nil
 }
 
+func (s *Store) addArbitraryData(tx txn, id int64, txn types.Transaction) error {
+	for i, arbitraryData := range txn.ArbitraryData {
+		if _, err := tx.Exec("INSERT INTO arbitrary_data(transaction_id, transaction_order, data) VALUES (?, ?, ?)", id, i, arbitraryData); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) addTransactions(tx txn, bid types.BlockID, txns []types.Transaction) error {
+	for i, txn := range txns {
+		result, err := tx.Exec("INSERT INTO transactions(transaction_id) VALUES (?);", encode(txn.ID()))
+		if err != nil {
+			return err
+		}
+		txnID, err := result.LastInsertId()
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec("INSERT INTO block_transactions(block_id, transaction_id, block_order) VALUES (?, ?, ?)", encode(bid), txnID, i); err != nil {
+			return err
+		} else if err := s.addArbitraryData(tx, txnID, txn); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *Store) deleteBlock(tx txn, bid types.BlockID) error {
 	_, err := tx.Exec("DELETE FROM blocks WHERE id = ?", encode(bid))
 	return err
@@ -51,6 +79,8 @@ func (s *Store) applyUpdates() error {
 				return fmt.Errorf("applyUpdates: failed to add block: %v", err)
 			} else if err := s.addMinerPayouts(tx, update.Block.ID(), update.Block.MinerPayouts); err != nil {
 				return fmt.Errorf("applyUpdates: failed to add miner payouts: %v", err)
+			} else if err := s.addTransactions(tx, update.Block.ID(), update.Block.Transactions); err != nil {
+				return fmt.Errorf("applyUpdates: failed to add transactions: %v", err)
 			}
 		}
 		s.pendingUpdates = s.pendingUpdates[:0]
