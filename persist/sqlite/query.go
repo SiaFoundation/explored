@@ -144,3 +144,14 @@ func (s *Store) BlockByHeight(height uint64) (result types.Block, err error) {
 	result, err = s.BlockByID(bid)
 	return
 }
+
+// Transaction implements explorer.Store.
+func (s *Store) Transaction(id types.TransactionID) (result types.Transaction, err error) {
+	var txnID int64
+	if err = s.queryRow("SELECT id FROM transactions WHERE transaction_id = ?", encode(id)).Scan(&txnID); err != nil {
+		return
+	}
+
+	result, err = s.transactionByID(txnID)
+	return
+}

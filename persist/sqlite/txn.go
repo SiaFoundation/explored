@@ -58,6 +58,7 @@ func (s *Store) addTransactions(tx txn, bid types.BlockID, txns []types.Transact
 		if err != nil {
 			return err
 		}
+
 		if _, err := tx.Exec("INSERT INTO block_transactions(block_id, transaction_id, block_order) VALUES (?, ?, ?)", encode(bid), txnID, i); err != nil {
 			return err
 		} else if err := s.addArbitraryData(tx, txnID, txn); err != nil {
