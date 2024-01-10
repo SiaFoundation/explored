@@ -3,6 +3,7 @@ package sqlite
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"go.sia.tech/core/types"
@@ -31,24 +32,25 @@ func decodeUint64(x *uint64, data []byte) error {
 
 // transactionByID returns the transaction with the given integer ID in the
 // database (not its Sia ID).
-func (s *Store) transactionByID(txnID int64) (result types.Transaction, err error) {
+func (s *Store) transactionByID(txnID int64) (types.Transaction, error) {
+	var result types.Transaction
 	{
-		var rows *loggedRows
-		if rows, err = s.query("SELECT data FROM arbitrary_data WHERE transaction_id = ? ORDER BY transaction_order", txnID); err != nil {
-			return
+		rows, err := s.query("SELECT data FROM arbitrary_data WHERE transaction_id = ? ORDER BY transaction_order", txnID)
+		if err != nil {
+			return types.Transaction{}, fmt.Errorf("transactionByID: failed to query arbitrary data: %v", err)
 		}
 		defer rows.Close()
 
 		for rows.Next() {
 			var data []byte
 			if err = rows.Scan(&data); err != nil {
-				return
+				return types.Transaction{}, fmt.Errorf("transactionByID: failed to scan arbitrary data: %v", err)
 			}
 			result.ArbitraryData = append(result.ArbitraryData, data)
 		}
 	}
 
-	return
+	return result, nil
 }
 
 // Tip implements explorer.Store.
