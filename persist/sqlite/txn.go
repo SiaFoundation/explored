@@ -52,17 +52,17 @@ func (s *Store) addTransactions(tx txn, bid types.BlockID, txns []types.Transact
 	for i, txn := range txns {
 		result, err := tx.Exec("INSERT INTO transactions(transaction_id) VALUES (?);", encode(txn.ID()))
 		if err != nil {
-			return err
+			return fmt.Errorf("addTransactions: failed to insert into transactions: %v", err)
 		}
 		txnID, err := result.LastInsertId()
 		if err != nil {
-			return err
+			return fmt.Errorf("addTransactions: failed to get insert result ID: %v", err)
 		}
 
 		if _, err := tx.Exec("INSERT INTO block_transactions(block_id, transaction_id, block_order) VALUES (?, ?, ?)", encode(bid), txnID, i); err != nil {
-			return err
+			return fmt.Errorf("addTransactions: failed to insert into block_transactions: %v", err)
 		} else if err := s.addArbitraryData(tx, txnID, txn); err != nil {
-			return err
+			return fmt.Errorf("addTransactions: failed to add arbitrary data: %v", err)
 		}
 	}
 	return nil
