@@ -222,7 +222,7 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET    /explorer/tip":                  srv.explorerTipHandler,
 		"GET    /explorer/block/id/:id":         srv.explorerBlockHandler,
 		"GET    /explorer/block/height/:height": srv.explorerBlockHeightHandler,
-		"GET    /explorer/transactions/:id":     srv.explorerTransactionsIDHandler,
+		"GET    /explorer/transactions/id/:id":  srv.explorerTransactionsIDHandler,
 		"POST   /explorer/transactions":         srv.explorerTransactionsHandler,
 	})
 }

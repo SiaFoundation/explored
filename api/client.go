@@ -81,7 +81,7 @@ func (c *Client) BlockHeight(height uint64) (resp types.Block, err error) {
 
 // Transaction returns the transaction with the specified ID.
 func (c *Client) Transaction(id types.TransactionID) (resp types.Transaction, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/transactions/%s", id), &resp)
+	err = c.c.GET(fmt.Sprintf("/explorer/transactions/id/%s", id), &resp)
 	return
 }
 
