@@ -1,7 +1,7 @@
 package api
 
 import (
-	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 
@@ -179,14 +179,15 @@ func (s *server) explorerTransactionsIDHandler(jc jape.Context) {
 }
 
 func (s *server) explorerTransactionsHandler(jc jape.Context) {
-	var (
-		errTooManyIDs = errors.New("too many IDs provided (provide less than 5000)")
+	const (
+		maxIDs = 5000
 	)
+	errTooManyIDs := fmt.Errorf("too many IDs provided (provide less than %d)", maxIDs)
 
 	var ids []types.TransactionID
 	if jc.Decode(&ids) != nil {
 		return
-	} else if len(ids) > 5000 {
+	} else if len(ids) > maxIDs {
 		jc.Error(errTooManyIDs, http.StatusBadRequest)
 		return
 	}
