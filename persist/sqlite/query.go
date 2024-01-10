@@ -34,20 +34,19 @@ func decodeUint64(x *uint64, data []byte) error {
 // database (not its Sia ID).
 func (s *Store) transactionByID(txnID int64) (types.Transaction, error) {
 	var result types.Transaction
-	{
-		rows, err := s.query("SELECT data FROM arbitrary_data WHERE transaction_id = ? ORDER BY transaction_order", txnID)
-		if err != nil {
-			return types.Transaction{}, fmt.Errorf("transactionByID: failed to query arbitrary data: %v", err)
-		}
-		defer rows.Close()
 
-		for rows.Next() {
-			var data []byte
-			if err = rows.Scan(&data); err != nil {
-				return types.Transaction{}, fmt.Errorf("transactionByID: failed to scan arbitrary data: %v", err)
-			}
-			result.ArbitraryData = append(result.ArbitraryData, data)
+	rows, err := s.query("SELECT data FROM arbitrary_data WHERE transaction_id = ? ORDER BY transaction_order", txnID)
+	if err != nil {
+		return types.Transaction{}, fmt.Errorf("transactionByID: failed to query arbitrary data: %v", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var data []byte
+		if err = rows.Scan(&data); err != nil {
+			return types.Transaction{}, fmt.Errorf("transactionByID: failed to scan arbitrary data: %v", err)
 		}
+		result.ArbitraryData = append(result.ArbitraryData, data)
 	}
 
 	return result, nil
