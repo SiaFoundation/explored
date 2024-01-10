@@ -43,7 +43,7 @@ func (s *Store) transactionByID(txnID int64) (types.Transaction, error) {
 
 	for rows.Next() {
 		var data []byte
-		if err = rows.Scan(&data); err != nil {
+		if err := rows.Scan(&data); err != nil {
 			return types.Transaction{}, fmt.Errorf("transactionByID: failed to scan arbitrary data: %v", err)
 		}
 		result.ArbitraryData = append(result.ArbitraryData, data)
@@ -53,106 +53,104 @@ func (s *Store) transactionByID(txnID int64) (types.Transaction, error) {
 }
 
 // Tip implements explorer.Store.
-func (s *Store) Tip() (result types.ChainIndex, err error) {
+func (s *Store) Tip() (types.ChainIndex, error) {
 	var data []byte
-	err = s.queryRow("SELECT id, height FROM blocks WHERE height = (SELECT MAX(height) from blocks)").Scan(&data, &result.Height)
-	if errors.Is(err, sql.ErrNoRows) {
-		err = ErrNoTip
-		return
+	var result types.ChainIndex
+	if err := s.queryRow("SELECT id, height FROM blocks WHERE height = (SELECT MAX(height) from blocks)").Scan(&data, &result.Height); errors.Is(err, sql.ErrNoRows) {
+		return types.ChainIndex{}, ErrNoTip
 	} else if err != nil {
-		return
+		return types.ChainIndex{}, err
 	}
-	if err = decode(&result.ID, data); err != nil {
-		return
+	if err := decode(&result.ID, data); err != nil {
+		return types.ChainIndex{}, err
 	}
-	return
+	return result, nil
 }
 
 // BlockByID implements explorer.Store.
-func (s *Store) BlockByID(id types.BlockID) (result types.Block, err error) {
+func (s *Store) BlockByID(id types.BlockID) (types.Block, error) {
+	var result types.Block
 	{
 		var timestamp int64
 		var parentID, nonce []byte
-		if err = s.queryRow("SELECT parent_id, nonce, timestamp FROM blocks WHERE id = ?", encode(id)).Scan(&parentID, &nonce, &timestamp); err != nil {
-			return
+		if err := s.queryRow("SELECT parent_id, nonce, timestamp FROM blocks WHERE id = ?", encode(id)).Scan(&parentID, &nonce, &timestamp); err != nil {
+			return types.Block{}, err
 		}
 		result.Timestamp = time.Unix(timestamp, 0).UTC()
-		if err = decode(&result.ParentID, parentID); err != nil {
-			return
+		if err := decode(&result.ParentID, parentID); err != nil {
+			return types.Block{}, err
 		}
-		if err = decodeUint64(&result.Nonce, nonce); err != nil {
-			return
+		if err := decodeUint64(&result.Nonce, nonce); err != nil {
+			return types.Block{}, err
 		}
 	}
 
 	{
-		var rows *loggedRows
-		if rows, err = s.query("SELECT address, value FROM miner_payouts WHERE block_id = ? ORDER BY block_order", encode(id)); err != nil {
-			return
+		rows, err := s.query("SELECT address, value FROM miner_payouts WHERE block_id = ? ORDER BY block_order", encode(id))
+		if err != nil {
+			return types.Block{}, err
 		}
 		defer rows.Close()
 
 		var address, value []byte
 		for rows.Next() {
-			if err = rows.Scan(&address, &value); err != nil {
-				return
+			if err := rows.Scan(&address, &value); err != nil {
+				return types.Block{}, err
 			}
 			var minerPayout types.SiacoinOutput
-			if err = decode(&minerPayout.Address, address); err != nil {
-				return
+			if err := decode(&minerPayout.Address, address); err != nil {
+				return types.Block{}, err
 			}
-			if err = decode(&minerPayout.Value, value); err != nil {
-				return
+			if err := decode(&minerPayout.Value, value); err != nil {
+				return types.Block{}, err
 			}
 			result.MinerPayouts = append(result.MinerPayouts, minerPayout)
 		}
 	}
 
 	{
-		var rows *loggedRows
-		if rows, err = s.query("SELECT transaction_id FROM block_transactions WHERE block_id = ? ORDER BY block_order", encode(id)); err != nil {
-			return
+		rows, err := s.query("SELECT transaction_id FROM block_transactions WHERE block_id = ? ORDER BY block_order", encode(id))
+		if err != nil {
+			return types.Block{}, err
 		}
 		defer rows.Close()
 
 		var txnID int64
 		for rows.Next() {
-			if err = rows.Scan(&txnID); err != nil {
-				return
+			if err := rows.Scan(&txnID); err != nil {
+				return types.Block{}, err
 			}
-			var txn types.Transaction
-			if txn, err = s.transactionByID(txnID); err != nil {
-				return
+			txn, err := s.transactionByID(txnID)
+			if err != nil {
+				return types.Block{}, err
 			}
 			result.Transactions = append(result.Transactions, txn)
 		}
 	}
 
-	return
+	return result, nil
 }
 
 // BlockByHeight implements explorer.Store.
-func (s *Store) BlockByHeight(height uint64) (result types.Block, err error) {
+func (s *Store) BlockByHeight(height uint64) (types.Block, error) {
 	var data []byte
-	if err = s.queryRow("SELECT id FROM blocks WHERE height = ?", height).Scan(&data); err != nil {
-		return
+	if err := s.queryRow("SELECT id FROM blocks WHERE height = ?", height).Scan(&data); err != nil {
+		return types.Block{}, err
 	}
 
 	var bid types.BlockID
-	if err = decode(&bid, data); err != nil {
-		return
+	if err := decode(&bid, data); err != nil {
+		return types.Block{}, err
 	}
-	result, err = s.BlockByID(bid)
-	return
+	return s.BlockByID(bid)
 }
 
 // Transaction implements explorer.Store.
-func (s *Store) Transaction(id types.TransactionID) (result types.Transaction, err error) {
+func (s *Store) Transaction(id types.TransactionID) (types.Transaction, error) {
 	var txnID int64
-	if err = s.queryRow("SELECT id FROM transactions WHERE transaction_id = ?", encode(id)).Scan(&txnID); err != nil {
-		return
+	if err := s.queryRow("SELECT id FROM transactions WHERE transaction_id = ?", encode(id)).Scan(&txnID); err != nil {
+		return types.Transaction{}, err
 	}
 
-	result, err = s.transactionByID(txnID)
-	return
+	return s.transactionByID(txnID)
 }
