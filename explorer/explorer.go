@@ -14,6 +14,7 @@ type Store interface {
 	BlockByID(id types.BlockID) (types.Block, error)
 	BlockByHeight(height uint64) (types.Block, error)
 	Transaction(id types.TransactionID) (types.Transaction, error)
+	Transactions(ids []types.TransactionID) ([]types.Transaction, error)
 }
 
 // Explorer implements a Sia explorer.
@@ -44,4 +45,9 @@ func (e *Explorer) BlockByHeight(height uint64) (types.Block, error) {
 // Transaction returns the transaction with the specified ID.
 func (e *Explorer) Transaction(id types.TransactionID) (types.Transaction, error) {
 	return e.s.Transaction(id)
+}
+
+// Transactions returns the transactions with the specified IDs.
+func (e *Explorer) Transactions(ids []types.TransactionID) ([]types.Transaction, error) {
+	return e.s.Transactions(ids)
 }

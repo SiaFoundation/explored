@@ -3,7 +3,6 @@ package api
 import (
 	"fmt"
 	"net/http"
-	"sync"
 
 	"go.sia.tech/jape"
 
@@ -44,6 +43,7 @@ type (
 		BlockByID(id types.BlockID) (types.Block, error)
 		BlockByHeight(height uint64) (types.Block, error)
 		Transaction(id types.TransactionID) (types.Transaction, error)
+		Transactions(ids []types.TransactionID) ([]types.Transaction, error)
 	}
 )
 
@@ -51,8 +51,6 @@ type server struct {
 	cm ChainManager
 	e  Explorer
 	s  Syncer
-
-	mu sync.Mutex
 }
 
 func (s *server) syncerPeersHandler(jc jape.Context) {
@@ -192,13 +190,9 @@ func (s *server) explorerTransactionsHandler(jc jape.Context) {
 		return
 	}
 
-	var txns []types.Transaction
-	for _, id := range ids {
-		txn, err := s.e.Transaction(id)
-		if jc.Check("failed to get transaction", err) != nil {
-			return
-		}
-		txns = append(txns, txn)
+	txns, err := s.e.Transactions(ids)
+	if jc.Check("failed to get transactions", err) != nil {
+		return
 	}
 	jc.Encode(txns)
 }
