@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -164,12 +165,17 @@ func (s *server) explorerBlockHeightHandler(jc jape.Context) {
 }
 
 func (s *server) explorerTransactionsIDHandler(jc jape.Context) {
+	errNotFound := errors.New("no transaction found")
+
 	var id types.TransactionID
 	if jc.DecodeParam("id", &id) != nil {
 		return
 	}
 	txns, err := s.e.Transactions([]types.TransactionID{id})
 	if jc.Check("failed to get transaction", err) != nil {
+		return
+	} else if len(txns) == 0 {
+		jc.Error(errNotFound, http.StatusNotFound)
 		return
 	}
 	jc.Encode(txns[0])
