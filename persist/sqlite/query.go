@@ -109,22 +109,30 @@ func (s *Store) BlockByID(id types.BlockID) (types.Block, error) {
 	}
 
 	{
-		rows, err := s.query("SELECT transaction_id FROM block_transactions WHERE block_id = ? ORDER BY block_order", encode(id))
+		rows, err := s.query(`
+            SELECT block_transactions.block_order, arbitrary_data.data
+            FROM block_transactions
+            LEFT JOIN arbitrary_data ON block_transactions.transaction_id = arbitrary_data.transaction_id
+            WHERE block_transactions.block_id = ?
+            ORDER BY block_transactions.block_order
+        `, encode(id))
 		if err != nil {
 			return types.Block{}, err
 		}
 		defer rows.Close()
 
-		var txnID int64
 		for rows.Next() {
-			if err := rows.Scan(&txnID); err != nil {
+			var data []byte
+			var blockOrder int
+			if err := rows.Scan(&blockOrder, &data); err != nil {
 				return types.Block{}, err
 			}
-			txn, err := s.transactionByID(txnID)
-			if err != nil {
-				return types.Block{}, err
+			for len(result.Transactions) <= blockOrder {
+				result.Transactions = append(result.Transactions, types.Transaction{})
 			}
-			result.Transactions = append(result.Transactions, txn)
+			if data != nil {
+				result.Transactions[blockOrder].ArbitraryData = append(result.Transactions[blockOrder].ArbitraryData, data)
+			}
 		}
 	}
 
