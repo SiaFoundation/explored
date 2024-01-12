@@ -79,8 +79,16 @@ func blockMinerPayouts(tx txn, blockID types.BlockID) ([]types.SiacoinOutput, er
 
 // transactionDatabaseIDs returns the database ID for each transaction.
 func transactionDatabaseIDs(tx txn, txnIDs []types.TransactionID) (dbIDs []int64, err error) {
+	encodedIDs := func(ids []types.TransactionID) []any {
+		result := make([]any, len(ids))
+		for i, id := range ids {
+			result[i] = dbEncode(id)
+		}
+		return result
+	}
+
 	query := `SELECT id FROM transactions WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)`
-	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+	rows, err := tx.Query(query, encodedIDs(txnIDs)...)
 	if err != nil {
 		return nil, err
 	}
