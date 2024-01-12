@@ -31,26 +31,50 @@ func (s *Store) addBlock(dbTxn txn, b types.Block, height uint64) error {
 }
 
 func (s *Store) addMinerPayouts(dbTxn txn, bid types.BlockID, scos []types.SiacoinOutput) error {
+	stmt, err := dbTxn.Prepare(`INSERT INTO miner_payouts(block_id, block_order, address, value) VALUES (?, ?, ?, ?);`)
+	if err != nil {
+		return fmt.Errorf("addMinerPayouts: failed to prepare statement: %v", err)
+	}
+	defer stmt.Close()
+
 	for i, sco := range scos {
-		if _, err := dbTxn.Exec("INSERT INTO miner_payouts(block_id, block_order, address, value) VALUES (?, ?, ?, ?);", encode(bid), i, encode(sco.Address), encode(sco.Value)); err != nil {
-			return err
+		if _, err := stmt.Exec(encode(bid), i, encode(sco.Address), encode(sco.Value)); err != nil {
+			return fmt.Errorf("addMinerPayouts: failed to execute statement: %v", err)
 		}
 	}
 	return nil
 }
 
 func (s *Store) addArbitraryData(dbTxn txn, id int64, txn types.Transaction) error {
+	stmt, err := dbTxn.Prepare(`INSERT INTO arbitrary_data(transaction_id, transaction_order, data) VALUES (?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addArbitraryData: failed to prepare statement: %v", err)
+	}
+	defer stmt.Close()
+
 	for i, arbitraryData := range txn.ArbitraryData {
-		if _, err := dbTxn.Exec("INSERT INTO arbitrary_data(transaction_id, transaction_order, data) VALUES (?, ?, ?)", id, i, arbitraryData); err != nil {
-			return err
+		if _, err := stmt.Exec(id, i, arbitraryData); err != nil {
+			return fmt.Errorf("addArbitraryData: failed to execute statement: %v", err)
 		}
 	}
 	return nil
 }
 
 func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Transaction) error {
+	transactionsStmt, err := dbTxn.Prepare(`INSERT INTO transactions(transaction_id) VALUES (?);`)
+	if err != nil {
+		return fmt.Errorf("addTransactions: failed to prepare transactions statement: %v", err)
+	}
+	defer transactionsStmt.Close()
+
+	blockTransactionsStmt, err := dbTxn.Prepare(`INSERT INTO block_transactions(block_id, transaction_id, block_order) VALUES (?, ?, ?);`)
+	if err != nil {
+		return fmt.Errorf("addTransactions: failed to prepare block_transactions statement: %v", err)
+	}
+	defer blockTransactionsStmt.Close()
+
 	for i, txn := range txns {
-		result, err := dbTxn.Exec("INSERT INTO transactions(transaction_id) VALUES (?);", encode(txn.ID()))
+		result, err := transactionsStmt.Exec(encode(txn.ID()))
 		if err != nil {
 			return fmt.Errorf("addTransactions: failed to insert into transactions: %v", err)
 		}
@@ -59,7 +83,7 @@ func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Trans
 			return fmt.Errorf("addTransactions: failed to get insert result ID: %v", err)
 		}
 
-		if _, err := dbTxn.Exec("INSERT INTO block_transactions(block_id, transaction_id, block_order) VALUES (?, ?, ?)", encode(bid), txnID, i); err != nil {
+		if _, err := blockTransactionsStmt.Exec(encode(bid), txnID, i); err != nil {
 			return fmt.Errorf("addTransactions: failed to insert into block_transactions: %v", err)
 		} else if err := s.addArbitraryData(dbTxn, txnID, txn); err != nil {
 			return fmt.Errorf("addTransactions: failed to add arbitrary data: %v", err)
