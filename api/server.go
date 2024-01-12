@@ -168,11 +168,11 @@ func (s *server) explorerTransactionsIDHandler(jc jape.Context) {
 	if jc.DecodeParam("id", &id) != nil {
 		return
 	}
-	txn, err := s.e.Transactions([]types.TransactionID{id})
+	txns, err := s.e.Transactions([]types.TransactionID{id})
 	if jc.Check("failed to get transaction", err) != nil {
 		return
 	}
-	jc.Encode(txn)
+	jc.Encode(txns[0])
 }
 
 func (s *server) explorerTransactionsHandler(jc jape.Context) {
