@@ -42,7 +42,6 @@ type (
 		Tip() (types.ChainIndex, error)
 		BlockByID(id types.BlockID) (types.Block, error)
 		BlockByHeight(height uint64) (types.Block, error)
-		Transaction(id types.TransactionID) (types.Transaction, error)
 		Transactions(ids []types.TransactionID) ([]types.Transaction, error)
 	}
 )
@@ -169,7 +168,7 @@ func (s *server) explorerTransactionsIDHandler(jc jape.Context) {
 	if jc.DecodeParam("id", &id) != nil {
 		return
 	}
-	txn, err := s.e.Transaction(id)
+	txn, err := s.e.Transactions([]types.TransactionID{id})
 	if jc.Check("failed to get transaction", err) != nil {
 		return
 	}

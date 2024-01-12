@@ -127,33 +127,3 @@ func (s *Store) Transactions(ids []types.TransactionID) (results []types.Transac
 	})
 	return
 }
-
-// Transaction implements explorer.Store.
-func (s *Store) Transaction(id types.TransactionID) (result types.Transaction, err error) {
-	err = s.transaction(func(tx txn) error {
-		var dbID int64
-		err := tx.QueryRow("SELECT id FROM transactions WHERE transaction_id = ?", dbEncode(id)).Scan(&dbID)
-		if err != nil {
-			return err
-		}
-
-		txnArbitraryData, err := transactionArbitraryData(tx, []int64{dbID})
-		if err != nil {
-			return fmt.Errorf("failed to get arbitrary data: %v", err)
-		}
-
-		result.ArbitraryData = txnArbitraryData[dbID]
-
-		// TODO: siacoin inputs
-		// TODO: siacoin outputs
-		// TODO: siafund inputs
-		// TODO: siafund outputs
-		// TODO: file contracts
-		// TODO: file contract revisions
-		// TODO: storage proofs
-		// TODO: signatures
-
-		return nil
-	})
-	return
-}

@@ -13,7 +13,6 @@ type Store interface {
 	Tip() (types.ChainIndex, error)
 	BlockByID(id types.BlockID) (types.Block, error)
 	BlockByHeight(height uint64) (types.Block, error)
-	Transaction(id types.TransactionID) (types.Transaction, error)
 	Transactions(ids []types.TransactionID) ([]types.Transaction, error)
 }
 
@@ -40,11 +39,6 @@ func (e *Explorer) BlockByID(id types.BlockID) (types.Block, error) {
 // BlockByHeight returns the block with the specified height.
 func (e *Explorer) BlockByHeight(height uint64) (types.Block, error) {
 	return e.s.BlockByHeight(height)
-}
-
-// Transaction returns the transaction with the specified ID.
-func (e *Explorer) Transaction(id types.TransactionID) (types.Transaction, error) {
-	return e.s.Transaction(id)
 }
 
 // Transactions returns the transactions with the specified IDs.
