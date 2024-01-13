@@ -43,11 +43,6 @@ type (
 		QueryRow(query string, args ...any) *loggedRow
 	}
 
-	// A dbTxn wraps a Store and implements the txn interface.
-	dbTxn struct {
-		store *Store
-	}
-
 	loggedStmt struct {
 		*sql.Stmt
 		query string
@@ -189,35 +184,6 @@ func (lt *loggedTxn) QueryRow(query string, args ...any) *loggedRow {
 		lt.log.Debug("slow query row", zap.String("query", query), zap.Duration("elapsed", dur), zap.Stack("stack"))
 	}
 	return &loggedRow{row, lt.log.Named("row")}
-}
-
-// Exec executes a query without returning any rows. The args are for
-// any placeholder parameters in the query.
-func (dt *dbTxn) Exec(query string, args ...any) (sql.Result, error) {
-	return dt.store.exec(query, args...)
-}
-
-// Prepare creates a prepared statement for later queries or executions.
-// Multiple queries or executions may be run concurrently from the
-// returned statement. The caller must call the statement's Close method
-// when the statement is no longer needed.
-func (dt *dbTxn) Prepare(query string) (*loggedStmt, error) {
-	return dt.store.prepare(query)
-}
-
-// Query executes a query that returns rows, typically a SELECT. The
-// args are for any placeholder parameters in the query.
-func (dt *dbTxn) Query(query string, args ...any) (*loggedRows, error) {
-	return dt.store.query(query, args...)
-}
-
-// QueryRow executes a query that is expected to return at most one row.
-// QueryRow always returns a non-nil value. Errors are deferred until
-// Row's Scan method is called. If the query selects no rows, the *Row's
-// Scan will return ErrNoRows. Otherwise, the *Row's Scan scans the
-// first selected row and discards the rest.
-func (dt *dbTxn) QueryRow(query string, args ...any) *loggedRow {
-	return dt.store.queryRow(query, args...)
 }
 
 func queryPlaceHolders(n int) string {

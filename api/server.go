@@ -1,8 +1,9 @@
 package api
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
-	"sync"
 
 	"go.sia.tech/jape"
 
@@ -42,6 +43,7 @@ type (
 		Tip() (types.ChainIndex, error)
 		BlockByID(id types.BlockID) (types.Block, error)
 		BlockByHeight(height uint64) (types.Block, error)
+		Transactions(ids []types.TransactionID) ([]types.Transaction, error)
 	}
 )
 
@@ -49,8 +51,6 @@ type server struct {
 	cm ChainManager
 	e  Explorer
 	s  Syncer
-
-	mu sync.Mutex
 }
 
 func (s *server) syncerPeersHandler(jc jape.Context) {
@@ -164,6 +164,44 @@ func (s *server) explorerBlockHeightHandler(jc jape.Context) {
 	jc.Encode(block)
 }
 
+func (s *server) explorerTransactionsIDHandler(jc jape.Context) {
+	errNotFound := errors.New("no transaction found")
+
+	var id types.TransactionID
+	if jc.DecodeParam("id", &id) != nil {
+		return
+	}
+	txns, err := s.e.Transactions([]types.TransactionID{id})
+	if jc.Check("failed to get transaction", err) != nil {
+		return
+	} else if len(txns) == 0 {
+		jc.Error(errNotFound, http.StatusNotFound)
+		return
+	}
+	jc.Encode(txns[0])
+}
+
+func (s *server) explorerTransactionsHandler(jc jape.Context) {
+	const (
+		maxIDs = 5000
+	)
+	errTooManyIDs := fmt.Errorf("too many IDs provided (provide less than %d)", maxIDs)
+
+	var ids []types.TransactionID
+	if jc.Decode(&ids) != nil {
+		return
+	} else if len(ids) > maxIDs {
+		jc.Error(errTooManyIDs, http.StatusBadRequest)
+		return
+	}
+
+	txns, err := s.e.Transactions(ids)
+	if jc.Check("failed to get transactions", err) != nil {
+		return
+	}
+	jc.Encode(txns)
+}
+
 // NewServer returns an HTTP handler that serves the explored API.
 func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 	srv := server{
@@ -183,5 +221,7 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET    /explorer/tip":                  srv.explorerTipHandler,
 		"GET    /explorer/block/id/:id":         srv.explorerBlockHandler,
 		"GET    /explorer/block/height/:height": srv.explorerBlockHeightHandler,
+		"GET    /explorer/transactions/id/:id":  srv.explorerTransactionsIDHandler,
+		"POST   /explorer/transactions":         srv.explorerTransactionsHandler,
 	})
 }

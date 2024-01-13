@@ -78,3 +78,15 @@ func (c *Client) BlockHeight(height uint64) (resp types.Block, err error) {
 	err = c.c.GET(fmt.Sprintf("/explorer/block/height/%d", height), &resp)
 	return
 }
+
+// Transaction returns the transaction with the specified ID.
+func (c *Client) Transaction(id types.TransactionID) (resp types.Transaction, err error) {
+	err = c.c.GET(fmt.Sprintf("/explorer/transactions/id/%s", id), &resp)
+	return
+}
+
+// Transactions returns the transactions with the specified IDs.
+func (c *Client) Transactions(ids []types.TransactionID) (resp []types.Transaction, err error) {
+	err = c.c.POST("/explorer/transactions", ids, &resp)
+	return
+}
