@@ -38,6 +38,31 @@ ORDER BY transaction_order DESC`
 	return result, nil
 }
 
+// transactionSiacoinOutputs returns the siacoin outputs for each transaction.
+func transactionSiacoinOutputs(tx txn, txnIDs []int64) (map[int64][]types.SiacoinOutput, error) {
+	// make separate table for maturity heights/source?
+	query := `SELECT transaction_id, address, value
+FROM siacoin_outputs
+WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
+ORDER BY transaction_order DESC`
+	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64][]types.SiacoinOutput)
+	for rows.Next() {
+		var txnID int64
+		var sco types.SiacoinOutput
+		if err := rows.Scan(&txnID, dbDecode(&sco.Address), dbDecode(&sco.Value)); err != nil {
+			return nil, fmt.Errorf("failed to scan siacoin output: %v", err)
+		}
+		result[txnID] = append(result[txnID], sco)
+	}
+	return result, nil
+}
+
 // blockTransactionIDs returns the database ID for each transaction in the
 // block.
 func blockTransactionIDs(tx txn, blockID types.BlockID) (dbIDs []int64, err error) {
@@ -68,7 +93,6 @@ func blockMinerPayouts(tx txn, blockID types.BlockID) ([]types.SiacoinOutput, er
 	var result []types.SiacoinOutput
 	for rows.Next() {
 		var output types.SiacoinOutput
-
 		if err := rows.Scan(dbDecode(&output.Address), dbDecode(&output.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan miner payout: %v", err)
 		}
@@ -117,8 +141,12 @@ func (s *Store) Transactions(ids []types.TransactionID) (results []types.Transac
 			return fmt.Errorf("failed to get arbitrary data: %v", err)
 		}
 
+		txnSiacoinOutputs, err := transactionSiacoinOutputs(tx, dbIDs)
+		if err != nil {
+			return fmt.Errorf("failed to get siacoin outputs: %v", err)
+		}
+
 		// TODO: siacoin inputs
-		// TODO: siacoin outputs
 		// TODO: siafund inputs
 		// TODO: siafund outputs
 		// TODO: file contracts
@@ -127,8 +155,10 @@ func (s *Store) Transactions(ids []types.TransactionID) (results []types.Transac
 		// TODO: signatures
 
 		for _, dbID := range dbIDs {
-			var txn types.Transaction
-			txn.ArbitraryData = txnArbitraryData[dbID]
+			txn := types.Transaction{
+				ArbitraryData:  txnArbitraryData[dbID],
+				SiacoinOutputs: txnSiacoinOutputs[dbID],
+			}
 			results = append(results, txn)
 		}
 		return nil

@@ -46,5 +46,15 @@ CREATE TABLE arbitrary_data (
 
 CREATE INDEX arbitrary_data_transaction_id_index ON arbitrary_data(transaction_id);
 
+CREATE TABLE siacoin_outputs (
+        transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
+        transaction_order INTEGER NOT NULL,
+        address BLOB NOT NULL,
+        value BLOB NOT NULL,
+        UNIQUE(transaction_id, transaction_order)
+);
+
+CREATE INDEX siacoin_outputs_transaction_id_index ON siacoin_outputs(transaction_id);
+
 -- initialize the global settings table
 INSERT INTO global_settings (id, db_version) VALUES (0, 0); -- should not be changed
