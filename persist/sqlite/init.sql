@@ -56,5 +56,15 @@ CREATE TABLE siacoin_outputs (
 
 CREATE INDEX siacoin_outputs_transaction_id_index ON siacoin_outputs(transaction_id);
 
+CREATE TABLE siacoin_inputs (
+        transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
+        transaction_order INTEGER NOT NULL,
+        parent_id BLOB NOT NULL,
+        unlock_conditions BLOB NOT NULL,
+        UNIQUE(transaction_id, transaction_order)
+);
+
+CREATE INDEX siacoin_inputs_transaction_id_index ON siacoin_inputs(transaction_id);
+
 -- initialize the global settings table
 INSERT INTO global_settings (id, db_version) VALUES (0, 0); -- should not be changed

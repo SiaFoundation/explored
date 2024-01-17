@@ -63,6 +63,30 @@ ORDER BY transaction_order DESC`
 	return result, nil
 }
 
+// transactionSiacoinInputs returns the siacoin inputs for each transaction.
+func transactionSiacoinInputs(tx txn, txnIDs []int64) (map[int64][]types.SiacoinInput, error) {
+	query := `SELECT transaction_id, parent_id, unlock_conditions
+FROM siacoin_inputs
+WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
+ORDER BY transaction_order DESC`
+	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64][]types.SiacoinInput)
+	for rows.Next() {
+		var txnID int64
+		var sci types.SiacoinInput
+		if err := rows.Scan(&txnID, dbDecode(&sci.ParentID), dbDecode(&sci.UnlockConditions)); err != nil {
+			return nil, fmt.Errorf("failed to scan siacoin output: %v", err)
+		}
+		result[txnID] = append(result[txnID], sci)
+	}
+	return result, nil
+}
+
 // blockTransactionIDs returns the database ID for each transaction in the
 // block.
 func blockTransactionIDs(tx txn, blockID types.BlockID) (dbIDs []int64, err error) {
@@ -141,6 +165,11 @@ func (s *Store) Transactions(ids []types.TransactionID) (results []types.Transac
 			return fmt.Errorf("failed to get arbitrary data: %v", err)
 		}
 
+		txnSiacoinInputs, err := transactionSiacoinInputs(tx, dbIDs)
+		if err != nil {
+			return fmt.Errorf("failed to get siacoin inputs: %v", err)
+		}
+
 		txnSiacoinOutputs, err := transactionSiacoinOutputs(tx, dbIDs)
 		if err != nil {
 			return fmt.Errorf("failed to get siacoin outputs: %v", err)
@@ -157,6 +186,7 @@ func (s *Store) Transactions(ids []types.TransactionID) (results []types.Transac
 		for _, dbID := range dbIDs {
 			txn := types.Transaction{
 				ArbitraryData:  txnArbitraryData[dbID],
+				SiacoinInputs:  txnSiacoinInputs[dbID],
 				SiacoinOutputs: txnSiacoinOutputs[dbID],
 			}
 			results = append(results, txn)

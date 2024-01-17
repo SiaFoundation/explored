@@ -60,6 +60,20 @@ func (s *Store) addSiacoinOutputs(dbTxn txn, id int64, txn types.Transaction) er
 	return nil
 }
 
+func (s *Store) addSiacoinInputs(dbTxn txn, id int64, txn types.Transaction) error {
+	stmt, err := dbTxn.Prepare(`INSERT INTO siacoin_inputs(transaction_id, transaction_order, parent_id, unlock_conditions) VALUES (?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addSiacoinInputs: failed to prepare statement: %v", err)
+	}
+	defer stmt.Close()
+
+	for i, sci := range txn.SiacoinInputs {
+		if _, err := stmt.Exec(id, i, dbEncode(sci.ParentID), dbEncode(sci.UnlockConditions)); err != nil {
+			return fmt.Errorf("addSiacoinInputs: failed to execute statement: %v", err)
+		}
+	}
+	return nil
+}
 func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Transaction) error {
 	transactionsStmt, err := dbTxn.Prepare(`INSERT INTO transactions(transaction_id) VALUES (?);`)
 	if err != nil {
@@ -87,6 +101,8 @@ func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Trans
 			return fmt.Errorf("addTransactions: failed to insert into block_transactions: %v", err)
 		} else if err := s.addArbitraryData(dbTxn, txnID, txn); err != nil {
 			return fmt.Errorf("addTransactions: failed to add arbitrary data: %v", err)
+		} else if err := s.addSiacoinInputs(dbTxn, txnID, txn); err != nil {
+			return fmt.Errorf("addSiacoinInputs: failed to add siacoin inputs: %v", err)
 		} else if err := s.addSiacoinOutputs(dbTxn, txnID, txn); err != nil {
 			return fmt.Errorf("addSiacoinOutputs: failed to add siacoin outputs: %v", err)
 		}

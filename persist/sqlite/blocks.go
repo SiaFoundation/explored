@@ -31,6 +31,11 @@ func (s *Store) BlockByID(id types.BlockID) (result types.Block, err error) {
 			return fmt.Errorf("failed to get arbitrary data: %v", err)
 		}
 
+		txnSiacoinInputs, err := transactionSiacoinInputs(tx, transactionIDs)
+		if err != nil {
+			return fmt.Errorf("failed to get siacoin inputs: %v", err)
+		}
+
 		txnSiacoinOutputs, err := transactionSiacoinOutputs(tx, transactionIDs)
 		if err != nil {
 			return fmt.Errorf("failed to get siacoin outputs: %v", err)
@@ -39,6 +44,7 @@ func (s *Store) BlockByID(id types.BlockID) (result types.Block, err error) {
 		for _, id := range transactionIDs {
 			txn := types.Transaction{
 				ArbitraryData:  txnArbitraryData[id],
+				SiacoinInputs:  txnSiacoinInputs[id],
 				SiacoinOutputs: txnSiacoinOutputs[id],
 			}
 			result.Transactions = append(result.Transactions, txn)
@@ -74,6 +80,11 @@ func (s *Store) BlockByHeight(height uint64) (result types.Block, err error) {
 			return fmt.Errorf("failed to get arbitrary data: %v", err)
 		}
 
+		txnSiacoinInputs, err := transactionSiacoinInputs(tx, transactionIDs)
+		if err != nil {
+			return fmt.Errorf("failed to get siacoin inputs: %v", err)
+		}
+
 		txnSiacoinOutputs, err := transactionSiacoinOutputs(tx, transactionIDs)
 		if err != nil {
 			return fmt.Errorf("failed to get siacoin outputs: %v", err)
@@ -82,6 +93,7 @@ func (s *Store) BlockByHeight(height uint64) (result types.Block, err error) {
 		for _, id := range transactionIDs {
 			txn := types.Transaction{
 				ArbitraryData:  txnArbitraryData[id],
+				SiacoinInputs:  txnSiacoinInputs[id],
 				SiacoinOutputs: txnSiacoinOutputs[id],
 			}
 			result.Transactions = append(result.Transactions, txn)
