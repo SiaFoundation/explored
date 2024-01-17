@@ -80,9 +80,33 @@ ORDER BY transaction_order DESC`
 		var txnID int64
 		var sci types.SiacoinInput
 		if err := rows.Scan(&txnID, dbDecode(&sci.ParentID), dbDecode(&sci.UnlockConditions)); err != nil {
-			return nil, fmt.Errorf("failed to scan siacoin output: %v", err)
+			return nil, fmt.Errorf("failed to scan siacoin input: %v", err)
 		}
 		result[txnID] = append(result[txnID], sci)
+	}
+	return result, nil
+}
+
+// transactionSiafundInputs returns the siacoin inputs for each transaction.
+func transactionSiafundInputs(tx txn, txnIDs []int64) (map[int64][]types.SiafundInput, error) {
+	query := `SELECT transaction_id, parent_id, unlock_conditions, claim_address
+FROM siafund_inputs
+WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
+ORDER BY transaction_order DESC`
+	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64][]types.SiafundInput)
+	for rows.Next() {
+		var txnID int64
+		var sfi types.SiafundInput
+		if err := rows.Scan(&txnID, dbDecode(&sfi.ParentID), dbDecode(&sfi.UnlockConditions), dbDecode(&sfi.ClaimAddress)); err != nil {
+			return nil, fmt.Errorf("failed to scan siafund input: %v", err)
+		}
+		result[txnID] = append(result[txnID], sfi)
 	}
 	return result, nil
 }
@@ -152,6 +176,46 @@ func transactionDatabaseIDs(tx txn, txnIDs []types.TransactionID) (dbIDs []int64
 	return
 }
 
+func (s *Store) getTransactions(tx txn, dbIDs []int64) ([]types.Transaction, error) {
+	txnArbitraryData, err := transactionArbitraryData(tx, dbIDs)
+	if err != nil {
+		return nil, fmt.Errorf("getTransactions: failed to get arbitrary data: %v", err)
+	}
+
+	txnSiacoinInputs, err := transactionSiacoinInputs(tx, dbIDs)
+	if err != nil {
+		return nil, fmt.Errorf("getTransactions: failed to get siacoin inputs: %v", err)
+	}
+
+	txnSiacoinOutputs, err := transactionSiacoinOutputs(tx, dbIDs)
+	if err != nil {
+		return nil, fmt.Errorf("getTransactions: failed to get siacoin outputs: %v", err)
+	}
+
+	txnSiafundInputs, err := transactionSiafundInputs(tx, dbIDs)
+	if err != nil {
+		return nil, fmt.Errorf("getTransactions: failed to get siacoin inputs: %v", err)
+	}
+
+	// TODO: siafund outputs
+	// TODO: file contracts
+	// TODO: file contract revisions
+	// TODO: storage proofs
+	// TODO: signatures
+
+	var results []types.Transaction
+	for _, dbID := range dbIDs {
+		txn := types.Transaction{
+			ArbitraryData:  txnArbitraryData[dbID],
+			SiacoinInputs:  txnSiacoinInputs[dbID],
+			SiacoinOutputs: txnSiacoinOutputs[dbID],
+			SiafundInputs:  txnSiafundInputs[dbID],
+		}
+		results = append(results, txn)
+	}
+	return results, nil
+}
+
 // Transactions implements explorer.Store.
 func (s *Store) Transactions(ids []types.TransactionID) (results []types.Transaction, err error) {
 	err = s.transaction(func(tx txn) error {
@@ -159,39 +223,11 @@ func (s *Store) Transactions(ids []types.TransactionID) (results []types.Transac
 		if err != nil {
 			return fmt.Errorf("failed to get transaction IDs: %v", err)
 		}
-
-		txnArbitraryData, err := transactionArbitraryData(tx, dbIDs)
+		results, err = s.getTransactions(tx, dbIDs)
 		if err != nil {
-			return fmt.Errorf("failed to get arbitrary data: %v", err)
+			return fmt.Errorf("failed to get transactions: %v")
 		}
-
-		txnSiacoinInputs, err := transactionSiacoinInputs(tx, dbIDs)
-		if err != nil {
-			return fmt.Errorf("failed to get siacoin inputs: %v", err)
-		}
-
-		txnSiacoinOutputs, err := transactionSiacoinOutputs(tx, dbIDs)
-		if err != nil {
-			return fmt.Errorf("failed to get siacoin outputs: %v", err)
-		}
-
-		// TODO: siacoin inputs
-		// TODO: siafund inputs
-		// TODO: siafund outputs
-		// TODO: file contracts
-		// TODO: file contract revisions
-		// TODO: storage proofs
-		// TODO: signatures
-
-		for _, dbID := range dbIDs {
-			txn := types.Transaction{
-				ArbitraryData:  txnArbitraryData[dbID],
-				SiacoinInputs:  txnSiacoinInputs[dbID],
-				SiacoinOutputs: txnSiacoinOutputs[dbID],
-			}
-			results = append(results, txn)
-		}
-		return nil
+		return err
 	})
 	return
 }

@@ -45,6 +45,21 @@ func (s *Store) addArbitraryData(dbTxn txn, id int64, txn types.Transaction) err
 	return nil
 }
 
+func (s *Store) addSiacoinInputs(dbTxn txn, id int64, txn types.Transaction) error {
+	stmt, err := dbTxn.Prepare(`INSERT INTO siacoin_inputs(transaction_id, transaction_order, parent_id, unlock_conditions) VALUES (?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addSiacoinInputs: failed to prepare statement: %v", err)
+	}
+	defer stmt.Close()
+
+	for i, sci := range txn.SiacoinInputs {
+		if _, err := stmt.Exec(id, i, dbEncode(sci.ParentID), dbEncode(sci.UnlockConditions)); err != nil {
+			return fmt.Errorf("addSiacoinInputs: failed to execute statement: %v", err)
+		}
+	}
+	return nil
+}
+
 func (s *Store) addSiacoinOutputs(dbTxn txn, id int64, txn types.Transaction) error {
 	stmt, err := dbTxn.Prepare(`INSERT INTO siacoin_outputs(transaction_id, transaction_order, address, value) VALUES (?, ?, ?, ?)`)
 	if err != nil {
@@ -60,20 +75,21 @@ func (s *Store) addSiacoinOutputs(dbTxn txn, id int64, txn types.Transaction) er
 	return nil
 }
 
-func (s *Store) addSiacoinInputs(dbTxn txn, id int64, txn types.Transaction) error {
-	stmt, err := dbTxn.Prepare(`INSERT INTO siacoin_inputs(transaction_id, transaction_order, parent_id, unlock_conditions) VALUES (?, ?, ?, ?)`)
+func (s *Store) addSiafundInputs(dbTxn txn, id int64, txn types.Transaction) error {
+	stmt, err := dbTxn.Prepare(`INSERT INTO siafund_inputs(transaction_id, transaction_order, parent_id, unlock_conditions, claim_address) VALUES (?, ?, ?, ?, ?)`)
 	if err != nil {
-		return fmt.Errorf("addSiacoinInputs: failed to prepare statement: %v", err)
+		return fmt.Errorf("addSiafundInputs: failed to prepare statement: %v", err)
 	}
 	defer stmt.Close()
 
-	for i, sci := range txn.SiacoinInputs {
-		if _, err := stmt.Exec(id, i, dbEncode(sci.ParentID), dbEncode(sci.UnlockConditions)); err != nil {
-			return fmt.Errorf("addSiacoinInputs: failed to execute statement: %v", err)
+	for i, sci := range txn.SiafundInputs {
+		if _, err := stmt.Exec(id, i, dbEncode(sci.ParentID), dbEncode(sci.UnlockConditions), dbEncode(sci.ClaimAddress)); err != nil {
+			return fmt.Errorf("addSiafundInputs: failed to execute statement: %v", err)
 		}
 	}
 	return nil
 }
+
 func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Transaction) error {
 	transactionsStmt, err := dbTxn.Prepare(`INSERT INTO transactions(transaction_id) VALUES (?);`)
 	if err != nil {
