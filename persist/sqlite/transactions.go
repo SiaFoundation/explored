@@ -87,7 +87,7 @@ ORDER BY transaction_order DESC`
 	return result, nil
 }
 
-// transactionSiafundInputs returns the siacoin inputs for each transaction.
+// transactionSiafundInputs returns the siafund inputs for each transaction.
 func transactionSiafundInputs(tx txn, txnIDs []int64) (map[int64][]types.SiafundInput, error) {
 	query := `SELECT transaction_id, parent_id, unlock_conditions, claim_address
 FROM siafund_inputs
@@ -107,6 +107,30 @@ ORDER BY transaction_order DESC`
 			return nil, fmt.Errorf("failed to scan siafund input: %v", err)
 		}
 		result[txnID] = append(result[txnID], sfi)
+	}
+	return result, nil
+}
+
+// transactionSiafundOutputs returns the siafund outputs for each transaction.
+func transactionSiafundOutputs(tx txn, txnIDs []int64) (map[int64][]types.SiafundOutput, error) {
+	query := `SELECT transaction_id, address, value
+FROM siafund_outputs
+WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
+ORDER BY transaction_order DESC`
+	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64][]types.SiafundOutput)
+	for rows.Next() {
+		var txnID int64
+		var sfo types.SiafundOutput
+		if err := rows.Scan(&txnID, dbDecode(&sfo.Address), dbDecode(&sfo.Value)); err != nil {
+			return nil, fmt.Errorf("failed to scan siafund output: %v", err)
+		}
+		result[txnID] = append(result[txnID], sfo)
 	}
 	return result, nil
 }
@@ -194,10 +218,14 @@ func (s *Store) getTransactions(tx txn, dbIDs []int64) ([]types.Transaction, err
 
 	txnSiafundInputs, err := transactionSiafundInputs(tx, dbIDs)
 	if err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get siacoin inputs: %v", err)
+		return nil, fmt.Errorf("getTransactions: failed to get siafund inputs: %v", err)
 	}
 
-	// TODO: siafund outputs
+	txnSiafundOutputs, err := transactionSiafundOutputs(tx, dbIDs)
+	if err != nil {
+		return nil, fmt.Errorf("getTransactions: failed to get siafund outputs: %v", err)
+	}
+
 	// TODO: file contracts
 	// TODO: file contract revisions
 	// TODO: storage proofs
@@ -210,6 +238,7 @@ func (s *Store) getTransactions(tx txn, dbIDs []int64) ([]types.Transaction, err
 			SiacoinInputs:  txnSiacoinInputs[dbID],
 			SiacoinOutputs: txnSiacoinOutputs[dbID],
 			SiafundInputs:  txnSiafundInputs[dbID],
+			SiafundOutputs: txnSiafundOutputs[dbID],
 		}
 		results = append(results, txn)
 	}
