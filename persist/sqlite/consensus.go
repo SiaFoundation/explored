@@ -60,15 +60,19 @@ func (s *Store) addSiacoinInputs(dbTxn txn, id int64, txn types.Transaction) err
 	return nil
 }
 
-func (s *Store) addSiacoinOutputs(dbTxn txn, id int64, txn types.Transaction) error {
-	stmt, err := dbTxn.Prepare(`INSERT INTO siacoin_outputs(transaction_id, transaction_order, address, value) VALUES (?, ?, ?, ?)`)
+func (s *Store) addSiacoinOutputs(dbTxn txn, id int64, txn types.Transaction, sces map[types.SiacoinOutputID]types.SiacoinElement) error {
+	stmt, err := dbTxn.Prepare(`INSERT INTO siacoin_outputs(transaction_id, transaction_order, address, value, maturity_height) VALUES (?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("addSiacoinOutputs: failed to prepare statement: %v", err)
 	}
 	defer stmt.Close()
 
 	for i, sco := range txn.SiacoinOutputs {
-		if _, err := stmt.Exec(id, i, dbEncode(sco.Address), dbEncode(sco.Value)); err != nil {
+		sce, ok := sces[txn.SiacoinOutputID(i)]
+		if !ok {
+			return errors.New("addSiacoinOutputs: sce not in map")
+		}
+		if _, err := stmt.Exec(id, i, dbEncode(sco.Address), dbEncode(sco.Value), sce.MaturityHeight); err != nil {
 			return fmt.Errorf("addSiacoinOutputs: failed to execute statement: %v", err)
 		}
 	}
@@ -90,21 +94,25 @@ func (s *Store) addSiafundInputs(dbTxn txn, id int64, txn types.Transaction) err
 	return nil
 }
 
-func (s *Store) addSiafundOutputs(dbTxn txn, id int64, txn types.Transaction) error {
-	stmt, err := dbTxn.Prepare(`INSERT INTO siafund_outputs(transaction_id, transaction_order, address, value) VALUES (?, ?, ?, ?)`)
+func (s *Store) addSiafundOutputs(dbTxn txn, id int64, txn types.Transaction, sfes map[types.SiafundOutputID]types.SiafundElement) error {
+	stmt, err := dbTxn.Prepare(`INSERT INTO siafund_outputs(transaction_id, transaction_order, address, value, claim_start) VALUES (?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("addSiafundOutputs: failed to prepare statement: %v", err)
 	}
 	defer stmt.Close()
 
-	for i, sco := range txn.SiafundOutputs {
-		if _, err := stmt.Exec(id, i, dbEncode(sco.Address), dbEncode(sco.Value)); err != nil {
+	for i, sfo := range txn.SiafundOutputs {
+		sfe, ok := sfes[txn.SiafundOutputID(i)]
+		if !ok {
+			return errors.New("addSiafundOutputs: sfe not in map")
+		}
+		if _, err := stmt.Exec(id, i, dbEncode(sfo.Address), dbEncode(sfo.Value), dbEncode(sfe.ClaimStart)); err != nil {
 			return fmt.Errorf("addSiafundOutputs: failed to execute statement: %v", err)
 		}
 	}
 	return nil
 }
-func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Transaction) error {
+func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Transaction, sces map[types.SiacoinOutputID]types.SiacoinElement, sfes map[types.SiafundOutputID]types.SiafundElement) error {
 	transactionsStmt, err := dbTxn.Prepare(`INSERT INTO transactions(transaction_id) VALUES (?);`)
 	if err != nil {
 		return fmt.Errorf("addTransactions: failed to prepare transactions statement: %v", err)
@@ -133,11 +141,11 @@ func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Trans
 			return fmt.Errorf("addTransactions: failed to add arbitrary data: %v", err)
 		} else if err := s.addSiacoinInputs(dbTxn, txnID, txn); err != nil {
 			return fmt.Errorf("addSiacoinInputs: failed to add siacoin inputs: %v", err)
-		} else if err := s.addSiacoinOutputs(dbTxn, txnID, txn); err != nil {
+		} else if err := s.addSiacoinOutputs(dbTxn, txnID, txn, sces); err != nil {
 			return fmt.Errorf("addSiacoinOutputs: failed to add siacoin outputs: %v", err)
 		} else if err := s.addSiafundInputs(dbTxn, txnID, txn); err != nil {
 			return fmt.Errorf("addSiafundInputs: failed to add siafund inputs: %v", err)
-		} else if err := s.addSiafundOutputs(dbTxn, txnID, txn); err != nil {
+		} else if err := s.addSiafundOutputs(dbTxn, txnID, txn, sfes); err != nil {
 			return fmt.Errorf("addSiafundOutputs: failed to add siafund outputs: %v", err)
 		}
 	}
@@ -152,11 +160,20 @@ func (s *Store) deleteBlock(dbTxn txn, bid types.BlockID) error {
 func (s *Store) applyUpdates() error {
 	return s.transaction(func(dbTxn txn) error {
 		for _, update := range s.pendingUpdates {
+			sces := make(map[types.SiacoinOutputID]types.SiacoinElement)
+			update.ForEachSiacoinElement(func(sce types.SiacoinElement, spent bool) {
+				sces[types.SiacoinOutputID(sce.StateElement.ID)] = sce
+			})
+			sfes := make(map[types.SiafundOutputID]types.SiafundElement)
+			update.ForEachSiafundElement(func(sfe types.SiafundElement, spent bool) {
+				sfes[types.SiafundOutputID(sfe.StateElement.ID)] = sfe
+			})
+
 			if err := s.addBlock(dbTxn, update.Block, update.State.Index.Height); err != nil {
 				return fmt.Errorf("applyUpdates: failed to add block: %v", err)
 			} else if err := s.addMinerPayouts(dbTxn, update.Block.ID(), update.Block.MinerPayouts); err != nil {
 				return fmt.Errorf("applyUpdates: failed to add miner payouts: %v", err)
-			} else if err := s.addTransactions(dbTxn, update.Block.ID(), update.Block.Transactions); err != nil {
+			} else if err := s.addTransactions(dbTxn, update.Block.ID(), update.Block.Transactions, sces, sfes); err != nil {
 				return fmt.Errorf("applyUpdates: failed to add transactions: %v", err)
 			}
 		}

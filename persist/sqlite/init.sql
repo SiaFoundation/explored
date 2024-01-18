@@ -61,6 +61,7 @@ CREATE TABLE siacoin_outputs (
         transaction_order INTEGER NOT NULL,
         address BLOB NOT NULL,
         value BLOB NOT NULL,
+        maturity_height INTEGER NOT NULL,
         UNIQUE(transaction_id, transaction_order)
 );
 
@@ -82,6 +83,7 @@ CREATE TABLE siafund_outputs (
         transaction_order INTEGER NOT NULL,
         address BLOB NOT NULL,
         value BLOB NOT NULL,
+        claim_start BLOB NOT NULL,
         UNIQUE(transaction_id, transaction_order)
 );
 
