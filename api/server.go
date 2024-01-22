@@ -44,6 +44,8 @@ type (
 		BlockByID(id types.BlockID) (types.Block, error)
 		BlockByHeight(height uint64) (types.Block, error)
 		Transactions(ids []types.TransactionID) ([]types.Transaction, error)
+		UnspentSiacoinOutputs(address types.Address) ([]types.SiacoinOutput, error)
+		UnspentSiafundOutputs(address types.Address) ([]types.SiafundOutput, error)
 	}
 )
 
@@ -202,6 +204,38 @@ func (s *server) explorerTransactionsHandler(jc jape.Context) {
 	jc.Encode(txns)
 }
 
+func (s *server) explorerAddressesAddressHandler(jc jape.Context) {
+	var address types.Address
+	if jc.DecodeParam("address", &address) != nil {
+		return
+	}
+
+	unspentSiacoinOutputs, err := s.e.UnspentSiacoinOutputs(address)
+	if jc.Check("failed to get unspent siacoin outputs", err) != nil {
+		return
+	}
+	unspentSiafundOutputs, err := s.e.UnspentSiafundOutputs(address)
+	if jc.Check("failed to get unspent siafund outputs", err) != nil {
+		return
+	}
+
+	var unspentSC types.Currency
+	for _, sco := range unspentSiacoinOutputs {
+		unspentSC = unspentSC.Add(sco.Value)
+	}
+	var unspentSF uint64
+	for _, sfo := range unspentSiafundOutputs {
+		unspentSF += sfo.Value
+	}
+
+	jc.Encode(AddressesAddressResponse{
+		UnspentSiacoins:       unspentSC,
+		UnspentSiafunds:       unspentSF,
+		UnspentSiacoinOutputs: unspentSiacoinOutputs,
+		UnspentSiafundOutputs: unspentSiafundOutputs,
+	})
+}
+
 // NewServer returns an HTTP handler that serves the explored API.
 func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 	srv := server{
@@ -223,5 +257,6 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET    /explorer/block/height/:height": srv.explorerBlockHeightHandler,
 		"GET    /explorer/transactions/id/:id":  srv.explorerTransactionsIDHandler,
 		"POST   /explorer/transactions":         srv.explorerTransactionsHandler,
+		"GET   /explorer/addresses/:address":    srv.explorerAddressesAddressHandler,
 	})
 }

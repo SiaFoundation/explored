@@ -29,3 +29,11 @@ type TxpoolTransactionsResponse struct {
 	Transactions   []types.Transaction   `json:"transactions"`
 	V2Transactions []types.V2Transaction `json:"v2transactions"`
 }
+
+// AddressesAddressResponse is the response for /addresses/:address.
+type AddressesAddressResponse struct {
+	UnspentSiacoins       types.Currency        `json:"unspentSiacoins"`
+	UnspentSiafunds       uint64                `json:"unspentSiafunds"`
+	UnspentSiacoinOutputs []types.SiacoinOutput `json:"unspentSiacoinOutputs"`
+	UnspentSiafundOutputs []types.SiafundOutput `json:"unspentSiafundOutputs"`
+}

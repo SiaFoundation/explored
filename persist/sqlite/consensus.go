@@ -161,12 +161,12 @@ func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Trans
 	return nil
 }
 
-type ConsensusUpdate interface {
+type consensusUpdate interface {
 	ForEachSiacoinElement(fn func(sce types.SiacoinElement, spent bool))
 	ForEachSiafundElement(fn func(sfe types.SiafundElement, spent bool))
 }
 
-func (s *Store) addOutputs(dbTxn txn, update ConsensusUpdate) (map[types.SiacoinOutputID]int64, map[types.SiafundOutputID]int64, error) {
+func (s *Store) addOutputs(dbTxn txn, update consensusUpdate) (map[types.SiacoinOutputID]int64, map[types.SiafundOutputID]int64, error) {
 	scDBIds := make(map[types.SiacoinOutputID]int64)
 	{
 		scOutputsStmt, err := dbTxn.Prepare(`INSERT INTO siacoin_outputs(output_id, spent, maturity_height, address, value)
