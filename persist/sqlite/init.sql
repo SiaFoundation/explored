@@ -11,11 +11,31 @@ CREATE TABLE blocks (
         timestamp INTEGER NOT NULL
 );
 
+CREATE TABLE siacoin_outputs (
+        id INTEGER PRIMARY KEY,
+        spent INTEGER NOT NULL,
+        source INTEGER NOT NULL,
+        maturity_height INTEGER NOT NULL,
+        address BLOB NOT NULL,
+        value BLOB NOT NULL
+);
+
+CREATE INDEX siacoin_outputs_address_spent_index ON siacoin_outputs(address, spent);
+
+CREATE TABLE siafund_outputs (
+        id INTEGER PRIMARY KEY,
+        spent INTEGER NOT NULL,
+        claim_start BLOB NOT NULL,
+        address BLOB NOT NULL,
+        value BLOB NOT NULL
+);
+
+CREATE INDEX siafund_outputs_address_spent_index ON siafund_outputs(address, spent);
+
 CREATE TABLE miner_payouts (
         block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
         block_order INTEGER NOT NULL,
-        address BLOB NOT NULL,
-        value BLOB NOT NULL,
+        output_id INTEGER REFERENCES siacoin_outputs(id) ON DELETE CASCADE NOT NULL,
         UNIQUE(block_id, block_order)
 );
 
@@ -37,16 +57,16 @@ CREATE TABLE block_transactions (
 
 CREATE INDEX block_transactions_block_id_index ON block_transactions(block_id);
 
-CREATE TABLE arbitrary_data (
+CREATE TABLE transaction_arbitrary_data (
         transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
         transaction_order INTEGER NOT NULL,
         data BLOB NOT NULL,
         UNIQUE(transaction_id, transaction_order)
 );
 
-CREATE INDEX arbitrary_data_transaction_id_index ON arbitrary_data(transaction_id);
+CREATE INDEX transaction_arbitrary_data_transaction_id_index ON transaction_arbitrary_data(transaction_id);
 
-CREATE TABLE siacoin_inputs (
+CREATE TABLE transaction_siacoin_inputs (
         transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
         transaction_order INTEGER NOT NULL,
         parent_id BLOB NOT NULL,
@@ -54,20 +74,18 @@ CREATE TABLE siacoin_inputs (
         UNIQUE(transaction_id, transaction_order)
 );
 
-CREATE INDEX siacoin_inputs_transaction_id_index ON siacoin_inputs(transaction_id);
+CREATE INDEX transaction_siacoin_inputs_transaction_id_index ON transaction_siacoin_inputs(transaction_id);
 
-CREATE TABLE siacoin_outputs (
+CREATE TABLE transaction_siacoin_outputs (
         transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
         transaction_order INTEGER NOT NULL,
-        address BLOB NOT NULL,
-        value BLOB NOT NULL,
-        maturity_height INTEGER NOT NULL,
+        output_id INTEGER REFERENCES siacoin_outputs(id) ON DELETE CASCADE NOT NULL,
         UNIQUE(transaction_id, transaction_order)
 );
 
-CREATE INDEX siacoin_outputs_transaction_id_index ON siacoin_outputs(transaction_id);
+CREATE INDEX transaction_siacoin_outputs_transaction_id_index ON transaction_siacoin_outputs(transaction_id);
 
-CREATE TABLE siafund_inputs (
+CREATE TABLE transaction_siafund_inputs (
         transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
         transaction_order INTEGER NOT NULL,
         parent_id BLOB NOT NULL,
@@ -76,18 +94,16 @@ CREATE TABLE siafund_inputs (
         UNIQUE(transaction_id, transaction_order)
 );
 
-CREATE INDEX siafund_inputs_transaction_id_index ON siafund_inputs(transaction_id);
+CREATE INDEX transaction_siafund_inputs_transaction_id_index ON transaction_siafund_inputs(transaction_id);
 
-CREATE TABLE siafund_outputs (
+CREATE TABLE transaction_siafund_outputs (
         transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
         transaction_order INTEGER NOT NULL,
-        address BLOB NOT NULL,
-        value BLOB NOT NULL,
-        claim_start BLOB NOT NULL,
+        output_id INTEGER REFERENCES siafund_outputs(id) ON DELETE CASCADE NOT NULL,
         UNIQUE(transaction_id, transaction_order)
 );
 
-CREATE INDEX siafund_outputs_transaction_id_index ON siafund_outputs(transaction_id);
+CREATE INDEX transaction_siafund_outputs_transaction_id_index ON transaction_siafund_outputs(transaction_id);
 
 -- initialize the global settings table
 INSERT INTO global_settings (id, db_version) VALUES (0, 0); -- should not be changed
