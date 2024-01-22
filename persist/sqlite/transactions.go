@@ -63,7 +63,6 @@ ORDER BY transaction_order DESC`
 		idMap[outputID] = txnID
 	}
 
-	// map transaction ID to output list
 	outputQuery := `SELECT id, address, value
 	FROM siacoin_outputs
 	WHERE id IN (` + queryPlaceHolders(len(ids)) + `)`
@@ -72,6 +71,7 @@ ORDER BY transaction_order DESC`
 		return nil, fmt.Errorf("failed to query siacoin outputs: %v", err)
 	}
 
+	// map transaction ID to output list
 	result := make(map[int64][]types.SiacoinOutput)
 	for outputRows.Next() {
 		var outputID int64
@@ -157,7 +157,6 @@ ORDER BY transaction_order DESC`
 		idMap[outputID] = txnID
 	}
 
-	// map transaction ID to output list
 	outputQuery := `SELECT id, address, value
     FROM siafund_outputs
     WHERE id IN (` + queryPlaceHolders(len(ids)) + `)`
@@ -166,6 +165,7 @@ ORDER BY transaction_order DESC`
 		return nil, fmt.Errorf("failed to query siafund outputs: %v", err)
 	}
 
+	// map transaction ID to output list
 	result := make(map[int64][]types.SiafundOutput)
 	for outputRows.Next() {
 		var outputID int64

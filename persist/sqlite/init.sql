@@ -14,7 +14,6 @@ CREATE TABLE blocks (
 CREATE TABLE siacoin_outputs (
         id INTEGER PRIMARY KEY,
         spent INTEGER NOT NULL,
-        source INTEGER NOT NULL,
         maturity_height INTEGER NOT NULL,
         address BLOB NOT NULL,
         value BLOB NOT NULL
