@@ -161,15 +161,18 @@ func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Trans
 	return nil
 }
 
-func (s *Store) deleteBlock(dbTxn txn, bid types.BlockID) error {
-	_, err := dbTxn.Exec("DELETE FROM blocks WHERE id = ?", dbEncode(bid))
-	return err
+type ConsensusUpdate interface {
+	ForEachSiacoinElement(fn func(sce types.SiacoinElement, spent bool))
+	ForEachSiafundElement(fn func(sfe types.SiafundElement, spent bool))
 }
 
-func (s *Store) addOutputs(dbTxn txn, update *chain.ApplyUpdate) (map[types.SiacoinOutputID]int64, map[types.SiafundOutputID]int64, error) {
+func (s *Store) addOutputs(dbTxn txn, update ConsensusUpdate) (map[types.SiacoinOutputID]int64, map[types.SiafundOutputID]int64, error) {
 	scDBIds := make(map[types.SiacoinOutputID]int64)
 	{
-		scOutputsStmt, err := dbTxn.Prepare(`INSERT INTO siacoin_outputs(spent, maturity_height, address, value) VALUES (?, ?, ?, ?)`)
+		scOutputsStmt, err := dbTxn.Prepare(`INSERT INTO siacoin_outputs(output_id, spent, maturity_height, address, value)
+			VALUES (?, ?, ?, ?, ?)
+			ON CONFLICT(output_id)
+			DO UPDATE SET spent = ?`)
 		if err != nil {
 			return nil, nil, fmt.Errorf("addOutputs: failed to prepare siacoin_outputs statement: %v", err)
 		}
@@ -181,7 +184,7 @@ func (s *Store) addOutputs(dbTxn txn, update *chain.ApplyUpdate) (map[types.Siac
 				return
 			}
 
-			result, err := scOutputsStmt.Exec(false, sce.MaturityHeight, dbEncode(sce.SiacoinOutput.Address), dbEncode(sce.SiacoinOutput.Value))
+			result, err := scOutputsStmt.Exec(dbEncode(sce.StateElement.ID), spent, sce.MaturityHeight, dbEncode(sce.SiacoinOutput.Address), dbEncode(sce.SiacoinOutput.Value), spent)
 			if err != nil {
 				updateErr = fmt.Errorf("addOutputs: failed to execute siacoin_outputs statement: %v", err)
 				return
@@ -202,7 +205,10 @@ func (s *Store) addOutputs(dbTxn txn, update *chain.ApplyUpdate) (map[types.Siac
 
 	sfDBIds := make(map[types.SiafundOutputID]int64)
 	{
-		sfOutputsStmt, err := dbTxn.Prepare(`INSERT INTO siafund_outputs(spent, claim_start, address, value) VALUES (?, ?, ?, ?)`)
+		sfOutputsStmt, err := dbTxn.Prepare(`INSERT INTO siafund_outputs(output_id, spent, claim_start, address, value)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(output_id)
+		DO UPDATE SET spent = ?`)
 		if err != nil {
 			return nil, nil, fmt.Errorf("addOutputs: failed to prepare siafund_outputs statement: %v", err)
 		}
@@ -214,7 +220,7 @@ func (s *Store) addOutputs(dbTxn txn, update *chain.ApplyUpdate) (map[types.Siac
 				return
 			}
 
-			result, err := sfOutputsStmt.Exec(false, dbEncode(sfe.ClaimStart), dbEncode(sfe.SiafundOutput.Address), dbEncode(sfe.SiafundOutput.Value))
+			result, err := sfOutputsStmt.Exec(dbEncode(sfe.StateElement.ID), spent, dbEncode(sfe.ClaimStart), dbEncode(sfe.SiafundOutput.Address), dbEncode(sfe.SiafundOutput.Value), spent)
 			if err != nil {
 				updateErr = fmt.Errorf("addOutputs: failed to execute siafund_outputs statement: %v", err)
 				return
@@ -234,6 +240,11 @@ func (s *Store) addOutputs(dbTxn txn, update *chain.ApplyUpdate) (map[types.Siac
 	}
 
 	return scDBIds, sfDBIds, nil
+}
+
+func (s *Store) deleteBlock(dbTxn txn, bid types.BlockID) error {
+	_, err := dbTxn.Exec("DELETE FROM blocks WHERE id = ?", dbEncode(bid))
+	return err
 }
 
 func (s *Store) applyUpdates() error {
@@ -261,6 +272,8 @@ func (s *Store) revertUpdate(cru *chain.RevertUpdate) error {
 	return s.transaction(func(dbTxn txn) error {
 		if err := s.deleteBlock(dbTxn, cru.Block.ID()); err != nil {
 			return fmt.Errorf("revertUpdate: failed to delete block: %v", err)
+		} else if _, _, err := s.addOutputs(dbTxn, cru); err != nil {
+			return fmt.Errorf("revertUpdate: failed to update output state: %v", err)
 		}
 		return nil
 	})
