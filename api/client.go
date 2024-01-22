@@ -93,6 +93,6 @@ func (c *Client) Transactions(ids []types.TransactionID) (resp []types.Transacti
 
 // Address returns the specified address' balances and unspent outputs.
 func (c *Client) Address(address types.Address) (resp AddressesAddressResponse, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/addresses/id/%s", address), &resp)
+	err = c.c.GET(fmt.Sprintf("/explorer/addresses/%s", address), &resp)
 	return
 }

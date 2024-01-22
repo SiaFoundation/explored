@@ -313,7 +313,7 @@ func (s *Store) Transactions(ids []types.TransactionID) (results []types.Transac
 		}
 		results, err = s.getTransactions(tx, dbIDs)
 		if err != nil {
-			return fmt.Errorf("failed to get transactions: %v")
+			return fmt.Errorf("failed to get transactions: %v", err)
 		}
 		return err
 	})

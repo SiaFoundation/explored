@@ -118,7 +118,6 @@ func (s *Store) addSiafundOutputs(dbTxn txn, id int64, txn types.Transaction, db
 		}
 	}
 	return nil
-
 }
 
 func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Transaction, scDBIds map[types.SiacoinOutputID]int64, sfDBIds map[types.SiafundOutputID]int64) error {
@@ -169,14 +168,14 @@ type consensusUpdate interface {
 func (s *Store) addOutputs(dbTxn txn, update consensusUpdate) (map[types.SiacoinOutputID]int64, map[types.SiafundOutputID]int64, error) {
 	scDBIds := make(map[types.SiacoinOutputID]int64)
 	{
-		scOutputsStmt, err := dbTxn.Prepare(`INSERT INTO siacoin_outputs(output_id, spent, maturity_height, address, value)
+		stmt, err := dbTxn.Prepare(`INSERT INTO siacoin_outputs(output_id, spent, maturity_height, address, value)
 			VALUES (?, ?, ?, ?, ?)
 			ON CONFLICT(output_id)
 			DO UPDATE SET spent = ?`)
 		if err != nil {
 			return nil, nil, fmt.Errorf("addOutputs: failed to prepare siacoin_outputs statement: %v", err)
 		}
-		defer scOutputsStmt.Close()
+		defer stmt.Close()
 
 		var updateErr error
 		update.ForEachSiacoinElement(func(sce types.SiacoinElement, spent bool) {
@@ -184,7 +183,7 @@ func (s *Store) addOutputs(dbTxn txn, update consensusUpdate) (map[types.Siacoin
 				return
 			}
 
-			result, err := scOutputsStmt.Exec(dbEncode(sce.StateElement.ID), spent, sce.MaturityHeight, dbEncode(sce.SiacoinOutput.Address), dbEncode(sce.SiacoinOutput.Value), spent)
+			result, err := stmt.Exec(dbEncode(sce.StateElement.ID), spent, sce.MaturityHeight, dbEncode(sce.SiacoinOutput.Address), dbEncode(sce.SiacoinOutput.Value), spent)
 			if err != nil {
 				updateErr = fmt.Errorf("addOutputs: failed to execute siacoin_outputs statement: %v", err)
 				return
@@ -205,14 +204,14 @@ func (s *Store) addOutputs(dbTxn txn, update consensusUpdate) (map[types.Siacoin
 
 	sfDBIds := make(map[types.SiafundOutputID]int64)
 	{
-		sfOutputsStmt, err := dbTxn.Prepare(`INSERT INTO siafund_outputs(output_id, spent, claim_start, address, value)
+		stmt, err := dbTxn.Prepare(`INSERT INTO siafund_outputs(output_id, spent, claim_start, address, value)
 		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(output_id)
 		DO UPDATE SET spent = ?`)
 		if err != nil {
 			return nil, nil, fmt.Errorf("addOutputs: failed to prepare siafund_outputs statement: %v", err)
 		}
-		defer sfOutputsStmt.Close()
+		defer stmt.Close()
 
 		var updateErr error
 		update.ForEachSiafundElement(func(sfe types.SiafundElement, spent bool) {
@@ -220,7 +219,7 @@ func (s *Store) addOutputs(dbTxn txn, update consensusUpdate) (map[types.Siacoin
 				return
 			}
 
-			result, err := sfOutputsStmt.Exec(dbEncode(sfe.StateElement.ID), spent, dbEncode(sfe.ClaimStart), dbEncode(sfe.SiafundOutput.Address), dbEncode(sfe.SiafundOutput.Value), spent)
+			result, err := stmt.Exec(dbEncode(sfe.StateElement.ID), spent, dbEncode(sfe.ClaimStart), dbEncode(sfe.SiafundOutput.Address), dbEncode(sfe.SiafundOutput.Value), spent)
 			if err != nil {
 				updateErr = fmt.Errorf("addOutputs: failed to execute siafund_outputs statement: %v", err)
 				return
