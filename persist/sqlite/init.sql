@@ -13,12 +13,11 @@ CREATE TABLE blocks (
 
 CREATE TABLE siacoin_outputs (
         id INTEGER PRIMARY KEY,
-        output_id BLOB NOT NULL,
+        output_id BLOB UNIQUE NOT NULL,
         spent INTEGER NOT NULL,
         maturity_height INTEGER NOT NULL,
         address BLOB NOT NULL,
-        value BLOB NOT NULL,
-        UNIQUE(output_id)
+        value BLOB NOT NULL
 );
 
 CREATE INDEX siacoin_outputs_output_id_index ON siacoin_outputs(output_id);
@@ -26,12 +25,11 @@ CREATE INDEX siacoin_outputs_address_spent_index ON siacoin_outputs(address, spe
 
 CREATE TABLE siafund_outputs (
         id INTEGER PRIMARY KEY,
-        output_id BLOB NOT NULL,
+        output_id BLOB UNIQUE NOT NULL,
         spent INTEGER NOT NULL,
         claim_start BLOB NOT NULL,
         address BLOB NOT NULL,
-        value BLOB NOT NULL,
-        UNIQUE(output_id)
+        value BLOB NOT NULL
 );
 
 CREATE INDEX siafund_outputs_output_id_index ON siafund_outputs(output_id);
