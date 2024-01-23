@@ -67,21 +67,21 @@ func (c *Client) Tip() (resp types.ChainIndex, err error) {
 	return
 }
 
-// Block returns the block with the specified ID.
-func (c *Client) Block(id types.BlockID) (resp types.Block, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/block/id/%s", id), &resp)
+// BestTip returns the chain index at the specified height.
+func (c *Client) BestTip(height uint64) (resp types.ChainIndex, err error) {
+	err = c.c.GET(fmt.Sprintf("/explorer/tip/%d", height), &resp)
 	return
 }
 
-// BlockHeight returns the block with the specified height.
-func (c *Client) BlockHeight(height uint64) (resp types.Block, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/block/height/%d", height), &resp)
+// Block returns the block with the specified ID.
+func (c *Client) Block(id types.BlockID) (resp types.Block, err error) {
+	err = c.c.GET(fmt.Sprintf("/explorer/block/%s", id), &resp)
 	return
 }
 
 // Transaction returns the transaction with the specified ID.
 func (c *Client) Transaction(id types.TransactionID) (resp types.Transaction, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/transactions/id/%s", id), &resp)
+	err = c.c.GET(fmt.Sprintf("/explorer/transactions/%s", id), &resp)
 	return
 }
 
