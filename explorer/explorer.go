@@ -11,8 +11,8 @@ type Store interface {
 	chain.Subscriber
 
 	Tip() (types.ChainIndex, error)
-	BlockByID(id types.BlockID) (types.Block, error)
-	BlockByHeight(height uint64) (types.Block, error)
+	Block(id types.BlockID) (types.Block, error)
+	BestTip(height uint64) (types.ChainIndex, error)
 	Transactions(ids []types.TransactionID) ([]types.Transaction, error)
 	UnspentSiacoinOutputs(address types.Address) ([]types.SiacoinOutput, error)
 	UnspentSiafundOutputs(address types.Address) ([]types.SiafundOutput, error)
@@ -33,14 +33,14 @@ func (e *Explorer) Tip() (types.ChainIndex, error) {
 	return e.s.Tip()
 }
 
-// BlockByID returns the block with the specified ID.
-func (e *Explorer) BlockByID(id types.BlockID) (types.Block, error) {
-	return e.s.BlockByID(id)
+// Block returns the block with the specified ID.
+func (e *Explorer) Block(id types.BlockID) (types.Block, error) {
+	return e.s.Block(id)
 }
 
-// BlockByHeight returns the block with the specified height.
-func (e *Explorer) BlockByHeight(height uint64) (types.Block, error) {
-	return e.s.BlockByHeight(height)
+// BestTip returns the chain index at the specified height.
+func (e *Explorer) BestTip(height uint64) (types.ChainIndex, error) {
+	return e.s.BestTip(height)
 }
 
 // Transactions returns the transactions with the specified IDs.

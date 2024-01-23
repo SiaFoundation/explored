@@ -41,8 +41,8 @@ type (
 	// Explorer implements a Sia explorer.
 	Explorer interface {
 		Tip() (types.ChainIndex, error)
-		BlockByID(id types.BlockID) (types.Block, error)
-		BlockByHeight(height uint64) (types.Block, error)
+		Block(id types.BlockID) (types.Block, error)
+		BestTip(height uint64) (types.ChainIndex, error)
 		Transactions(ids []types.TransactionID) ([]types.Transaction, error)
 		UnspentSiacoinOutputs(address types.Address) ([]types.SiacoinOutput, error)
 		UnspentSiafundOutputs(address types.Address) ([]types.SiafundOutput, error)
@@ -142,24 +142,24 @@ func (s *server) explorerTipHandler(jc jape.Context) {
 	jc.Encode(tip)
 }
 
+func (s *server) explorerTipHeightHandler(jc jape.Context) {
+	var height uint64
+	if jc.DecodeParam("height", &height) != nil {
+		return
+	}
+	tip, err := s.e.BestTip(height)
+	if jc.Check("failed to get block", err) != nil {
+		return
+	}
+	jc.Encode(tip)
+}
+
 func (s *server) explorerBlockHandler(jc jape.Context) {
 	var id types.BlockID
 	if jc.DecodeParam("id", &id) != nil {
 		return
 	}
-	block, err := s.e.BlockByID(id)
-	if jc.Check("failed to get block", err) != nil {
-		return
-	}
-	jc.Encode(block)
-}
-
-func (s *server) explorerBlockHeightHandler(jc jape.Context) {
-	var height uint64
-	if jc.DecodeParam("height", &height) != nil {
-		return
-	}
-	block, err := s.e.BlockByHeight(height)
+	block, err := s.e.Block(id)
 	if jc.Check("failed to get block", err) != nil {
 		return
 	}
@@ -252,11 +252,11 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET    /txpool/fee":          srv.txpoolFeeHandler,
 		"POST   /txpool/broadcast":    srv.txpoolBroadcastHandler,
 
-		"GET    /explorer/tip":                  srv.explorerTipHandler,
-		"GET    /explorer/block/id/:id":         srv.explorerBlockHandler,
-		"GET    /explorer/block/height/:height": srv.explorerBlockHeightHandler,
-		"GET    /explorer/transactions/id/:id":  srv.explorerTransactionsIDHandler,
-		"POST   /explorer/transactions":         srv.explorerTransactionsHandler,
-		"GET   /explorer/addresses/:address":    srv.explorerAddressesAddressHandler,
+		"GET    /explorer/tip":                srv.explorerTipHandler,
+		"GET    /explorer/tip/:height":        srv.explorerTipHeightHandler,
+		"GET    /explorer/block/:id":          srv.explorerBlockHandler,
+		"GET    /explorer/transactions/:id":   srv.explorerTransactionsIDHandler,
+		"POST   /explorer/transactions":       srv.explorerTransactionsHandler,
+		"GET    /explorer/addresses/:address": srv.explorerAddressesAddressHandler,
 	})
 }
