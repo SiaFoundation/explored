@@ -91,8 +91,14 @@ func (c *Client) Transactions(ids []types.TransactionID) (resp []types.Transacti
 	return
 }
 
-// Address returns the specified address' balances and unspent outputs.
-func (c *Client) Address(address types.Address) (resp AddressesAddressResponse, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/addresses/%s", address), &resp)
+// AddressUTXOs returns the specified address' unspent outputs.
+func (c *Client) AddressUTXOs(address types.Address) (resp AddressUTXOsResponse, err error) {
+	err = c.c.GET(fmt.Sprintf("/explorer/addresses/%s/utxos", address), &resp)
+	return
+}
+
+// AddressBalance returns the specified address' balance.
+func (c *Client) AddressBalance(address types.Address) (resp AddressBalanceResponse, err error) {
+	err = c.c.GET(fmt.Sprintf("/explorer/addresses/%s/balance", address), &resp)
 	return
 }

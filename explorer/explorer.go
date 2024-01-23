@@ -16,6 +16,7 @@ type Store interface {
 	Transactions(ids []types.TransactionID) ([]types.Transaction, error)
 	UnspentSiacoinOutputs(address types.Address) ([]types.SiacoinOutput, error)
 	UnspentSiafundOutputs(address types.Address) ([]types.SiafundOutput, error)
+	Balance(address types.Address) (sc types.Currency, sf uint64, err error)
 }
 
 // Explorer implements a Sia explorer.
@@ -58,4 +59,9 @@ func (e *Explorer) UnspentSiacoinOutputs(address types.Address) ([]types.Siacoin
 // specified address.
 func (e *Explorer) UnspentSiafundOutputs(address types.Address) ([]types.SiafundOutput, error) {
 	return e.s.UnspentSiafundOutputs(address)
+}
+
+// Balance returns the balance of an address.
+func (e *Explorer) Balance(address types.Address) (sc types.Currency, sf uint64, err error) {
+	return e.s.Balance(address)
 }
