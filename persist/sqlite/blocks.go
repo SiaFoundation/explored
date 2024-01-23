@@ -25,7 +25,8 @@ func (s *Store) BlockByID(id types.BlockID) (result types.Block, err error) {
 			return fmt.Errorf("failed to get block transaction IDs: %v", err)
 		}
 
-		if result.Transactions, err = s.getTransactions(tx, transactionIDs); err != nil {
+		result.Transactions, err = s.getTransactions(tx, transactionIDs)
+		if err != nil {
 			return fmt.Errorf("failed to get transactions: %v", err)
 		}
 
