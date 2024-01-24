@@ -92,8 +92,8 @@ func (c *Client) Transactions(ids []types.TransactionID) (resp []types.Transacti
 }
 
 // AddressUTXOs returns the specified address' unspent outputs.
-func (c *Client) AddressUTXOs(address types.Address) (resp AddressUTXOsResponse, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/addresses/%s/utxos", address), &resp)
+func (c *Client) AddressUTXOs(address types.Address, limit, offset uint64) (resp AddressUTXOsResponse, err error) {
+	err = c.c.GET(fmt.Sprintf("/explorer/addresses/%s/utxos?limit=%d&offset=%d", address, limit, offset), &resp)
 	return
 }
 

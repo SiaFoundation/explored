@@ -45,8 +45,8 @@ type (
 		BestTip(height uint64) (types.ChainIndex, error)
 		Transactions(ids []types.TransactionID) ([]types.Transaction, error)
 		Balance(address types.Address) (sc types.Currency, sf uint64, err error)
-		UnspentSiacoinOutputs(address types.Address) ([]types.SiacoinOutput, error)
-		UnspentSiafundOutputs(address types.Address) ([]types.SiafundOutput, error)
+		UnspentSiacoinOutputs(address types.Address, limit, offset uint64) ([]types.SiacoinOutput, error)
+		UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]types.SiafundOutput, error)
 	}
 )
 
@@ -211,11 +211,17 @@ func (s *server) explorerAddressessAddressUtxosHandler(jc jape.Context) {
 		return
 	}
 
-	unspentSiacoinOutputs, err := s.e.UnspentSiacoinOutputs(address)
+	limit := uint64(100)
+	offset := uint64(0)
+	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
+		return
+	}
+
+	unspentSiacoinOutputs, err := s.e.UnspentSiacoinOutputs(address, limit, offset)
 	if jc.Check("failed to get unspent siacoin outputs", err) != nil {
 		return
 	}
-	unspentSiafundOutputs, err := s.e.UnspentSiafundOutputs(address)
+	unspentSiafundOutputs, err := s.e.UnspentSiafundOutputs(address, limit, offset)
 	if jc.Check("failed to get unspent siafund outputs", err) != nil {
 		return
 	}
