@@ -263,80 +263,74 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate) error {
 	return nil
 }
 
-func (s *Store) addOutputs(dbTxn txn, update consensusUpdate) (map[types.SiacoinOutputID]int64, map[types.SiafundOutputID]int64, error) {
+func (s *Store) addSCOutputs(dbTxn txn, update consensusUpdate) (map[types.SiacoinOutputID]int64, error) {
 	scDBIds := make(map[types.SiacoinOutputID]int64)
-	{
-		stmt, err := dbTxn.Prepare(`INSERT INTO siacoin_outputs(output_id, spent, maturity_height, address, value)
+
+	stmt, err := dbTxn.Prepare(`INSERT INTO siacoin_outputs(output_id, spent, maturity_height, address, value)
 			VALUES (?, ?, ?, ?, ?)
 			ON CONFLICT(output_id)
 			DO UPDATE SET spent = ?`)
-		if err != nil {
-			return nil, nil, fmt.Errorf("addOutputs: failed to prepare siacoin_outputs statement: %v", err)
-		}
-		defer stmt.Close()
-
-		var updateErr error
-		update.ForEachSiacoinElement(func(sce types.SiacoinElement, spent bool) {
-			if updateErr != nil {
-				return
-			}
-
-			result, err := stmt.Exec(dbEncode(sce.StateElement.ID), spent, sce.MaturityHeight, dbEncode(sce.SiacoinOutput.Address), dbEncode(sce.SiacoinOutput.Value), spent)
-			if err != nil {
-				updateErr = fmt.Errorf("addOutputs: failed to execute siacoin_outputs statement: %v", err)
-				return
-			}
-
-			dbID, err := result.LastInsertId()
-			if err != nil {
-				updateErr = fmt.Errorf("addOutputs: failed to get last insert ID: %v", err)
-				return
-			}
-
-			scDBIds[types.SiacoinOutputID(sce.StateElement.ID)] = dbID
-		})
-		if updateErr != nil {
-			return nil, nil, updateErr
-		}
+	if err != nil {
+		return nil, fmt.Errorf("addSCOutputs: failed to prepare siacoin_outputs statement: %v", err)
 	}
+	defer stmt.Close()
 
+	var updateErr error
+	update.ForEachSiacoinElement(func(sce types.SiacoinElement, spent bool) {
+		if updateErr != nil {
+			return
+		}
+
+		result, err := stmt.Exec(dbEncode(sce.StateElement.ID), spent, sce.MaturityHeight, dbEncode(sce.SiacoinOutput.Address), dbEncode(sce.SiacoinOutput.Value), spent)
+		if err != nil {
+			updateErr = fmt.Errorf("addSCOutputs: failed to execute siacoin_outputs statement: %v", err)
+			return
+		}
+
+		dbID, err := result.LastInsertId()
+		if err != nil {
+			updateErr = fmt.Errorf("addSCOutputs: failed to get last insert ID: %v", err)
+			return
+		}
+
+		scDBIds[types.SiacoinOutputID(sce.StateElement.ID)] = dbID
+	})
+	return scDBIds, updateErr
+}
+
+func (s *Store) addSFOutputs(dbTxn txn, update consensusUpdate) (map[types.SiafundOutputID]int64, error) {
 	sfDBIds := make(map[types.SiafundOutputID]int64)
-	{
-		stmt, err := dbTxn.Prepare(`INSERT INTO siafund_outputs(output_id, spent, claim_start, address, value)
+
+	stmt, err := dbTxn.Prepare(`INSERT INTO siafund_outputs(output_id, spent, claim_start, address, value)
 		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(output_id)
 		DO UPDATE SET spent = ?`)
-		if err != nil {
-			return nil, nil, fmt.Errorf("addOutputs: failed to prepare siafund_outputs statement: %v", err)
-		}
-		defer stmt.Close()
-
-		var updateErr error
-		update.ForEachSiafundElement(func(sfe types.SiafundElement, spent bool) {
-			if updateErr != nil {
-				return
-			}
-
-			result, err := stmt.Exec(dbEncode(sfe.StateElement.ID), spent, dbEncode(sfe.ClaimStart), dbEncode(sfe.SiafundOutput.Address), dbEncode(sfe.SiafundOutput.Value), spent)
-			if err != nil {
-				updateErr = fmt.Errorf("addOutputs: failed to execute siafund_outputs statement: %v", err)
-				return
-			}
-
-			dbID, err := result.LastInsertId()
-			if err != nil {
-				updateErr = fmt.Errorf("addOutputs: failed to get last insert ID: %v", err)
-				return
-			}
-
-			sfDBIds[types.SiafundOutputID(sfe.StateElement.ID)] = dbID
-		})
-		if updateErr != nil {
-			return nil, nil, updateErr
-		}
+	if err != nil {
+		return nil, fmt.Errorf("addSFOutputs: failed to prepare siafund_outputs statement: %v", err)
 	}
+	defer stmt.Close()
 
-	return scDBIds, sfDBIds, nil
+	var updateErr error
+	update.ForEachSiafundElement(func(sfe types.SiafundElement, spent bool) {
+		if updateErr != nil {
+			return
+		}
+
+		result, err := stmt.Exec(dbEncode(sfe.StateElement.ID), spent, dbEncode(sfe.ClaimStart), dbEncode(sfe.SiafundOutput.Address), dbEncode(sfe.SiafundOutput.Value), spent)
+		if err != nil {
+			updateErr = fmt.Errorf("addSFOutputs: failed to execute siafund_outputs statement: %v", err)
+			return
+		}
+
+		dbID, err := result.LastInsertId()
+		if err != nil {
+			updateErr = fmt.Errorf("addSFOutputs: failed to get last insert ID: %v", err)
+			return
+		}
+
+		sfDBIds[types.SiafundOutputID(sfe.StateElement.ID)] = dbID
+	})
+	return sfDBIds, updateErr
 }
 
 func (s *Store) deleteBlock(dbTxn txn, bid types.BlockID) error {
@@ -347,10 +341,15 @@ func (s *Store) deleteBlock(dbTxn txn, bid types.BlockID) error {
 func (s *Store) applyUpdates() error {
 	return s.transaction(func(dbTxn txn) error {
 		for _, update := range s.pendingUpdates {
-			scDBIds, sfDBIds, err := s.addOutputs(dbTxn, update)
+			scDBIds, err := s.addSCOutputs(dbTxn, update)
 			if err != nil {
-				return fmt.Errorf("applyUpdates: failed to add outputs: %v", err)
-			} else if err := s.updateBalances(dbTxn, update); err != nil {
+				return fmt.Errorf("applyUpdates: failed to add siacoin outputs: %v", err)
+			}
+			sfDBIds, err := s.addSFOutputs(dbTxn, update)
+			if err != nil {
+				return fmt.Errorf("applyUpdates: failed to add siafund outputs: %v", err)
+			}
+			if err := s.updateBalances(dbTxn, update); err != nil {
 				return fmt.Errorf("applyUpdates: failed to update balances: %v", err)
 			}
 
@@ -371,8 +370,10 @@ func (s *Store) revertUpdate(cru *chain.RevertUpdate) error {
 	return s.transaction(func(dbTxn txn) error {
 		if err := s.deleteBlock(dbTxn, cru.Block.ID()); err != nil {
 			return fmt.Errorf("revertUpdate: failed to delete block: %v", err)
-		} else if _, _, err := s.addOutputs(dbTxn, cru); err != nil {
-			return fmt.Errorf("revertUpdate: failed to update output state: %v", err)
+		} else if _, err := s.addSCOutputs(dbTxn, cru); err != nil {
+			return fmt.Errorf("revertUpdate: failed to update siacoin output state: %v", err)
+		} else if _, err := s.addSFOutputs(dbTxn, cru); err != nil {
+			return fmt.Errorf("revertUpdate: failed to update siafund output state: %v", err)
 		} else if err := s.updateBalances(dbTxn, cru); err != nil {
 			return fmt.Errorf("revertUpdate: failed to update balances: %v", err)
 		}
