@@ -54,7 +54,7 @@ CREATE INDEX miner_payouts_block_id_index ON miner_payouts(block_id);
 
 CREATE TABLE transactions (
         id INTEGER PRIMARY KEY,
-        transaction_id BLOB NOT NULL
+        transaction_id BLOB UNIQUE NOT NULL
 );
 
 CREATE INDEX transactions_transaction_id_index ON transactions(transaction_id);

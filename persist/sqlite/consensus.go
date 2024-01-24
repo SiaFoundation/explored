@@ -121,6 +121,12 @@ func (s *Store) addSiafundOutputs(dbTxn txn, id int64, txn types.Transaction, db
 }
 
 func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Transaction, scDBIds map[types.SiacoinOutputID]int64, sfDBIds map[types.SiafundOutputID]int64) error {
+	existingTransactionsStmt, err := dbTxn.Prepare(`SELECT id FROM transactions WHERE transaction_id = ?`)
+	if err != nil {
+		return fmt.Errorf("addTransactions: failed to prepare existing transactions statement: %v", err)
+	}
+	defer existingTransactionsStmt.Close()
+
 	transactionsStmt, err := dbTxn.Prepare(`INSERT INTO transactions(transaction_id) VALUES (?);`)
 	if err != nil {
 		return fmt.Errorf("addTransactions: failed to prepare transactions statement: %v", err)
@@ -134,13 +140,19 @@ func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Trans
 	defer blockTransactionsStmt.Close()
 
 	for i, txn := range txns {
-		result, err := transactionsStmt.Exec(dbEncode(txn.ID()))
-		if err != nil {
-			return fmt.Errorf("addTransactions: failed to insert into transactions: %v", err)
-		}
-		txnID, err := result.LastInsertId()
-		if err != nil {
-			return fmt.Errorf("addTransactions: failed to get insert result ID: %v", err)
+		var txnID int64
+		err := existingTransactionsStmt.QueryRow(dbEncode(txn.ID())).Scan(&txnID)
+		if err == sql.ErrNoRows {
+			result, err := transactionsStmt.Exec(dbEncode(txn.ID()))
+			if err != nil {
+				return fmt.Errorf("addTransactions: failed to insert into transactions: %v", err)
+			}
+			txnID, err = result.LastInsertId()
+			if err != nil {
+				return fmt.Errorf("addTransactions: failed to get insert result ID: %v", err)
+			}
+		} else if err != nil {
+			return fmt.Errorf("addTransactions: failed to check for existing transaction: %v", err)
 		}
 
 		if _, err := blockTransactionsStmt.Exec(dbEncode(bid), txnID, i); err != nil {
