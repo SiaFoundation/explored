@@ -40,47 +40,26 @@ ORDER BY transaction_order DESC`
 
 // transactionSiacoinOutputs returns the siacoin outputs for each transaction.
 func transactionSiacoinOutputs(tx txn, txnIDs []int64) (map[int64][]types.SiacoinOutput, error) {
-	query := `SELECT transaction_id, output_id
-FROM transaction_siacoin_outputs
-WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
-ORDER BY transaction_order DESC`
+	query := `SELECT ts.transaction_id, sc.address, sc.value
+FROM siacoin_outputs sc
+INNER JOIN transaction_siacoin_outputs ts ON (ts.output_id = sc.id)
+WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
+ORDER BY ts.transaction_order DESC`
 	rows, err := tx.Query(query, queryArgs(txnIDs)...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query siacoin output ids: %v", err)
 	}
 	defer rows.Close()
 
-	var ids []int64
-	// output ID -> transaction ID
-	idMap := make(map[int64]int64)
-	for rows.Next() {
-		var txnID int64
-		var outputID int64
-		if err := rows.Scan(&txnID, &outputID); err != nil {
-			return nil, fmt.Errorf("failed to scan siacoin output id: %v", err)
-		}
-		ids = append(ids, outputID)
-		idMap[outputID] = txnID
-	}
-
-	outputQuery := `SELECT id, address, value
-	FROM siacoin_outputs
-	WHERE id IN (` + queryPlaceHolders(len(ids)) + `)`
-	outputRows, err := tx.Query(outputQuery, queryArgs(ids)...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query siacoin outputs: %v", err)
-	}
-	defer outputRows.Close()
-
 	// map transaction ID to output list
 	result := make(map[int64][]types.SiacoinOutput)
-	for outputRows.Next() {
-		var outputID int64
+	for rows.Next() {
+		var txnID int64
 		var sco types.SiacoinOutput
-		if err := outputRows.Scan(&outputID, dbDecode(&sco.Address), dbDecode(&sco.Value)); err != nil {
+		if err := rows.Scan(&txnID, dbDecode(&sco.Address), dbDecode(&sco.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan siacoin output: %v", err)
 		}
-		result[idMap[outputID]] = append(result[idMap[outputID]], sco)
+		result[txnID] = append(result[txnID], sco)
 	}
 	return result, nil
 }
@@ -135,47 +114,26 @@ ORDER BY transaction_order DESC`
 
 // transactionSiafundOutputs returns the siafund outputs for each transaction.
 func transactionSiafundOutputs(tx txn, txnIDs []int64) (map[int64][]types.SiafundOutput, error) {
-	query := `SELECT transaction_id, output_id
-FROM transaction_siafund_outputs
-WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
-ORDER BY transaction_order DESC`
+	query := `SELECT ts.transaction_id, sf.address, sf.value
+FROM siafund_outputs sf
+INNER JOIN transaction_siafund_outputs ts ON (ts.output_id = sf.id)
+WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
+ORDER BY ts.transaction_order DESC`
 	rows, err := tx.Query(query, queryArgs(txnIDs)...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query siafund output ids: %v", err)
 	}
 	defer rows.Close()
 
-	var ids []int64
-	// output ID -> transaction ID
-	idMap := make(map[int64]int64)
-	for rows.Next() {
-		var txnID int64
-		var outputID int64
-		if err := rows.Scan(&txnID, &outputID); err != nil {
-			return nil, fmt.Errorf("failed to scan siafund output id: %v", err)
-		}
-		ids = append(ids, outputID)
-		idMap[outputID] = txnID
-	}
-
-	outputQuery := `SELECT id, address, value
-    FROM siafund_outputs
-    WHERE id IN (` + queryPlaceHolders(len(ids)) + `)`
-	outputRows, err := tx.Query(outputQuery, queryArgs(ids)...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query siafund outputs: %v", err)
-	}
-	defer outputRows.Close()
-
 	// map transaction ID to output list
 	result := make(map[int64][]types.SiafundOutput)
-	for outputRows.Next() {
-		var outputID int64
+	for rows.Next() {
+		var txnID int64
 		var sfo types.SiafundOutput
-		if err := outputRows.Scan(&outputID, dbDecode(&sfo.Address), dbDecode(&sfo.Value)); err != nil {
+		if err := rows.Scan(&txnID, dbDecode(&sfo.Address), dbDecode(&sfo.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan siafund output: %v", err)
 		}
-		result[idMap[outputID]] = append(result[idMap[outputID]], sfo)
+		result[txnID] = append(result[txnID], sfo)
 	}
 	return result, nil
 }
@@ -201,34 +159,21 @@ func blockTransactionIDs(tx txn, blockID types.BlockID) (dbIDs []int64, err erro
 
 // blockMinerPayouts returns the miner payouts for the block.
 func blockMinerPayouts(tx txn, blockID types.BlockID) ([]types.SiacoinOutput, error) {
-	rows, err := tx.Query(`SELECT output_id FROM miner_payouts WHERE block_id = ? ORDER BY block_order`, dbEncode(blockID))
+	query := `SELECT sc.address, sc.value
+FROM siacoin_outputs sc
+INNER JOIN miner_payouts mp ON (mp.output_id = sc.id)
+WHERE block_id = ?
+ORDER BY mp.block_order DESC`
+	rows, err := tx.Query(query, dbEncode(blockID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query miner payout ids: %v", err)
 	}
 	defer rows.Close()
 
-	var outputIDs []int64
-	for rows.Next() {
-		var outputID int64
-		if err := rows.Scan(&outputID); err != nil {
-			return nil, fmt.Errorf("failed to scan miner payout id: %v", err)
-		}
-		outputIDs = append(outputIDs, outputID)
-	}
-
-	query := `SELECT address, value
-	FROM siacoin_outputs
-	WHERE id IN (` + queryPlaceHolders(len(outputIDs)) + `)`
-	outputRows, err := tx.Query(query, queryArgs(outputIDs)...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query miner payouts: %v", err)
-	}
-	defer outputRows.Close()
-
 	var result []types.SiacoinOutput
-	for outputRows.Next() {
+	for rows.Next() {
 		var output types.SiacoinOutput
-		if err := outputRows.Scan(dbDecode(&output.Address), dbDecode(&output.Value)); err != nil {
+		if err := rows.Scan(dbDecode(&output.Address), dbDecode(&output.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan miner payout: %v", err)
 		}
 		result = append(result, output)
