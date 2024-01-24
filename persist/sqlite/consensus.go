@@ -183,12 +183,15 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate) error {
 	for address := range addresses {
 		addressList = append(addressList, dbEncode(address))
 	}
+
 	rows, err := dbTxn.Query(`SELECT address, siacoin_balance, siafund_balance
 		FROM address_balance
 		WHERE address IN (`+queryPlaceHolders(len(addressList))+`)`, queryArgs(addressList)...)
 	if err != nil {
 		return fmt.Errorf("updateBalances: failed to query address_balance: %v", err)
 	}
+	defer rows.Close()
+
 	for rows.Next() {
 		var address types.Address
 		var sc types.Currency

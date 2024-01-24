@@ -70,6 +70,7 @@ ORDER BY transaction_order DESC`
 	if err != nil {
 		return nil, fmt.Errorf("failed to query siacoin outputs: %v", err)
 	}
+	defer outputRows.Close()
 
 	// map transaction ID to output list
 	result := make(map[int64][]types.SiacoinOutput)
@@ -164,6 +165,7 @@ ORDER BY transaction_order DESC`
 	if err != nil {
 		return nil, fmt.Errorf("failed to query siafund outputs: %v", err)
 	}
+	defer outputRows.Close()
 
 	// map transaction ID to output list
 	result := make(map[int64][]types.SiafundOutput)
@@ -221,6 +223,8 @@ func blockMinerPayouts(tx txn, blockID types.BlockID) ([]types.SiacoinOutput, er
 	if err != nil {
 		return nil, fmt.Errorf("failed to query miner payouts: %v", err)
 	}
+	defer outputRows.Close()
+
 	var result []types.SiacoinOutput
 	for outputRows.Next() {
 		var output types.SiacoinOutput
