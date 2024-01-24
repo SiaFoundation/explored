@@ -11,6 +11,14 @@ CREATE TABLE blocks (
         timestamp INTEGER NOT NULL
 );
 
+CREATE INDEX blocks_height_index ON blocks(height);
+
+CREATE TABLE address_balance (
+        address BLOB PRIMARY KEY NOT NULL,
+        siacoin_balance BLOB NOT NULL,
+        siafund_balance BLOB NOT NULL
+);
+
 CREATE TABLE siacoin_outputs (
         id INTEGER PRIMARY KEY,
         output_id BLOB UNIQUE NOT NULL,

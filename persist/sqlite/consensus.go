@@ -165,6 +165,101 @@ type consensusUpdate interface {
 	ForEachSiafundElement(fn func(sfe types.SiafundElement, spent bool))
 }
 
+func (s *Store) updateBalances(dbTxn txn, update consensusUpdate) error {
+	type balance struct {
+		sc types.Currency
+		sf uint64
+	}
+
+	addresses := make(map[types.Address]balance)
+	update.ForEachSiacoinElement(func(sce types.SiacoinElement, spent bool) {
+		addresses[sce.SiacoinOutput.Address] = balance{}
+	})
+	update.ForEachSiafundElement(func(sfe types.SiafundElement, spent bool) {
+		addresses[sfe.SiafundOutput.Address] = balance{}
+	})
+
+	var addressList []any
+	for address := range addresses {
+		addressList = append(addressList, dbEncode(address))
+	}
+	rows, err := dbTxn.Query(`SELECT address, siacoin_balance, siafund_balance
+		FROM address_balance
+		WHERE address IN (`+queryPlaceHolders(len(addressList))+`)`, queryArgs(addressList)...)
+	if err != nil {
+		return fmt.Errorf("updateBalances: failed to query address_balance: %v", err)
+	}
+	for rows.Next() {
+		var address types.Address
+		var sc types.Currency
+		var sf uint64
+		if err := rows.Scan(dbDecode(&address), dbDecode(&sc), dbDecode(&sf)); err != nil {
+			return err
+		}
+		addresses[address] = balance{
+			sc: sc,
+			sf: sf,
+		}
+	}
+
+	// log.Println("New block")
+	update.ForEachSiacoinElement(func(sce types.SiacoinElement, spent bool) {
+		bal := addresses[sce.SiacoinOutput.Address]
+		if spent {
+			// If within the same block, an address A receives SC in one
+			// transaction and sends it to another address in a later
+			// transaction, the chain update will not contain the unspent
+			// siacoin element that was temporarily A's. This can then result
+			// in underflow when we subtract the element for A as being spent.
+			// So we catch underflow here because this causes crashes even
+			// though there is no net balance change for A.
+			// Example: https://siascan.com/block/506
+
+			// log.Println("Spend:", sce.SiacoinOutput.Address, sce.SiacoinOutput.Value)
+			underflow := false
+			bal.sc, underflow = bal.sc.SubWithUnderflow(sce.SiacoinOutput.Value)
+			if underflow {
+				return
+			}
+		} else {
+			// log.Println("Gain:", sce.SiacoinOutput.Address, sce.SiacoinOutput.Value)
+			bal.sc = bal.sc.Add(sce.SiacoinOutput.Value)
+		}
+		addresses[sce.SiacoinOutput.Address] = bal
+	})
+	update.ForEachSiafundElement(func(sfe types.SiafundElement, spent bool) {
+		bal := addresses[sfe.SiafundOutput.Address]
+		if spent {
+			underflow := (bal.sf - sfe.SiafundOutput.Value) > bal.sf
+			if underflow {
+				return
+			}
+			bal.sf -= sfe.SiafundOutput.Value
+		} else {
+			bal.sf += sfe.SiafundOutput.Value
+		}
+		addresses[sfe.SiafundOutput.Address] = bal
+	})
+
+	stmt, err := dbTxn.Prepare(`INSERT INTO address_balance(address, siacoin_balance, siafund_balance)
+	VALUES (?, ?, ?)
+	ON CONFLICT(address)
+	DO UPDATE set siacoin_balance = ?, siafund_balance = ?`)
+	if err != nil {
+		return fmt.Errorf("updateBalances: failed to prepare statement: %v", err)
+	}
+	defer stmt.Close()
+
+	for addr, bal := range addresses {
+		if _, err := stmt.Exec(dbEncode(addr), dbEncode(bal.sc), dbEncode(bal.sf), dbEncode(bal.sc), dbEncode(bal.sf)); err != nil {
+			return fmt.Errorf("updateBalances: failed to exec statement: %v", err)
+		}
+		// log.Println(addr, "=", bal.sc)
+	}
+
+	return nil
+}
+
 func (s *Store) addOutputs(dbTxn txn, update consensusUpdate) (map[types.SiacoinOutputID]int64, map[types.SiafundOutputID]int64, error) {
 	scDBIds := make(map[types.SiacoinOutputID]int64)
 	{
@@ -252,6 +347,8 @@ func (s *Store) applyUpdates() error {
 			scDBIds, sfDBIds, err := s.addOutputs(dbTxn, update)
 			if err != nil {
 				return fmt.Errorf("applyUpdates: failed to add outputs: %v", err)
+			} else if err := s.updateBalances(dbTxn, update); err != nil {
+				return fmt.Errorf("applyUpdates: failed to update balances: %v", err)
 			}
 
 			if err := s.addBlock(dbTxn, update.Block, update.State.Index.Height); err != nil {
@@ -273,6 +370,8 @@ func (s *Store) revertUpdate(cru *chain.RevertUpdate) error {
 			return fmt.Errorf("revertUpdate: failed to delete block: %v", err)
 		} else if _, _, err := s.addOutputs(dbTxn, cru); err != nil {
 			return fmt.Errorf("revertUpdate: failed to update output state: %v", err)
+		} else if err := s.updateBalances(dbTxn, cru); err != nil {
+			return fmt.Errorf("revertUpdate: failed to update balances: %v", err)
 		}
 		return nil
 	})
