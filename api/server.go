@@ -10,6 +10,7 @@ import (
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/gateway"
 	"go.sia.tech/core/types"
+	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/syncer"
 )
 
@@ -41,12 +42,12 @@ type (
 	// Explorer implements a Sia explorer.
 	Explorer interface {
 		Tip() (types.ChainIndex, error)
-		Block(id types.BlockID) (types.Block, error)
+		Block(id types.BlockID) (explorer.Block, error)
 		BestTip(height uint64) (types.ChainIndex, error)
-		Transactions(ids []types.TransactionID) ([]types.Transaction, error)
+		Transactions(ids []types.TransactionID) ([]explorer.Transaction, error)
 		Balance(address types.Address) (sc types.Currency, sf uint64, err error)
-		UnspentSiacoinOutputs(address types.Address, limit, offset uint64) ([]types.SiacoinOutput, error)
-		UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]types.SiafundOutput, error)
+		UnspentSiacoinOutputs(address types.Address, limit, offset uint64) ([]explorer.SiacoinOutput, error)
+		UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]explorer.SiafundOutput, error)
 	}
 )
 

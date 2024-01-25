@@ -7,14 +7,7 @@ import (
 
 	"go.sia.tech/core/chain"
 	"go.sia.tech/core/types"
-)
-
-type Source int
-
-const (
-	SourceOther Source = iota
-	SourceMinerPayout
-	SourceTransaction
+	"go.sia.tech/explored/explorer"
 )
 
 func (s *Store) addBlock(dbTxn txn, b types.Block, height uint64) error {
@@ -271,15 +264,15 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate) error {
 }
 
 func (s *Store) addSCOutputs(dbTxn txn, update consensusUpdate) (map[types.SiacoinOutputID]int64, error) {
-	sources := make(map[types.SiacoinOutputID]Source)
+	sources := make(map[types.SiacoinOutputID]explorer.Source)
 	if applyUpdate, ok := update.(*chain.ApplyUpdate); ok {
 		block := applyUpdate.Block
 		for i := range block.MinerPayouts {
-			sources[block.ID().MinerOutputID(i)] = SourceMinerPayout
+			sources[block.ID().MinerOutputID(i)] = explorer.SourceMinerPayout
 		}
 		for _, txn := range block.Transactions {
 			for i := range txn.SiacoinOutputs {
-				sources[txn.SiacoinOutputID(i)] = SourceTransaction
+				sources[txn.SiacoinOutputID(i)] = explorer.SourceTransaction
 			}
 			// TODO: contract valid/missed outputs
 		}

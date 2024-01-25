@@ -11,11 +11,11 @@ type Store interface {
 	chain.Subscriber
 
 	Tip() (types.ChainIndex, error)
-	Block(id types.BlockID) (types.Block, error)
+	Block(id types.BlockID) (Block, error)
 	BestTip(height uint64) (types.ChainIndex, error)
-	Transactions(ids []types.TransactionID) ([]types.Transaction, error)
-	UnspentSiacoinOutputs(address types.Address, limit, offset uint64) ([]types.SiacoinOutput, error)
-	UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]types.SiafundOutput, error)
+	Transactions(ids []types.TransactionID) ([]Transaction, error)
+	UnspentSiacoinOutputs(address types.Address, limit, offset uint64) ([]SiacoinOutput, error)
+	UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]SiafundOutput, error)
 	Balance(address types.Address) (sc types.Currency, sf uint64, err error)
 }
 
@@ -35,7 +35,7 @@ func (e *Explorer) Tip() (types.ChainIndex, error) {
 }
 
 // Block returns the block with the specified ID.
-func (e *Explorer) Block(id types.BlockID) (types.Block, error) {
+func (e *Explorer) Block(id types.BlockID) (Block, error) {
 	return e.s.Block(id)
 }
 
@@ -45,19 +45,19 @@ func (e *Explorer) BestTip(height uint64) (types.ChainIndex, error) {
 }
 
 // Transactions returns the transactions with the specified IDs.
-func (e *Explorer) Transactions(ids []types.TransactionID) ([]types.Transaction, error) {
+func (e *Explorer) Transactions(ids []types.TransactionID) ([]Transaction, error) {
 	return e.s.Transactions(ids)
 }
 
 // UnspentSiacoinOutputs returns the unspent siacoin outputs owned by the
 // specified address.
-func (e *Explorer) UnspentSiacoinOutputs(address types.Address, limit, offset uint64) ([]types.SiacoinOutput, error) {
+func (e *Explorer) UnspentSiacoinOutputs(address types.Address, limit, offset uint64) ([]SiacoinOutput, error) {
 	return e.s.UnspentSiacoinOutputs(address, limit, offset)
 }
 
 // UnspentSiafundOutputs returns the unspent siafund outputs owned by the
 // specified address.
-func (e *Explorer) UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]types.SiafundOutput, error) {
+func (e *Explorer) UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]SiafundOutput, error) {
 	return e.s.UnspentSiafundOutputs(address, limit, offset)
 }
 
