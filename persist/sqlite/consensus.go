@@ -18,7 +18,7 @@ func (s *Store) addBlock(dbTxn txn, b types.Block, height uint64) error {
 func (s *Store) addMinerPayouts(dbTxn txn, bid types.BlockID, height uint64, scos []types.SiacoinOutput, dbIDs map[types.SiacoinOutputID]int64) error {
 	stmt, err := dbTxn.Prepare(`INSERT INTO miner_payouts(block_id, block_order, output_id) VALUES (?, ?, ?);`)
 	if err != nil {
-		return fmt.Errorf("addMinerPayouts: failed to prepare statement: %v", err)
+		return fmt.Errorf("addMinerPayouts: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
@@ -29,7 +29,7 @@ func (s *Store) addMinerPayouts(dbTxn txn, bid types.BlockID, height uint64, sco
 		}
 
 		if _, err := stmt.Exec(dbEncode(bid), i, dbID); err != nil {
-			return fmt.Errorf("addMinerPayouts: failed to execute statement: %v", err)
+			return fmt.Errorf("addMinerPayouts: failed to execute statement: %w", err)
 		}
 	}
 	return nil
@@ -38,13 +38,13 @@ func (s *Store) addMinerPayouts(dbTxn txn, bid types.BlockID, height uint64, sco
 func (s *Store) addArbitraryData(dbTxn txn, id int64, txn types.Transaction) error {
 	stmt, err := dbTxn.Prepare(`INSERT INTO transaction_arbitrary_data(transaction_id, transaction_order, data) VALUES (?, ?, ?)`)
 	if err != nil {
-		return fmt.Errorf("addArbitraryData: failed to prepare statement: %v", err)
+		return fmt.Errorf("addArbitraryData: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i, arbitraryData := range txn.ArbitraryData {
 		if _, err := stmt.Exec(id, i, arbitraryData); err != nil {
-			return fmt.Errorf("addArbitraryData: failed to execute statement: %v", err)
+			return fmt.Errorf("addArbitraryData: failed to execute statement: %w", err)
 		}
 	}
 	return nil
@@ -53,13 +53,13 @@ func (s *Store) addArbitraryData(dbTxn txn, id int64, txn types.Transaction) err
 func (s *Store) addSiacoinInputs(dbTxn txn, id int64, txn types.Transaction) error {
 	stmt, err := dbTxn.Prepare(`INSERT INTO transaction_siacoin_inputs(transaction_id, transaction_order, parent_id, unlock_conditions) VALUES (?, ?, ?, ?)`)
 	if err != nil {
-		return fmt.Errorf("addSiacoinInputs: failed to prepare statement: %v", err)
+		return fmt.Errorf("addSiacoinInputs: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i, sci := range txn.SiacoinInputs {
 		if _, err := stmt.Exec(id, i, dbEncode(sci.ParentID), dbEncode(sci.UnlockConditions)); err != nil {
-			return fmt.Errorf("addSiacoinInputs: failed to execute statement: %v", err)
+			return fmt.Errorf("addSiacoinInputs: failed to execute statement: %w", err)
 		}
 	}
 	return nil
@@ -68,7 +68,7 @@ func (s *Store) addSiacoinInputs(dbTxn txn, id int64, txn types.Transaction) err
 func (s *Store) addSiacoinOutputs(dbTxn txn, id int64, txn types.Transaction, dbIDs map[types.SiacoinOutputID]int64) error {
 	stmt, err := dbTxn.Prepare(`INSERT INTO transaction_siacoin_outputs(transaction_id, transaction_order, output_id) VALUES (?, ?, ?)`)
 	if err != nil {
-		return fmt.Errorf("addSiacoinOutputs: failed to prepare statement: %v", err)
+		return fmt.Errorf("addSiacoinOutputs: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
@@ -79,7 +79,7 @@ func (s *Store) addSiacoinOutputs(dbTxn txn, id int64, txn types.Transaction, db
 		}
 
 		if _, err := stmt.Exec(id, i, dbID); err != nil {
-			return fmt.Errorf("addSiacoinOutputs: failed to execute statement: %v", err)
+			return fmt.Errorf("addSiacoinOutputs: failed to execute statement: %w", err)
 		}
 	}
 	return nil
@@ -88,13 +88,13 @@ func (s *Store) addSiacoinOutputs(dbTxn txn, id int64, txn types.Transaction, db
 func (s *Store) addSiafundInputs(dbTxn txn, id int64, txn types.Transaction) error {
 	stmt, err := dbTxn.Prepare(`INSERT INTO transaction_siafund_inputs(transaction_id, transaction_order, parent_id, unlock_conditions, claim_address) VALUES (?, ?, ?, ?, ?)`)
 	if err != nil {
-		return fmt.Errorf("addSiafundInputs: failed to prepare statement: %v", err)
+		return fmt.Errorf("addSiafundInputs: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i, sci := range txn.SiafundInputs {
 		if _, err := stmt.Exec(id, i, dbEncode(sci.ParentID), dbEncode(sci.UnlockConditions), dbEncode(sci.ClaimAddress)); err != nil {
-			return fmt.Errorf("addSiafundInputs: failed to execute statement: %v", err)
+			return fmt.Errorf("addSiafundInputs: failed to execute statement: %w", err)
 		}
 	}
 	return nil
@@ -103,7 +103,7 @@ func (s *Store) addSiafundInputs(dbTxn txn, id int64, txn types.Transaction) err
 func (s *Store) addSiafundOutputs(dbTxn txn, id int64, txn types.Transaction, dbIDs map[types.SiafundOutputID]int64) error {
 	stmt, err := dbTxn.Prepare(`INSERT INTO transaction_siafund_outputs(transaction_id, transaction_order, output_id) VALUES (?, ?, ?)`)
 	if err != nil {
-		return fmt.Errorf("addSiafundOutputs: failed to prepare statement: %v", err)
+		return fmt.Errorf("addSiafundOutputs: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
@@ -114,7 +114,7 @@ func (s *Store) addSiafundOutputs(dbTxn txn, id int64, txn types.Transaction, db
 		}
 
 		if _, err := stmt.Exec(id, i, dbID); err != nil {
-			return fmt.Errorf("addSiafundOutputs: failed to execute statement: %v", err)
+			return fmt.Errorf("addSiafundOutputs: failed to execute statement: %w", err)
 		}
 	}
 	return nil
@@ -123,19 +123,19 @@ func (s *Store) addSiafundOutputs(dbTxn txn, id int64, txn types.Transaction, db
 func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Transaction, scDBIds map[types.SiacoinOutputID]int64, sfDBIds map[types.SiafundOutputID]int64) error {
 	existingTransactionsStmt, err := dbTxn.Prepare(`SELECT id FROM transactions WHERE transaction_id = ?`)
 	if err != nil {
-		return fmt.Errorf("addTransactions: failed to prepare existing transactions statement: %v", err)
+		return fmt.Errorf("failed to prepare existing transactions statement: %w", err)
 	}
 	defer existingTransactionsStmt.Close()
 
 	transactionsStmt, err := dbTxn.Prepare(`INSERT INTO transactions(transaction_id) VALUES (?);`)
 	if err != nil {
-		return fmt.Errorf("addTransactions: failed to prepare transactions statement: %v", err)
+		return fmt.Errorf("failed to prepare transactions statement: %w", err)
 	}
 	defer transactionsStmt.Close()
 
 	blockTransactionsStmt, err := dbTxn.Prepare(`INSERT INTO block_transactions(block_id, transaction_id, block_order) VALUES (?, ?, ?);`)
 	if err != nil {
-		return fmt.Errorf("addTransactions: failed to prepare block_transactions statement: %v", err)
+		return fmt.Errorf("failed to prepare block_transactions statement: %w", err)
 	}
 	defer blockTransactionsStmt.Close()
 
@@ -145,28 +145,28 @@ func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Trans
 		if err == sql.ErrNoRows {
 			result, err := transactionsStmt.Exec(dbEncode(txn.ID()))
 			if err != nil {
-				return fmt.Errorf("addTransactions: failed to insert into transactions: %v", err)
+				return fmt.Errorf("failed to insert into transactions: %w", err)
 			}
 			txnID, err = result.LastInsertId()
 			if err != nil {
-				return fmt.Errorf("addTransactions: failed to get insert result ID: %v", err)
+				return fmt.Errorf("failed to get insert result ID: %w", err)
 			}
 		} else if err != nil {
-			return fmt.Errorf("addTransactions: failed to check for existing transaction: %v", err)
+			return fmt.Errorf("failed to check for existing transaction: %w", err)
 		}
 
 		if _, err := blockTransactionsStmt.Exec(dbEncode(bid), txnID, i); err != nil {
-			return fmt.Errorf("addTransactions: failed to insert into block_transactions: %v", err)
+			return fmt.Errorf("failed to insert into block_transactions: %w", err)
 		} else if err := s.addArbitraryData(dbTxn, txnID, txn); err != nil {
-			return fmt.Errorf("addTransactions: failed to add arbitrary data: %v", err)
+			return fmt.Errorf("failed to add arbitrary data: %w", err)
 		} else if err := s.addSiacoinInputs(dbTxn, txnID, txn); err != nil {
-			return fmt.Errorf("addSiacoinInputs: failed to add siacoin inputs: %v", err)
+			return fmt.Errorf("failed to add siacoin inputs: %w", err)
 		} else if err := s.addSiacoinOutputs(dbTxn, txnID, txn, scDBIds); err != nil {
-			return fmt.Errorf("addSiacoinOutputs: failed to add siacoin outputs: %v", err)
+			return fmt.Errorf("failed to add siacoin outputs: %w", err)
 		} else if err := s.addSiafundInputs(dbTxn, txnID, txn); err != nil {
-			return fmt.Errorf("addSiafundInputs: failed to add siafund inputs: %v", err)
+			return fmt.Errorf("failed to add siafund inputs: %w", err)
 		} else if err := s.addSiafundOutputs(dbTxn, txnID, txn, sfDBIds); err != nil {
-			return fmt.Errorf("addSiafundOutputs: failed to add siafund outputs: %v", err)
+			return fmt.Errorf("failed to add siafund outputs: %w", err)
 		}
 	}
 	return nil
@@ -200,7 +200,7 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate) error {
 		FROM address_balance
 		WHERE address IN (`+queryPlaceHolders(len(addressList))+`)`, queryArgs(addressList)...)
 	if err != nil {
-		return fmt.Errorf("updateBalances: failed to query address_balance: %v", err)
+		return fmt.Errorf("updateBalances: failed to query address_balance: %w", err)
 	}
 	defer rows.Close()
 
@@ -261,13 +261,13 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate) error {
 	ON CONFLICT(address)
 	DO UPDATE set siacoin_balance = ?, siafund_balance = ?`)
 	if err != nil {
-		return fmt.Errorf("updateBalances: failed to prepare statement: %v", err)
+		return fmt.Errorf("updateBalances: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for addr, bal := range addresses {
 		if _, err := stmt.Exec(dbEncode(addr), dbEncode(bal.sc), dbEncode(bal.sf), dbEncode(bal.sc), dbEncode(bal.sf)); err != nil {
-			return fmt.Errorf("updateBalances: failed to exec statement: %v", err)
+			return fmt.Errorf("updateBalances: failed to exec statement: %w", err)
 		}
 		// log.Println(addr, "=", bal.sc)
 	}
@@ -283,7 +283,7 @@ func (s *Store) addSCOutputs(dbTxn txn, update consensusUpdate) (map[types.Siaco
 			ON CONFLICT(output_id)
 			DO UPDATE SET spent = ?`)
 	if err != nil {
-		return nil, fmt.Errorf("addSCOutputs: failed to prepare siacoin_outputs statement: %v", err)
+		return nil, fmt.Errorf("addSCOutputs: failed to prepare siacoin_outputs statement: %w", err)
 	}
 	defer stmt.Close()
 
@@ -295,13 +295,13 @@ func (s *Store) addSCOutputs(dbTxn txn, update consensusUpdate) (map[types.Siaco
 
 		result, err := stmt.Exec(dbEncode(sce.StateElement.ID), spent, sce.MaturityHeight, dbEncode(sce.SiacoinOutput.Address), dbEncode(sce.SiacoinOutput.Value), spent)
 		if err != nil {
-			updateErr = fmt.Errorf("addSCOutputs: failed to execute siacoin_outputs statement: %v", err)
+			updateErr = fmt.Errorf("addSCOutputs: failed to execute siacoin_outputs statement: %w", err)
 			return
 		}
 
 		dbID, err := result.LastInsertId()
 		if err != nil {
-			updateErr = fmt.Errorf("addSCOutputs: failed to get last insert ID: %v", err)
+			updateErr = fmt.Errorf("addSCOutputs: failed to get last insert ID: %w", err)
 			return
 		}
 
@@ -318,7 +318,7 @@ func (s *Store) addSFOutputs(dbTxn txn, update consensusUpdate) (map[types.Siafu
 		ON CONFLICT(output_id)
 		DO UPDATE SET spent = ?`)
 	if err != nil {
-		return nil, fmt.Errorf("addSFOutputs: failed to prepare siafund_outputs statement: %v", err)
+		return nil, fmt.Errorf("addSFOutputs: failed to prepare siafund_outputs statement: %w", err)
 	}
 	defer stmt.Close()
 
@@ -330,13 +330,13 @@ func (s *Store) addSFOutputs(dbTxn txn, update consensusUpdate) (map[types.Siafu
 
 		result, err := stmt.Exec(dbEncode(sfe.StateElement.ID), spent, dbEncode(sfe.ClaimStart), dbEncode(sfe.SiafundOutput.Address), dbEncode(sfe.SiafundOutput.Value), spent)
 		if err != nil {
-			updateErr = fmt.Errorf("addSFOutputs: failed to execute siafund_outputs statement: %v", err)
+			updateErr = fmt.Errorf("addSFOutputs: failed to execute siafund_outputs statement: %w", err)
 			return
 		}
 
 		dbID, err := result.LastInsertId()
 		if err != nil {
-			updateErr = fmt.Errorf("addSFOutputs: failed to get last insert ID: %v", err)
+			updateErr = fmt.Errorf("addSFOutputs: failed to get last insert ID: %w", err)
 			return
 		}
 
@@ -355,22 +355,22 @@ func (s *Store) applyUpdates() error {
 		for _, update := range s.pendingUpdates {
 			scDBIds, err := s.addSCOutputs(dbTxn, update)
 			if err != nil {
-				return fmt.Errorf("applyUpdates: failed to add siacoin outputs: %v", err)
+				return fmt.Errorf("applyUpdates: failed to add siacoin outputs: %w", err)
 			}
 			sfDBIds, err := s.addSFOutputs(dbTxn, update)
 			if err != nil {
-				return fmt.Errorf("applyUpdates: failed to add siafund outputs: %v", err)
+				return fmt.Errorf("applyUpdates: failed to add siafund outputs: %w", err)
 			}
 			if err := s.updateBalances(dbTxn, update); err != nil {
-				return fmt.Errorf("applyUpdates: failed to update balances: %v", err)
+				return fmt.Errorf("applyUpdates: failed to update balances: %w", err)
 			}
 
 			if err := s.addBlock(dbTxn, update.Block, update.State.Index.Height); err != nil {
-				return fmt.Errorf("applyUpdates: failed to add block: %v", err)
+				return fmt.Errorf("applyUpdates: failed to add block: %w", err)
 			} else if err := s.addMinerPayouts(dbTxn, update.Block.ID(), update.State.Index.Height, update.Block.MinerPayouts, scDBIds); err != nil {
-				return fmt.Errorf("applyUpdates: failed to add miner payouts: %v", err)
+				return fmt.Errorf("applyUpdates: failed to add miner payouts: %w", err)
 			} else if err := s.addTransactions(dbTxn, update.Block.ID(), update.Block.Transactions, scDBIds, sfDBIds); err != nil {
-				return fmt.Errorf("applyUpdates: failed to add transactions: %v", err)
+				return fmt.Errorf("applyUpdates: failed to add transactions: addTransactions: %w", err)
 			}
 		}
 		s.pendingUpdates = s.pendingUpdates[:0]
@@ -381,13 +381,13 @@ func (s *Store) applyUpdates() error {
 func (s *Store) revertUpdate(cru *chain.RevertUpdate) error {
 	return s.transaction(func(dbTxn txn) error {
 		if err := s.deleteBlock(dbTxn, cru.Block.ID()); err != nil {
-			return fmt.Errorf("revertUpdate: failed to delete block: %v", err)
+			return fmt.Errorf("revertUpdate: failed to delete block: %w", err)
 		} else if _, err := s.addSCOutputs(dbTxn, cru); err != nil {
-			return fmt.Errorf("revertUpdate: failed to update siacoin output state: %v", err)
+			return fmt.Errorf("revertUpdate: failed to update siacoin output state: %w", err)
 		} else if _, err := s.addSFOutputs(dbTxn, cru); err != nil {
-			return fmt.Errorf("revertUpdate: failed to update siafund output state: %v", err)
+			return fmt.Errorf("revertUpdate: failed to update siafund output state: %w", err)
 		} else if err := s.updateBalances(dbTxn, cru); err != nil {
-			return fmt.Errorf("revertUpdate: failed to update balances: %v", err)
+			return fmt.Errorf("revertUpdate: failed to update balances: %w", err)
 		}
 		return nil
 	})

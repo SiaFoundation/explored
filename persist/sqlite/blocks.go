@@ -16,18 +16,18 @@ func (s *Store) Block(id types.BlockID) (result types.Block, err error) {
 
 		result.MinerPayouts, err = blockMinerPayouts(tx, id)
 		if err != nil {
-			return fmt.Errorf("failed to get miner payouts: %v", err)
+			return fmt.Errorf("failed to get miner payouts: %w", err)
 		}
 
 		// get block transaction IDs
 		transactionIDs, err := blockTransactionIDs(tx, id)
 		if err != nil {
-			return fmt.Errorf("failed to get block transaction IDs: %v", err)
+			return fmt.Errorf("failed to get block transaction IDs: %w", err)
 		}
 
 		result.Transactions, err = s.getTransactions(tx, transactionIDs)
 		if err != nil {
-			return fmt.Errorf("failed to get transactions: %v", err)
+			return fmt.Errorf("failed to get transactions: %w", err)
 		}
 
 		return nil

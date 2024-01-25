@@ -11,14 +11,14 @@ func (s *Store) UnspentSiacoinOutputs(address types.Address, limit, offset uint6
 	err = s.transaction(func(tx txn) error {
 		rows, err := tx.Query(`SELECT address, value FROM siacoin_outputs WHERE address = ? AND spent = 0 LIMIT ? OFFSET ?`, dbEncode(address), limit, offset)
 		if err != nil {
-			return fmt.Errorf("failed to query siacoin outputs: %v", err)
+			return fmt.Errorf("failed to query siacoin outputs: %w", err)
 		}
 		defer rows.Close()
 
 		for rows.Next() {
 			var sco types.SiacoinOutput
 			if err := rows.Scan(dbDecode(&sco.Address), dbDecode(&sco.Value)); err != nil {
-				return fmt.Errorf("failed to scan siacoin output: %v", err)
+				return fmt.Errorf("failed to scan siacoin output: %w", err)
 			}
 			result = append(result, sco)
 		}
@@ -32,14 +32,14 @@ func (s *Store) UnspentSiafundOutputs(address types.Address, limit, offset uint6
 	err = s.transaction(func(tx txn) error {
 		rows, err := tx.Query(`SELECT address, value FROM siafund_outputs WHERE address = ? AND spent = 0 LIMIT ? OFFSET ?`, dbEncode(address), limit, offset)
 		if err != nil {
-			return fmt.Errorf("failed to query siafund outputs: %v", err)
+			return fmt.Errorf("failed to query siafund outputs: %w", err)
 		}
 		defer rows.Close()
 
 		for rows.Next() {
 			var sco types.SiafundOutput
 			if err := rows.Scan(dbDecode(&sco.Address), dbDecode(&sco.Value)); err != nil {
-				return fmt.Errorf("failed to scan siafund output: %v", err)
+				return fmt.Errorf("failed to scan siafund output: %w", err)
 			}
 			result = append(result, sco)
 		}
@@ -53,7 +53,7 @@ func (s *Store) Balance(address types.Address) (sc types.Currency, sf uint64, er
 	err = s.transaction(func(tx txn) error {
 		err = tx.QueryRow(`SELECT siacoin_balance, siafund_balance FROM address_balance WHERE address = ?`, dbEncode(address)).Scan(dbDecode(&sc), dbDecode(&sf))
 		if err != nil {
-			return fmt.Errorf("failed to query balances: %v", err)
+			return fmt.Errorf("failed to query balances: %w", err)
 		}
 		return nil
 	})

@@ -31,7 +31,7 @@ ORDER BY transaction_order DESC`
 		var txnID int64
 		var data []byte
 		if err := rows.Scan(&txnID, &data); err != nil {
-			return nil, fmt.Errorf("failed to scan arbitrary data: %v", err)
+			return nil, fmt.Errorf("failed to scan arbitrary data: %w", err)
 		}
 		result[txnID] = append(result[txnID], data)
 	}
@@ -47,7 +47,7 @@ WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
 ORDER BY ts.transaction_order DESC`
 	rows, err := tx.Query(query, queryArgs(txnIDs)...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query siacoin output ids: %v", err)
+		return nil, fmt.Errorf("failed to query siacoin output ids: %w", err)
 	}
 	defer rows.Close()
 
@@ -57,7 +57,7 @@ ORDER BY ts.transaction_order DESC`
 		var txnID int64
 		var sco types.SiacoinOutput
 		if err := rows.Scan(&txnID, dbDecode(&sco.Address), dbDecode(&sco.Value)); err != nil {
-			return nil, fmt.Errorf("failed to scan siacoin output: %v", err)
+			return nil, fmt.Errorf("failed to scan siacoin output: %w", err)
 		}
 		result[txnID] = append(result[txnID], sco)
 	}
@@ -81,7 +81,7 @@ ORDER BY transaction_order DESC`
 		var txnID int64
 		var sci types.SiacoinInput
 		if err := rows.Scan(&txnID, dbDecode(&sci.ParentID), dbDecode(&sci.UnlockConditions)); err != nil {
-			return nil, fmt.Errorf("failed to scan siacoin input: %v", err)
+			return nil, fmt.Errorf("failed to scan siacoin input: %w", err)
 		}
 		result[txnID] = append(result[txnID], sci)
 	}
@@ -105,7 +105,7 @@ ORDER BY transaction_order DESC`
 		var txnID int64
 		var sfi types.SiafundInput
 		if err := rows.Scan(&txnID, dbDecode(&sfi.ParentID), dbDecode(&sfi.UnlockConditions), dbDecode(&sfi.ClaimAddress)); err != nil {
-			return nil, fmt.Errorf("failed to scan siafund input: %v", err)
+			return nil, fmt.Errorf("failed to scan siafund input: %w", err)
 		}
 		result[txnID] = append(result[txnID], sfi)
 	}
@@ -121,7 +121,7 @@ WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
 ORDER BY ts.transaction_order DESC`
 	rows, err := tx.Query(query, queryArgs(txnIDs)...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query siafund output ids: %v", err)
+		return nil, fmt.Errorf("failed to query siafund output ids: %w", err)
 	}
 	defer rows.Close()
 
@@ -131,7 +131,7 @@ ORDER BY ts.transaction_order DESC`
 		var txnID int64
 		var sfo types.SiafundOutput
 		if err := rows.Scan(&txnID, dbDecode(&sfo.Address), dbDecode(&sfo.Value)); err != nil {
-			return nil, fmt.Errorf("failed to scan siafund output: %v", err)
+			return nil, fmt.Errorf("failed to scan siafund output: %w", err)
 		}
 		result[txnID] = append(result[txnID], sfo)
 	}
@@ -150,7 +150,7 @@ func blockTransactionIDs(tx txn, blockID types.BlockID) (dbIDs []int64, err erro
 	for rows.Next() {
 		var dbID int64
 		if err := rows.Scan(&dbID); err != nil {
-			return nil, fmt.Errorf("failed to scan block transaction: %v", err)
+			return nil, fmt.Errorf("failed to scan block transaction: %w", err)
 		}
 		dbIDs = append(dbIDs, dbID)
 	}
@@ -166,7 +166,7 @@ WHERE block_id = ?
 ORDER BY mp.block_order DESC`
 	rows, err := tx.Query(query, dbEncode(blockID))
 	if err != nil {
-		return nil, fmt.Errorf("failed to query miner payout ids: %v", err)
+		return nil, fmt.Errorf("failed to query miner payout ids: %w", err)
 	}
 	defer rows.Close()
 
@@ -174,7 +174,7 @@ ORDER BY mp.block_order DESC`
 	for rows.Next() {
 		var output types.SiacoinOutput
 		if err := rows.Scan(dbDecode(&output.Address), dbDecode(&output.Value)); err != nil {
-			return nil, fmt.Errorf("failed to scan miner payout: %v", err)
+			return nil, fmt.Errorf("failed to scan miner payout: %w", err)
 		}
 		result = append(result, output)
 	}
@@ -201,7 +201,7 @@ func transactionDatabaseIDs(tx txn, txnIDs []types.TransactionID) (dbIDs []int64
 	for rows.Next() {
 		var dbID int64
 		if err := rows.Scan(&dbID); err != nil {
-			return nil, fmt.Errorf("failed to scan transaction: %v", err)
+			return nil, fmt.Errorf("failed to scan transaction: %w", err)
 		}
 		dbIDs = append(dbIDs, dbID)
 	}
@@ -211,27 +211,27 @@ func transactionDatabaseIDs(tx txn, txnIDs []types.TransactionID) (dbIDs []int64
 func (s *Store) getTransactions(tx txn, dbIDs []int64) ([]types.Transaction, error) {
 	txnArbitraryData, err := transactionArbitraryData(tx, dbIDs)
 	if err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get arbitrary data: %v", err)
+		return nil, fmt.Errorf("getTransactions: failed to get arbitrary data: %w", err)
 	}
 
 	txnSiacoinInputs, err := transactionSiacoinInputs(tx, dbIDs)
 	if err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get siacoin inputs: %v", err)
+		return nil, fmt.Errorf("getTransactions: failed to get siacoin inputs: %w", err)
 	}
 
 	txnSiacoinOutputs, err := transactionSiacoinOutputs(tx, dbIDs)
 	if err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get siacoin outputs: %v", err)
+		return nil, fmt.Errorf("getTransactions: failed to get siacoin outputs: %w", err)
 	}
 
 	txnSiafundInputs, err := transactionSiafundInputs(tx, dbIDs)
 	if err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get siafund inputs: %v", err)
+		return nil, fmt.Errorf("getTransactions: failed to get siafund inputs: %w", err)
 	}
 
 	txnSiafundOutputs, err := transactionSiafundOutputs(tx, dbIDs)
 	if err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get siafund outputs: %v", err)
+		return nil, fmt.Errorf("getTransactions: failed to get siafund outputs: %w", err)
 	}
 
 	// TODO: file contracts
@@ -258,11 +258,11 @@ func (s *Store) Transactions(ids []types.TransactionID) (results []types.Transac
 	err = s.transaction(func(tx txn) error {
 		dbIDs, err := transactionDatabaseIDs(tx, ids)
 		if err != nil {
-			return fmt.Errorf("failed to get transaction IDs: %v", err)
+			return fmt.Errorf("failed to get transaction IDs: %w", err)
 		}
 		results, err = s.getTransactions(tx, dbIDs)
 		if err != nil {
-			return fmt.Errorf("failed to get transactions: %v", err)
+			return fmt.Errorf("failed to get transactions: %w", err)
 		}
 		return err
 	})
