@@ -121,17 +121,13 @@ func (s *Store) addSiafundOutputs(dbTxn txn, id int64, txn types.Transaction, db
 }
 
 func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Transaction, scDBIds map[types.SiacoinOutputID]int64, sfDBIds map[types.SiafundOutputID]int64) error {
-	existingTransactionsStmt, err := dbTxn.Prepare(`SELECT id FROM transactions WHERE transaction_id = ?`)
+	insertTransactionStmt, err := dbTxn.Prepare(`INSERT INTO transactions (transaction_id) VALUES (?)
+	ON CONFLICT (transaction_id) DO UPDATE SET transaction_id=EXCLUDED.transaction_id -- technically a no-op, but necessary for the RETURNING clause
+	RETURNING id;`)
 	if err != nil {
-		return fmt.Errorf("failed to prepare existing transactions statement: %w", err)
+		return fmt.Errorf("failed to prepare insert transaction statement: %v", err)
 	}
-	defer existingTransactionsStmt.Close()
-
-	transactionsStmt, err := dbTxn.Prepare(`INSERT INTO transactions(transaction_id) VALUES (?);`)
-	if err != nil {
-		return fmt.Errorf("failed to prepare transactions statement: %w", err)
-	}
-	defer transactionsStmt.Close()
+	defer insertTransactionStmt.Close()
 
 	blockTransactionsStmt, err := dbTxn.Prepare(`INSERT INTO block_transactions(block_id, transaction_id, block_order) VALUES (?, ?, ?);`)
 	if err != nil {
@@ -141,18 +137,9 @@ func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Trans
 
 	for i, txn := range txns {
 		var txnID int64
-		err := existingTransactionsStmt.QueryRow(dbEncode(txn.ID())).Scan(&txnID)
-		if err == sql.ErrNoRows {
-			result, err := transactionsStmt.Exec(dbEncode(txn.ID()))
-			if err != nil {
-				return fmt.Errorf("failed to insert into transactions: %w", err)
-			}
-			txnID, err = result.LastInsertId()
-			if err != nil {
-				return fmt.Errorf("failed to get insert result ID: %w", err)
-			}
-		} else if err != nil {
-			return fmt.Errorf("failed to check for existing transaction: %w", err)
+		err := insertTransactionStmt.QueryRow(dbEncode(txn.ID())).Scan(&txnID)
+		if err != nil {
+			return fmt.Errorf("failed to insert into transactions: %w", err)
 		}
 
 		if _, err := blockTransactionsStmt.Exec(dbEncode(bid), txnID, i); err != nil {
