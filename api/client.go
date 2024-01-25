@@ -5,6 +5,7 @@ import (
 
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
+	"go.sia.tech/explored/explorer"
 	"go.sia.tech/jape"
 )
 
@@ -74,19 +75,19 @@ func (c *Client) BestTip(height uint64) (resp types.ChainIndex, err error) {
 }
 
 // Block returns the block with the specified ID.
-func (c *Client) Block(id types.BlockID) (resp types.Block, err error) {
+func (c *Client) Block(id types.BlockID) (resp explorer.Block, err error) {
 	err = c.c.GET(fmt.Sprintf("/explorer/block/%s", id), &resp)
 	return
 }
 
 // Transaction returns the transaction with the specified ID.
-func (c *Client) Transaction(id types.TransactionID) (resp types.Transaction, err error) {
+func (c *Client) Transaction(id types.TransactionID) (resp explorer.Transaction, err error) {
 	err = c.c.GET(fmt.Sprintf("/explorer/transactions/%s", id), &resp)
 	return
 }
 
 // Transactions returns the transactions with the specified IDs.
-func (c *Client) Transactions(ids []types.TransactionID) (resp []types.Transaction, err error) {
+func (c *Client) Transactions(ids []types.TransactionID) (resp []explorer.Transaction, err error) {
 	err = c.c.POST("/explorer/transactions", ids, &resp)
 	return
 }
