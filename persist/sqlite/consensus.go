@@ -9,6 +9,14 @@ import (
 	"go.sia.tech/core/types"
 )
 
+type Source int
+
+const (
+	SourceOther Source = iota
+	SourceMinerPayout
+	SourceTransaction
+)
+
 func (s *Store) addBlock(dbTxn txn, b types.Block, height uint64) error {
 	// nonce is encoded because database/sql doesn't support uint64 with high bit set
 	_, err := dbTxn.Exec("INSERT INTO blocks(id, height, parent_id, nonce, timestamp) VALUES (?, ?, ?, ?, ?);", dbEncode(b.ID()), height, dbEncode(b.ParentID), dbEncode(b.Nonce), dbEncode(b.Timestamp))
@@ -263,10 +271,22 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate) error {
 }
 
 func (s *Store) addSCOutputs(dbTxn txn, update consensusUpdate) (map[types.SiacoinOutputID]int64, error) {
-	scDBIds := make(map[types.SiacoinOutputID]int64)
+	sources := make(map[types.SiacoinOutputID]Source)
+	if applyUpdate, ok := update.(*chain.ApplyUpdate); ok {
+		block := applyUpdate.Block
+		for i := range block.MinerPayouts {
+			sources[block.ID().MinerOutputID(i)] = SourceMinerPayout
+		}
+		for _, txn := range block.Transactions {
+			for i := range txn.SiacoinOutputs {
+				sources[txn.SiacoinOutputID(i)] = SourceTransaction
+			}
+			// TODO: contract valid/missed outputs
+		}
+	}
 
-	stmt, err := dbTxn.Prepare(`INSERT INTO siacoin_outputs(output_id, spent, maturity_height, address, value)
-			VALUES (?, ?, ?, ?, ?)
+	stmt, err := dbTxn.Prepare(`INSERT INTO siacoin_outputs(output_id, spent, source, maturity_height, address, value)
+			VALUES (?, ?, ?, ?, ?, ?)
 			ON CONFLICT(output_id)
 			DO UPDATE SET spent = ?`)
 	if err != nil {
@@ -275,12 +295,13 @@ func (s *Store) addSCOutputs(dbTxn txn, update consensusUpdate) (map[types.Siaco
 	defer stmt.Close()
 
 	var updateErr error
+	scDBIds := make(map[types.SiacoinOutputID]int64)
 	update.ForEachSiacoinElement(func(sce types.SiacoinElement, spent bool) {
 		if updateErr != nil {
 			return
 		}
 
-		result, err := stmt.Exec(dbEncode(sce.StateElement.ID), spent, sce.MaturityHeight, dbEncode(sce.SiacoinOutput.Address), dbEncode(sce.SiacoinOutput.Value), spent)
+		result, err := stmt.Exec(dbEncode(sce.StateElement.ID), spent, int(sources[types.SiacoinOutputID(sce.StateElement.ID)]), sce.MaturityHeight, dbEncode(sce.SiacoinOutput.Address), dbEncode(sce.SiacoinOutput.Value), spent)
 		if err != nil {
 			updateErr = fmt.Errorf("addSCOutputs: failed to execute siacoin_outputs statement: %w", err)
 			return
@@ -298,8 +319,6 @@ func (s *Store) addSCOutputs(dbTxn txn, update consensusUpdate) (map[types.Siaco
 }
 
 func (s *Store) addSFOutputs(dbTxn txn, update consensusUpdate) (map[types.SiafundOutputID]int64, error) {
-	sfDBIds := make(map[types.SiafundOutputID]int64)
-
 	stmt, err := dbTxn.Prepare(`INSERT INTO siafund_outputs(output_id, spent, claim_start, address, value)
 		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(output_id)
@@ -310,6 +329,7 @@ func (s *Store) addSFOutputs(dbTxn txn, update consensusUpdate) (map[types.Siafu
 	defer stmt.Close()
 
 	var updateErr error
+	sfDBIds := make(map[types.SiafundOutputID]int64)
 	update.ForEachSiafundElement(func(sfe types.SiafundElement, spent bool) {
 		if updateErr != nil {
 			return

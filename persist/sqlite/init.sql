@@ -23,6 +23,7 @@ CREATE TABLE siacoin_outputs (
         id INTEGER PRIMARY KEY,
         output_id BLOB UNIQUE NOT NULL,
         spent INTEGER NOT NULL,
+        source INTEGER NOT NULL,
         maturity_height INTEGER NOT NULL,
         address BLOB NOT NULL,
         value BLOB NOT NULL
