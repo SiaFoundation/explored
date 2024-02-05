@@ -2,6 +2,7 @@ package explorer
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 
 	"go.sia.tech/core/types"
@@ -21,7 +22,16 @@ const (
 
 // MarshalJSON implements json.Marshaler.
 func (d Source) MarshalJSON() ([]byte, error) {
-	return json.Marshal([...]string{"invalid", "miner_payout", "transaction"}[d])
+	switch d {
+	case SourceInvalid:
+		return json.Marshal("invalid")
+	case SourceMinerPayout:
+		return json.Marshal("miner_payout")
+	case SourceTransaction:
+		return json.Marshal("transaction")
+	default:
+		return nil, errors.New("invalid Source value")
+	}
 }
 
 // A SiacoinOutput is a types.SiacoinOutput with added fields for output ID,
