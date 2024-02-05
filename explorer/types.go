@@ -11,8 +11,8 @@ import (
 type Source int
 
 const (
-	// SourceUnknown represents a source we currently don't track yet.
-	SourceUnknown Source = iota
+	// SourceInvalid represents a source we are not aware of.
+	SourceInvalid Source = iota
 	// SourceMinerPayout means the source of the output is a miner payout.
 	SourceMinerPayout
 	// SourceTransaction means the source of the output is a transaction.
@@ -21,7 +21,7 @@ const (
 
 // MarshalJSON implements json.Marshaler.
 func (d Source) MarshalJSON() ([]byte, error) {
-	return json.Marshal([...]string{"unknown", "miner_payout", "transaction"}[d])
+	return json.Marshal([...]string{"invalid", "miner_payout", "transaction"}[d])
 }
 
 // A SiacoinOutput is a types.SiacoinOutput with added fields for output ID,
