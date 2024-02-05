@@ -68,8 +68,8 @@ func (c *Client) Tip() (resp types.ChainIndex, err error) {
 	return
 }
 
-// BestTip returns the chain index at the specified height.
-func (c *Client) BestTip(height uint64) (resp types.ChainIndex, err error) {
+// TipByHeight returns the chain index at the specified height.
+func (c *Client) TipByHeight(height uint64) (resp types.ChainIndex, err error) {
 	err = c.c.GET(fmt.Sprintf("/explorer/tip/%d", height), &resp)
 	return
 }
