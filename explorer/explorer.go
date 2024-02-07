@@ -11,9 +11,12 @@ type Store interface {
 	chain.Subscriber
 
 	Tip() (types.ChainIndex, error)
-	BlockByID(id types.BlockID) (types.Block, error)
-	BlockByHeight(height uint64) (types.Block, error)
-	Transactions(ids []types.TransactionID) ([]types.Transaction, error)
+	Block(id types.BlockID) (Block, error)
+	BestTip(height uint64) (types.ChainIndex, error)
+	Transactions(ids []types.TransactionID) ([]Transaction, error)
+	UnspentSiacoinOutputs(address types.Address, limit, offset uint64) ([]SiacoinOutput, error)
+	UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]SiafundOutput, error)
+	Balance(address types.Address) (sc types.Currency, sf uint64, err error)
 }
 
 // Explorer implements a Sia explorer.
@@ -31,17 +34,34 @@ func (e *Explorer) Tip() (types.ChainIndex, error) {
 	return e.s.Tip()
 }
 
-// BlockByID returns the block with the specified ID.
-func (e *Explorer) BlockByID(id types.BlockID) (types.Block, error) {
-	return e.s.BlockByID(id)
+// Block returns the block with the specified ID.
+func (e *Explorer) Block(id types.BlockID) (Block, error) {
+	return e.s.Block(id)
 }
 
-// BlockByHeight returns the block with the specified height.
-func (e *Explorer) BlockByHeight(height uint64) (types.Block, error) {
-	return e.s.BlockByHeight(height)
+// BestTip returns the chain index at the specified height.
+func (e *Explorer) BestTip(height uint64) (types.ChainIndex, error) {
+	return e.s.BestTip(height)
 }
 
 // Transactions returns the transactions with the specified IDs.
-func (e *Explorer) Transactions(ids []types.TransactionID) ([]types.Transaction, error) {
+func (e *Explorer) Transactions(ids []types.TransactionID) ([]Transaction, error) {
 	return e.s.Transactions(ids)
+}
+
+// UnspentSiacoinOutputs returns the unspent siacoin outputs owned by the
+// specified address.
+func (e *Explorer) UnspentSiacoinOutputs(address types.Address, limit, offset uint64) ([]SiacoinOutput, error) {
+	return e.s.UnspentSiacoinOutputs(address, limit, offset)
+}
+
+// UnspentSiafundOutputs returns the unspent siafund outputs owned by the
+// specified address.
+func (e *Explorer) UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]SiafundOutput, error) {
+	return e.s.UnspentSiafundOutputs(address, limit, offset)
+}
+
+// Balance returns the balance of an address.
+func (e *Explorer) Balance(address types.Address) (sc types.Currency, sf uint64, err error) {
+	return e.s.Balance(address)
 }

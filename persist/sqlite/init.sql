@@ -11,11 +11,45 @@ CREATE TABLE blocks (
         timestamp INTEGER NOT NULL
 );
 
+CREATE INDEX blocks_height_index ON blocks(height);
+
+CREATE TABLE address_balance (
+        address BLOB PRIMARY KEY NOT NULL,
+        siacoin_balance BLOB NOT NULL,
+        siafund_balance BLOB NOT NULL
+);
+
+CREATE TABLE siacoin_outputs (
+        id INTEGER PRIMARY KEY,
+        block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
+        output_id BLOB UNIQUE NOT NULL,
+        spent INTEGER NOT NULL,
+        source INTEGER NOT NULL,
+        maturity_height INTEGER NOT NULL,
+        address BLOB NOT NULL,
+        value BLOB NOT NULL
+);
+
+CREATE INDEX siacoin_outputs_output_id_index ON siacoin_outputs(output_id);
+CREATE INDEX siacoin_outputs_address_spent_index ON siacoin_outputs(address, spent);
+
+CREATE TABLE siafund_outputs (
+        id INTEGER PRIMARY KEY,
+        block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
+        output_id BLOB UNIQUE NOT NULL,
+        spent INTEGER NOT NULL,
+        claim_start BLOB NOT NULL,
+        address BLOB NOT NULL,
+        value BLOB NOT NULL
+);
+
+CREATE INDEX siafund_outputs_output_id_index ON siafund_outputs(output_id);
+CREATE INDEX siafund_outputs_address_spent_index ON siafund_outputs(address, spent);
+
 CREATE TABLE miner_payouts (
         block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
         block_order INTEGER NOT NULL,
-        address BLOB NOT NULL,
-        value BLOB NOT NULL,
+        output_id INTEGER REFERENCES siacoin_outputs(id) ON DELETE CASCADE NOT NULL,
         UNIQUE(block_id, block_order)
 );
 
@@ -37,14 +71,53 @@ CREATE TABLE block_transactions (
 
 CREATE INDEX block_transactions_block_id_index ON block_transactions(block_id);
 
-CREATE TABLE arbitrary_data (
+CREATE TABLE transaction_arbitrary_data (
         transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
         transaction_order INTEGER NOT NULL,
         data BLOB NOT NULL,
         UNIQUE(transaction_id, transaction_order)
 );
 
-CREATE INDEX arbitrary_data_transaction_id_index ON arbitrary_data(transaction_id);
+CREATE INDEX transaction_arbitrary_data_transaction_id_index ON transaction_arbitrary_data(transaction_id);
+
+CREATE TABLE transaction_siacoin_inputs (
+        transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
+        transaction_order INTEGER NOT NULL,
+        parent_id BLOB NOT NULL,
+        unlock_conditions BLOB NOT NULL,
+        UNIQUE(transaction_id, transaction_order)
+);
+
+CREATE INDEX transaction_siacoin_inputs_transaction_id_index ON transaction_siacoin_inputs(transaction_id);
+
+CREATE TABLE transaction_siacoin_outputs (
+        transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
+        transaction_order INTEGER NOT NULL,
+        output_id INTEGER REFERENCES siacoin_outputs(id) ON DELETE CASCADE NOT NULL,
+        UNIQUE(transaction_id, transaction_order)
+);
+
+CREATE INDEX transaction_siacoin_outputs_transaction_id_index ON transaction_siacoin_outputs(transaction_id);
+
+CREATE TABLE transaction_siafund_inputs (
+        transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
+        transaction_order INTEGER NOT NULL,
+        parent_id BLOB NOT NULL,
+        unlock_conditions BLOB NOT NULL,
+        claim_address BLOB NOT NULL,
+        UNIQUE(transaction_id, transaction_order)
+);
+
+CREATE INDEX transaction_siafund_inputs_transaction_id_index ON transaction_siafund_inputs(transaction_id);
+
+CREATE TABLE transaction_siafund_outputs (
+        transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
+        transaction_order INTEGER NOT NULL,
+        output_id INTEGER REFERENCES siafund_outputs(id) ON DELETE CASCADE NOT NULL,
+        UNIQUE(transaction_id, transaction_order)
+);
+
+CREATE INDEX transaction_siafund_outputs_transaction_id_index ON transaction_siafund_outputs(transaction_id);
 
 -- initialize the global settings table
 INSERT INTO global_settings (id, db_version) VALUES (0, 0); -- should not be changed

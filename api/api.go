@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"go.sia.tech/core/types"
+	"go.sia.tech/explored/explorer"
 )
 
 // A GatewayPeer is a currently-connected peer.
@@ -28,4 +29,16 @@ type TxpoolBroadcastRequest struct {
 type TxpoolTransactionsResponse struct {
 	Transactions   []types.Transaction   `json:"transactions"`
 	V2Transactions []types.V2Transaction `json:"v2transactions"`
+}
+
+// AddressUTXOsResponse is the response for /addresses/:address/utxos.
+type AddressUTXOsResponse struct {
+	UnspentSiacoinOutputs []explorer.SiacoinOutput `json:"unspentSiacoinOutputs"`
+	UnspentSiafundOutputs []explorer.SiafundOutput `json:"unspentSiafundOutputs"`
+}
+
+// AddressBalanceResponse is the response for /addresses/:address/balance.
+type AddressBalanceResponse struct {
+	UnspentSiacoins types.Currency `json:"unspentSiacoins"`
+	UnspentSiafunds uint64         `json:"unspentSiafunds"`
 }

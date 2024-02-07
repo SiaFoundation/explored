@@ -10,6 +10,7 @@ import (
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/gateway"
 	"go.sia.tech/core/types"
+	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/syncer"
 )
 
@@ -41,9 +42,12 @@ type (
 	// Explorer implements a Sia explorer.
 	Explorer interface {
 		Tip() (types.ChainIndex, error)
-		BlockByID(id types.BlockID) (types.Block, error)
-		BlockByHeight(height uint64) (types.Block, error)
-		Transactions(ids []types.TransactionID) ([]types.Transaction, error)
+		Block(id types.BlockID) (explorer.Block, error)
+		BestTip(height uint64) (types.ChainIndex, error)
+		Transactions(ids []types.TransactionID) ([]explorer.Transaction, error)
+		Balance(address types.Address) (sc types.Currency, sf uint64, err error)
+		UnspentSiacoinOutputs(address types.Address, limit, offset uint64) ([]explorer.SiacoinOutput, error)
+		UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]explorer.SiafundOutput, error)
 	}
 )
 
@@ -140,24 +144,24 @@ func (s *server) explorerTipHandler(jc jape.Context) {
 	jc.Encode(tip)
 }
 
+func (s *server) explorerTipHeightHandler(jc jape.Context) {
+	var height uint64
+	if jc.DecodeParam("height", &height) != nil {
+		return
+	}
+	tip, err := s.e.BestTip(height)
+	if jc.Check("failed to get block", err) != nil {
+		return
+	}
+	jc.Encode(tip)
+}
+
 func (s *server) explorerBlockHandler(jc jape.Context) {
 	var id types.BlockID
 	if jc.DecodeParam("id", &id) != nil {
 		return
 	}
-	block, err := s.e.BlockByID(id)
-	if jc.Check("failed to get block", err) != nil {
-		return
-	}
-	jc.Encode(block)
-}
-
-func (s *server) explorerBlockHeightHandler(jc jape.Context) {
-	var height uint64
-	if jc.DecodeParam("height", &height) != nil {
-		return
-	}
-	block, err := s.e.BlockByHeight(height)
+	block, err := s.e.Block(id)
 	if jc.Check("failed to get block", err) != nil {
 		return
 	}
@@ -202,6 +206,50 @@ func (s *server) explorerTransactionsHandler(jc jape.Context) {
 	jc.Encode(txns)
 }
 
+func (s *server) explorerAddressessAddressUtxosHandler(jc jape.Context) {
+	var address types.Address
+	if jc.DecodeParam("address", &address) != nil {
+		return
+	}
+
+	limit := uint64(100)
+	offset := uint64(0)
+	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
+		return
+	}
+
+	unspentSiacoinOutputs, err := s.e.UnspentSiacoinOutputs(address, limit, offset)
+	if jc.Check("failed to get unspent siacoin outputs", err) != nil {
+		return
+	}
+	unspentSiafundOutputs, err := s.e.UnspentSiafundOutputs(address, limit, offset)
+	if jc.Check("failed to get unspent siafund outputs", err) != nil {
+		return
+	}
+
+	jc.Encode(AddressUTXOsResponse{
+		UnspentSiacoinOutputs: unspentSiacoinOutputs,
+		UnspentSiafundOutputs: unspentSiafundOutputs,
+	})
+}
+
+func (s *server) explorerAddressessAddressBalanceHandler(jc jape.Context) {
+	var address types.Address
+	if jc.DecodeParam("address", &address) != nil {
+		return
+	}
+
+	sc, sf, err := s.e.Balance(address)
+	if jc.Check("failed to get balance", err) != nil {
+		return
+	}
+
+	jc.Encode(AddressBalanceResponse{
+		UnspentSiacoins: sc,
+		UnspentSiafunds: sf,
+	})
+}
+
 // NewServer returns an HTTP handler that serves the explored API.
 func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 	srv := server{
@@ -218,10 +266,12 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET    /txpool/fee":          srv.txpoolFeeHandler,
 		"POST   /txpool/broadcast":    srv.txpoolBroadcastHandler,
 
-		"GET    /explorer/tip":                  srv.explorerTipHandler,
-		"GET    /explorer/block/id/:id":         srv.explorerBlockHandler,
-		"GET    /explorer/block/height/:height": srv.explorerBlockHeightHandler,
-		"GET    /explorer/transactions/id/:id":  srv.explorerTransactionsIDHandler,
-		"POST   /explorer/transactions":         srv.explorerTransactionsHandler,
+		"GET    /explorer/tip":                        srv.explorerTipHandler,
+		"GET    /explorer/tip/:height":                srv.explorerTipHeightHandler,
+		"GET    /explorer/block/:id":                  srv.explorerBlockHandler,
+		"GET    /explorer/transactions/:id":           srv.explorerTransactionsIDHandler,
+		"POST   /explorer/transactions":               srv.explorerTransactionsHandler,
+		"GET    /explorer/addresses/:address/utxos":   srv.explorerAddressessAddressUtxosHandler,
+		"GET    /explorer/addresses/:address/balance": srv.explorerAddressessAddressBalanceHandler,
 	})
 }

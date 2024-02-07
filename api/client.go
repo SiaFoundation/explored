@@ -5,6 +5,7 @@ import (
 
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
+	"go.sia.tech/explored/explorer"
 	"go.sia.tech/jape"
 )
 
@@ -67,26 +68,38 @@ func (c *Client) Tip() (resp types.ChainIndex, err error) {
 	return
 }
 
-// Block returns the block with the specified ID.
-func (c *Client) Block(id types.BlockID) (resp types.Block, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/block/id/%s", id), &resp)
+// TipByHeight returns the chain index at the specified height.
+func (c *Client) TipByHeight(height uint64) (resp types.ChainIndex, err error) {
+	err = c.c.GET(fmt.Sprintf("/explorer/tip/%d", height), &resp)
 	return
 }
 
-// BlockHeight returns the block with the specified height.
-func (c *Client) BlockHeight(height uint64) (resp types.Block, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/block/height/%d", height), &resp)
+// Block returns the block with the specified ID.
+func (c *Client) Block(id types.BlockID) (resp explorer.Block, err error) {
+	err = c.c.GET(fmt.Sprintf("/explorer/block/%s", id), &resp)
 	return
 }
 
 // Transaction returns the transaction with the specified ID.
-func (c *Client) Transaction(id types.TransactionID) (resp types.Transaction, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/transactions/id/%s", id), &resp)
+func (c *Client) Transaction(id types.TransactionID) (resp explorer.Transaction, err error) {
+	err = c.c.GET(fmt.Sprintf("/explorer/transactions/%s", id), &resp)
 	return
 }
 
 // Transactions returns the transactions with the specified IDs.
-func (c *Client) Transactions(ids []types.TransactionID) (resp []types.Transaction, err error) {
+func (c *Client) Transactions(ids []types.TransactionID) (resp []explorer.Transaction, err error) {
 	err = c.c.POST("/explorer/transactions", ids, &resp)
+	return
+}
+
+// AddressUTXOs returns the specified address' unspent outputs.
+func (c *Client) AddressUTXOs(address types.Address, limit, offset uint64) (resp AddressUTXOsResponse, err error) {
+	err = c.c.GET(fmt.Sprintf("/explorer/addresses/%s/utxos?limit=%d&offset=%d", address, limit, offset), &resp)
+	return
+}
+
+// AddressBalance returns the specified address' balance.
+func (c *Client) AddressBalance(address types.Address) (resp AddressBalanceResponse, err error) {
+	err = c.c.GET(fmt.Sprintf("/explorer/addresses/%s/balance", address), &resp)
 	return
 }
