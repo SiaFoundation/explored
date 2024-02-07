@@ -163,7 +163,7 @@ func blockMinerPayouts(tx txn, blockID types.BlockID) ([]explorer.SiacoinOutput,
 	query := `SELECT sc.output_id, sc.source, sc.maturity_height, sc.address, sc.value
 FROM siacoin_outputs sc
 INNER JOIN miner_payouts mp ON (mp.output_id = sc.id)
-WHERE block_id = ?
+WHERE mp.block_id = ?
 ORDER BY mp.block_order DESC`
 	rows, err := tx.Query(query, dbEncode(blockID))
 	if err != nil {

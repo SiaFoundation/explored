@@ -21,6 +21,7 @@ CREATE TABLE address_balance (
 
 CREATE TABLE siacoin_outputs (
         id INTEGER PRIMARY KEY,
+        block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
         output_id BLOB UNIQUE NOT NULL,
         spent INTEGER NOT NULL,
         source INTEGER NOT NULL,
@@ -34,6 +35,7 @@ CREATE INDEX siacoin_outputs_address_spent_index ON siacoin_outputs(address, spe
 
 CREATE TABLE siafund_outputs (
         id INTEGER PRIMARY KEY,
+        block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
         output_id BLOB UNIQUE NOT NULL,
         spent INTEGER NOT NULL,
         claim_start BLOB NOT NULL,
