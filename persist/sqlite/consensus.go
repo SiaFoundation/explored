@@ -186,7 +186,7 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate) error {
 
 	rows, err := dbTxn.Query(`SELECT address, siacoin_balance, siafund_balance
 		FROM address_balance
-		WHERE address IN (`+queryPlaceHolders(len(addressList))+`)`, queryArgs(addressList)...)
+		WHERE address IN (`+queryPlaceHolders(len(addressList))+`)`, addressList...)
 	if err != nil {
 		return fmt.Errorf("updateBalances: failed to query address_balance: %w", err)
 	}

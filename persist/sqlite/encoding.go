@@ -53,6 +53,10 @@ func (d *decodable) Scan(src any) error {
 			dec := types.NewBufDecoder(src)
 			v.DecodeFrom(dec)
 			return dec.Err()
+		case *types.Currency:
+			dec := types.NewBufDecoder(src)
+			(*types.V1Currency)(v).DecodeFrom(dec)
+			return dec.Err()
 		case *uint64:
 			*v = binary.LittleEndian.Uint64(src)
 		default:
