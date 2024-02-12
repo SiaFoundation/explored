@@ -2,8 +2,6 @@ module go.sia.tech/explored
 
 go 1.21
 
-toolchain go1.21.5
-
 require (
 	github.com/mattn/go-sqlite3 v1.14.19
 	go.etcd.io/bbolt v1.3.8
