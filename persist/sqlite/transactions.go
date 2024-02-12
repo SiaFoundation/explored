@@ -42,7 +42,7 @@ ORDER BY transaction_order DESC`
 // transactionSiacoinOutputs returns the siacoin outputs for each transaction.
 func transactionSiacoinOutputs(tx txn, txnIDs []int64) (map[int64][]explorer.SiacoinOutput, error) {
 	query := `SELECT ts.transaction_id, sc.output_id, sc.source, sc.maturity_height, sc.address, sc.value
-FROM siacoin_outputs sc
+FROM siacoin_elements sc
 INNER JOIN transaction_siacoin_outputs ts ON (ts.output_id = sc.id)
 WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
 ORDER BY ts.transaction_order DESC`
@@ -116,7 +116,7 @@ ORDER BY transaction_order DESC`
 // transactionSiafundOutputs returns the siafund outputs for each transaction.
 func transactionSiafundOutputs(tx txn, txnIDs []int64) (map[int64][]explorer.SiafundOutput, error) {
 	query := `SELECT ts.transaction_id, sf.output_id, sf.claim_start, sf.address, sf.value
-FROM siafund_outputs sf
+FROM siafund_elements sf
 INNER JOIN transaction_siafund_outputs ts ON (ts.output_id = sf.id)
 WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
 ORDER BY ts.transaction_order DESC`
@@ -161,7 +161,7 @@ func blockTransactionIDs(tx txn, blockID types.BlockID) (dbIDs []int64, err erro
 // blockMinerPayouts returns the miner payouts for the block.
 func blockMinerPayouts(tx txn, blockID types.BlockID) ([]explorer.SiacoinOutput, error) {
 	query := `SELECT sc.output_id, sc.source, sc.maturity_height, sc.address, sc.value
-FROM siacoin_outputs sc
+FROM siacoin_elements sc
 INNER JOIN miner_payouts mp ON (mp.output_id = sc.id)
 WHERE mp.block_id = ?
 ORDER BY mp.block_order DESC`

@@ -10,7 +10,7 @@ import (
 // UnspentSiacoinOutputs implements explorer.Store.
 func (s *Store) UnspentSiacoinOutputs(address types.Address, limit, offset uint64) (result []explorer.SiacoinOutput, err error) {
 	err = s.transaction(func(tx txn) error {
-		rows, err := tx.Query(`SELECT output_id, source, address, value FROM siacoin_outputs WHERE address = ? AND spent = 0 LIMIT ? OFFSET ?`, dbEncode(address), limit, offset)
+		rows, err := tx.Query(`SELECT output_id, source, address, value FROM siacoin_elements WHERE address = ? AND spent = 0 LIMIT ? OFFSET ?`, dbEncode(address), limit, offset)
 		if err != nil {
 			return fmt.Errorf("failed to query siacoin outputs: %w", err)
 		}
@@ -31,7 +31,7 @@ func (s *Store) UnspentSiacoinOutputs(address types.Address, limit, offset uint6
 // UnspentSiafundOutputs implements explorer.Store.
 func (s *Store) UnspentSiafundOutputs(address types.Address, limit, offset uint64) (result []explorer.SiafundOutput, err error) {
 	err = s.transaction(func(tx txn) error {
-		rows, err := tx.Query(`SELECT output_id, claim_start, address, value FROM siafund_outputs WHERE address = ? AND spent = 0 LIMIT ? OFFSET ?`, dbEncode(address), limit, offset)
+		rows, err := tx.Query(`SELECT output_id, claim_start, address, value FROM siafund_elements WHERE address = ? AND spent = 0 LIMIT ? OFFSET ?`, dbEncode(address), limit, offset)
 		if err != nil {
 			return fmt.Errorf("failed to query siafund outputs: %w", err)
 		}

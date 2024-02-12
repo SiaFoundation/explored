@@ -19,7 +19,7 @@ CREATE TABLE address_balance (
         siafund_balance BLOB NOT NULL
 );
 
-CREATE TABLE siacoin_outputs (
+CREATE TABLE siacoin_elements (
         id INTEGER PRIMARY KEY,
         block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
         output_id BLOB UNIQUE NOT NULL,
@@ -30,10 +30,10 @@ CREATE TABLE siacoin_outputs (
         value BLOB NOT NULL
 );
 
-CREATE INDEX siacoin_outputs_output_id_index ON siacoin_outputs(output_id);
-CREATE INDEX siacoin_outputs_address_spent_index ON siacoin_outputs(address, spent);
+CREATE INDEX siacoin_elements_output_id_index ON siacoin_elements(output_id);
+CREATE INDEX siacoin_elements_address_spent_index ON siacoin_elements(address, spent);
 
-CREATE TABLE siafund_outputs (
+CREATE TABLE siafund_elements (
         id INTEGER PRIMARY KEY,
         block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
         output_id BLOB UNIQUE NOT NULL,
@@ -43,13 +43,13 @@ CREATE TABLE siafund_outputs (
         value BLOB NOT NULL
 );
 
-CREATE INDEX siafund_outputs_output_id_index ON siafund_outputs(output_id);
-CREATE INDEX siafund_outputs_address_spent_index ON siafund_outputs(address, spent);
+CREATE INDEX siafund_elements_output_id_index ON siafund_elements(output_id);
+CREATE INDEX siafund_elements_address_spent_index ON siafund_elements(address, spent);
 
 CREATE TABLE miner_payouts (
         block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
         block_order INTEGER NOT NULL,
-        output_id INTEGER REFERENCES siacoin_outputs(id) ON DELETE CASCADE NOT NULL,
+        output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL,
         UNIQUE(block_id, block_order)
 );
 
@@ -93,7 +93,7 @@ CREATE INDEX transaction_siacoin_inputs_transaction_id_index ON transaction_siac
 CREATE TABLE transaction_siacoin_outputs (
         transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
         transaction_order INTEGER NOT NULL,
-        output_id INTEGER REFERENCES siacoin_outputs(id) ON DELETE CASCADE NOT NULL,
+        output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL,
         UNIQUE(transaction_id, transaction_order)
 );
 
@@ -113,7 +113,7 @@ CREATE INDEX transaction_siafund_inputs_transaction_id_index ON transaction_siaf
 CREATE TABLE transaction_siafund_outputs (
         transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
         transaction_order INTEGER NOT NULL,
-        output_id INTEGER REFERENCES siafund_outputs(id) ON DELETE CASCADE NOT NULL,
+        output_id INTEGER REFERENCES siafund_elements(id) ON DELETE CASCADE NOT NULL,
         UNIQUE(transaction_id, transaction_order)
 );
 

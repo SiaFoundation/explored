@@ -278,12 +278,12 @@ func (s *Store) addSCOutputs(dbTxn txn, bid types.BlockID, update consensusUpdat
 		}
 	}
 
-	stmt, err := dbTxn.Prepare(`INSERT INTO siacoin_outputs(output_id, block_id, spent, source, maturity_height, address, value)
+	stmt, err := dbTxn.Prepare(`INSERT INTO siacoin_elements(output_id, block_id, spent, source, maturity_height, address, value)
 			VALUES (?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(output_id)
 			DO UPDATE SET spent = ?`)
 	if err != nil {
-		return nil, fmt.Errorf("addSCOutputs: failed to prepare siacoin_outputs statement: %w", err)
+		return nil, fmt.Errorf("addSCOutputs: failed to prepare siacoin_elements statement: %w", err)
 	}
 	defer stmt.Close()
 
@@ -296,7 +296,7 @@ func (s *Store) addSCOutputs(dbTxn txn, bid types.BlockID, update consensusUpdat
 
 		result, err := stmt.Exec(dbEncode(sce.StateElement.ID), dbEncode(bid), spent, int(sources[types.SiacoinOutputID(sce.StateElement.ID)]), sce.MaturityHeight, dbEncode(sce.SiacoinOutput.Address), dbEncode(sce.SiacoinOutput.Value), spent)
 		if err != nil {
-			updateErr = fmt.Errorf("addSCOutputs: failed to execute siacoin_outputs statement: %w", err)
+			updateErr = fmt.Errorf("addSCOutputs: failed to execute siacoin_elements statement: %w", err)
 			return
 		}
 
@@ -312,12 +312,12 @@ func (s *Store) addSCOutputs(dbTxn txn, bid types.BlockID, update consensusUpdat
 }
 
 func (s *Store) addSFOutputs(dbTxn txn, bid types.BlockID, update consensusUpdate) (map[types.SiafundOutputID]int64, error) {
-	stmt, err := dbTxn.Prepare(`INSERT INTO siafund_outputs(output_id, block_id, spent, claim_start, address, value)
+	stmt, err := dbTxn.Prepare(`INSERT INTO siafund_elements(output_id, block_id, spent, claim_start, address, value)
 		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(output_id)
 		DO UPDATE SET spent = ?`)
 	if err != nil {
-		return nil, fmt.Errorf("addSFOutputs: failed to prepare siafund_outputs statement: %w", err)
+		return nil, fmt.Errorf("addSFOutputs: failed to prepare siafund_elements statement: %w", err)
 	}
 	defer stmt.Close()
 
@@ -330,7 +330,7 @@ func (s *Store) addSFOutputs(dbTxn txn, bid types.BlockID, update consensusUpdat
 
 		result, err := stmt.Exec(dbEncode(sfe.StateElement.ID), dbEncode(bid), spent, dbEncode(sfe.ClaimStart), dbEncode(sfe.SiafundOutput.Address), dbEncode(sfe.SiafundOutput.Value), spent)
 		if err != nil {
-			updateErr = fmt.Errorf("addSFOutputs: failed to execute siafund_outputs statement: %w", err)
+			updateErr = fmt.Errorf("addSFOutputs: failed to execute siafund_elements statement: %w", err)
 			return
 		}
 
