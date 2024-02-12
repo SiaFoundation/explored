@@ -10,8 +10,8 @@ import (
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/gateway"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/syncer"
 	"go.sia.tech/explored/explorer"
-	"go.sia.tech/explored/syncer"
 )
 
 type (
@@ -22,20 +22,19 @@ type (
 		RecommendedFee() types.Currency
 		PoolTransactions() []types.Transaction
 		V2PoolTransactions() []types.V2Transaction
-		AddPoolTransactions(txns []types.Transaction) error
-		AddV2PoolTransactions(txns []types.V2Transaction) error
+		AddPoolTransactions(txns []types.Transaction) (bool, error)
+		AddV2PoolTransactions(index types.ChainIndex, txns []types.V2Transaction) (bool, error)
 		UnconfirmedParents(txn types.Transaction) []types.Transaction
 	}
 
 	// A Syncer can connect to other peers and synchronize the blockchain.
 	Syncer interface {
 		Addr() string
-		Peers() []*gateway.Peer
-		PeerInfo(peer string) (syncer.PeerInfo, bool)
-		Connect(addr string) (*gateway.Peer, error)
+		Peers() []*syncer.Peer
+		Connect(addr string) (*syncer.Peer, error)
 		BroadcastHeader(bh gateway.BlockHeader)
 		BroadcastTransactionSet(txns []types.Transaction)
-		BroadcastV2TransactionSet(txns []types.V2Transaction)
+		BroadcastV2TransactionSet(index types.ChainIndex, txns []types.V2Transaction)
 		BroadcastV2BlockOutline(bo gateway.V2BlockOutline)
 	}
 
@@ -55,27 +54,6 @@ type server struct {
 	cm ChainManager
 	e  Explorer
 	s  Syncer
-}
-
-func (s *server) syncerPeersHandler(jc jape.Context) {
-	var peers []GatewayPeer
-	for _, p := range s.s.Peers() {
-		info, ok := s.s.PeerInfo(p.Addr)
-		if !ok {
-			continue
-		}
-		peers = append(peers, GatewayPeer{
-			Addr:    p.Addr,
-			Inbound: p.Inbound,
-			Version: p.Version,
-
-			FirstSeen:      info.FirstSeen,
-			ConnectedSince: info.LastConnect,
-			SyncedBlocks:   info.SyncedBlocks,
-			SyncDuration:   info.SyncDuration,
-		})
-	}
-	jc.Encode(peers)
 }
 
 func (s *server) syncerConnectHandler(jc jape.Context) {
@@ -122,17 +100,24 @@ func (s *server) txpoolBroadcastHandler(jc jape.Context) {
 	if jc.Decode(&tbr) != nil {
 		return
 	}
+
+	tip, err := s.e.Tip()
+	if jc.Check("failed to get tip", err) != nil {
+		return
+	}
 	if len(tbr.Transactions) != 0 {
-		if jc.Check("invalid transaction set", s.cm.AddPoolTransactions(tbr.Transactions)) != nil {
+		_, err := s.cm.AddPoolTransactions(tbr.Transactions)
+		if jc.Check("invalid transaction set", err) != nil {
 			return
 		}
 		s.s.BroadcastTransactionSet(tbr.Transactions)
 	}
 	if len(tbr.V2Transactions) != 0 {
-		if jc.Check("invalid v2 transaction set", s.cm.AddV2PoolTransactions(tbr.V2Transactions)) != nil {
+		_, err := s.cm.AddV2PoolTransactions(tip, tbr.V2Transactions)
+		if jc.Check("invalid v2 transaction set", err) != nil {
 			return
 		}
-		s.s.BroadcastV2TransactionSet(tbr.V2Transactions)
+		s.s.BroadcastV2TransactionSet(tip, tbr.V2Transactions)
 	}
 }
 
@@ -258,7 +243,6 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		s:  s,
 	}
 	return jape.Mux(map[string]jape.Handler{
-		"GET    /syncer/peers":           srv.syncerPeersHandler,
 		"POST   /syncer/connect":         srv.syncerConnectHandler,
 		"POST   /syncer/broadcast/block": srv.syncerBroadcastBlockHandler,
 

@@ -2,12 +2,13 @@ package syncerutil
 
 import (
 	"encoding/json"
+	"errors"
 	"net"
 	"os"
 	"sync"
 	"time"
 
-	"go.sia.tech/explored/syncer"
+	"go.sia.tech/coreutils/syncer"
 )
 
 type peerBan struct {
@@ -28,11 +29,11 @@ func (eps *EphemeralPeerStore) banned(peer string) bool {
 		return false // shouldn't happen
 	}
 	for _, s := range []string{
-		peer,                        //  1.2.3.4:5678
-		syncer.Subnet(host + "/32"), //  1.2.3.4:*
-		syncer.Subnet(host + "/24"), //  1.2.3.*
-		syncer.Subnet(host + "/16"), //  1.2.*
-		syncer.Subnet(host + "/8"),  //  1.*
+		peer,                       //  1.2.3.4:5678
+		syncer.Subnet(host, "/32"), //  1.2.3.4:*
+		syncer.Subnet(host, "/24"), //  1.2.3.*
+		syncer.Subnet(host, "/16"), //  1.2.*
+		syncer.Subnet(host, "/8"),  //  1.*
 	} {
 		if b, ok := eps.bans[s]; ok {
 			if time.Until(b.Expiry) <= 0 {
@@ -46,37 +47,39 @@ func (eps *EphemeralPeerStore) banned(peer string) bool {
 }
 
 // AddPeer implements PeerStore.
-func (eps *EphemeralPeerStore) AddPeer(peer string) {
+func (eps *EphemeralPeerStore) AddPeer(peer string) error {
 	eps.mu.Lock()
 	defer eps.mu.Unlock()
 	if _, ok := eps.peers[peer]; !ok {
-		eps.peers[peer] = syncer.PeerInfo{FirstSeen: time.Now()}
+		eps.peers[peer] = syncer.PeerInfo{Address: peer, FirstSeen: time.Now()}
 	}
+	return nil
 }
 
 // Peers implements PeerStore.
-func (eps *EphemeralPeerStore) Peers() []string {
+func (eps *EphemeralPeerStore) Peers() ([]syncer.PeerInfo, error) {
 	eps.mu.Lock()
 	defer eps.mu.Unlock()
-	var peers []string
-	for p := range eps.peers {
-		if !eps.banned(p) {
+	var peers []syncer.PeerInfo
+	for addr, p := range eps.peers {
+		if !eps.banned(addr) {
 			peers = append(peers, p)
 		}
 	}
-	return peers
+	return peers, nil
 }
 
 // UpdatePeerInfo implements PeerStore.
-func (eps *EphemeralPeerStore) UpdatePeerInfo(peer string, fn func(*syncer.PeerInfo)) {
+func (eps *EphemeralPeerStore) UpdatePeerInfo(peer string, fn func(*syncer.PeerInfo)) error {
 	eps.mu.Lock()
 	defer eps.mu.Unlock()
 	info, ok := eps.peers[peer]
 	if !ok {
-		return
+		return errors.New("no such peer")
 	}
 	fn(&info)
 	eps.peers[peer] = info
+	return nil
 }
 
 // PeerInfo implements PeerStore.
@@ -88,7 +91,7 @@ func (eps *EphemeralPeerStore) PeerInfo(peer string) (syncer.PeerInfo, bool) {
 }
 
 // Ban implements PeerStore.
-func (eps *EphemeralPeerStore) Ban(peer string, duration time.Duration, reason string) {
+func (eps *EphemeralPeerStore) Ban(peer string, duration time.Duration, reason string) error {
 	eps.mu.Lock()
 	defer eps.mu.Unlock()
 	// canonicalize
@@ -96,13 +99,14 @@ func (eps *EphemeralPeerStore) Ban(peer string, duration time.Duration, reason s
 		peer = ipnet.String()
 	}
 	eps.bans[peer] = peerBan{Expiry: time.Now().Add(duration), Reason: reason}
+	return nil
 }
 
 // Banned implements PeerStore.
-func (eps *EphemeralPeerStore) Banned(peer string) bool {
+func (eps *EphemeralPeerStore) Banned(peer string) (bool, error) {
 	eps.mu.Lock()
 	defer eps.mu.Unlock()
-	return eps.banned(peer)
+	return eps.banned(peer), nil
 }
 
 // NewEphemeralPeerStore initializes an EphemeralPeerStore.
@@ -175,21 +179,21 @@ func (jps *JSONPeerStore) save() error {
 }
 
 // AddPeer implements PeerStore.
-func (jps *JSONPeerStore) AddPeer(peer string) {
+func (jps *JSONPeerStore) AddPeer(peer string) error {
 	jps.EphemeralPeerStore.AddPeer(peer)
-	jps.save()
+	return jps.save()
 }
 
 // UpdatePeerInfo implements PeerStore.
-func (jps *JSONPeerStore) UpdatePeerInfo(peer string, fn func(*syncer.PeerInfo)) {
+func (jps *JSONPeerStore) UpdatePeerInfo(peer string, fn func(*syncer.PeerInfo)) error {
 	jps.EphemeralPeerStore.UpdatePeerInfo(peer, fn)
-	jps.save()
+	return jps.save()
 }
 
 // Ban implements PeerStore.
-func (jps *JSONPeerStore) Ban(peer string, duration time.Duration, reason string) {
+func (jps *JSONPeerStore) Ban(peer string, duration time.Duration, reason string) error {
 	jps.EphemeralPeerStore.Ban(peer, duration, reason)
-	jps.save()
+	return jps.save()
 }
 
 // NewJSONPeerStore returns a JSONPeerStore backed by the specified file.

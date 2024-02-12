@@ -19,6 +19,12 @@ func dbEncode(obj any) any {
 		obj.EncodeTo(e)
 		e.Flush()
 		return buf.Bytes()
+	case types.Currency:
+		var buf bytes.Buffer
+		e := types.NewEncoder(&buf)
+		types.V1Currency(obj).EncodeTo(e)
+		e.Flush()
+		return buf.Bytes()
 	case uint64:
 		b := make([]byte, 8)
 		binary.LittleEndian.PutUint64(b, obj)

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"go.sia.tech/core/chain"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
 )
 

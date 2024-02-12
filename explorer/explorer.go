@@ -1,8 +1,8 @@
 package explorer
 
 import (
-	"go.sia.tech/core/chain"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/chain"
 )
 
 // A Store is a database that stores information about elements, contracts,
