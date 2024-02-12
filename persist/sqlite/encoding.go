@@ -19,6 +19,15 @@ func dbEncode(obj any) any {
 		obj.EncodeTo(e)
 		e.Flush()
 		return buf.Bytes()
+	case []types.Hash256:
+		var buf bytes.Buffer
+		e := types.NewEncoder(&buf)
+		e.WritePrefix(len(obj))
+		for _, o := range obj {
+			o.EncodeTo(e)
+		}
+		e.Flush()
+		return buf.Bytes()
 	case types.Currency:
 		var buf bytes.Buffer
 		e := types.NewEncoder(&buf)
@@ -53,6 +62,12 @@ func (d *decodable) Scan(src any) error {
 			dec := types.NewBufDecoder(src)
 			v.DecodeFrom(dec)
 			return dec.Err()
+		case *[]types.Hash256:
+			dec := types.NewBufDecoder(src)
+			*v = make([]types.Hash256, dec.ReadPrefix())
+			for i := range *v {
+				(*v)[i].DecodeFrom(dec)
+			}
 		case *types.Currency:
 			dec := types.NewBufDecoder(src)
 			(*types.V1Currency)(v).DecodeFrom(dec)
