@@ -11,6 +11,7 @@ import (
 	"go.sia.tech/coreutils/chain"
 )
 
+// HashStore stores the state element merkle tree.
 type HashStore struct {
 	hashFiles [64]*os.File
 	numLeaves uint64

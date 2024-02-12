@@ -5,7 +5,7 @@ import (
 	"go.sia.tech/coreutils/chain"
 )
 
-// A HashStore is a database that stores the state element merkle tree.
+// A HashStore stores the state element merkle tree.
 type HashStore interface {
 	chain.Subscriber
 
