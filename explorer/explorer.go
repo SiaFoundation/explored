@@ -44,12 +44,6 @@ func (e *Explorer) MerkleProof(leafIndex uint64) ([]types.Hash256, error) {
 	return e.hs.MerkleProof(leafIndex)
 }
 
-// ModifyLeaf overwrites hashes in the tree with the proof hashes in the
-// provided element.
-func (e *Explorer) ModifyLeaf(elem types.StateElement) error {
-	return e.hs.ModifyLeaf(elem)
-}
-
 // Tip returns the tip of the best known valid chain.
 func (e *Explorer) Tip() (types.ChainIndex, error) {
 	return e.s.Tip()
