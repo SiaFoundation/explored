@@ -163,6 +163,7 @@ func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Trans
 type consensusUpdate interface {
 	ForEachSiacoinElement(fn func(sce types.SiacoinElement, spent bool))
 	ForEachSiafundElement(fn func(sfe types.SiafundElement, spent bool))
+	ForEachFileContractElement(fn func(fce types.FileContractElement, rev *types.FileContractElement, resolved, valid bool))
 }
 
 func (s *Store) updateBalances(dbTxn txn, update consensusUpdate) error {
@@ -372,6 +373,10 @@ func (s *Store) applyUpdates() error {
 			} else if err := s.addTransactions(dbTxn, update.Block.ID(), update.Block.Transactions, scDBIds, sfDBIds); err != nil {
 				return fmt.Errorf("applyUpdates: failed to add transactions: addTransactions: %w", err)
 			}
+
+			if err := s.updateLeaves(dbTxn, update); err != nil {
+				return err
+			}
 		}
 		s.pendingUpdates = s.pendingUpdates[:0]
 		return nil
@@ -389,7 +394,8 @@ func (s *Store) revertUpdate(cru *chain.RevertUpdate) error {
 		} else if err := s.updateBalances(dbTxn, cru); err != nil {
 			return fmt.Errorf("revertUpdate: failed to update balances: %w", err)
 		}
-		return nil
+
+		return s.updateLeaves(dbTxn, cru)
 	})
 }
 

@@ -69,6 +69,9 @@ func (s *Store) init() error {
 		return fmt.Errorf("failed to disable foreign key constraints: %w", err)
 	}
 
+	// error is ignored -- the database may not have been initialized yet.
+	s.db.QueryRow("SELECT COUNT(*) FROM merkle_proofs WHERE i = 0").Scan(&s.numLeaves)
+
 	version := getDBVersion(s.db)
 	switch {
 	case version == 0:

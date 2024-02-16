@@ -123,5 +123,12 @@ CREATE TABLE transaction_siafund_outputs (
 
 CREATE INDEX transaction_siafund_outputs_transaction_id_index ON transaction_siafund_outputs(transaction_id);
 
+CREATE TABLE merkle_proofs (
+        i INTEGER NOT NULL,
+        j INTEGER NOT NULL,
+        hash BLOB NOT NULL,
+        PRIMARY KEY(i ,j)
+);
+
 -- initialize the global settings table
 INSERT INTO global_settings (id, db_version) VALUES (0, 0); -- should not be changed

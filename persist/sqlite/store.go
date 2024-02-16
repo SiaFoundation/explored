@@ -23,6 +23,7 @@ type (
 		log *zap.Logger
 
 		mu             sync.Mutex
+		numLeaves      uint64
 		pendingUpdates []*chain.ApplyUpdate
 	}
 )

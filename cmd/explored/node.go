@@ -17,7 +17,6 @@ import (
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/coreutils/syncer"
 	"go.sia.tech/explored/explorer"
-	"go.sia.tech/explored/internal/explorerutil"
 	"go.sia.tech/explored/internal/syncerutil"
 	"go.sia.tech/explored/persist/sqlite"
 	"go.uber.org/zap"
@@ -178,13 +177,8 @@ func newNode(addr, dir string, chainNetwork string, useUPNP bool, logger *zap.Lo
 	if err := os.MkdirAll(hashPath, fs.ModePerm); err != nil {
 		return nil, err
 	}
-	hashStore, err := explorerutil.NewHashStore(hashPath)
-	if err != nil {
-		return nil, err
-	}
-	cm.AddSubscriber(hashStore, tip)
 
-	e := explorer.NewExplorer(store, hashStore)
+	e := explorer.NewExplorer(store)
 
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -248,7 +242,6 @@ func newNode(addr, dir string, chainNetwork string, useUPNP bool, logger *zap.Lo
 				l.Close()
 				<-ch
 				db.Close()
-				hashStore.Commit()
 			}
 		},
 	}, nil

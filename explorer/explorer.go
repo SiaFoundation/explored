@@ -5,15 +5,6 @@ import (
 	"go.sia.tech/coreutils/chain"
 )
 
-// A HashStore stores the state element merkle tree.
-type HashStore interface {
-	chain.Subscriber
-
-	Commit() error
-	MerkleProof(leafIndex uint64) ([]types.Hash256, error)
-	ModifyLeaf(elem types.StateElement) error
-}
-
 // A Store is a database that stores information about elements, contracts,
 // and blocks.
 type Store interface {
@@ -26,22 +17,23 @@ type Store interface {
 	UnspentSiacoinOutputs(address types.Address, limit, offset uint64) ([]SiacoinOutput, error)
 	UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]SiafundOutput, error)
 	Balance(address types.Address) (sc types.Currency, sf uint64, err error)
+
+	MerkleProof(leafIndex uint64) ([]types.Hash256, error)
 }
 
 // Explorer implements a Sia explorer.
 type Explorer struct {
-	s  Store
-	hs HashStore
+	s Store
 }
 
 // NewExplorer returns a Sia explorer.
-func NewExplorer(s Store, hs HashStore) *Explorer {
-	return &Explorer{s: s, hs: hs}
+func NewExplorer(s Store) *Explorer {
+	return &Explorer{s: s}
 }
 
 // MerkleProof gets the merkle proof with the given leaf index.
 func (e *Explorer) MerkleProof(leafIndex uint64) ([]types.Hash256, error) {
-	return e.hs.MerkleProof(leafIndex)
+	return e.s.MerkleProof(leafIndex)
 }
 
 // Tip returns the tip of the best known valid chain.
