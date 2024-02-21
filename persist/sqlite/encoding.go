@@ -29,14 +29,13 @@ func dbEncode(obj any) any {
 		e.Flush()
 		return buf.Bytes()
 	case types.Currency:
-		var buf bytes.Buffer
-		e := types.NewEncoder(&buf)
-		types.V1Currency(obj).EncodeTo(e)
-		e.Flush()
-		return buf.Bytes()
+		buf := make([]byte, 16)
+		binary.BigEndian.PutUint64(buf[:8], obj.Hi)
+		binary.BigEndian.PutUint64(buf[8:], obj.Lo)
+		return buf
 	case uint64:
 		b := make([]byte, 8)
-		binary.LittleEndian.PutUint64(b, obj)
+		binary.BigEndian.PutUint64(b, obj)
 		return b
 	case time.Time:
 		return obj.Unix()
@@ -69,11 +68,10 @@ func (d *decodable) Scan(src any) error {
 				(*v)[i].DecodeFrom(dec)
 			}
 		case *types.Currency:
-			dec := types.NewBufDecoder(src)
-			(*types.V1Currency)(v).DecodeFrom(dec)
-			return dec.Err()
+			v.Hi = binary.BigEndian.Uint64(src[:8])
+			v.Lo = binary.BigEndian.Uint64(src[8:])
 		case *uint64:
-			*v = binary.LittleEndian.Uint64(src)
+			*v = binary.BigEndian.Uint64(src)
 		default:
 			return fmt.Errorf("cannot scan %T to %T", src, d.v)
 		}
