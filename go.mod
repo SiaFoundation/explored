@@ -1,12 +1,14 @@
 module go.sia.tech/explored
 
-go 1.21
+go 1.21.6
+
+toolchain go1.21.7
 
 require (
 	github.com/mattn/go-sqlite3 v1.14.19
 	go.etcd.io/bbolt v1.3.8
 	go.sia.tech/core v0.2.1
-	go.sia.tech/coreutils v0.0.1
+	go.sia.tech/coreutils v0.0.2
 	go.sia.tech/jape v0.11.1
 	go.uber.org/zap v1.26.0
 	golang.org/x/term v0.6.0
