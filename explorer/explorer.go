@@ -1,8 +1,8 @@
 package explorer
 
 import (
-	"go.sia.tech/core/chain"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/chain"
 )
 
 // A Store is a database that stores information about elements, contracts,
@@ -17,6 +17,8 @@ type Store interface {
 	UnspentSiacoinOutputs(address types.Address, limit, offset uint64) ([]SiacoinOutput, error)
 	UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]SiafundOutput, error)
 	Balance(address types.Address) (sc types.Currency, sf uint64, err error)
+
+	MerkleProof(leafIndex uint64) ([]types.Hash256, error)
 }
 
 // Explorer implements a Sia explorer.
@@ -27,6 +29,11 @@ type Explorer struct {
 // NewExplorer returns a Sia explorer.
 func NewExplorer(s Store) *Explorer {
 	return &Explorer{s: s}
+}
+
+// MerkleProof gets the merkle proof with the given leaf index.
+func (e *Explorer) MerkleProof(leafIndex uint64) ([]types.Hash256, error) {
+	return e.s.MerkleProof(leafIndex)
 }
 
 // Tip returns the tip of the best known valid chain.

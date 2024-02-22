@@ -19,10 +19,12 @@ CREATE TABLE address_balance (
         siafund_balance BLOB NOT NULL
 );
 
-CREATE TABLE siacoin_outputs (
+CREATE TABLE siacoin_elements (
         id INTEGER PRIMARY KEY,
         block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
         output_id BLOB UNIQUE NOT NULL,
+        leaf_index BLOB UNIQUE NOT NULL,
+        merkle_proof BLOB UNIQUE NOT NULL,
         spent INTEGER NOT NULL,
         source INTEGER NOT NULL,
         maturity_height INTEGER NOT NULL,
@@ -30,26 +32,28 @@ CREATE TABLE siacoin_outputs (
         value BLOB NOT NULL
 );
 
-CREATE INDEX siacoin_outputs_output_id_index ON siacoin_outputs(output_id);
-CREATE INDEX siacoin_outputs_address_spent_index ON siacoin_outputs(address, spent);
+CREATE INDEX siacoin_elements_output_id_index ON siacoin_elements(output_id);
+CREATE INDEX siacoin_elements_address_spent_index ON siacoin_elements(address, spent);
 
-CREATE TABLE siafund_outputs (
+CREATE TABLE siafund_elements (
         id INTEGER PRIMARY KEY,
         block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
         output_id BLOB UNIQUE NOT NULL,
+        leaf_index BLOB UNIQUE NOT NULL,
+        merkle_proof BLOB UNIQUE NOT NULL,
         spent INTEGER NOT NULL,
         claim_start BLOB NOT NULL,
         address BLOB NOT NULL,
         value BLOB NOT NULL
 );
 
-CREATE INDEX siafund_outputs_output_id_index ON siafund_outputs(output_id);
-CREATE INDEX siafund_outputs_address_spent_index ON siafund_outputs(address, spent);
+CREATE INDEX siafund_elements_output_id_index ON siafund_elements(output_id);
+CREATE INDEX siafund_elements_address_spent_index ON siafund_elements(address, spent);
 
 CREATE TABLE miner_payouts (
         block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
         block_order INTEGER NOT NULL,
-        output_id INTEGER REFERENCES siacoin_outputs(id) ON DELETE CASCADE NOT NULL,
+        output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL,
         UNIQUE(block_id, block_order)
 );
 
@@ -93,7 +97,7 @@ CREATE INDEX transaction_siacoin_inputs_transaction_id_index ON transaction_siac
 CREATE TABLE transaction_siacoin_outputs (
         transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
         transaction_order INTEGER NOT NULL,
-        output_id INTEGER REFERENCES siacoin_outputs(id) ON DELETE CASCADE NOT NULL,
+        output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL,
         UNIQUE(transaction_id, transaction_order)
 );
 
@@ -113,11 +117,18 @@ CREATE INDEX transaction_siafund_inputs_transaction_id_index ON transaction_siaf
 CREATE TABLE transaction_siafund_outputs (
         transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
         transaction_order INTEGER NOT NULL,
-        output_id INTEGER REFERENCES siafund_outputs(id) ON DELETE CASCADE NOT NULL,
+        output_id INTEGER REFERENCES siafund_elements(id) ON DELETE CASCADE NOT NULL,
         UNIQUE(transaction_id, transaction_order)
 );
 
 CREATE INDEX transaction_siafund_outputs_transaction_id_index ON transaction_siafund_outputs(transaction_id);
+
+CREATE TABLE merkle_proofs (
+        i INTEGER NOT NULL,
+        j INTEGER NOT NULL,
+        hash BLOB NOT NULL,
+        PRIMARY KEY(i ,j)
+);
 
 -- initialize the global settings table
 INSERT INTO global_settings (id, db_version) VALUES (0, 0); -- should not be changed

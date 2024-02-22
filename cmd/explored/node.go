@@ -3,21 +3,22 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
+	"io/fs"
 	"net"
+	"os"
 	"path/filepath"
 	"strconv"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
-	"go.sia.tech/core/chain"
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/gateway"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/chain"
+	"go.sia.tech/coreutils/syncer"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/syncerutil"
 	"go.sia.tech/explored/persist/sqlite"
-	"go.sia.tech/explored/syncer"
 	"go.uber.org/zap"
 	"lukechampine.com/upnp"
 )
@@ -160,7 +161,7 @@ func newNode(addr, dir string, chainNetwork string, useUPNP bool, logger *zap.Lo
 	if err != nil {
 		return nil, err
 	}
-	e := explorer.NewExplorer(store)
+
 	tip, err := store.Tip()
 	if errors.Is(err, sqlite.ErrNoTip) {
 		tip = types.ChainIndex{
@@ -171,6 +172,13 @@ func newNode(addr, dir string, chainNetwork string, useUPNP bool, logger *zap.Lo
 		return nil, err
 	}
 	cm.AddSubscriber(store, tip)
+
+	hashPath := filepath.Join(dir, "./hash")
+	if err := os.MkdirAll(hashPath, fs.ModePerm); err != nil {
+		return nil, err
+	}
+
+	e := explorer.NewExplorer(store)
 
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -218,7 +226,7 @@ func newNode(addr, dir string, chainNetwork string, useUPNP bool, logger *zap.Lo
 		UniqueID:   gateway.GenerateUniqueID(),
 		NetAddress: syncerAddr,
 	}
-	s := syncer.New(l, cm, ps, header, syncer.WithLogger(log.Default()))
+	s := syncer.New(l, cm, ps, header, syncer.WithLogger(logger.Named("syncer")))
 
 	return &node{
 		cm: cm,

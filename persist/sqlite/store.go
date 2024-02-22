@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/mattn/go-sqlite3"
-	"go.sia.tech/core/chain"
+	"go.sia.tech/coreutils/chain"
 	"go.uber.org/zap"
 	"lukechampine.com/frand"
 )
@@ -23,6 +23,7 @@ type (
 		log *zap.Logger
 
 		mu             sync.Mutex
+		numLeaves      uint64
 		pendingUpdates []*chain.ApplyUpdate
 	}
 )

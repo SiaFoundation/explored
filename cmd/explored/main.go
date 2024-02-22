@@ -75,7 +75,7 @@ func main() {
 	consoleEncoder := zapcore.NewConsoleEncoder(consoleCfg)
 
 	// only log info messages to console unless stdout logging is enabled
-	consoleCore := zapcore.NewCore(consoleEncoder, zapcore.Lock(os.Stdout), zap.NewAtomicLevelAt(zap.InfoLevel))
+	consoleCore := zapcore.NewCore(consoleEncoder, zapcore.Lock(os.Stdout), zap.NewAtomicLevelAt(zap.DebugLevel))
 	log := zap.New(consoleCore, zap.AddCaller())
 	defer log.Sync()
 	// redirect stdlib log to zap

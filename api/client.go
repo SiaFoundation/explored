@@ -44,12 +44,6 @@ func (c *Client) TxpoolFee() (resp types.Currency, err error) {
 	return
 }
 
-// SyncerPeers returns the current peers of the syncer.
-func (c *Client) SyncerPeers() (resp []GatewayPeer, err error) {
-	err = c.c.GET("/syncer/peers", &resp)
-	return
-}
-
 // SyncerConnect adds the address as a peer of the syncer.
 func (c *Client) SyncerConnect(addr string) (err error) {
 	err = c.c.POST("/syncer/connect", addr, nil)

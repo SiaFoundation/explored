@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"go.sia.tech/core/chain"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
 )
 
@@ -163,6 +163,7 @@ func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Trans
 type consensusUpdate interface {
 	ForEachSiacoinElement(fn func(sce types.SiacoinElement, spent bool))
 	ForEachSiafundElement(fn func(sfe types.SiafundElement, spent bool))
+	ForEachFileContractElement(fn func(fce types.FileContractElement, rev *types.FileContractElement, resolved, valid bool))
 }
 
 func (s *Store) updateBalances(dbTxn txn, update consensusUpdate) error {
@@ -186,7 +187,7 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate) error {
 
 	rows, err := dbTxn.Query(`SELECT address, siacoin_balance, siafund_balance
 		FROM address_balance
-		WHERE address IN (`+queryPlaceHolders(len(addressList))+`)`, queryArgs(addressList)...)
+		WHERE address IN (`+queryPlaceHolders(len(addressList))+`)`, addressList...)
 	if err != nil {
 		return fmt.Errorf("updateBalances: failed to query address_balance: %w", err)
 	}
@@ -278,12 +279,12 @@ func (s *Store) addSCOutputs(dbTxn txn, bid types.BlockID, update consensusUpdat
 		}
 	}
 
-	stmt, err := dbTxn.Prepare(`INSERT INTO siacoin_outputs(output_id, block_id, spent, source, maturity_height, address, value)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
+	stmt, err := dbTxn.Prepare(`INSERT INTO siacoin_elements(output_id, block_id, leaf_index, merkle_proof, spent, source, maturity_height, address, value)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(output_id)
 			DO UPDATE SET spent = ?`)
 	if err != nil {
-		return nil, fmt.Errorf("addSCOutputs: failed to prepare siacoin_outputs statement: %w", err)
+		return nil, fmt.Errorf("addSCOutputs: failed to prepare siacoin_elements statement: %w", err)
 	}
 	defer stmt.Close()
 
@@ -294,9 +295,9 @@ func (s *Store) addSCOutputs(dbTxn txn, bid types.BlockID, update consensusUpdat
 			return
 		}
 
-		result, err := stmt.Exec(dbEncode(sce.StateElement.ID), dbEncode(bid), spent, int(sources[types.SiacoinOutputID(sce.StateElement.ID)]), sce.MaturityHeight, dbEncode(sce.SiacoinOutput.Address), dbEncode(sce.SiacoinOutput.Value), spent)
+		result, err := stmt.Exec(dbEncode(sce.StateElement.ID), dbEncode(bid), dbEncode(sce.StateElement.LeafIndex), dbEncode(sce.StateElement.MerkleProof), spent, int(sources[types.SiacoinOutputID(sce.StateElement.ID)]), sce.MaturityHeight, dbEncode(sce.SiacoinOutput.Address), dbEncode(sce.SiacoinOutput.Value), spent)
 		if err != nil {
-			updateErr = fmt.Errorf("addSCOutputs: failed to execute siacoin_outputs statement: %w", err)
+			updateErr = fmt.Errorf("addSCOutputs: failed to execute siacoin_elements statement: %w", err)
 			return
 		}
 
@@ -312,12 +313,12 @@ func (s *Store) addSCOutputs(dbTxn txn, bid types.BlockID, update consensusUpdat
 }
 
 func (s *Store) addSFOutputs(dbTxn txn, bid types.BlockID, update consensusUpdate) (map[types.SiafundOutputID]int64, error) {
-	stmt, err := dbTxn.Prepare(`INSERT INTO siafund_outputs(output_id, block_id, spent, claim_start, address, value)
-		VALUES (?, ?, ?, ?, ?, ?)
+	stmt, err := dbTxn.Prepare(`INSERT INTO siafund_elements(output_id, block_id, leaf_index, merkle_proof, spent, claim_start, address, value)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(output_id)
 		DO UPDATE SET spent = ?`)
 	if err != nil {
-		return nil, fmt.Errorf("addSFOutputs: failed to prepare siafund_outputs statement: %w", err)
+		return nil, fmt.Errorf("addSFOutputs: failed to prepare siafund_elements statement: %w", err)
 	}
 	defer stmt.Close()
 
@@ -328,9 +329,9 @@ func (s *Store) addSFOutputs(dbTxn txn, bid types.BlockID, update consensusUpdat
 			return
 		}
 
-		result, err := stmt.Exec(dbEncode(sfe.StateElement.ID), dbEncode(bid), spent, dbEncode(sfe.ClaimStart), dbEncode(sfe.SiafundOutput.Address), dbEncode(sfe.SiafundOutput.Value), spent)
+		result, err := stmt.Exec(dbEncode(sfe.StateElement.ID), dbEncode(bid), dbEncode(sfe.StateElement.LeafIndex), dbEncode(sfe.StateElement.MerkleProof), spent, dbEncode(sfe.ClaimStart), dbEncode(sfe.SiafundOutput.Address), dbEncode(sfe.SiafundOutput.Value), spent)
 		if err != nil {
-			updateErr = fmt.Errorf("addSFOutputs: failed to execute siafund_outputs statement: %w", err)
+			updateErr = fmt.Errorf("addSFOutputs: failed to execute siafund_elements statement: %w", err)
 			return
 		}
 
@@ -372,6 +373,10 @@ func (s *Store) applyUpdates() error {
 			} else if err := s.addTransactions(dbTxn, update.Block.ID(), update.Block.Transactions, scDBIds, sfDBIds); err != nil {
 				return fmt.Errorf("applyUpdates: failed to add transactions: addTransactions: %w", err)
 			}
+
+			if err := s.updateLeaves(dbTxn, update); err != nil {
+				return err
+			}
 		}
 		s.pendingUpdates = s.pendingUpdates[:0]
 		return nil
@@ -389,7 +394,8 @@ func (s *Store) revertUpdate(cru *chain.RevertUpdate) error {
 		} else if err := s.updateBalances(dbTxn, cru); err != nil {
 			return fmt.Errorf("revertUpdate: failed to update balances: %w", err)
 		}
-		return nil
+
+		return s.updateLeaves(dbTxn, cru)
 	})
 }
 

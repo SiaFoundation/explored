@@ -34,24 +34,15 @@ func (d Source) MarshalJSON() ([]byte, error) {
 	}
 }
 
-// A SiacoinOutput is a types.SiacoinOutput with added fields for output ID,
-// source, and maturity height.
+// A SiacoinOutput is a types.SiacoinElement with an added field for the
+// source.
 type SiacoinOutput struct {
-	OutputID       types.SiacoinOutputID `json:"outputID"`
-	Source         Source                `json:"source"`
-	MaturityHeight int                   `json:"maturityHeight"`
-
-	types.SiacoinOutput
+	Source Source `json:"source"`
+	types.SiacoinElement
 }
 
-// A SiafundOutput contains a types.SiafundOutput with added fields for output
-// ID and claim start.
-type SiafundOutput struct {
-	OutputID   types.SiafundOutputID `json:"outputID"`
-	ClaimStart types.Currency        `json:"claimStart"`
-
-	types.SiafundOutput
-}
+// A SiafundOutput is a types.SiafundElement.
+type SiafundOutput types.SiafundElement
 
 // A Transaction is a transaction that uses the wrapped types above.
 type Transaction struct {

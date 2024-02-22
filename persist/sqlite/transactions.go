@@ -41,8 +41,8 @@ ORDER BY transaction_order DESC`
 
 // transactionSiacoinOutputs returns the siacoin outputs for each transaction.
 func transactionSiacoinOutputs(tx txn, txnIDs []int64) (map[int64][]explorer.SiacoinOutput, error) {
-	query := `SELECT ts.transaction_id, sc.output_id, sc.source, sc.maturity_height, sc.address, sc.value
-FROM siacoin_outputs sc
+	query := `SELECT ts.transaction_id, sc.output_id, sc.leaf_index, sc.merkle_proof, sc.source, sc.maturity_height, sc.address, sc.value
+FROM siacoin_elements sc
 INNER JOIN transaction_siacoin_outputs ts ON (ts.output_id = sc.id)
 WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
 ORDER BY ts.transaction_order DESC`
@@ -57,7 +57,7 @@ ORDER BY ts.transaction_order DESC`
 	for rows.Next() {
 		var txnID int64
 		var sco explorer.SiacoinOutput
-		if err := rows.Scan(&txnID, dbDecode(&sco.OutputID), &sco.Source, &sco.MaturityHeight, dbDecode(&sco.Address), dbDecode(&sco.Value)); err != nil {
+		if err := rows.Scan(&txnID, dbDecode(&sco.StateElement.ID), dbDecode(&sco.LeafIndex), dbDecode(&sco.MerkleProof), &sco.Source, &sco.MaturityHeight, dbDecode(&sco.SiacoinOutput.Address), dbDecode(&sco.SiacoinOutput.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan siacoin output: %w", err)
 		}
 		result[txnID] = append(result[txnID], sco)
@@ -115,8 +115,8 @@ ORDER BY transaction_order DESC`
 
 // transactionSiafundOutputs returns the siafund outputs for each transaction.
 func transactionSiafundOutputs(tx txn, txnIDs []int64) (map[int64][]explorer.SiafundOutput, error) {
-	query := `SELECT ts.transaction_id, sf.output_id, sf.claim_start, sf.address, sf.value
-FROM siafund_outputs sf
+	query := `SELECT ts.transaction_id, sf.output_id, sf.leaf_index, sf.merkle_proof, sf.claim_start, sf.address, sf.value
+FROM siafund_elements sf
 INNER JOIN transaction_siafund_outputs ts ON (ts.output_id = sf.id)
 WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
 ORDER BY ts.transaction_order DESC`
@@ -131,7 +131,7 @@ ORDER BY ts.transaction_order DESC`
 	for rows.Next() {
 		var txnID int64
 		var sfo explorer.SiafundOutput
-		if err := rows.Scan(&txnID, dbDecode(&sfo.OutputID), dbDecode(&sfo.ClaimStart), dbDecode(&sfo.Address), dbDecode(&sfo.Value)); err != nil {
+		if err := rows.Scan(&txnID, dbDecode(&sfo.StateElement.ID), dbDecode(&sfo.StateElement.LeafIndex), dbDecode(&sfo.StateElement.MerkleProof), dbDecode(&sfo.ClaimStart), dbDecode(&sfo.SiafundOutput.Address), dbDecode(&sfo.SiafundOutput.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan siafund output: %w", err)
 		}
 		result[txnID] = append(result[txnID], sfo)
@@ -160,8 +160,8 @@ func blockTransactionIDs(tx txn, blockID types.BlockID) (dbIDs []int64, err erro
 
 // blockMinerPayouts returns the miner payouts for the block.
 func blockMinerPayouts(tx txn, blockID types.BlockID) ([]explorer.SiacoinOutput, error) {
-	query := `SELECT sc.output_id, sc.source, sc.maturity_height, sc.address, sc.value
-FROM siacoin_outputs sc
+	query := `SELECT sc.output_id, sc.leaf_index, sc.merkle_proof, sc.source, sc.maturity_height, sc.address, sc.value
+FROM siacoin_elements sc
 INNER JOIN miner_payouts mp ON (mp.output_id = sc.id)
 WHERE mp.block_id = ?
 ORDER BY mp.block_order DESC`
@@ -174,7 +174,7 @@ ORDER BY mp.block_order DESC`
 	var result []explorer.SiacoinOutput
 	for rows.Next() {
 		var output explorer.SiacoinOutput
-		if err := rows.Scan(dbDecode(&output.OutputID), &output.Source, &output.MaturityHeight, dbDecode(&output.Address), dbDecode(&output.Value)); err != nil {
+		if err := rows.Scan(dbDecode(&output.StateElement.ID), dbDecode(&output.StateElement.LeafIndex), dbDecode(&output.StateElement.MerkleProof), &output.Source, &output.MaturityHeight, dbDecode(&output.SiacoinOutput.Address), dbDecode(&output.SiacoinOutput.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan miner payout: %w", err)
 		}
 		result = append(result, output)
