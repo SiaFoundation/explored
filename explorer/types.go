@@ -75,13 +75,13 @@ type FileContractRevision struct {
 
 // A Transaction is a transaction that uses the wrapped types above.
 type Transaction struct {
-	SiacoinInputs         []types.SiacoinInput `json:"siacoinInputs,omitempty"`
-	SiacoinOutputs        []SiacoinOutput      `json:"siacoinOutputs,omitempty"`
-	SiafundInputs         []types.SiafundInput `json:"siafundInputs,omitempty"`
-	SiafundOutputs        []SiafundOutput      `json:"siafundOutputs,omitempty"`
-	FileContracts         []FileContract       `json:"fileContracts,omitempty"`
-	FileContractRevisions []FileContract       `json:"fileContracts,omitempty"`
-	ArbitraryData         [][]byte             `json:"arbitraryData,omitempty"`
+	SiacoinInputs         []types.SiacoinInput   `json:"siacoinInputs,omitempty"`
+	SiacoinOutputs        []SiacoinOutput        `json:"siacoinOutputs,omitempty"`
+	SiafundInputs         []types.SiafundInput   `json:"siafundInputs,omitempty"`
+	SiafundOutputs        []SiafundOutput        `json:"siafundOutputs,omitempty"`
+	FileContracts         []FileContract         `json:"fileContracts,omitempty"`
+	FileContractRevisions []FileContractRevision `json:"fileContracts,omitempty"`
+	ArbitraryData         [][]byte               `json:"arbitraryData,omitempty"`
 }
 
 // A Block is a block containing wrapped transactions and siacoin

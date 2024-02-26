@@ -62,6 +62,9 @@ CREATE TABLE file_contract_elements (
         leaf_index BLOB NOT NULL,
         merkle_proof BLOB NOT NULL,
 
+        resolved INTEGER NOT NULL,
+        valid INTEGER NOT NULL,
+
         filesize INTEGER NOT NULL,
         file_merkle_root BLOB NOT NULL,
         window_start INTEGER NOT NULL,
@@ -159,9 +162,9 @@ CREATE INDEX transaction_file_contracts_transaction_id_index ON transaction_file
 CREATE TABLE transaction_file_contract_revisions (
         transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
         transaction_order INTEGER NOT NULL,
+        contract_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL,
         parent_id BLOB UNIQUE NOT NULL,
         unlock_conditions BLOB UNIQUE NOT NULL,
-        contract_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL,
         UNIQUE(transaction_id, transaction_order)
 );
 
