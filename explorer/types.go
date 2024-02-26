@@ -44,13 +44,44 @@ type SiacoinOutput struct {
 // A SiafundOutput is a types.SiafundElement.
 type SiafundOutput types.SiafundElement
 
+// A FileContract is a types.FileContractElement that uses wrapped types
+// internally.
+type FileContract struct {
+	types.StateElement
+	Filesize           uint64          `json:"filesize"`
+	FileMerkleRoot     types.Hash256   `json:"fileMerkleRoot"`
+	WindowStart        uint64          `json:"windowStart"`
+	WindowEnd          uint64          `json:"windowEnd"`
+	Payout             types.Currency  `json:"payout"`
+	ValidProofOutputs  []SiacoinOutput `json:"validProofOutputs"`
+	MissedProofOutputs []SiacoinOutput `json:"missedProofOutputs"`
+	UnlockHash         types.Hash256   `json:"unlockHash"`
+	RevisionNumber     uint64          `json:"revisionNumber"`
+}
+
+// A FileContractRevision is a types.FileContractRevision that uses wrapped
+// types internally.
+type FileContractRevision struct {
+	ParentID         types.FileContractID   `json:"parentID"`
+	UnlockConditions types.UnlockConditions `json:"unlockConditions"`
+	// NOTE: the Payout field of the contract is not "really" part of a
+	// revision. A revision cannot change the total payout, so the original siad
+	// code defines FileContractRevision as an entirely separate struct without
+	// a Payout field. Here, we instead reuse the FileContract type, which means
+	// we must treat its Payout field as invalid. To guard against developer
+	// error, we set it to a sentinel value when decoding it.
+	FileContract
+}
+
 // A Transaction is a transaction that uses the wrapped types above.
 type Transaction struct {
-	SiacoinInputs  []types.SiacoinInput `json:"siacoinInputs,omitempty"`
-	SiacoinOutputs []SiacoinOutput      `json:"siacoinOutputs,omitempty"`
-	SiafundInputs  []types.SiafundInput `json:"siafundInputs,omitempty"`
-	SiafundOutputs []SiafundOutput      `json:"siafundOutputs,omitempty"`
-	ArbitraryData  [][]byte             `json:"arbitraryData,omitempty"`
+	SiacoinInputs         []types.SiacoinInput `json:"siacoinInputs,omitempty"`
+	SiacoinOutputs        []SiacoinOutput      `json:"siacoinOutputs,omitempty"`
+	SiafundInputs         []types.SiafundInput `json:"siafundInputs,omitempty"`
+	SiafundOutputs        []SiafundOutput      `json:"siafundOutputs,omitempty"`
+	FileContracts         []FileContract       `json:"fileContracts,omitempty"`
+	FileContractRevisions []FileContract       `json:"fileContracts,omitempty"`
+	ArbitraryData         [][]byte             `json:"arbitraryData,omitempty"`
 }
 
 // A Block is a block containing wrapped transactions and siacoin
