@@ -121,22 +121,56 @@ func (s *Store) addSiafundOutputs(dbTxn txn, id int64, txn types.Transaction, db
 	return nil
 }
 
-func (s *Store) addFileContracts(dbTxn txn, id int64, txn types.Transaction, dbIDs map[fileContract]int64) error {
+func (s *Store) addFileContracts(dbTxn txn, id int64, txn types.Transaction, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[fileContract]int64) error {
 	stmt, err := dbTxn.Prepare(`INSERT INTO transaction_file_contracts(transaction_id, transaction_order, contract_id) VALUES (?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("addFileContracts: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
+	// validOutputsStmt, err := dbTxn.Prepare(`INSERT INTO file_contract_valid_proof_outputs(contract_id, contract_order, output_id) VALUES (?, ?, ?)`)
+	// if err != nil {
+	// 	return fmt.Errorf("addFileContracts: failed to prepare valid proof outputs statement: %w", err)
+	// }
+	// defer validOutputsStmt.Close()
+
+	// missedOutputsStmt, err := dbTxn.Prepare(`INSERT INTO file_contract_missed_proof_outputs(contract_id, contract_order, output_id) VALUES (?, ?, ?)`)
+	// if err != nil {
+	// 	return fmt.Errorf("addFileContracts: failed to prepare missed proof outputs statement: %w", err)
+	// }
+	// defer missedOutputsStmt.Close()
+
 	for i := range txn.FileContracts {
-		dbID, ok := dbIDs[fileContract{txn.FileContractID(i), 0}]
+		dbID, ok := fcDBIds[fileContract{txn.FileContractID(i), 0}]
 		if !ok {
-			return errors.New("addFileContracts: dbID not in map")
+			return errors.New("addFileContracts: fcDbID not in map")
 		}
 
 		if _, err := stmt.Exec(id, i, dbID); err != nil {
-			return fmt.Errorf("addFileContracts: failed to execute statement: %w", err)
+			return fmt.Errorf("addFileContracts: failed to execute transaction_file_contracts statement: %w", err)
 		}
+
+		// for j := range txn.FileContracts[i].ValidProofOutputs {
+		// 	scDBId, ok := scDBIds[txn.FileContractID(i).ValidOutputID(j)]
+		// 	if !ok {
+		// 		return errors.New("addFileContracts: valid scDBId not in map")
+		// 	}
+
+		// 	if _, err := validOutputsStmt.Exec(dbID, j, scDBId); err != nil {
+		// 		return fmt.Errorf("addFileContracts: failed to execute valid proof outputs statement: %w", err)
+		// 	}
+		// }
+
+		// for j := range txn.FileContracts[i].MissedProofOutputs {
+		// 	scDBId, ok := scDBIds[txn.FileContractID(i).MissedOutputID(j)]
+		// 	if !ok {
+		// 		return errors.New("addFileContracts: missed scDBId not in map")
+		// 	}
+
+		// 	if _, err := missedOutputsStmt.Exec(dbID, j, scDBId); err != nil {
+		// 		return fmt.Errorf("addFileContracts: failed to execute missed proof outputs statement: %w", err)
+		// 	}
+		// }
 	}
 	return nil
 }
@@ -196,10 +230,10 @@ func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Trans
 			return fmt.Errorf("failed to add siafund inputs: %w", err)
 		} else if err := s.addSiafundOutputs(dbTxn, txnID, txn, sfDBIds); err != nil {
 			return fmt.Errorf("failed to add siafund outputs: %w", err)
-		} else if err := s.addFileContracts(dbTxn, txnID, txn, fcDBIds); err != nil {
+		} else if err := s.addFileContracts(dbTxn, txnID, txn, scDBIds, fcDBIds); err != nil {
 			return fmt.Errorf("failed to add file contract: %w", err)
 		} else if err := s.addFileContractRevisions(dbTxn, txnID, txn, fcDBIds); err != nil {
-			return fmt.Errorf("failed to add file contract: %w", err)
+			return fmt.Errorf("failed to add file contract revisions: %w", err)
 		}
 	}
 	return nil
@@ -316,17 +350,27 @@ func (s *Store) addSiacoinElements(dbTxn txn, bid types.BlockID, update consensu
 		for i := range block.MinerPayouts {
 			sources[bid.MinerOutputID(i)] = explorer.SourceMinerPayout
 		}
+
 		for _, txn := range block.Transactions {
 			for i := range txn.SiacoinOutputs {
 				sources[txn.SiacoinOutputID(i)] = explorer.SourceTransaction
 			}
-			// TODO: contract valid/missed outputs
+
+			for i := range txn.FileContracts {
+				fcid := txn.FileContractID(i)
+				for j := range txn.FileContracts[i].ValidProofOutputs {
+					sources[fcid.ValidOutputID(j)] = explorer.SourceValidProofOutput
+				}
+				for j := range txn.FileContracts[i].MissedProofOutputs {
+					sources[fcid.MissedOutputID(j)] = explorer.SourceMissedProofOutput
+				}
+			}
 		}
 	}
 
 	stmt, err := dbTxn.Prepare(`INSERT INTO siacoin_elements(output_id, block_id, leaf_index, merkle_proof, spent, source, maturity_height, address, value)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT(output_id)
+			ON CONFLICT
 			DO UPDATE SET spent = ?`)
 	if err != nil {
 		return nil, fmt.Errorf("addSiacoinElements: failed to prepare siacoin_elements statement: %w", err)
@@ -360,7 +404,7 @@ func (s *Store) addSiacoinElements(dbTxn txn, bid types.BlockID, update consensu
 func (s *Store) addSiafundElements(dbTxn txn, bid types.BlockID, update consensusUpdate) (map[types.SiafundOutputID]int64, error) {
 	stmt, err := dbTxn.Prepare(`INSERT INTO siafund_elements(output_id, block_id, leaf_index, merkle_proof, spent, claim_start, address, value)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(output_id)
+		ON CONFLICT
 		DO UPDATE SET spent = ?`)
 	if err != nil {
 		return nil, fmt.Errorf("addSiafundElements: failed to prepare siafund_elements statement: %w", err)
@@ -397,8 +441,8 @@ type fileContract struct {
 }
 
 func (s *Store) addFileContractElements(dbTxn txn, bid types.BlockID, update consensusUpdate) (map[fileContract]int64, error) {
-	stmt, err := dbTxn.Prepare(`INSERT INTO file_contract_elements(block_id, contract_id, leaf_index, merkle_proof, resolved, valid, filesize, file_merkle_root, window_start, window_end, valid_proof_outputs, missed_proof_outputs, payout, unlock_hash, revision_number)
-		VALUES (?, ?, ?, ?, FALSE, TRUE, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	stmt, err := dbTxn.Prepare(`INSERT INTO file_contract_elements(block_id, contract_id, leaf_index, merkle_proof, resolved, valid, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number)
+		VALUES (?, ?, ?, ?, FALSE, TRUE, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (contract_id, revision_number)
 		DO UPDATE SET resolved = ? AND valid = ?`)
 	if err != nil {
@@ -418,7 +462,7 @@ func (s *Store) addFileContractElements(dbTxn txn, bid types.BlockID, update con
 			fc = &rev.FileContract
 		}
 
-		result, err := stmt.Exec(dbEncode(bid), dbEncode(fce.StateElement.ID), dbEncode(fce.StateElement.LeafIndex), dbEncode(fce.StateElement.MerkleProof), fc.Filesize, dbEncode(fc.FileMerkleRoot), fc.WindowStart, fc.WindowEnd, len(fc.ValidProofOutputs), len(fc.MissedProofOutputs), dbEncode(fc.Payout), dbEncode(fc.UnlockHash), fc.RevisionNumber, resolved, valid)
+		result, err := stmt.Exec(dbEncode(bid), dbEncode(fce.StateElement.ID), dbEncode(fce.StateElement.LeafIndex), dbEncode(fce.StateElement.MerkleProof), fc.Filesize, dbEncode(fc.FileMerkleRoot), fc.WindowStart, fc.WindowEnd, dbEncode(fc.Payout), dbEncode(fc.UnlockHash), fc.RevisionNumber, resolved, valid)
 		if err != nil {
 			updateErr = fmt.Errorf("addFileContractElements: failed to execute file_contract_elements statement: %w", err)
 			return

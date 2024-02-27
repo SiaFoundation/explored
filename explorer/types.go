@@ -18,6 +18,12 @@ const (
 	SourceMinerPayout
 	// SourceTransaction means the source of the output is a transaction.
 	SourceTransaction
+	// SourceValidProofOutput me ans the source of the output is a valid proof
+	// output.
+	SourceValidProofOutput
+	// SourceMissedProofOutput me ans the source of the output is a missed
+	// proof output.
+	SourceMissedProofOutput
 )
 
 // MarshalJSON implements json.Marshaler.
@@ -48,6 +54,10 @@ type SiafundOutput types.SiafundElement
 // internally.
 type FileContract struct {
 	types.StateElement
+
+	Resolved bool `json:"resolved"`
+	Valid    bool `json:"valid"`
+
 	Filesize           uint64          `json:"filesize"`
 	FileMerkleRoot     types.Hash256   `json:"fileMerkleRoot"`
 	WindowStart        uint64          `json:"windowStart"`
@@ -80,7 +90,7 @@ type Transaction struct {
 	SiafundInputs         []types.SiafundInput   `json:"siafundInputs,omitempty"`
 	SiafundOutputs        []SiafundOutput        `json:"siafundOutputs,omitempty"`
 	FileContracts         []FileContract         `json:"fileContracts,omitempty"`
-	FileContractRevisions []FileContractRevision `json:"fileContracts,omitempty"`
+	FileContractRevisions []FileContractRevision `json:"fileContractRevisions,omitempty"`
 	ArbitraryData         [][]byte               `json:"arbitraryData,omitempty"`
 }
 

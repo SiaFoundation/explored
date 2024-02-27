@@ -69,13 +69,29 @@ CREATE TABLE file_contract_elements (
         file_merkle_root BLOB NOT NULL,
         window_start INTEGER NOT NULL,
         window_end INTEGER NOT NULL,
-        valid_proof_outputs INTEGER NOT NULL,
-        missed_proof_outputs INTEGER NOT NULL,
         payout BLOB NOT NULL,
         unlock_hash BLOB NOT NULL,
         revision_number INTEGER NOT NULL,
         UNIQUE(contract_id, revision_number)
 );
+
+CREATE TABLE file_contract_valid_proof_outputs (
+        contract_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL,
+        contract_order INTEGER NOT NULL,
+        output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL,
+        UNIQUE(contract_id, contract_order)
+);
+
+CREATE INDEX file_contract_valid_proof_outputs_contract_id_index ON file_contract_valid_proof_outputs(contract_id);
+
+CREATE TABLE file_contract_missed_proof_outputs (
+        contract_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL,
+        contract_order INTEGER NOT NULL,
+        output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL,
+        UNIQUE(contract_id, contract_order)
+);
+
+CREATE INDEX file_contract_missed_proof_outputs_contract_id_index ON file_contract_missed_proof_outputs(contract_id);
 
 CREATE TABLE miner_payouts (
         block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
