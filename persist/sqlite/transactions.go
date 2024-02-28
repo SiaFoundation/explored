@@ -169,7 +169,7 @@ ORDER BY ts.transaction_order DESC`
 func transactionFileContractRevisions(tx txn, txnIDs []int64) (map[int64][]explorer.FileContractRevision, error) {
 	query := `SELECT ts.transaction_id, ts.parent_id, ts.unlock_conditions, fc.contract_id, fc.leaf_index, fc.merkle_proof, fc.resolved, fc.valid, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
 FROM file_contract_elements fc
-INNER JOIN transaction_file_contracts ts ON (ts.contract_id = fc.id)
+INNER JOIN transaction_file_contract_revisions ts ON (ts.contract_id = fc.id)
 WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
 ORDER BY ts.transaction_order DESC`
 	rows, err := tx.Query(query, queryArgs(txnIDs)...)

@@ -47,7 +47,16 @@ type (
 		Balance(address types.Address) (sc types.Currency, sf uint64, err error)
 		UnspentSiacoinOutputs(address types.Address, limit, offset uint64) ([]explorer.SiacoinOutput, error)
 		UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]explorer.SiafundOutput, error)
+		Contracts(ids []types.FileContractID) (result []explorer.FileContract, err error)
 	}
+)
+
+const (
+	maxIDs = 5000
+)
+
+var (
+	errTooManyIDs = fmt.Errorf("too many IDs provided (provide less than %d)", maxIDs)
 )
 
 type server struct {
@@ -171,11 +180,6 @@ func (s *server) explorerTransactionsIDHandler(jc jape.Context) {
 }
 
 func (s *server) explorerTransactionsHandler(jc jape.Context) {
-	const (
-		maxIDs = 5000
-	)
-	errTooManyIDs := fmt.Errorf("too many IDs provided (provide less than %d)", maxIDs)
-
 	var ids []types.TransactionID
 	if jc.Decode(&ids) != nil {
 		return
@@ -235,6 +239,39 @@ func (s *server) explorerAddressessAddressBalanceHandler(jc jape.Context) {
 	})
 }
 
+func (s *server) explorerContractIDHandler(jc jape.Context) {
+	errNotFound := errors.New("no contract found")
+
+	var id types.FileContractID
+	if jc.DecodeParam("id", &id) != nil {
+		return
+	}
+	fcs, err := s.e.Contracts([]types.FileContractID{id})
+	if jc.Check("failed to get contract", err) != nil {
+		return
+	} else if len(fcs) == 0 {
+		jc.Error(errNotFound, http.StatusNotFound)
+		return
+	}
+	jc.Encode(fcs[0])
+}
+
+func (s *server) explorerContractsHandler(jc jape.Context) {
+	var ids []types.FileContractID
+	if jc.Decode(&ids) != nil {
+		return
+	} else if len(ids) > maxIDs {
+		jc.Error(errTooManyIDs, http.StatusBadRequest)
+		return
+	}
+
+	fcs, err := s.e.Contracts(ids)
+	if jc.Check("failed to get contracts", err) != nil {
+		return
+	}
+	jc.Encode(fcs)
+}
+
 // NewServer returns an HTTP handler that serves the explored API.
 func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 	srv := server{
@@ -257,5 +294,7 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"POST   /explorer/transactions":               srv.explorerTransactionsHandler,
 		"GET    /explorer/addresses/:address/utxos":   srv.explorerAddressessAddressUtxosHandler,
 		"GET    /explorer/addresses/:address/balance": srv.explorerAddressessAddressBalanceHandler,
+		"GET    /explorer/contracts/:id":              srv.explorerContractIDHandler,
+		"POST   /explorer/contracts":                  srv.explorerContractsHandler,
 	})
 }
