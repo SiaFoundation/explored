@@ -58,15 +58,15 @@ type FileContract struct {
 	Resolved bool `json:"resolved"`
 	Valid    bool `json:"valid"`
 
-	Filesize           uint64          `json:"filesize"`
-	FileMerkleRoot     types.Hash256   `json:"fileMerkleRoot"`
-	WindowStart        uint64          `json:"windowStart"`
-	WindowEnd          uint64          `json:"windowEnd"`
-	Payout             types.Currency  `json:"payout"`
-	ValidProofOutputs  []SiacoinOutput `json:"validProofOutputs"`
-	MissedProofOutputs []SiacoinOutput `json:"missedProofOutputs"`
-	UnlockHash         types.Hash256   `json:"unlockHash"`
-	RevisionNumber     uint64          `json:"revisionNumber"`
+	Filesize           uint64                `json:"filesize"`
+	FileMerkleRoot     types.Hash256         `json:"fileMerkleRoot"`
+	WindowStart        uint64                `json:"windowStart"`
+	WindowEnd          uint64                `json:"windowEnd"`
+	Payout             types.Currency        `json:"payout"`
+	ValidProofOutputs  []types.SiacoinOutput `json:"validProofOutputs"`
+	MissedProofOutputs []types.SiacoinOutput `json:"missedProofOutputs"`
+	UnlockHash         types.Hash256         `json:"unlockHash"`
+	RevisionNumber     uint64                `json:"revisionNumber"`
 }
 
 // A FileContractRevision is a types.FileContractRevision that uses wrapped

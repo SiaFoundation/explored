@@ -128,17 +128,17 @@ func (s *Store) addFileContracts(dbTxn txn, id int64, txn types.Transaction, scD
 	}
 	defer stmt.Close()
 
-	// validOutputsStmt, err := dbTxn.Prepare(`INSERT INTO file_contract_valid_proof_outputs(contract_id, contract_order, output_id) VALUES (?, ?, ?)`)
-	// if err != nil {
-	// 	return fmt.Errorf("addFileContracts: failed to prepare valid proof outputs statement: %w", err)
-	// }
-	// defer validOutputsStmt.Close()
+	validOutputsStmt, err := dbTxn.Prepare(`INSERT INTO file_contract_valid_proof_outputs(contract_id, contract_order, address, value) VALUES (?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addFileContracts: failed to prepare valid proof outputs statement: %w", err)
+	}
+	defer validOutputsStmt.Close()
 
-	// missedOutputsStmt, err := dbTxn.Prepare(`INSERT INTO file_contract_missed_proof_outputs(contract_id, contract_order, output_id) VALUES (?, ?, ?)`)
-	// if err != nil {
-	// 	return fmt.Errorf("addFileContracts: failed to prepare missed proof outputs statement: %w", err)
-	// }
-	// defer missedOutputsStmt.Close()
+	missedOutputsStmt, err := dbTxn.Prepare(`INSERT INTO file_contract_missed_proof_outputs(contract_id, contract_order, address, value) VALUES (?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addFileContracts: failed to prepare missed proof outputs statement: %w", err)
+	}
+	defer missedOutputsStmt.Close()
 
 	for i := range txn.FileContracts {
 		dbID, ok := fcDBIds[fileContract{txn.FileContractID(i), 0}]
@@ -150,27 +150,17 @@ func (s *Store) addFileContracts(dbTxn txn, id int64, txn types.Transaction, scD
 			return fmt.Errorf("addFileContracts: failed to execute transaction_file_contracts statement: %w", err)
 		}
 
-		// for j := range txn.FileContracts[i].ValidProofOutputs {
-		// 	scDBId, ok := scDBIds[txn.FileContractID(i).ValidOutputID(j)]
-		// 	if !ok {
-		// 		return errors.New("addFileContracts: valid scDBId not in map")
-		// 	}
+		for j, sco := range txn.FileContracts[i].ValidProofOutputs {
+			if _, err := validOutputsStmt.Exec(dbID, j, dbEncode(sco.Address), dbEncode(sco.Value)); err != nil {
+				return fmt.Errorf("addFileContracts: failed to execute valid proof outputs statement: %w", err)
+			}
+		}
 
-		// 	if _, err := validOutputsStmt.Exec(dbID, j, scDBId); err != nil {
-		// 		return fmt.Errorf("addFileContracts: failed to execute valid proof outputs statement: %w", err)
-		// 	}
-		// }
-
-		// for j := range txn.FileContracts[i].MissedProofOutputs {
-		// 	scDBId, ok := scDBIds[txn.FileContractID(i).MissedOutputID(j)]
-		// 	if !ok {
-		// 		return errors.New("addFileContracts: missed scDBId not in map")
-		// 	}
-
-		// 	if _, err := missedOutputsStmt.Exec(dbID, j, scDBId); err != nil {
-		// 		return fmt.Errorf("addFileContracts: failed to execute missed proof outputs statement: %w", err)
-		// 	}
-		// }
+		for j, sco := range txn.FileContracts[i].MissedProofOutputs {
+			if _, err := missedOutputsStmt.Exec(dbID, j, dbEncode(sco.Address), dbEncode(sco.Value)); err != nil {
+				return fmt.Errorf("addFileContracts: failed to execute missed proof outputs statement: %w", err)
+			}
+		}
 	}
 	return nil
 }
@@ -182,6 +172,18 @@ func (s *Store) addFileContractRevisions(dbTxn txn, id int64, txn types.Transact
 	}
 	defer stmt.Close()
 
+	validOutputsStmt, err := dbTxn.Prepare(`INSERT INTO file_contract_valid_proof_outputs(contract_id, contract_order, address, value) VALUES (?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addFileContracts: failed to prepare valid proof outputs statement: %w", err)
+	}
+	defer validOutputsStmt.Close()
+
+	missedOutputsStmt, err := dbTxn.Prepare(`INSERT INTO file_contract_missed_proof_outputs(contract_id, contract_order, address, value) VALUES (?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addFileContracts: failed to prepare missed proof outputs statement: %w", err)
+	}
+	defer missedOutputsStmt.Close()
+
 	for i := range txn.FileContractRevisions {
 		fcr := &txn.FileContractRevisions[i]
 		dbID, ok := dbIDs[fileContract{fcr.ParentID, fcr.FileContract.RevisionNumber}]
@@ -192,7 +194,20 @@ func (s *Store) addFileContractRevisions(dbTxn txn, id int64, txn types.Transact
 		if _, err := stmt.Exec(id, i, dbID, dbEncode(fcr.UnlockConditions), dbEncode(fcr.UnlockHash)); err != nil {
 			return fmt.Errorf("addFileContractRevisions: failed to execute statement: %w", err)
 		}
+
+		for j, sco := range txn.FileContractRevisions[i].ValidProofOutputs {
+			if _, err := validOutputsStmt.Exec(dbID, j, dbEncode(sco.Address), dbEncode(sco.Value)); err != nil {
+				return fmt.Errorf("addFileContractRevisions: failed to execute valid proof outputs statement: %w", err)
+			}
+		}
+
+		for j, sco := range txn.FileContractRevisions[i].MissedProofOutputs {
+			if _, err := missedOutputsStmt.Exec(dbID, j, dbEncode(sco.Address), dbEncode(sco.Value)); err != nil {
+				return fmt.Errorf("addFileContractRevisions: failed to execute missed proof outputs statement: %w", err)
+			}
+		}
 	}
+
 	return nil
 }
 

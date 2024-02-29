@@ -80,7 +80,8 @@ CREATE INDEX file_contract_elements_contract_id_index ON file_contract_elements(
 CREATE TABLE file_contract_valid_proof_outputs (
         contract_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL,
         contract_order INTEGER NOT NULL,
-        output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL,
+        address BLOB NOT NULL,
+        value BLOB NOT NULL,
         UNIQUE(contract_id, contract_order)
 );
 
@@ -89,7 +90,8 @@ CREATE INDEX file_contract_valid_proof_outputs_contract_id_index ON file_contrac
 CREATE TABLE file_contract_missed_proof_outputs (
         contract_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL,
         contract_order INTEGER NOT NULL,
-        output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL,
+        address BLOB NOT NULL,
+        value BLOB NOT NULL,
         UNIQUE(contract_id, contract_order)
 );
 
