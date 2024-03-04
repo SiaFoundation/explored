@@ -368,7 +368,7 @@ func (s *Store) updateMaturedBalances(dbTxn txn, update consensusUpdate, height 
 
 	_, isApply := update.(*chain.ApplyUpdate)
 	if !isApply {
-		height += 1
+		height++
 	}
 
 	rows, err := dbTxn.Query(`SELECT address, value
