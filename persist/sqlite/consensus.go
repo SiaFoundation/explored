@@ -319,7 +319,8 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate) error {
 			if underflow {
 				return
 			}
-		} else {
+		} else if sce.MaturityHeight == 0 {
+			// Outputs that mature later are handled in updateMaturedBalances
 			// log.Println("Gain:", sce.SiacoinOutput.Address, sce.SiacoinOutput.Value)
 			bal.sc = bal.sc.Add(sce.SiacoinOutput.Value)
 		}
@@ -353,6 +354,86 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate) error {
 			return fmt.Errorf("updateBalances: failed to exec statement: %w", err)
 		}
 		// log.Println(addr, "=", bal.sc)
+	}
+
+	return nil
+}
+
+func (s *Store) updateMaturedBalances(dbTxn txn, update consensusUpdate, height uint64) error {
+	// Prevent double counting - outputs with a maturity height of 0 are
+	// handled in updateBalances
+	if height == 0 {
+		return nil
+	}
+
+	_, isApply := update.(*chain.ApplyUpdate)
+	if !isApply {
+		height += 1
+	}
+
+	rows, err := dbTxn.Query(`SELECT address, value
+			FROM siacoin_elements
+			WHERE maturity_height = ?`, height)
+	if err != nil {
+		return fmt.Errorf("updateMaturedBalances: failed to query siacoin_elements: %w", err)
+	}
+	defer rows.Close()
+
+	var addressList []any
+	var scos []types.SiacoinOutput
+	for rows.Next() {
+		var sco types.SiacoinOutput
+		if err := rows.Scan(dbDecode(&sco.Address), dbDecode(&sco.Value)); err != nil {
+			return fmt.Errorf("updateMaturedBalances: failed to scan maturing outputs: %w", err)
+		}
+		scos = append(scos, sco)
+		addressList = append(addressList, dbEncode(sco.Address))
+	}
+
+	balanceRows, err := dbTxn.Query(`SELECT address, siacoin_balance
+		FROM address_balance
+		WHERE address IN (`+queryPlaceHolders(len(addressList))+`)`, addressList...)
+	if err != nil {
+		return fmt.Errorf("updateMaturedBalances: failed to query address_balance: %w", err)
+	}
+	defer balanceRows.Close()
+
+	addresses := make(map[types.Address]types.Currency)
+	for balanceRows.Next() {
+		var address types.Address
+		var sc types.Currency
+		if err := balanceRows.Scan(dbDecode(&address), dbDecode(&sc)); err != nil {
+			return fmt.Errorf("updateMaturedBalances: failed to scan balance: %w", err)
+		}
+		addresses[address] = sc
+	}
+
+	// If the update is an apply update then we add the amounts.
+	// If we are reverting then we subtract them.
+	for _, sco := range scos {
+		bal := addresses[sco.Address]
+		if isApply {
+			bal = bal.Add(sco.Value)
+		} else {
+			bal = bal.Sub(sco.Value)
+		}
+		addresses[sco.Address] = bal
+	}
+
+	stmt, err := dbTxn.Prepare(`INSERT INTO address_balance(address, siacoin_balance, siafund_balance)
+	VALUES (?, ?, ?)
+	ON CONFLICT(address)
+	DO UPDATE set siacoin_balance = ?`)
+	if err != nil {
+		return fmt.Errorf("updateMaturedBalances: failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	initialSF := dbEncode(uint64(0))
+	for addr, bal := range addresses {
+		if _, err := stmt.Exec(dbEncode(addr), dbEncode(bal), initialSF, dbEncode(bal)); err != nil {
+			return fmt.Errorf("updateMaturedBalances: failed to exec statement: %w", err)
+		}
 	}
 
 	return nil
@@ -512,6 +593,8 @@ func (s *Store) applyUpdates() error {
 			}
 			if err := s.updateBalances(dbTxn, update); err != nil {
 				return fmt.Errorf("applyUpdates: failed to update balances: %w", err)
+			} else if err := s.updateMaturedBalances(dbTxn, update, update.State.Index.Height); err != nil {
+				return fmt.Errorf("applyUpdates: failed to update matured balances: %w", err)
 			}
 
 			fcDBIds, err := s.addFileContractElements(dbTxn, update.Block.ID(), update)
@@ -546,6 +629,8 @@ func (s *Store) revertUpdate(cru *chain.RevertUpdate) error {
 			return fmt.Errorf("revertUpdate: failed to update siafund output state: %w", err)
 		} else if err := s.updateBalances(dbTxn, cru); err != nil {
 			return fmt.Errorf("revertUpdate: failed to update balances: %w", err)
+		} else if err := s.updateMaturedBalances(dbTxn, cru, cru.State.Index.Height); err != nil {
+			return fmt.Errorf("revertUpdate: failed to update matured balances: %w", err)
 		} else if _, err := s.addFileContractElements(dbTxn, cru.Block.ID(), cru); err != nil {
 			return fmt.Errorf("revertUpdate: failed to update file contract state: %w", err)
 		}
