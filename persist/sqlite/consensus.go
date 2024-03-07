@@ -121,7 +121,7 @@ func (s *Store) addSiafundOutputs(dbTxn txn, id int64, txn types.Transaction, db
 	return nil
 }
 
-func (s *Store) addFileContracts(dbTxn txn, id int64, txn types.Transaction, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[fileContract]int64) error {
+func (s *Store) addFileContracts(dbTxn txn, id int64, txn types.Transaction, fcDBIds map[fileContract]int64) error {
 	stmt, err := dbTxn.Prepare(`INSERT INTO transaction_file_contracts(transaction_id, transaction_order, contract_id) VALUES (?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("addFileContracts: failed to prepare statement: %w", err)
@@ -245,7 +245,7 @@ func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Trans
 			return fmt.Errorf("failed to add siafund inputs: %w", err)
 		} else if err := s.addSiafundOutputs(dbTxn, txnID, txn, sfDBIds); err != nil {
 			return fmt.Errorf("failed to add siafund outputs: %w", err)
-		} else if err := s.addFileContracts(dbTxn, txnID, txn, scDBIds, fcDBIds); err != nil {
+		} else if err := s.addFileContracts(dbTxn, txnID, txn, fcDBIds); err != nil {
 			return fmt.Errorf("failed to add file contract: %w", err)
 		} else if err := s.addFileContractRevisions(dbTxn, txnID, txn, fcDBIds); err != nil {
 			return fmt.Errorf("failed to add file contract revisions: %w", err)
@@ -366,8 +366,8 @@ func (s *Store) updateMaturedBalances(dbTxn txn, update consensusUpdate, height 
 		return nil
 	}
 
-	_, isApply := update.(*chain.ApplyUpdate)
-	if !isApply {
+	_, isRevert := update.(*chain.RevertUpdate)
+	if !isRevert {
 		height++
 	}
 
@@ -412,10 +412,10 @@ func (s *Store) updateMaturedBalances(dbTxn txn, update consensusUpdate, height 
 	// If we are reverting then we subtract them.
 	for _, sco := range scos {
 		bal := addresses[sco.Address]
-		if isApply {
-			bal = bal.Add(sco.Value)
-		} else {
+		if isRevert {
 			bal = bal.Sub(sco.Value)
+		} else {
+			bal = bal.Add(sco.Value)
 		}
 		addresses[sco.Address] = bal
 	}
@@ -546,6 +546,14 @@ func (s *Store) addFileContractElements(dbTxn txn, bid types.BlockID, update con
 	}
 	defer stmt.Close()
 
+	revisionStmt, err := dbTxn.Prepare(`INSERT INTO last_contract_revision(contract_id, contract_element_id)
+	VALUES (?, ?)
+	ON CONFLICT
+	DO UPDATE SET contract_element_id = ?`)
+	if err != nil {
+		return nil, fmt.Errorf("addFileContractElements: failed to prepare last_contract_revision statement: %w", err)
+	}
+
 	var updateErr error
 	fcDBIds := make(map[fileContract]int64)
 	update.ForEachFileContractElement(func(fce types.FileContractElement, rev *types.FileContractElement, resolved, valid bool) {
@@ -567,6 +575,11 @@ func (s *Store) addFileContractElements(dbTxn txn, bid types.BlockID, update con
 		dbID, err := result.LastInsertId()
 		if err != nil {
 			updateErr = fmt.Errorf("addFileContractElements: failed to get last insert ID: %w", err)
+			return
+		}
+
+		if _, err := revisionStmt.Exec(dbEncode(fce.StateElement.ID), dbID, dbID); err != nil {
+			updateErr = fmt.Errorf("addFileContractElements: failed to update last revision number: %w", err)
 			return
 		}
 

@@ -19,9 +19,9 @@ func (s *Store) Contracts(ids []types.FileContractID) (result []explorer.FileCon
 
 	err = s.transaction(func(tx txn) error {
 		query := `SELECT fc1.id, fc1.contract_id, fc1.leaf_index, fc1.merkle_proof, fc1.resolved, fc1.valid, fc1.filesize, fc1.file_merkle_root, fc1.window_start, fc1.window_end, fc1.payout, fc1.unlock_hash, fc1.revision_number
-		FROM file_contract_elements fc1
-		WHERE fc1.contract_id IN (` + queryPlaceHolders(len(ids)) + `)
-		AND fc1.revision_number = (SELECT max(revision_number) FROM file_contract_elements fc2 WHERE fc2.contract_id = fc1.contract_id)`
+			FROM file_contract_elements fc1
+			INNER JOIN last_contract_revision rev ON (rev.contract_element_id = fc1.id)
+			WHERE rev.contract_id IN (` + queryPlaceHolders(len(ids)) + `)`
 		rows, err := tx.Query(query, encodedIDs(ids)...)
 		if err != nil {
 			return err
@@ -54,5 +54,6 @@ func (s *Store) Contracts(ids []types.FileContractID) (result []explorer.FileCon
 
 		return nil
 	})
+
 	return
 }

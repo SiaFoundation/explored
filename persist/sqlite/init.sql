@@ -77,6 +77,11 @@ CREATE TABLE file_contract_elements (
 
 CREATE INDEX file_contract_elements_contract_id_index ON file_contract_elements(contract_id);
 
+CREATE TABLE last_contract_revision (
+        contract_id BLOB PRIMARY KEY NOT NULL,
+        contract_element_id INTEGER UNIQUE REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL
+);
+
 CREATE TABLE file_contract_valid_proof_outputs (
         contract_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL,
         contract_order INTEGER NOT NULL,
