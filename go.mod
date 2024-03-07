@@ -3,7 +3,7 @@ module go.sia.tech/explored
 go 1.21.6
 
 require (
-	github.com/mattn/go-sqlite3 v1.14.19
+	github.com/mattn/go-sqlite3 v1.14.22
 	go.etcd.io/bbolt v1.3.9
 	go.sia.tech/core v0.2.1
 	go.sia.tech/coreutils v0.0.2
