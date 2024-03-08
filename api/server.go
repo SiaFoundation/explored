@@ -44,7 +44,7 @@ type (
 		Block(id types.BlockID) (explorer.Block, error)
 		BestTip(height uint64) (types.ChainIndex, error)
 		Transactions(ids []types.TransactionID) ([]explorer.Transaction, error)
-		Balance(address types.Address) (sc types.Currency, sf uint64, err error)
+		Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 		UnspentSiacoinOutputs(address types.Address, limit, offset uint64) ([]explorer.SiacoinOutput, error)
 		UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]explorer.SiafundOutput, error)
 		Contracts(ids []types.FileContractID) (result []explorer.FileContract, err error)
@@ -228,14 +228,15 @@ func (s *server) explorerAddressessAddressBalanceHandler(jc jape.Context) {
 		return
 	}
 
-	sc, sf, err := s.e.Balance(address)
+	sc, immatureSC, sf, err := s.e.Balance(address)
 	if jc.Check("failed to get balance", err) != nil {
 		return
 	}
 
 	jc.Encode(AddressBalanceResponse{
-		UnspentSiacoins: sc,
-		UnspentSiafunds: sf,
+		UnspentSiacoins:  sc,
+		ImmatureSiacoins: immatureSC,
+		UnspentSiafunds:  sf,
 	})
 }
 

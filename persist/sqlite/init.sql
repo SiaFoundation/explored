@@ -16,6 +16,7 @@ CREATE INDEX blocks_height_index ON blocks(height);
 CREATE TABLE address_balance (
         address BLOB PRIMARY KEY NOT NULL,
         siacoin_balance BLOB NOT NULL,
+        immature_siacoin_balance BLOB NOT NULL,
         siafund_balance BLOB NOT NULL
 );
 

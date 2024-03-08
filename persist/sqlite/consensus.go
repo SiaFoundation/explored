@@ -260,12 +260,13 @@ type consensusUpdate interface {
 	ForEachFileContractElement(fn func(fce types.FileContractElement, rev *types.FileContractElement, resolved, valid bool))
 }
 
-func (s *Store) updateBalances(dbTxn txn, update consensusUpdate) error {
-	type balance struct {
-		sc types.Currency
-		sf uint64
-	}
+type balance struct {
+	sc         types.Currency
+	immatureSC types.Currency
+	sf         uint64
+}
 
+func (s *Store) updateBalances(dbTxn txn, update consensusUpdate, height uint64) error {
 	addresses := make(map[types.Address]balance)
 	update.ForEachSiacoinElement(func(sce types.SiacoinElement, spent bool) {
 		addresses[sce.SiacoinOutput.Address] = balance{}
@@ -279,7 +280,7 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate) error {
 		addressList = append(addressList, dbEncode(address))
 	}
 
-	rows, err := dbTxn.Query(`SELECT address, siacoin_balance, siafund_balance
+	rows, err := dbTxn.Query(`SELECT address, siacoin_balance, immature_siacoin_balance, siafund_balance
 		FROM address_balance
 		WHERE address IN (`+queryPlaceHolders(len(addressList))+`)`, addressList...)
 	if err != nil {
@@ -288,41 +289,42 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate) error {
 	defer rows.Close()
 
 	for rows.Next() {
+		var bal balance
 		var address types.Address
-		var sc types.Currency
-		var sf uint64
-		if err := rows.Scan(dbDecode(&address), dbDecode(&sc), dbDecode(&sf)); err != nil {
+		if err := rows.Scan(dbDecode(&address), dbDecode(&bal.sc), dbDecode(&bal.immatureSC), dbDecode(&bal.sf)); err != nil {
 			return err
 		}
-		addresses[address] = balance{
-			sc: sc,
-			sf: sf,
-		}
+		addresses[address] = bal
 	}
 
 	// log.Println("New block")
 	update.ForEachSiacoinElement(func(sce types.SiacoinElement, spent bool) {
 		bal := addresses[sce.SiacoinOutput.Address]
-		if spent {
-			// If within the same block, an address A receives SC in one
-			// transaction and sends it to another address in a later
-			// transaction, the chain update will not contain the unspent
-			// siacoin element that was temporarily A's. This can then result
-			// in underflow when we subtract the element for A as being spent.
-			// So we catch underflow here because this causes crashes even
-			// though there is no net balance change for A.
-			// Example: https://siascan.com/block/506
+		if sce.MaturityHeight < height {
+			if spent {
+				// If within the same block, an address A receives SC in one
+				// transaction and sends it to another address in a later
+				// transaction, the chain update will not contain the unspent
+				// siacoin element that was temporarily A's. This can then result
+				// in underflow when we subtract the element for A as being spent.
+				// So we catch underflow here because this causes crashes even
+				// though there is no net balance change for A.
+				// Example: https://siascan.com/block/506
 
-			// log.Println("Spend:", sce.SiacoinOutput.Address, sce.SiacoinOutput.Value)
-			underflow := false
-			bal.sc, underflow = bal.sc.SubWithUnderflow(sce.SiacoinOutput.Value)
-			if underflow {
-				return
+				// log.Println("Spend:", sce.SiacoinOutput.Address, sce.SiacoinOutput.Value)
+				underflow := false
+				bal.sc, underflow = bal.sc.SubWithUnderflow(sce.SiacoinOutput.Value)
+				if underflow {
+					return
+				}
+			} else {
+				// log.Println("Gain:", sce.SiacoinOutput.Address, sce.SiacoinOutput.Value)
+				bal.sc = bal.sc.Add(sce.SiacoinOutput.Value)
 			}
-		} else if sce.MaturityHeight == 0 {
-			// Outputs that mature later are handled in updateMaturedBalances
-			// log.Println("Gain:", sce.SiacoinOutput.Address, sce.SiacoinOutput.Value)
-			bal.sc = bal.sc.Add(sce.SiacoinOutput.Value)
+		} else {
+			if !spent {
+				bal.immatureSC = bal.immatureSC.Add(sce.SiacoinOutput.Value)
+			}
 		}
 		addresses[sce.SiacoinOutput.Address] = bal
 	})
@@ -340,17 +342,17 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate) error {
 		addresses[sfe.SiafundOutput.Address] = bal
 	})
 
-	stmt, err := dbTxn.Prepare(`INSERT INTO address_balance(address, siacoin_balance, siafund_balance)
-	VALUES (?, ?, ?)
+	stmt, err := dbTxn.Prepare(`INSERT INTO address_balance(address, siacoin_balance, immature_siacoin_balance, siafund_balance)
+	VALUES (?, ?, ?, ?)
 	ON CONFLICT(address)
-	DO UPDATE set siacoin_balance = ?, siafund_balance = ?`)
+	DO UPDATE set siacoin_balance = ?, immature_siacoin_balance = ?, siafund_balance = ?`)
 	if err != nil {
 		return fmt.Errorf("updateBalances: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for addr, bal := range addresses {
-		if _, err := stmt.Exec(dbEncode(addr), dbEncode(bal.sc), dbEncode(bal.sf), dbEncode(bal.sc), dbEncode(bal.sf)); err != nil {
+		if _, err := stmt.Exec(dbEncode(addr), dbEncode(bal.sc), dbEncode(bal.immatureSC), dbEncode(bal.sf), dbEncode(bal.sc), dbEncode(bal.immatureSC), dbEncode(bal.sf)); err != nil {
 			return fmt.Errorf("updateBalances: failed to exec statement: %w", err)
 		}
 		// log.Println(addr, "=", bal.sc)
@@ -390,7 +392,7 @@ func (s *Store) updateMaturedBalances(dbTxn txn, update consensusUpdate, height 
 		addressList = append(addressList, dbEncode(sco.Address))
 	}
 
-	balanceRows, err := dbTxn.Query(`SELECT address, siacoin_balance
+	balanceRows, err := dbTxn.Query(`SELECT address, siacoin_balance, immature_siacoin_balance
 		FROM address_balance
 		WHERE address IN (`+queryPlaceHolders(len(addressList))+`)`, addressList...)
 	if err != nil {
@@ -398,14 +400,14 @@ func (s *Store) updateMaturedBalances(dbTxn txn, update consensusUpdate, height 
 	}
 	defer balanceRows.Close()
 
-	addresses := make(map[types.Address]types.Currency)
+	addresses := make(map[types.Address]balance)
 	for balanceRows.Next() {
 		var address types.Address
-		var sc types.Currency
-		if err := balanceRows.Scan(dbDecode(&address), dbDecode(&sc)); err != nil {
+		var bal balance
+		if err := balanceRows.Scan(dbDecode(&address), dbDecode(&bal.sc), dbDecode(&bal.immatureSC)); err != nil {
 			return fmt.Errorf("updateMaturedBalances: failed to scan balance: %w", err)
 		}
-		addresses[address] = sc
+		addresses[address] = bal
 	}
 
 	// If the update is an apply update then we add the amounts.
@@ -413,17 +415,19 @@ func (s *Store) updateMaturedBalances(dbTxn txn, update consensusUpdate, height 
 	for _, sco := range scos {
 		bal := addresses[sco.Address]
 		if isRevert {
-			bal = bal.Sub(sco.Value)
+			bal.sc = bal.sc.Sub(sco.Value)
+			bal.immatureSC = bal.immatureSC.Add(sco.Value)
 		} else {
-			bal = bal.Add(sco.Value)
+			bal.sc = bal.sc.Add(sco.Value)
+			bal.immatureSC = bal.immatureSC.Sub(sco.Value)
 		}
 		addresses[sco.Address] = bal
 	}
 
-	stmt, err := dbTxn.Prepare(`INSERT INTO address_balance(address, siacoin_balance, siafund_balance)
-	VALUES (?, ?, ?)
+	stmt, err := dbTxn.Prepare(`INSERT INTO address_balance(address, siacoin_balance, immature_siacoin_balance, siafund_balance)
+	VALUES (?, ?, ?, ?)
 	ON CONFLICT(address)
-	DO UPDATE set siacoin_balance = ?`)
+	DO UPDATE set siacoin_balance = ?, immature_siacoin_balance = ?`)
 	if err != nil {
 		return fmt.Errorf("updateMaturedBalances: failed to prepare statement: %w", err)
 	}
@@ -431,7 +435,7 @@ func (s *Store) updateMaturedBalances(dbTxn txn, update consensusUpdate, height 
 
 	initialSF := dbEncode(uint64(0))
 	for addr, bal := range addresses {
-		if _, err := stmt.Exec(dbEncode(addr), dbEncode(bal), initialSF, dbEncode(bal)); err != nil {
+		if _, err := stmt.Exec(dbEncode(addr), dbEncode(bal.sc), dbEncode(bal.immatureSC), initialSF, dbEncode(bal.sc), dbEncode(bal.immatureSC)); err != nil {
 			return fmt.Errorf("updateMaturedBalances: failed to exec statement: %w", err)
 		}
 	}
@@ -604,7 +608,7 @@ func (s *Store) applyUpdates() error {
 			if err != nil {
 				return fmt.Errorf("applyUpdates: failed to add siafund outputs: %w", err)
 			}
-			if err := s.updateBalances(dbTxn, update); err != nil {
+			if err := s.updateBalances(dbTxn, update, update.State.Index.Height); err != nil {
 				return fmt.Errorf("applyUpdates: failed to update balances: %w", err)
 			} else if err := s.updateMaturedBalances(dbTxn, update, update.State.Index.Height); err != nil {
 				return fmt.Errorf("applyUpdates: failed to update matured balances: %w", err)
@@ -640,7 +644,7 @@ func (s *Store) revertUpdate(cru *chain.RevertUpdate) error {
 			return fmt.Errorf("revertUpdate: failed to update siacoin output state: %w", err)
 		} else if _, err := s.addSiafundElements(dbTxn, cru.Block.ID(), cru); err != nil {
 			return fmt.Errorf("revertUpdate: failed to update siafund output state: %w", err)
-		} else if err := s.updateBalances(dbTxn, cru); err != nil {
+		} else if err := s.updateBalances(dbTxn, cru, cru.State.Index.Height); err != nil {
 			return fmt.Errorf("revertUpdate: failed to update balances: %w", err)
 		} else if err := s.updateMaturedBalances(dbTxn, cru, cru.State.Index.Height); err != nil {
 			return fmt.Errorf("revertUpdate: failed to update matured balances: %w", err)

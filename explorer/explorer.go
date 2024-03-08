@@ -16,7 +16,7 @@ type Store interface {
 	Transactions(ids []types.TransactionID) ([]Transaction, error)
 	UnspentSiacoinOutputs(address types.Address, limit, offset uint64) ([]SiacoinOutput, error)
 	UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]SiafundOutput, error)
-	Balance(address types.Address) (sc types.Currency, sf uint64, err error)
+	Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 	Contracts(ids []types.FileContractID) (result []FileContract, err error)
 
 	MerkleProof(leafIndex uint64) ([]types.Hash256, error)
@@ -70,7 +70,7 @@ func (e *Explorer) UnspentSiafundOutputs(address types.Address, limit, offset ui
 }
 
 // Balance returns the balance of an address.
-func (e *Explorer) Balance(address types.Address) (sc types.Currency, sf uint64, err error) {
+func (e *Explorer) Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error) {
 	return e.s.Balance(address)
 }
 

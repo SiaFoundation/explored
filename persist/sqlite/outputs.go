@@ -50,9 +50,9 @@ func (s *Store) UnspentSiafundOutputs(address types.Address, limit, offset uint6
 }
 
 // Balance implements explorer.Store.
-func (s *Store) Balance(address types.Address) (sc types.Currency, sf uint64, err error) {
+func (s *Store) Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error) {
 	err = s.transaction(func(tx txn) error {
-		err = tx.QueryRow(`SELECT siacoin_balance, siafund_balance FROM address_balance WHERE address = ?`, dbEncode(address)).Scan(dbDecode(&sc), dbDecode(&sf))
+		err = tx.QueryRow(`SELECT siacoin_balance, immature_siacoin_balance, siafund_balance FROM address_balance WHERE address = ?`, dbEncode(address)).Scan(dbDecode(&sc), dbDecode(&immatureSC), dbDecode(&sf))
 		if err != nil {
 			return fmt.Errorf("failed to query balances: %w", err)
 		}
