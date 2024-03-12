@@ -8,7 +8,7 @@ require (
 	go.sia.tech/core v0.2.1
 	go.sia.tech/coreutils v0.0.3
 	go.sia.tech/jape v0.11.1
-	go.uber.org/zap v1.26.0
+	go.uber.org/zap v1.27.0
 	golang.org/x/term v0.18.0
 	lukechampine.com/frand v1.4.2
 	lukechampine.com/upnp v0.3.0
