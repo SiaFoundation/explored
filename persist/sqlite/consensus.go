@@ -369,7 +369,7 @@ func (s *Store) updateMaturedBalances(dbTxn txn, update consensusUpdate, height 
 	}
 
 	_, isRevert := update.(*chain.RevertUpdate)
-	if !isRevert {
+	if isRevert {
 		height++
 	}
 
