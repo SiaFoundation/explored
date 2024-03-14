@@ -139,6 +139,152 @@ ORDER BY ts.transaction_order DESC`
 	return result, nil
 }
 
+type fileContractProofOutputs struct {
+	valid  []types.SiacoinOutput
+	missed []types.SiacoinOutput
+}
+
+func fileContractOutputs(tx txn, contractIDs []int64) (map[int64]fileContractProofOutputs, error) {
+	result := make(map[int64]fileContractProofOutputs)
+
+	validQuery := `SELECT contract_id, address, value
+FROM file_contract_valid_proof_outputs
+WHERE contract_id IN (` + queryPlaceHolders(len(contractIDs)) + `)
+ORDER BY contract_order`
+	validRows, err := tx.Query(validQuery, queryArgs(contractIDs)...)
+	if err != nil {
+		return nil, err
+	}
+	defer validRows.Close()
+
+	for validRows.Next() {
+		var contractID int64
+		var sco types.SiacoinOutput
+		if err := validRows.Scan(&contractID, dbDecode(&sco.Address), dbDecode(&sco.Value)); err != nil {
+			return nil, fmt.Errorf("failed to scan valid proof output: %w", err)
+		}
+
+		r := result[contractID]
+		r.valid = append(r.valid, sco)
+		result[contractID] = r
+	}
+
+	missedQuery := `SELECT contract_id, address, value
+FROM file_contract_missed_proof_outputs
+WHERE contract_id IN (` + queryPlaceHolders(len(contractIDs)) + `)
+ORDER BY contract_order`
+	missedRows, err := tx.Query(missedQuery, queryArgs(contractIDs)...)
+	if err != nil {
+		return nil, err
+	}
+	defer missedRows.Close()
+
+	for missedRows.Next() {
+		var contractID int64
+		var sco types.SiacoinOutput
+		if err := missedRows.Scan(&contractID, dbDecode(&sco.Address), dbDecode(&sco.Value)); err != nil {
+			return nil, fmt.Errorf("failed to scan missed proof output: %w", err)
+		}
+
+		r := result[contractID]
+		r.missed = append(r.missed, sco)
+		result[contractID] = r
+	}
+
+	return result, nil
+}
+
+type contractOrder struct {
+	txnID            int64
+	transactionOrder int64
+}
+
+// transactionFileContracts returns the file contracts for each transaction.
+func transactionFileContracts(tx txn, txnIDs []int64) (map[int64][]explorer.FileContract, error) {
+	query := `SELECT ts.transaction_id, fc.id, fc.contract_id, fc.leaf_index, fc.merkle_proof, fc.resolved, fc.valid, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
+FROM file_contract_elements fc
+INNER JOIN transaction_file_contracts ts ON (ts.contract_id = fc.id)
+WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
+ORDER BY ts.transaction_order DESC`
+	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query contract output ids: %w", err)
+	}
+	defer rows.Close()
+
+	var contractIDs []int64
+	// map transaction ID to contract list
+	result := make(map[int64][]explorer.FileContract)
+	// map contract ID to transaction ID
+	contractTransaction := make(map[int64]contractOrder)
+	for rows.Next() {
+		var txnID, contractID int64
+		var fc explorer.FileContract
+		if err := rows.Scan(&txnID, &contractID, dbDecode(&fc.StateElement.ID), dbDecode(&fc.StateElement.LeafIndex), dbDecode(&fc.StateElement.MerkleProof), &fc.Resolved, &fc.Valid, &fc.Filesize, dbDecode(&fc.FileMerkleRoot), &fc.WindowStart, &fc.WindowEnd, dbDecode(&fc.Payout), dbDecode(&fc.UnlockHash), &fc.RevisionNumber); err != nil {
+			return nil, fmt.Errorf("failed to scan file contract: %w", err)
+		}
+
+		result[txnID] = append(result[txnID], fc)
+		contractIDs = append(contractIDs, contractID)
+		contractTransaction[contractID] = contractOrder{txnID, int64(len(result[txnID])) - 1}
+	}
+
+	proofOutputs, err := fileContractOutputs(tx, contractIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get file contract outputs: %w", err)
+	}
+	for contractID, output := range proofOutputs {
+		index := contractTransaction[contractID]
+		result[index.txnID][index.transactionOrder].ValidProofOutputs = output.valid
+		result[index.txnID][index.transactionOrder].MissedProofOutputs = output.missed
+	}
+
+	return result, nil
+}
+
+// transactionFileContracts returns the file contract revisions for each transaction.
+func transactionFileContractRevisions(tx txn, txnIDs []int64) (map[int64][]explorer.FileContractRevision, error) {
+	query := `SELECT ts.transaction_id, fc.id, ts.parent_id, ts.unlock_conditions, fc.contract_id, fc.leaf_index, fc.merkle_proof, fc.resolved, fc.valid, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
+FROM file_contract_elements fc
+INNER JOIN transaction_file_contract_revisions ts ON (ts.contract_id = fc.id)
+WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
+ORDER BY ts.transaction_order DESC`
+	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query contract output ids: %w", err)
+	}
+	defer rows.Close()
+
+	var contractIDs []int64
+	// map transaction ID to contract list
+	result := make(map[int64][]explorer.FileContractRevision)
+	// map contract ID to transaction ID
+	contractTransaction := make(map[int64]contractOrder)
+	for rows.Next() {
+		var txnID, contractID int64
+		var fc explorer.FileContractRevision
+		if err := rows.Scan(&txnID, &contractID, dbDecode(&fc.ParentID), dbDecode(&fc.UnlockConditions), dbDecode(&fc.StateElement.ID), dbDecode(&fc.StateElement.LeafIndex), dbDecode(&fc.StateElement.MerkleProof), &fc.Resolved, &fc.Valid, &fc.Filesize, dbDecode(&fc.FileMerkleRoot), &fc.WindowStart, &fc.WindowEnd, dbDecode(&fc.Payout), dbDecode(&fc.UnlockHash), &fc.RevisionNumber); err != nil {
+			return nil, fmt.Errorf("failed to scan file contract: %w", err)
+		}
+
+		result[txnID] = append(result[txnID], fc)
+		contractIDs = append(contractIDs, contractID)
+		contractTransaction[contractID] = contractOrder{txnID, int64(len(result[txnID])) - 1}
+	}
+
+	proofOutputs, err := fileContractOutputs(tx, contractIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get file contract outputs: %w", err)
+	}
+	for contractID, output := range proofOutputs {
+		index := contractTransaction[contractID]
+		result[index.txnID][index.transactionOrder].ValidProofOutputs = output.valid
+		result[index.txnID][index.transactionOrder].MissedProofOutputs = output.missed
+	}
+
+	return result, nil
+}
+
 // blockTransactionIDs returns the database ID for each transaction in the
 // block.
 func blockTransactionIDs(tx txn, blockID types.BlockID) (dbIDs []int64, err error) {
@@ -235,19 +381,29 @@ func (s *Store) getTransactions(tx txn, dbIDs []int64) ([]explorer.Transaction, 
 		return nil, fmt.Errorf("getTransactions: failed to get siafund outputs: %w", err)
 	}
 
-	// TODO: file contracts
-	// TODO: file contract revisions
+	txnFileContracts, err := transactionFileContracts(tx, dbIDs)
+	if err != nil {
+		return nil, fmt.Errorf("getTransactions: failed to get file contracts: %w", err)
+	}
+
+	txnFileContractRevisions, err := transactionFileContractRevisions(tx, dbIDs)
+	if err != nil {
+		return nil, fmt.Errorf("getTransactions: failed to get file contract revisions: %w", err)
+	}
+
 	// TODO: storage proofs
 	// TODO: signatures
 
 	var results []explorer.Transaction
 	for _, dbID := range dbIDs {
 		txn := explorer.Transaction{
-			ArbitraryData:  txnArbitraryData[dbID],
-			SiacoinInputs:  txnSiacoinInputs[dbID],
-			SiacoinOutputs: txnSiacoinOutputs[dbID],
-			SiafundInputs:  txnSiafundInputs[dbID],
-			SiafundOutputs: txnSiafundOutputs[dbID],
+			ArbitraryData:         txnArbitraryData[dbID],
+			SiacoinInputs:         txnSiacoinInputs[dbID],
+			SiacoinOutputs:        txnSiacoinOutputs[dbID],
+			SiafundInputs:         txnSiafundInputs[dbID],
+			SiafundOutputs:        txnSiafundOutputs[dbID],
+			FileContracts:         txnFileContracts[dbID],
+			FileContractRevisions: txnFileContractRevisions[dbID],
 		}
 		results = append(results, txn)
 	}

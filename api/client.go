@@ -97,3 +97,15 @@ func (c *Client) AddressBalance(address types.Address) (resp AddressBalanceRespo
 	err = c.c.GET(fmt.Sprintf("/explorer/addresses/%s/balance", address), &resp)
 	return
 }
+
+// Contract returns the file contract with the specified ID.
+func (c *Client) Contract(id types.FileContractID) (resp explorer.FileContract, err error) {
+	err = c.c.GET(fmt.Sprintf("/explorer/contracts/%s", id), &resp)
+	return
+}
+
+// Contracts returns the transactions with the specified IDs.
+func (c *Client) Contracts(ids []types.FileContractID) (resp []explorer.FileContract, err error) {
+	err = c.c.POST("/explorer/contracts", ids, &resp)
+	return
+}

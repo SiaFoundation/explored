@@ -121,7 +121,97 @@ func (s *Store) addSiafundOutputs(dbTxn txn, id int64, txn types.Transaction, db
 	return nil
 }
 
-func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Transaction, scDBIds map[types.SiacoinOutputID]int64, sfDBIds map[types.SiafundOutputID]int64) error {
+func (s *Store) addFileContracts(dbTxn txn, id int64, txn types.Transaction, fcDBIds map[fileContract]int64) error {
+	stmt, err := dbTxn.Prepare(`INSERT INTO transaction_file_contracts(transaction_id, transaction_order, contract_id) VALUES (?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addFileContracts: failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	validOutputsStmt, err := dbTxn.Prepare(`INSERT INTO file_contract_valid_proof_outputs(contract_id, contract_order, address, value) VALUES (?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addFileContracts: failed to prepare valid proof outputs statement: %w", err)
+	}
+	defer validOutputsStmt.Close()
+
+	missedOutputsStmt, err := dbTxn.Prepare(`INSERT INTO file_contract_missed_proof_outputs(contract_id, contract_order, address, value) VALUES (?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addFileContracts: failed to prepare missed proof outputs statement: %w", err)
+	}
+	defer missedOutputsStmt.Close()
+
+	for i := range txn.FileContracts {
+		dbID, ok := fcDBIds[fileContract{txn.FileContractID(i), 0}]
+		if !ok {
+			return errors.New("addFileContracts: fcDbID not in map")
+		}
+
+		if _, err := stmt.Exec(id, i, dbID); err != nil {
+			return fmt.Errorf("addFileContracts: failed to execute transaction_file_contracts statement: %w", err)
+		}
+
+		for j, sco := range txn.FileContracts[i].ValidProofOutputs {
+			if _, err := validOutputsStmt.Exec(dbID, j, dbEncode(sco.Address), dbEncode(sco.Value)); err != nil {
+				return fmt.Errorf("addFileContracts: failed to execute valid proof outputs statement: %w", err)
+			}
+		}
+
+		for j, sco := range txn.FileContracts[i].MissedProofOutputs {
+			if _, err := missedOutputsStmt.Exec(dbID, j, dbEncode(sco.Address), dbEncode(sco.Value)); err != nil {
+				return fmt.Errorf("addFileContracts: failed to execute missed proof outputs statement: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Store) addFileContractRevisions(dbTxn txn, id int64, txn types.Transaction, dbIDs map[fileContract]int64) error {
+	stmt, err := dbTxn.Prepare(`INSERT INTO transaction_file_contract_revisions(transaction_id, transaction_order, contract_id, parent_id, unlock_conditions) VALUES (?, ?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addFileContractRevisions: failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	validOutputsStmt, err := dbTxn.Prepare(`INSERT INTO file_contract_valid_proof_outputs(contract_id, contract_order, address, value) VALUES (?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addFileContracts: failed to prepare valid proof outputs statement: %w", err)
+	}
+	defer validOutputsStmt.Close()
+
+	missedOutputsStmt, err := dbTxn.Prepare(`INSERT INTO file_contract_missed_proof_outputs(contract_id, contract_order, address, value) VALUES (?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addFileContracts: failed to prepare missed proof outputs statement: %w", err)
+	}
+	defer missedOutputsStmt.Close()
+
+	for i := range txn.FileContractRevisions {
+		fcr := &txn.FileContractRevisions[i]
+		dbID, ok := dbIDs[fileContract{fcr.ParentID, fcr.FileContract.RevisionNumber}]
+		if !ok {
+			return errors.New("addFileContractRevisions: dbID not in map")
+		}
+
+		if _, err := stmt.Exec(id, i, dbID, dbEncode(fcr.UnlockConditions), dbEncode(fcr.UnlockHash)); err != nil {
+			return fmt.Errorf("addFileContractRevisions: failed to execute statement: %w", err)
+		}
+
+		for j, sco := range txn.FileContractRevisions[i].ValidProofOutputs {
+			if _, err := validOutputsStmt.Exec(dbID, j, dbEncode(sco.Address), dbEncode(sco.Value)); err != nil {
+				return fmt.Errorf("addFileContractRevisions: failed to execute valid proof outputs statement: %w", err)
+			}
+		}
+
+		for j, sco := range txn.FileContractRevisions[i].MissedProofOutputs {
+			if _, err := missedOutputsStmt.Exec(dbID, j, dbEncode(sco.Address), dbEncode(sco.Value)); err != nil {
+				return fmt.Errorf("addFileContractRevisions: failed to execute missed proof outputs statement: %w", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Transaction, scDBIds map[types.SiacoinOutputID]int64, sfDBIds map[types.SiafundOutputID]int64, fcDBIds map[fileContract]int64) error {
 	insertTransactionStmt, err := dbTxn.Prepare(`INSERT INTO transactions (transaction_id) VALUES (?)
 	ON CONFLICT (transaction_id) DO UPDATE SET transaction_id=EXCLUDED.transaction_id -- technically a no-op, but necessary for the RETURNING clause
 	RETURNING id;`)
@@ -155,6 +245,10 @@ func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Trans
 			return fmt.Errorf("failed to add siafund inputs: %w", err)
 		} else if err := s.addSiafundOutputs(dbTxn, txnID, txn, sfDBIds); err != nil {
 			return fmt.Errorf("failed to add siafund outputs: %w", err)
+		} else if err := s.addFileContracts(dbTxn, txnID, txn, fcDBIds); err != nil {
+			return fmt.Errorf("failed to add file contract: %w", err)
+		} else if err := s.addFileContractRevisions(dbTxn, txnID, txn, fcDBIds); err != nil {
+			return fmt.Errorf("failed to add file contract revisions: %w", err)
 		}
 	}
 	return nil
@@ -166,12 +260,13 @@ type consensusUpdate interface {
 	ForEachFileContractElement(fn func(fce types.FileContractElement, rev *types.FileContractElement, resolved, valid bool))
 }
 
-func (s *Store) updateBalances(dbTxn txn, update consensusUpdate) error {
-	type balance struct {
-		sc types.Currency
-		sf uint64
-	}
+type balance struct {
+	sc         types.Currency
+	immatureSC types.Currency
+	sf         uint64
+}
 
+func (s *Store) updateBalances(dbTxn txn, update consensusUpdate, height uint64) error {
 	addresses := make(map[types.Address]balance)
 	update.ForEachSiacoinElement(func(sce types.SiacoinElement, spent bool) {
 		addresses[sce.SiacoinOutput.Address] = balance{}
@@ -185,7 +280,7 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate) error {
 		addressList = append(addressList, dbEncode(address))
 	}
 
-	rows, err := dbTxn.Query(`SELECT address, siacoin_balance, siafund_balance
+	rows, err := dbTxn.Query(`SELECT address, siacoin_balance, immature_siacoin_balance, siafund_balance
 		FROM address_balance
 		WHERE address IN (`+queryPlaceHolders(len(addressList))+`)`, addressList...)
 	if err != nil {
@@ -194,40 +289,42 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate) error {
 	defer rows.Close()
 
 	for rows.Next() {
+		var bal balance
 		var address types.Address
-		var sc types.Currency
-		var sf uint64
-		if err := rows.Scan(dbDecode(&address), dbDecode(&sc), dbDecode(&sf)); err != nil {
+		if err := rows.Scan(dbDecode(&address), dbDecode(&bal.sc), dbDecode(&bal.immatureSC), dbDecode(&bal.sf)); err != nil {
 			return err
 		}
-		addresses[address] = balance{
-			sc: sc,
-			sf: sf,
-		}
+		addresses[address] = bal
 	}
 
 	// log.Println("New block")
 	update.ForEachSiacoinElement(func(sce types.SiacoinElement, spent bool) {
 		bal := addresses[sce.SiacoinOutput.Address]
-		if spent {
-			// If within the same block, an address A receives SC in one
-			// transaction and sends it to another address in a later
-			// transaction, the chain update will not contain the unspent
-			// siacoin element that was temporarily A's. This can then result
-			// in underflow when we subtract the element for A as being spent.
-			// So we catch underflow here because this causes crashes even
-			// though there is no net balance change for A.
-			// Example: https://siascan.com/block/506
+		if sce.MaturityHeight < height {
+			if spent {
+				// If within the same block, an address A receives SC in one
+				// transaction and sends it to another address in a later
+				// transaction, the chain update will not contain the unspent
+				// siacoin element that was temporarily A's. This can then result
+				// in underflow when we subtract the element for A as being spent.
+				// So we catch underflow here because this causes crashes even
+				// though there is no net balance change for A.
+				// Example: https://siascan.com/block/506
 
-			// log.Println("Spend:", sce.SiacoinOutput.Address, sce.SiacoinOutput.Value)
-			underflow := false
-			bal.sc, underflow = bal.sc.SubWithUnderflow(sce.SiacoinOutput.Value)
-			if underflow {
-				return
+				// log.Println("Spend:", sce.SiacoinOutput.Address, sce.SiacoinOutput.Value)
+				underflow := false
+				bal.sc, underflow = bal.sc.SubWithUnderflow(sce.SiacoinOutput.Value)
+				if underflow {
+					return
+				}
+			} else {
+				// log.Println("Gain:", sce.SiacoinOutput.Address, sce.SiacoinOutput.Value)
+				bal.sc = bal.sc.Add(sce.SiacoinOutput.Value)
 			}
 		} else {
-			// log.Println("Gain:", sce.SiacoinOutput.Address, sce.SiacoinOutput.Value)
-			bal.sc = bal.sc.Add(sce.SiacoinOutput.Value)
+			if !spent {
+				bal.immatureSC = bal.immatureSC.Add(sce.SiacoinOutput.Value)
+			}
 		}
 		addresses[sce.SiacoinOutput.Address] = bal
 	})
@@ -245,17 +342,17 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate) error {
 		addresses[sfe.SiafundOutput.Address] = bal
 	})
 
-	stmt, err := dbTxn.Prepare(`INSERT INTO address_balance(address, siacoin_balance, siafund_balance)
-	VALUES (?, ?, ?)
+	stmt, err := dbTxn.Prepare(`INSERT INTO address_balance(address, siacoin_balance, immature_siacoin_balance, siafund_balance)
+	VALUES (?, ?, ?, ?)
 	ON CONFLICT(address)
-	DO UPDATE set siacoin_balance = ?, siafund_balance = ?`)
+	DO UPDATE set siacoin_balance = ?, immature_siacoin_balance = ?, siafund_balance = ?`)
 	if err != nil {
 		return fmt.Errorf("updateBalances: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for addr, bal := range addresses {
-		if _, err := stmt.Exec(dbEncode(addr), dbEncode(bal.sc), dbEncode(bal.sf), dbEncode(bal.sc), dbEncode(bal.sf)); err != nil {
+		if _, err := stmt.Exec(dbEncode(addr), dbEncode(bal.sc), dbEncode(bal.immatureSC), dbEncode(bal.sf), dbEncode(bal.sc), dbEncode(bal.immatureSC), dbEncode(bal.sf)); err != nil {
 			return fmt.Errorf("updateBalances: failed to exec statement: %w", err)
 		}
 		// log.Println(addr, "=", bal.sc)
@@ -264,27 +361,119 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate) error {
 	return nil
 }
 
-func (s *Store) addSCOutputs(dbTxn txn, bid types.BlockID, update consensusUpdate) (map[types.SiacoinOutputID]int64, error) {
+func (s *Store) updateMaturedBalances(dbTxn txn, update consensusUpdate, height uint64) error {
+	// Prevent double counting - outputs with a maturity height of 0 are
+	// handled in updateBalances
+	if height == 0 {
+		return nil
+	}
+
+	_, isRevert := update.(*chain.RevertUpdate)
+	if isRevert {
+		height++
+	}
+
+	rows, err := dbTxn.Query(`SELECT address, value
+			FROM siacoin_elements
+			WHERE maturity_height = ?`, height)
+	if err != nil {
+		return fmt.Errorf("updateMaturedBalances: failed to query siacoin_elements: %w", err)
+	}
+	defer rows.Close()
+
+	var addressList []any
+	var scos []types.SiacoinOutput
+	for rows.Next() {
+		var sco types.SiacoinOutput
+		if err := rows.Scan(dbDecode(&sco.Address), dbDecode(&sco.Value)); err != nil {
+			return fmt.Errorf("updateMaturedBalances: failed to scan maturing outputs: %w", err)
+		}
+		scos = append(scos, sco)
+		addressList = append(addressList, dbEncode(sco.Address))
+	}
+
+	balanceRows, err := dbTxn.Query(`SELECT address, siacoin_balance, immature_siacoin_balance
+		FROM address_balance
+		WHERE address IN (`+queryPlaceHolders(len(addressList))+`)`, addressList...)
+	if err != nil {
+		return fmt.Errorf("updateMaturedBalances: failed to query address_balance: %w", err)
+	}
+	defer balanceRows.Close()
+
+	addresses := make(map[types.Address]balance)
+	for balanceRows.Next() {
+		var address types.Address
+		var bal balance
+		if err := balanceRows.Scan(dbDecode(&address), dbDecode(&bal.sc), dbDecode(&bal.immatureSC)); err != nil {
+			return fmt.Errorf("updateMaturedBalances: failed to scan balance: %w", err)
+		}
+		addresses[address] = bal
+	}
+
+	// If the update is an apply update then we add the amounts.
+	// If we are reverting then we subtract them.
+	for _, sco := range scos {
+		bal := addresses[sco.Address]
+		if isRevert {
+			bal.sc = bal.sc.Sub(sco.Value)
+			bal.immatureSC = bal.immatureSC.Add(sco.Value)
+		} else {
+			bal.sc = bal.sc.Add(sco.Value)
+			bal.immatureSC = bal.immatureSC.Sub(sco.Value)
+		}
+		addresses[sco.Address] = bal
+	}
+
+	stmt, err := dbTxn.Prepare(`INSERT INTO address_balance(address, siacoin_balance, immature_siacoin_balance, siafund_balance)
+	VALUES (?, ?, ?, ?)
+	ON CONFLICT(address)
+	DO UPDATE set siacoin_balance = ?, immature_siacoin_balance = ?`)
+	if err != nil {
+		return fmt.Errorf("updateMaturedBalances: failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	initialSF := dbEncode(uint64(0))
+	for addr, bal := range addresses {
+		if _, err := stmt.Exec(dbEncode(addr), dbEncode(bal.sc), dbEncode(bal.immatureSC), initialSF, dbEncode(bal.sc), dbEncode(bal.immatureSC)); err != nil {
+			return fmt.Errorf("updateMaturedBalances: failed to exec statement: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (s *Store) addSiacoinElements(dbTxn txn, bid types.BlockID, update consensusUpdate) (map[types.SiacoinOutputID]int64, error) {
 	sources := make(map[types.SiacoinOutputID]explorer.Source)
 	if applyUpdate, ok := update.(*chain.ApplyUpdate); ok {
 		block := applyUpdate.Block
 		for i := range block.MinerPayouts {
 			sources[bid.MinerOutputID(i)] = explorer.SourceMinerPayout
 		}
+
 		for _, txn := range block.Transactions {
 			for i := range txn.SiacoinOutputs {
 				sources[txn.SiacoinOutputID(i)] = explorer.SourceTransaction
 			}
-			// TODO: contract valid/missed outputs
+
+			for i := range txn.FileContracts {
+				fcid := txn.FileContractID(i)
+				for j := range txn.FileContracts[i].ValidProofOutputs {
+					sources[fcid.ValidOutputID(j)] = explorer.SourceValidProofOutput
+				}
+				for j := range txn.FileContracts[i].MissedProofOutputs {
+					sources[fcid.MissedOutputID(j)] = explorer.SourceMissedProofOutput
+				}
+			}
 		}
 	}
 
 	stmt, err := dbTxn.Prepare(`INSERT INTO siacoin_elements(output_id, block_id, leaf_index, merkle_proof, spent, source, maturity_height, address, value)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT(output_id)
+			ON CONFLICT
 			DO UPDATE SET spent = ?`)
 	if err != nil {
-		return nil, fmt.Errorf("addSCOutputs: failed to prepare siacoin_elements statement: %w", err)
+		return nil, fmt.Errorf("addSiacoinElements: failed to prepare siacoin_elements statement: %w", err)
 	}
 	defer stmt.Close()
 
@@ -297,13 +486,13 @@ func (s *Store) addSCOutputs(dbTxn txn, bid types.BlockID, update consensusUpdat
 
 		result, err := stmt.Exec(dbEncode(sce.StateElement.ID), dbEncode(bid), dbEncode(sce.StateElement.LeafIndex), dbEncode(sce.StateElement.MerkleProof), spent, int(sources[types.SiacoinOutputID(sce.StateElement.ID)]), sce.MaturityHeight, dbEncode(sce.SiacoinOutput.Address), dbEncode(sce.SiacoinOutput.Value), spent)
 		if err != nil {
-			updateErr = fmt.Errorf("addSCOutputs: failed to execute siacoin_elements statement: %w", err)
+			updateErr = fmt.Errorf("addSiacoinElements: failed to execute siacoin_elements statement: %w", err)
 			return
 		}
 
 		dbID, err := result.LastInsertId()
 		if err != nil {
-			updateErr = fmt.Errorf("addSCOutputs: failed to get last insert ID: %w", err)
+			updateErr = fmt.Errorf("addSiacoinElements: failed to get last insert ID: %w", err)
 			return
 		}
 
@@ -312,13 +501,13 @@ func (s *Store) addSCOutputs(dbTxn txn, bid types.BlockID, update consensusUpdat
 	return scDBIds, updateErr
 }
 
-func (s *Store) addSFOutputs(dbTxn txn, bid types.BlockID, update consensusUpdate) (map[types.SiafundOutputID]int64, error) {
+func (s *Store) addSiafundElements(dbTxn txn, bid types.BlockID, update consensusUpdate) (map[types.SiafundOutputID]int64, error) {
 	stmt, err := dbTxn.Prepare(`INSERT INTO siafund_elements(output_id, block_id, leaf_index, merkle_proof, spent, claim_start, address, value)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(output_id)
+		ON CONFLICT
 		DO UPDATE SET spent = ?`)
 	if err != nil {
-		return nil, fmt.Errorf("addSFOutputs: failed to prepare siafund_elements statement: %w", err)
+		return nil, fmt.Errorf("addSiafundElements: failed to prepare siafund_elements statement: %w", err)
 	}
 	defer stmt.Close()
 
@@ -331,19 +520,76 @@ func (s *Store) addSFOutputs(dbTxn txn, bid types.BlockID, update consensusUpdat
 
 		result, err := stmt.Exec(dbEncode(sfe.StateElement.ID), dbEncode(bid), dbEncode(sfe.StateElement.LeafIndex), dbEncode(sfe.StateElement.MerkleProof), spent, dbEncode(sfe.ClaimStart), dbEncode(sfe.SiafundOutput.Address), dbEncode(sfe.SiafundOutput.Value), spent)
 		if err != nil {
-			updateErr = fmt.Errorf("addSFOutputs: failed to execute siafund_elements statement: %w", err)
+			updateErr = fmt.Errorf("addSiafundElements: failed to execute siafund_elements statement: %w", err)
 			return
 		}
 
 		dbID, err := result.LastInsertId()
 		if err != nil {
-			updateErr = fmt.Errorf("addSFOutputs: failed to get last insert ID: %w", err)
+			updateErr = fmt.Errorf("addSiafundElements: failed to get last insert ID: %w", err)
 			return
 		}
 
 		sfDBIds[types.SiafundOutputID(sfe.StateElement.ID)] = dbID
 	})
 	return sfDBIds, updateErr
+}
+
+type fileContract struct {
+	id             types.FileContractID
+	revisionNumber uint64
+}
+
+func (s *Store) addFileContractElements(dbTxn txn, bid types.BlockID, update consensusUpdate) (map[fileContract]int64, error) {
+	stmt, err := dbTxn.Prepare(`INSERT INTO file_contract_elements(block_id, contract_id, leaf_index, merkle_proof, resolved, valid, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number)
+		VALUES (?, ?, ?, ?, FALSE, TRUE, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT (contract_id, revision_number)
+		DO UPDATE SET resolved = ? AND valid = ?`)
+	if err != nil {
+		return nil, fmt.Errorf("addFileContractElements: failed to prepare file_contract_elements statement: %w", err)
+	}
+	defer stmt.Close()
+
+	revisionStmt, err := dbTxn.Prepare(`INSERT INTO last_contract_revision(contract_id, contract_element_id)
+	VALUES (?, ?)
+	ON CONFLICT
+	DO UPDATE SET contract_element_id = ?`)
+	if err != nil {
+		return nil, fmt.Errorf("addFileContractElements: failed to prepare last_contract_revision statement: %w", err)
+	}
+
+	var updateErr error
+	fcDBIds := make(map[fileContract]int64)
+	update.ForEachFileContractElement(func(fce types.FileContractElement, rev *types.FileContractElement, resolved, valid bool) {
+		if updateErr != nil {
+			return
+		}
+
+		fc := &fce.FileContract
+		if rev != nil {
+			fc = &rev.FileContract
+		}
+
+		result, err := stmt.Exec(dbEncode(bid), dbEncode(fce.StateElement.ID), dbEncode(fce.StateElement.LeafIndex), dbEncode(fce.StateElement.MerkleProof), fc.Filesize, dbEncode(fc.FileMerkleRoot), fc.WindowStart, fc.WindowEnd, dbEncode(fc.Payout), dbEncode(fc.UnlockHash), fc.RevisionNumber, resolved, valid)
+		if err != nil {
+			updateErr = fmt.Errorf("addFileContractElements: failed to execute file_contract_elements statement: %w", err)
+			return
+		}
+
+		dbID, err := result.LastInsertId()
+		if err != nil {
+			updateErr = fmt.Errorf("addFileContractElements: failed to get last insert ID: %w", err)
+			return
+		}
+
+		if _, err := revisionStmt.Exec(dbEncode(fce.StateElement.ID), dbID, dbID); err != nil {
+			updateErr = fmt.Errorf("addFileContractElements: failed to update last revision number: %w", err)
+			return
+		}
+
+		fcDBIds[fileContract{types.FileContractID(fce.StateElement.ID), fc.RevisionNumber}] = dbID
+	})
+	return fcDBIds, updateErr
 }
 
 func (s *Store) deleteBlock(dbTxn txn, bid types.BlockID) error {
@@ -354,23 +600,30 @@ func (s *Store) deleteBlock(dbTxn txn, bid types.BlockID) error {
 func (s *Store) applyUpdates() error {
 	return s.transaction(func(dbTxn txn) error {
 		for _, update := range s.pendingUpdates {
-			scDBIds, err := s.addSCOutputs(dbTxn, update.Block.ID(), update)
+			scDBIds, err := s.addSiacoinElements(dbTxn, update.Block.ID(), update)
 			if err != nil {
 				return fmt.Errorf("applyUpdates: failed to add siacoin outputs: %w", err)
 			}
-			sfDBIds, err := s.addSFOutputs(dbTxn, update.Block.ID(), update)
+			sfDBIds, err := s.addSiafundElements(dbTxn, update.Block.ID(), update)
 			if err != nil {
 				return fmt.Errorf("applyUpdates: failed to add siafund outputs: %w", err)
 			}
-			if err := s.updateBalances(dbTxn, update); err != nil {
+			if err := s.updateBalances(dbTxn, update, update.State.Index.Height); err != nil {
 				return fmt.Errorf("applyUpdates: failed to update balances: %w", err)
+			} else if err := s.updateMaturedBalances(dbTxn, update, update.State.Index.Height); err != nil {
+				return fmt.Errorf("applyUpdates: failed to update matured balances: %w", err)
+			}
+
+			fcDBIds, err := s.addFileContractElements(dbTxn, update.Block.ID(), update)
+			if err != nil {
+				return fmt.Errorf("applyUpdates: failed to add file contracts: %w", err)
 			}
 
 			if err := s.addBlock(dbTxn, update.Block, update.State.Index.Height); err != nil {
 				return fmt.Errorf("applyUpdates: failed to add block: %w", err)
 			} else if err := s.addMinerPayouts(dbTxn, update.Block.ID(), update.State.Index.Height, update.Block.MinerPayouts, scDBIds); err != nil {
 				return fmt.Errorf("applyUpdates: failed to add miner payouts: %w", err)
-			} else if err := s.addTransactions(dbTxn, update.Block.ID(), update.Block.Transactions, scDBIds, sfDBIds); err != nil {
+			} else if err := s.addTransactions(dbTxn, update.Block.ID(), update.Block.Transactions, scDBIds, sfDBIds, fcDBIds); err != nil {
 				return fmt.Errorf("applyUpdates: failed to add transactions: addTransactions: %w", err)
 			}
 
@@ -387,12 +640,16 @@ func (s *Store) revertUpdate(cru *chain.RevertUpdate) error {
 	return s.transaction(func(dbTxn txn) error {
 		if err := s.deleteBlock(dbTxn, cru.Block.ID()); err != nil {
 			return fmt.Errorf("revertUpdate: failed to delete block: %w", err)
-		} else if _, err := s.addSCOutputs(dbTxn, cru.Block.ID(), cru); err != nil {
+		} else if _, err := s.addSiacoinElements(dbTxn, cru.Block.ID(), cru); err != nil {
 			return fmt.Errorf("revertUpdate: failed to update siacoin output state: %w", err)
-		} else if _, err := s.addSFOutputs(dbTxn, cru.Block.ID(), cru); err != nil {
+		} else if _, err := s.addSiafundElements(dbTxn, cru.Block.ID(), cru); err != nil {
 			return fmt.Errorf("revertUpdate: failed to update siafund output state: %w", err)
-		} else if err := s.updateBalances(dbTxn, cru); err != nil {
+		} else if err := s.updateBalances(dbTxn, cru, cru.State.Index.Height); err != nil {
 			return fmt.Errorf("revertUpdate: failed to update balances: %w", err)
+		} else if err := s.updateMaturedBalances(dbTxn, cru, cru.State.Index.Height); err != nil {
+			return fmt.Errorf("revertUpdate: failed to update matured balances: %w", err)
+		} else if _, err := s.addFileContractElements(dbTxn, cru.Block.ID(), cru); err != nil {
+			return fmt.Errorf("revertUpdate: failed to update file contract state: %w", err)
 		}
 
 		return s.updateLeaves(dbTxn, cru)

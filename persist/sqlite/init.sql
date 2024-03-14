@@ -16,15 +16,18 @@ CREATE INDEX blocks_height_index ON blocks(height);
 CREATE TABLE address_balance (
         address BLOB PRIMARY KEY NOT NULL,
         siacoin_balance BLOB NOT NULL,
+        immature_siacoin_balance BLOB NOT NULL,
         siafund_balance BLOB NOT NULL
 );
 
 CREATE TABLE siacoin_elements (
         id INTEGER PRIMARY KEY,
         block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
+
         output_id BLOB UNIQUE NOT NULL,
         leaf_index BLOB UNIQUE NOT NULL,
         merkle_proof BLOB UNIQUE NOT NULL,
+
         spent INTEGER NOT NULL,
         source INTEGER NOT NULL,
         maturity_height INTEGER NOT NULL,
@@ -38,9 +41,11 @@ CREATE INDEX siacoin_elements_address_spent_index ON siacoin_elements(address, s
 CREATE TABLE siafund_elements (
         id INTEGER PRIMARY KEY,
         block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
+
         output_id BLOB UNIQUE NOT NULL,
         leaf_index BLOB UNIQUE NOT NULL,
         merkle_proof BLOB UNIQUE NOT NULL,
+
         spent INTEGER NOT NULL,
         claim_start BLOB NOT NULL,
         address BLOB NOT NULL,
@@ -49,6 +54,54 @@ CREATE TABLE siafund_elements (
 
 CREATE INDEX siafund_elements_output_id_index ON siafund_elements(output_id);
 CREATE INDEX siafund_elements_address_spent_index ON siafund_elements(address, spent);
+
+CREATE TABLE file_contract_elements (
+        id INTEGER PRIMARY KEY,
+        block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
+
+        contract_id BLOB NOT NULL,
+        leaf_index BLOB NOT NULL,
+        merkle_proof BLOB NOT NULL,
+
+        resolved INTEGER NOT NULL,
+        valid INTEGER NOT NULL,
+
+        filesize INTEGER NOT NULL,
+        file_merkle_root BLOB NOT NULL,
+        window_start INTEGER NOT NULL,
+        window_end INTEGER NOT NULL,
+        payout BLOB NOT NULL,
+        unlock_hash BLOB NOT NULL,
+        revision_number INTEGER NOT NULL,
+        UNIQUE(contract_id, revision_number)
+);
+
+CREATE INDEX file_contract_elements_contract_id_index ON file_contract_elements(contract_id);
+
+CREATE TABLE last_contract_revision (
+        contract_id BLOB PRIMARY KEY NOT NULL,
+        contract_element_id INTEGER UNIQUE REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL
+);
+
+CREATE TABLE file_contract_valid_proof_outputs (
+        contract_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL,
+        contract_order INTEGER NOT NULL,
+        address BLOB NOT NULL,
+        value BLOB NOT NULL,
+        UNIQUE(contract_id, contract_order)
+);
+
+CREATE INDEX file_contract_valid_proof_outputs_contract_id_index ON file_contract_valid_proof_outputs(contract_id);
+
+CREATE TABLE file_contract_missed_proof_outputs (
+        contract_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL,
+        contract_order INTEGER NOT NULL,
+        address BLOB NOT NULL,
+        value BLOB NOT NULL,
+        UNIQUE(contract_id, contract_order)
+);
+
+CREATE INDEX file_contract_missed_proof_outputs_contract_id_index ON file_contract_missed_proof_outputs(contract_id);
 
 CREATE TABLE miner_payouts (
         block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
@@ -122,6 +175,26 @@ CREATE TABLE transaction_siafund_outputs (
 );
 
 CREATE INDEX transaction_siafund_outputs_transaction_id_index ON transaction_siafund_outputs(transaction_id);
+
+CREATE TABLE transaction_file_contracts (
+        transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
+        transaction_order INTEGER NOT NULL,
+        contract_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL,
+        UNIQUE(transaction_id, transaction_order)
+);
+
+CREATE INDEX transaction_file_contracts_transaction_id_index ON transaction_file_contracts(transaction_id);
+
+CREATE TABLE transaction_file_contract_revisions (
+        transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
+        transaction_order INTEGER NOT NULL,
+        contract_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL,
+        parent_id BLOB UNIQUE NOT NULL,
+        unlock_conditions BLOB NOT NULL,
+        UNIQUE(transaction_id, transaction_order)
+);
+
+CREATE INDEX transaction_file_contract_revisions_transaction_id_index ON transaction_file_contract_revisions(transaction_id);
 
 CREATE TABLE merkle_proofs (
         i INTEGER NOT NULL,

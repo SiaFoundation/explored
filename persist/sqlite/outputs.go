@@ -10,7 +10,7 @@ import (
 // UnspentSiacoinOutputs implements explorer.Store.
 func (s *Store) UnspentSiacoinOutputs(address types.Address, limit, offset uint64) (result []explorer.SiacoinOutput, err error) {
 	err = s.transaction(func(tx txn) error {
-		rows, err := tx.Query(`SELECT output_id, leaf_index, merkle_proof, source, address, value FROM siacoin_elements WHERE address = ? AND spent = 0 LIMIT ? OFFSET ?`, dbEncode(address), limit, offset)
+		rows, err := tx.Query(`SELECT output_id, leaf_index, merkle_proof, source, maturity_height, address, value FROM siacoin_elements WHERE address = ? AND spent = 0 LIMIT ? OFFSET ?`, dbEncode(address), limit, offset)
 		if err != nil {
 			return fmt.Errorf("failed to query siacoin outputs: %w", err)
 		}
@@ -18,7 +18,7 @@ func (s *Store) UnspentSiacoinOutputs(address types.Address, limit, offset uint6
 
 		for rows.Next() {
 			var sco explorer.SiacoinOutput
-			if err := rows.Scan(dbDecode(&sco.StateElement.ID), dbDecode(&sco.StateElement.LeafIndex), dbDecode(&sco.StateElement.MerkleProof), &sco.Source, dbDecode(&sco.SiacoinOutput.Address), dbDecode(&sco.SiacoinOutput.Value)); err != nil {
+			if err := rows.Scan(dbDecode(&sco.StateElement.ID), dbDecode(&sco.StateElement.LeafIndex), dbDecode(&sco.StateElement.MerkleProof), &sco.Source, &sco.MaturityHeight, dbDecode(&sco.SiacoinOutput.Address), dbDecode(&sco.SiacoinOutput.Value)); err != nil {
 				return fmt.Errorf("failed to scan siacoin output: %w", err)
 			}
 			result = append(result, sco)
@@ -50,9 +50,9 @@ func (s *Store) UnspentSiafundOutputs(address types.Address, limit, offset uint6
 }
 
 // Balance implements explorer.Store.
-func (s *Store) Balance(address types.Address) (sc types.Currency, sf uint64, err error) {
+func (s *Store) Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error) {
 	err = s.transaction(func(tx txn) error {
-		err = tx.QueryRow(`SELECT siacoin_balance, siafund_balance FROM address_balance WHERE address = ?`, dbEncode(address)).Scan(dbDecode(&sc), dbDecode(&sf))
+		err = tx.QueryRow(`SELECT siacoin_balance, immature_siacoin_balance, siafund_balance FROM address_balance WHERE address = ?`, dbEncode(address)).Scan(dbDecode(&sc), dbDecode(&immatureSC), dbDecode(&sf))
 		if err != nil {
 			return fmt.Errorf("failed to query balances: %w", err)
 		}

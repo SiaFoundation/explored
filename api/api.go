@@ -39,6 +39,7 @@ type AddressUTXOsResponse struct {
 
 // AddressBalanceResponse is the response for /addresses/:address/balance.
 type AddressBalanceResponse struct {
-	UnspentSiacoins types.Currency `json:"unspentSiacoins"`
-	UnspentSiafunds uint64         `json:"unspentSiafunds"`
+	UnspentSiacoins  types.Currency `json:"unspentSiacoins"`
+	ImmatureSiacoins types.Currency `json:"immatureSiacoins"`
+	UnspentSiafunds  uint64         `json:"unspentSiafunds"`
 }
