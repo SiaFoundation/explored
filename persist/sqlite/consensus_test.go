@@ -205,3 +205,65 @@ func TestBalance(t *testing.T) {
 	checkBalance(addr2, utxos[0].SiacoinOutput.Value.Sub(types.Siacoins(100)), types.ZeroCurrency, 0)
 	checkBalance(addr3, types.Siacoins(100), types.ZeroCurrency, 0)
 }
+
+func TestBlock(t *testing.T) {
+	log := zaptest.NewLogger(t)
+	dir := t.TempDir()
+	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bdb.Close()
+
+	network, genesisBlock := testV1Network()
+
+	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	cm := chain.NewManager(store, genesisState)
+
+	if err := cm.AddSubscriber(db, types.ChainIndex{}); err != nil {
+		t.Fatal(err)
+	}
+
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+
+	for i := 0; i < 100; i++ {
+		// mine a block sending the payout to the wallet
+		b := mineBlock(cm.TipState(), nil, addr1)
+		if err := cm.AddBlocks([]types.Block{b}); err != nil {
+			t.Fatal(err)
+		}
+
+		block, err := db.Block(cm.TipState().Index.ID)
+		if err != nil {
+			t.Fatal(err)
+		} else if len(b.Transactions) != len(block.Transactions) {
+			t.Fatalf("expected %d transactions, got %d", len(b.Transactions), len(block.Transactions))
+		} else if b.Nonce != block.Nonce {
+			t.Fatalf("expected nonce %d, got %d", b.Nonce, block.Nonce)
+		} else if b.Timestamp != block.Timestamp {
+			t.Fatalf("expected timestamp %d, got %d", b.Timestamp.Unix(), block.Timestamp.Unix())
+		} else if len(b.MinerPayouts) != len(block.MinerPayouts) {
+			t.Fatalf("expected %d miner payouts, got %d", len(b.MinerPayouts), len(block.MinerPayouts))
+		}
+
+		for i := range b.MinerPayouts {
+			if b.MinerPayouts[i].Address != block.MinerPayouts[i].SiacoinOutput.Address {
+				t.Fatalf("expected address %v, got %v", b.MinerPayouts[i].Address, block.MinerPayouts[i].SiacoinOutput.Address)
+			} else if b.MinerPayouts[i].Value != block.MinerPayouts[i].SiacoinOutput.Value {
+				t.Fatalf("expected value %v, got %v", b.MinerPayouts[i].Value, block.MinerPayouts[i].SiacoinOutput.Value)
+			}
+		}
+	}
+}
