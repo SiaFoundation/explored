@@ -115,18 +115,24 @@ func TestBalance(t *testing.T) {
 		}
 	}
 
-	pk := types.GeneratePrivateKey()
-	addr := types.StandardUnlockHash(pk.PublicKey())
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
+	pk3 := types.GeneratePrivateKey()
+	addr3 := types.StandardUnlockHash(pk3.PublicKey())
 
 	expectedPayout := cm.TipState().BlockReward()
 	maturityHeight := cm.TipState().MaturityHeight() + 1
 
 	// mine a block sending the payout to the wallet
-	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, addr)}); err != nil {
+	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, addr1)}); err != nil {
 		t.Fatal(err)
 	}
 
-	utxos, err := db.UnspentSiacoinOutputs(addr, 100, 0)
+	utxos, err := db.UnspentSiacoinOutputs(addr1, 100, 0)
 	if err != nil {
 		t.Fatal(err)
 	} else if len(utxos) != 1 {
@@ -137,11 +143,65 @@ func TestBalance(t *testing.T) {
 
 	// mine until the payout matures
 	for i := cm.TipState().Index.Height; i < maturityHeight; i++ {
-		checkBalance(addr, types.ZeroCurrency, expectedPayout, 0)
+		checkBalance(addr1, types.ZeroCurrency, expectedPayout, 0)
 		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	checkBalance(addr, expectedPayout, types.ZeroCurrency, 0)
+	checkBalance(addr1, expectedPayout, types.ZeroCurrency, 0)
+
+	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
+	parentTxn := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{
+			{
+				ParentID:         types.SiacoinOutputID(utxos[0].ID),
+				UnlockConditions: unlockConditions,
+			},
+		},
+		SiacoinOutputs: []types.SiacoinOutput{
+			{Address: addr1, Value: types.Siacoins(100)},
+			{Address: addr2, Value: utxos[0].SiacoinOutput.Value.Sub(types.Siacoins(100))},
+		},
+		Signatures: []types.TransactionSignature{
+			{
+				ParentID:       utxos[0].ID,
+				PublicKeyIndex: 0,
+				CoveredFields:  types.CoveredFields{WholeTransaction: true},
+			},
+		},
+	}
+	parentSigHash := cm.TipState().WholeSigHash(parentTxn, utxos[0].ID, 0, 0, nil)
+	parentSig := pk1.SignHash(parentSigHash)
+	parentTxn.Signatures[0].Signature = parentSig[:]
+
+	outputID := parentTxn.SiacoinOutputID(0)
+	txn := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{
+			{
+				ParentID:         outputID,
+				UnlockConditions: unlockConditions,
+			},
+		},
+		SiacoinOutputs: []types.SiacoinOutput{
+			{Address: addr3, Value: types.Siacoins(100)},
+		},
+		Signatures: []types.TransactionSignature{
+			{
+				ParentID:       types.Hash256(outputID),
+				PublicKeyIndex: 0,
+				CoveredFields:  types.CoveredFields{WholeTransaction: true},
+			},
+		},
+	}
+	sigHash := cm.TipState().WholeSigHash(txn, types.Hash256(outputID), 0, 0, nil)
+	sig := pk1.SignHash(sigHash)
+	txn.Signatures[0].Signature = sig[:]
+
+	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{parentTxn, txn}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+
+	checkBalance(addr2, utxos[0].SiacoinOutput.Value.Sub(types.Siacoins(100)), types.ZeroCurrency, 0)
+	checkBalance(addr3, types.Siacoins(100), types.ZeroCurrency, 0)
 }
