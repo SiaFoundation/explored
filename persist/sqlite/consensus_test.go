@@ -370,3 +370,58 @@ func TestSendTransactions(t *testing.T) {
 		}
 	}
 }
+
+func TestTip(t *testing.T) {
+	log := zaptest.NewLogger(t)
+	dir := t.TempDir()
+	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bdb.Close()
+
+	network, genesisBlock := testV1Network()
+
+	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	cm := chain.NewManager(store, genesisState)
+
+	if err := cm.AddSubscriber(db, types.ChainIndex{}); err != nil {
+		t.Fatal(err)
+	}
+
+	const n = 100
+	for i := cm.TipState().Index.Height; i < n; i++ {
+		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
+			t.Fatal(err)
+		}
+
+		tip, err := db.Tip()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cm.Tip() != tip {
+			t.Fatal("tip mismatch")
+		}
+	}
+
+	for i := 0; i < n; i++ {
+		best, err := db.BestTip(uint64(i))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cmBest, ok := cm.BestIndex(uint64(i)); !ok || cmBest != best {
+			t.Fatal("best tip mismatch")
+		}
+	}
+}
