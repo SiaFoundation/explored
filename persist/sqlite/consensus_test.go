@@ -242,6 +242,36 @@ func TestSendTransactions(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// checkBalance checks that an address has the balances we expect
+	checkBalance := func(addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
+		sc, immatureSC, sf, err := db.Balance(addr)
+		if err != nil {
+			t.Fatal(err)
+		} else if sc != expectSC {
+			t.Fatalf("expected %v siacoins, got %v", expectSC, sc)
+		} else if immatureSC != expectImmatureSC {
+			t.Fatalf("expected %v immature siacoins, got %v", expectImmatureSC, immatureSC)
+		} else if sf != expectSF {
+			t.Fatalf("expected %d siafunds, got %d", expectSF, sf)
+		}
+	}
+
+	checkTransaction := func(expectTxn types.Transaction, gotTxn explorer.Transaction) {
+		if len(expectTxn.SiacoinOutputs) != len(expectTxn.SiacoinOutputs) {
+			t.Fatalf("expected %d siacoin outputs, got %d", len(expectTxn.SiacoinOutputs), len(expectTxn.SiacoinOutputs))
+		}
+
+		for j := range expectTxn.SiacoinOutputs {
+			expectSco := expectTxn.SiacoinOutputs[j]
+			gotSco := gotTxn.SiacoinOutputs[j].SiacoinOutput
+			if expectSco.Address != gotSco.Address {
+				t.Fatalf("expected address %v, got %v", expectSco.Address, gotSco.Address)
+			} else if expectSco.Value != gotSco.Value {
+				t.Fatalf("expected value %v, got %v", expectSco.Value, gotSco.Value)
+			}
+		}
+	}
+
 	// Generate three addresses: addr1, addr2, addr3
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
@@ -267,6 +297,10 @@ func TestSendTransactions(t *testing.T) {
 		}
 	}
 
+	checkBalance(addr1, expectedPayout, types.ZeroCurrency, 0)
+	checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
+	checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
+
 	// Check that addr1 has the miner payout output
 	utxos, err := db.UnspentSiacoinOutputs(addr1, 100, 0)
 	if err != nil {
@@ -275,22 +309,6 @@ func TestSendTransactions(t *testing.T) {
 		t.Fatalf("expected 1 utxo, got %d", len(utxos))
 	} else if utxos[0].SiacoinOutput.Value != expectedPayout {
 		t.Fatalf("expected value %v, got %v", expectedPayout, utxos[0].SiacoinOutput.Value)
-	}
-
-	checkTransaction := func(expectTxn types.Transaction, gotTxn explorer.Transaction) {
-		if len(expectTxn.SiacoinOutputs) != len(expectTxn.SiacoinOutputs) {
-			t.Fatalf("expected %d siacoin outputs, got %d", len(expectTxn.SiacoinOutputs), len(expectTxn.SiacoinOutputs))
-		}
-
-		for j := range expectTxn.SiacoinOutputs {
-			expectSco := expectTxn.SiacoinOutputs[j]
-			gotSco := gotTxn.SiacoinOutputs[j].SiacoinOutput
-			if expectSco.Address != gotSco.Address {
-				t.Fatalf("expected address %v, got %v", expectSco.Address, gotSco.Address)
-			} else if expectSco.Value != gotSco.Value {
-				t.Fatalf("expected value %v, got %v", expectSco.Value, gotSco.Value)
-			}
-		}
 	}
 
 	outputID := utxos[0].ID
@@ -328,6 +346,10 @@ func TestSendTransactions(t *testing.T) {
 		if err := cm.AddBlocks([]types.Block{b}); err != nil {
 			t.Fatal(err)
 		}
+
+		checkBalance(addr1, types.Siacoins(1).Mul64(uint64(i)), types.ZeroCurrency, 0)
+		checkBalance(addr2, types.Siacoins(2).Mul64(uint64(i)), types.ZeroCurrency, 0)
+		checkBalance(addr3, expectedPayout.Sub(types.Siacoins(1+2).Mul64(uint64(i+1))), types.ZeroCurrency, 0)
 
 		// Ensure the block we retrieved from the database is the same as the
 		// actual block
