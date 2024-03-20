@@ -8,6 +8,7 @@ import (
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils"
 	"go.sia.tech/coreutils/chain"
+	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/persist/sqlite"
 	"go.uber.org/zap/zaptest"
 )
@@ -212,7 +213,7 @@ func TestBalance(t *testing.T) {
 	checkBalance(addr3, types.Siacoins(100), types.ZeroCurrency, 0)
 }
 
-func TestBlock(t *testing.T) {
+func TestSendTransactions(t *testing.T) {
 	log := zaptest.NewLogger(t)
 	dir := t.TempDir()
 	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
@@ -274,6 +275,22 @@ func TestBlock(t *testing.T) {
 		t.Fatalf("expected 1 utxo, got %d", len(utxos))
 	} else if utxos[0].SiacoinOutput.Value != expectedPayout {
 		t.Fatalf("expected value %v, got %v", expectedPayout, utxos[0].SiacoinOutput.Value)
+	}
+
+	checkTransaction := func(expectTxn types.Transaction, gotTxn explorer.Transaction) {
+		if len(expectTxn.SiacoinOutputs) != len(expectTxn.SiacoinOutputs) {
+			t.Fatalf("expected %d siacoin outputs, got %d", len(expectTxn.SiacoinOutputs), len(expectTxn.SiacoinOutputs))
+		}
+
+		for j := range expectTxn.SiacoinOutputs {
+			expectSco := expectTxn.SiacoinOutputs[j]
+			gotSco := gotTxn.SiacoinOutputs[j].SiacoinOutput
+			if expectSco.Address != gotSco.Address {
+				t.Fatalf("expected address %v, got %v", expectSco.Address, gotSco.Address)
+			} else if expectSco.Value != gotSco.Value {
+				t.Fatalf("expected value %v, got %v", expectSco.Value, gotSco.Value)
+			}
+		}
 	}
 
 	outputID := utxos[0].ID
@@ -338,23 +355,18 @@ func TestBlock(t *testing.T) {
 			}
 		}
 
-		// Ensure the transactions in the block match
+		// Ensure the transactions in the block and retrieved separately match
+		// with the actual transactions
 		for i := range b.Transactions {
-			bTxn := b.Transactions[i]
-			blockTxn := block.Transactions[i]
-			if len(bTxn.SiacoinOutputs) != len(bTxn.SiacoinOutputs) {
-				t.Fatalf("expected %d siacoin outputs, got %d", len(bTxn.SiacoinOutputs), len(bTxn.SiacoinOutputs))
-			}
+			checkTransaction(b.Transactions[i], block.Transactions[i])
 
-			for j := range bTxn.SiacoinOutputs {
-				bSco := bTxn.SiacoinOutputs[j]
-				blockSco := blockTxn.SiacoinOutputs[j].SiacoinOutput
-				if bSco.Address != blockSco.Address {
-					t.Fatalf("expected address %v, got %v", bSco.Address, blockSco.Address)
-				} else if bSco.Value != blockSco.Value {
-					t.Fatalf("expected value %v, got %v", bSco.Value, blockSco.Value)
-				}
+			txns, err := db.Transactions([]types.TransactionID{b.Transactions[i].ID()})
+			if err != nil {
+				t.Fatal(err)
+			} else if len(txns) != 1 {
+				t.Fatal("failed to get transaction")
 			}
+			checkTransaction(b.Transactions[i], txns[0])
 		}
 	}
 }
