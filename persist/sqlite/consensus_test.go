@@ -238,14 +238,72 @@ func TestBlock(t *testing.T) {
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
 
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
+	pk3 := types.GeneratePrivateKey()
+	addr3 := types.StandardUnlockHash(pk3.PublicKey())
+
+	expectedPayout := cm.TipState().BlockReward()
+	maturityHeight := cm.TipState().MaturityHeight() + 1
+
+	// mine a block sending the payout to the wallet
+	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, addr1)}); err != nil {
+		t.Fatal(err)
+	}
+
+	// mine until the payout matures
+	for i := cm.TipState().Index.Height; i < maturityHeight; i++ {
+		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	utxos, err := db.UnspentSiacoinOutputs(addr1, 100, 0)
+	if err != nil {
+		t.Fatal(err)
+	} else if len(utxos) != 1 {
+		t.Fatalf("expected 1 utxo, got %d", len(utxos))
+	} else if utxos[0].SiacoinOutput.Value != expectedPayout {
+		t.Fatalf("expected value %v, got %v", expectedPayout, utxos[0].SiacoinOutput.Value)
+	}
+
+	outputID := utxos[0].ID
+	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
 	for i := 0; i < 100; i++ {
+		parentTxn := types.Transaction{
+			SiacoinInputs: []types.SiacoinInput{
+				{
+					ParentID:         types.SiacoinOutputID(outputID),
+					UnlockConditions: unlockConditions,
+				},
+			},
+			SiacoinOutputs: []types.SiacoinOutput{
+				{Address: addr2, Value: types.Siacoins(1)},
+				{Address: addr3, Value: types.Siacoins(2)},
+				{Address: addr1, Value: expectedPayout.Sub(types.Siacoins(1 + 2).Mul64(uint64(i + 1)))},
+			},
+			Signatures: []types.TransactionSignature{
+				{
+					ParentID:       outputID,
+					PublicKeyIndex: 0,
+					CoveredFields:  types.CoveredFields{WholeTransaction: true},
+				},
+			},
+		}
+
+		parentSigHash := cm.TipState().WholeSigHash(parentTxn, outputID, 0, 0, nil)
+		parentSig := pk1.SignHash(parentSigHash)
+		parentTxn.Signatures[0].Signature = parentSig[:]
+		outputID = types.Hash256(parentTxn.SiacoinOutputID(2))
+
 		// mine a block sending the payout to the wallet
-		b := mineBlock(cm.TipState(), nil, addr1)
+		b := mineBlock(cm.TipState(), []types.Transaction{parentTxn}, addr1)
 		if err := cm.AddBlocks([]types.Block{b}); err != nil {
 			t.Fatal(err)
 		}
 
-		block, err := db.Block(cm.TipState().Index.ID)
+		block, err := db.Block(b.ID())
 		if err != nil {
 			t.Fatal(err)
 		} else if len(b.Transactions) != len(block.Transactions) {
@@ -256,6 +314,8 @@ func TestBlock(t *testing.T) {
 			t.Fatalf("expected timestamp %d, got %d", b.Timestamp.Unix(), block.Timestamp.Unix())
 		} else if len(b.MinerPayouts) != len(block.MinerPayouts) {
 			t.Fatalf("expected %d miner payouts, got %d", len(b.MinerPayouts), len(block.MinerPayouts))
+		} else if len(b.Transactions) != len(block.Transactions) {
+			t.Fatalf("expected %d transactions, got %d", len(b.Transactions), len(block.Transactions))
 		}
 
 		for i := range b.MinerPayouts {
@@ -263,6 +323,25 @@ func TestBlock(t *testing.T) {
 				t.Fatalf("expected address %v, got %v", b.MinerPayouts[i].Address, block.MinerPayouts[i].SiacoinOutput.Address)
 			} else if b.MinerPayouts[i].Value != block.MinerPayouts[i].SiacoinOutput.Value {
 				t.Fatalf("expected value %v, got %v", b.MinerPayouts[i].Value, block.MinerPayouts[i].SiacoinOutput.Value)
+			}
+		}
+		for i := range b.Transactions {
+			bTxn := b.Transactions[i]
+			blockTxn := block.Transactions[i]
+			if len(bTxn.SiacoinOutputs) != len(bTxn.SiacoinOutputs) {
+				t.Fatalf("expected %d siacoin outputs, got %d", len(bTxn.SiacoinOutputs), len(bTxn.SiacoinOutputs))
+			}
+			t.Logf("bTxn: %+v", bTxn)
+			t.Logf("blockTxn: %+v", blockTxn)
+
+			for j := range bTxn.SiacoinOutputs {
+				bSco := bTxn.SiacoinOutputs[j]
+				blockSco := blockTxn.SiacoinOutputs[j].SiacoinOutput
+				if bSco.Address != blockSco.Address {
+					t.Fatalf("expected address %v, got %v", bSco.Address, blockSco.Address)
+				} else if bSco.Value != blockSco.Value {
+					t.Fatalf("expected value %v, got %v", bSco.Value, blockSco.Value)
+				}
 			}
 		}
 	}
