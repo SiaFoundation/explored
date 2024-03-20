@@ -20,7 +20,7 @@ func transactionArbitraryData(tx txn, txnIDs []int64) (map[int64][][]byte, error
 	query := `SELECT transaction_id, data
 FROM transaction_arbitrary_data
 WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
-ORDER BY transaction_order DESC`
+ORDER BY transaction_order ASC`
 	rows, err := tx.Query(query, queryArgs(txnIDs)...)
 	if err != nil {
 		return nil, err
@@ -45,7 +45,7 @@ func transactionSiacoinOutputs(tx txn, txnIDs []int64) (map[int64][]explorer.Sia
 FROM siacoin_elements sc
 INNER JOIN transaction_siacoin_outputs ts ON (ts.output_id = sc.id)
 WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
-ORDER BY ts.transaction_order DESC`
+ORDER BY ts.transaction_order ASC`
 	rows, err := tx.Query(query, queryArgs(txnIDs)...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query siacoin output ids: %w", err)
@@ -70,7 +70,7 @@ func transactionSiacoinInputs(tx txn, txnIDs []int64) (map[int64][]types.Siacoin
 	query := `SELECT transaction_id, parent_id, unlock_conditions
 FROM transaction_siacoin_inputs
 WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
-ORDER BY transaction_order DESC`
+ORDER BY transaction_order ASC`
 	rows, err := tx.Query(query, queryArgs(txnIDs)...)
 	if err != nil {
 		return nil, err
@@ -94,7 +94,7 @@ func transactionSiafundInputs(tx txn, txnIDs []int64) (map[int64][]types.Siafund
 	query := `SELECT transaction_id, parent_id, unlock_conditions, claim_address
 FROM transaction_siafund_inputs
 WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
-ORDER BY transaction_order DESC`
+ORDER BY transaction_order ASC`
 	rows, err := tx.Query(query, queryArgs(txnIDs)...)
 	if err != nil {
 		return nil, err
@@ -119,7 +119,7 @@ func transactionSiafundOutputs(tx txn, txnIDs []int64) (map[int64][]explorer.Sia
 FROM siafund_elements sf
 INNER JOIN transaction_siafund_outputs ts ON (ts.output_id = sf.id)
 WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
-ORDER BY ts.transaction_order DESC`
+ORDER BY ts.transaction_order ASC`
 	rows, err := tx.Query(query, queryArgs(txnIDs)...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query siafund output ids: %w", err)
@@ -205,7 +205,7 @@ func transactionFileContracts(tx txn, txnIDs []int64) (map[int64][]explorer.File
 FROM file_contract_elements fc
 INNER JOIN transaction_file_contracts ts ON (ts.contract_id = fc.id)
 WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
-ORDER BY ts.transaction_order DESC`
+ORDER BY ts.transaction_order ASC`
 	rows, err := tx.Query(query, queryArgs(txnIDs)...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query contract output ids: %w", err)
@@ -248,7 +248,7 @@ func transactionFileContractRevisions(tx txn, txnIDs []int64) (map[int64][]explo
 FROM file_contract_elements fc
 INNER JOIN transaction_file_contract_revisions ts ON (ts.contract_id = fc.id)
 WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
-ORDER BY ts.transaction_order DESC`
+ORDER BY ts.transaction_order ASC`
 	rows, err := tx.Query(query, queryArgs(txnIDs)...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query contract output ids: %w", err)
@@ -310,7 +310,7 @@ func blockMinerPayouts(tx txn, blockID types.BlockID) ([]explorer.SiacoinOutput,
 FROM siacoin_elements sc
 INNER JOIN miner_payouts mp ON (mp.output_id = sc.id)
 WHERE mp.block_id = ?
-ORDER BY mp.block_order DESC`
+ORDER BY mp.block_order ASC`
 	rows, err := tx.Query(query, dbEncode(blockID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query miner payout ids: %w", err)

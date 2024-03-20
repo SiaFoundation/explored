@@ -331,8 +331,6 @@ func TestBlock(t *testing.T) {
 			if len(bTxn.SiacoinOutputs) != len(bTxn.SiacoinOutputs) {
 				t.Fatalf("expected %d siacoin outputs, got %d", len(bTxn.SiacoinOutputs), len(bTxn.SiacoinOutputs))
 			}
-			t.Logf("bTxn: %+v", bTxn)
-			t.Logf("blockTxn: %+v", blockTxn)
 
 			for j := range bTxn.SiacoinOutputs {
 				bSco := bTxn.SiacoinOutputs[j]
