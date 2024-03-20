@@ -342,14 +342,14 @@ func TestSendTransactions(t *testing.T) {
 		outputID = types.Hash256(parentTxn.SiacoinOutputID(2))
 
 		// Mine a block with the above transaction
-		b := mineBlock(cm.TipState(), []types.Transaction{parentTxn}, addr1)
+		b := mineBlock(cm.TipState(), []types.Transaction{parentTxn}, types.VoidAddress)
 		if err := cm.AddBlocks([]types.Block{b}); err != nil {
 			t.Fatal(err)
 		}
 
-		checkBalance(addr1, types.Siacoins(1).Mul64(uint64(i)), types.ZeroCurrency, 0)
-		checkBalance(addr2, types.Siacoins(2).Mul64(uint64(i)), types.ZeroCurrency, 0)
-		checkBalance(addr3, expectedPayout.Sub(types.Siacoins(1+2).Mul64(uint64(i+1))), types.ZeroCurrency, 0)
+		checkBalance(addr1, expectedPayout.Sub(types.Siacoins(1+2).Mul64(uint64(i+1))), types.ZeroCurrency, 0)
+		checkBalance(addr2, types.Siacoins(1).Mul64(uint64(i+1)), types.ZeroCurrency, 0)
+		checkBalance(addr3, types.Siacoins(2).Mul64(uint64(i+1)), types.ZeroCurrency, 0)
 
 		// Ensure the block we retrieved from the database is the same as the
 		// actual block
