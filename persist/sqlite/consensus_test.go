@@ -102,6 +102,7 @@ func TestBalance(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// checkBalance checks that an address has the balances we expect
 	checkBalance := func(addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
 		sc, immatureSC, sf, err := db.Balance(addr)
 		if err != nil {
@@ -115,6 +116,7 @@ func TestBalance(t *testing.T) {
 		}
 	}
 
+	// Generate three addresses: addr1, addr2, addr3
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
 
@@ -127,11 +129,12 @@ func TestBalance(t *testing.T) {
 	expectedPayout := cm.TipState().BlockReward()
 	maturityHeight := cm.TipState().MaturityHeight() + 1
 
-	// mine a block sending the payout to the wallet
+	// Mine a block sending the payout to addr1
 	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, addr1)}); err != nil {
 		t.Fatal(err)
 	}
 
+	// Check that addr1 has the miner payout output
 	utxos, err := db.UnspentSiacoinOutputs(addr1, 100, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -141,7 +144,7 @@ func TestBalance(t *testing.T) {
 		t.Fatalf("expected value %v, got %v", expectedPayout, utxos[0].SiacoinOutput.Value)
 	}
 
-	// mine until the payout matures
+	// Mine until the payout matures
 	for i := cm.TipState().Index.Height; i < maturityHeight; i++ {
 		checkBalance(addr1, types.ZeroCurrency, expectedPayout, 0)
 		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
@@ -151,6 +154,7 @@ func TestBalance(t *testing.T) {
 
 	checkBalance(addr1, expectedPayout, types.ZeroCurrency, 0)
 
+	// Send all of the payout except 100 SC to addr2
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
 	parentTxn := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{
@@ -175,6 +179,8 @@ func TestBalance(t *testing.T) {
 	parentSig := pk1.SignHash(parentSigHash)
 	parentTxn.Signatures[0].Signature = parentSig[:]
 
+	// In the same block, have addr1 send the 100 SC it still has left to
+	// addr3
 	outputID := parentTxn.SiacoinOutputID(0)
 	txn := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{
@@ -235,6 +241,7 @@ func TestBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Generate three addresses: addr1, addr2, addr3
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
 
@@ -247,18 +254,19 @@ func TestBlock(t *testing.T) {
 	expectedPayout := cm.TipState().BlockReward()
 	maturityHeight := cm.TipState().MaturityHeight() + 1
 
-	// mine a block sending the payout to the wallet
+	// Mine a block sending the payout to the addr1
 	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, addr1)}); err != nil {
 		t.Fatal(err)
 	}
 
-	// mine until the payout matures
+	// Mine until the payout matures
 	for i := cm.TipState().Index.Height; i < maturityHeight; i++ {
 		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
 			t.Fatal(err)
 		}
 	}
 
+	// Check that addr1 has the miner payout output
 	utxos, err := db.UnspentSiacoinOutputs(addr1, 100, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -270,6 +278,7 @@ func TestBlock(t *testing.T) {
 
 	outputID := utxos[0].ID
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
+	// Send 1 SC to addr2 and 2 SC to addr3 100 times in consecutive blocks
 	for i := 0; i < 100; i++ {
 		parentTxn := types.Transaction{
 			SiacoinInputs: []types.SiacoinInput{
@@ -297,12 +306,14 @@ func TestBlock(t *testing.T) {
 		parentTxn.Signatures[0].Signature = parentSig[:]
 		outputID = types.Hash256(parentTxn.SiacoinOutputID(2))
 
-		// mine a block sending the payout to the wallet
+		// Mine a block with the above transaction
 		b := mineBlock(cm.TipState(), []types.Transaction{parentTxn}, addr1)
 		if err := cm.AddBlocks([]types.Block{b}); err != nil {
 			t.Fatal(err)
 		}
 
+		// Ensure the block we retrieved from the database is the same as the
+		// actual block
 		block, err := db.Block(b.ID())
 		if err != nil {
 			t.Fatal(err)
@@ -318,6 +329,7 @@ func TestBlock(t *testing.T) {
 			t.Fatalf("expected %d transactions, got %d", len(b.Transactions), len(block.Transactions))
 		}
 
+		// Ensure the miner payouts in the block match
 		for i := range b.MinerPayouts {
 			if b.MinerPayouts[i].Address != block.MinerPayouts[i].SiacoinOutput.Address {
 				t.Fatalf("expected address %v, got %v", b.MinerPayouts[i].Address, block.MinerPayouts[i].SiacoinOutput.Address)
@@ -325,6 +337,8 @@ func TestBlock(t *testing.T) {
 				t.Fatalf("expected value %v, got %v", b.MinerPayouts[i].Value, block.MinerPayouts[i].SiacoinOutput.Value)
 			}
 		}
+
+		// Ensure the transactions in the block match
 		for i := range b.Transactions {
 			bTxn := b.Transactions[i]
 			blockTxn := block.Transactions[i]
