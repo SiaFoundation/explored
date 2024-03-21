@@ -2,6 +2,7 @@ package sqlite_test
 
 import (
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"go.sia.tech/core/consensus"
@@ -257,13 +258,24 @@ func TestSendTransactions(t *testing.T) {
 	}
 
 	checkTransaction := func(expectTxn types.Transaction, gotTxn explorer.Transaction) {
-		if len(expectTxn.SiacoinOutputs) != len(expectTxn.SiacoinOutputs) {
+		if len(expectTxn.SiacoinInputs) != len(expectTxn.SiacoinInputs) {
+			t.Fatalf("expected %d siacoin inputs, got %d", len(expectTxn.SiacoinInputs), len(expectTxn.SiacoinInputs))
+		} else if len(expectTxn.SiacoinOutputs) != len(expectTxn.SiacoinOutputs) {
 			t.Fatalf("expected %d siacoin outputs, got %d", len(expectTxn.SiacoinOutputs), len(expectTxn.SiacoinOutputs))
 		}
 
-		for j := range expectTxn.SiacoinOutputs {
-			expectSco := expectTxn.SiacoinOutputs[j]
-			gotSco := gotTxn.SiacoinOutputs[j].SiacoinOutput
+		for i := range expectTxn.SiacoinInputs {
+			expectSci := expectTxn.SiacoinInputs[i]
+			gotSci := gotTxn.SiacoinInputs[i]
+			if expectSci.ParentID != gotSci.ParentID {
+				t.Fatalf("expected parent ID %v, got %v", expectSci.ParentID, gotSci.ParentID)
+			} else if !reflect.DeepEqual(expectSci.UnlockConditions, gotSci.UnlockConditions) {
+				t.Fatalf("expected unlock conditions %v, got %v", expectSci.UnlockConditions, gotSci.UnlockConditions)
+			}
+		}
+		for i := range expectTxn.SiacoinOutputs {
+			expectSco := expectTxn.SiacoinOutputs[i]
+			gotSco := gotTxn.SiacoinOutputs[i].SiacoinOutput
 			if expectSco.Address != gotSco.Address {
 				t.Fatalf("expected address %v, got %v", expectSco.Address, gotSco.Address)
 			} else if expectSco.Value != gotSco.Value {
