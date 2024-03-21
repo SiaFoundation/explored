@@ -154,7 +154,9 @@ issues:
   # But independently from this option we use default exclude patterns,
   # it can be disabled by `exclude-use-default: false`. To list all
   # excluded by default patterns execute `golangci-lint run --help`
-  exclude: []
+  exclude:
+    - "ifElseChain:.*"
+    - "exitAfterDefer:.*"
 
   # Independently from option `exclude` we use default exclude patterns,
   # it can be disabled by this option. To list all

@@ -276,14 +276,14 @@ func TestSendTransactions(t *testing.T) {
 	}
 
 	checkTransaction := func(expectTxn types.Transaction, gotTxn explorer.Transaction) {
-		if len(expectTxn.SiacoinInputs) != len(expectTxn.SiacoinInputs) {
-			t.Fatalf("expected %d siacoin inputs, got %d", len(expectTxn.SiacoinInputs), len(expectTxn.SiacoinInputs))
-		} else if len(expectTxn.SiacoinOutputs) != len(expectTxn.SiacoinOutputs) {
-			t.Fatalf("expected %d siacoin outputs, got %d", len(expectTxn.SiacoinOutputs), len(expectTxn.SiacoinOutputs))
-		} else if len(expectTxn.SiafundInputs) != len(expectTxn.SiafundInputs) {
-			t.Fatalf("expected %d siafund inputs, got %d", len(expectTxn.SiafundInputs), len(expectTxn.SiafundInputs))
-		} else if len(expectTxn.SiafundOutputs) != len(expectTxn.SiafundOutputs) {
-			t.Fatalf("expected %d siafund outputs, got %d", len(expectTxn.SiafundOutputs), len(expectTxn.SiafundOutputs))
+		if len(expectTxn.SiacoinInputs) != len(gotTxn.SiacoinInputs) {
+			t.Fatalf("expected %d siacoin inputs, got %d", len(expectTxn.SiacoinInputs), len(gotTxn.SiacoinInputs))
+		} else if len(expectTxn.SiacoinOutputs) != len(gotTxn.SiacoinOutputs) {
+			t.Fatalf("expected %d siacoin outputs, got %d", len(expectTxn.SiacoinOutputs), len(gotTxn.SiacoinOutputs))
+		} else if len(expectTxn.SiafundInputs) != len(gotTxn.SiafundInputs) {
+			t.Fatalf("expected %d siafund inputs, got %d", len(expectTxn.SiafundInputs), len(gotTxn.SiafundInputs))
+		} else if len(expectTxn.SiafundOutputs) != len(gotTxn.SiafundOutputs) {
+			t.Fatalf("expected %d siafund outputs, got %d", len(expectTxn.SiafundOutputs), len(gotTxn.SiafundOutputs))
 		}
 
 		for i := range expectTxn.SiacoinInputs {
