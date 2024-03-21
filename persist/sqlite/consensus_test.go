@@ -14,7 +14,9 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
-func testV1Network() (*consensus.Network, types.Block) {
+const giftSF = 10000
+
+func testV1Network(giftAddr types.Address) (*consensus.Network, types.Block) {
 	// use a modified version of Zen
 	n, genesisBlock := chain.TestnetZen()
 	n.InitialTarget = types.BlockID{0xFF}
@@ -26,6 +28,12 @@ func testV1Network() (*consensus.Network, types.Block) {
 	n.HardforkFoundation.Height = 1
 	n.HardforkV2.AllowHeight = 1000
 	n.HardforkV2.RequireHeight = 1000
+	genesisBlock.Transactions = []types.Transaction{{
+		SiafundOutputs: []types.SiafundOutput{{
+			Address: giftAddr,
+			Value:   giftSF,
+		}},
+	}}
 	return n, genesisBlock
 }
 
@@ -90,7 +98,7 @@ func TestBalance(t *testing.T) {
 	}
 	defer bdb.Close()
 
-	network, genesisBlock := testV1Network()
+	network, genesisBlock := testV1Network(types.VoidAddress)
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -229,7 +237,17 @@ func TestSendTransactions(t *testing.T) {
 	}
 	defer bdb.Close()
 
-	network, genesisBlock := testV1Network()
+	// Generate three addresses: addr1, addr2, addr3
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
+	pk3 := types.GeneratePrivateKey()
+	addr3 := types.StandardUnlockHash(pk3.PublicKey())
+
+	network, genesisBlock := testV1Network(addr1)
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -262,6 +280,10 @@ func TestSendTransactions(t *testing.T) {
 			t.Fatalf("expected %d siacoin inputs, got %d", len(expectTxn.SiacoinInputs), len(expectTxn.SiacoinInputs))
 		} else if len(expectTxn.SiacoinOutputs) != len(expectTxn.SiacoinOutputs) {
 			t.Fatalf("expected %d siacoin outputs, got %d", len(expectTxn.SiacoinOutputs), len(expectTxn.SiacoinOutputs))
+		} else if len(expectTxn.SiafundInputs) != len(expectTxn.SiafundInputs) {
+			t.Fatalf("expected %d siafund inputs, got %d", len(expectTxn.SiafundInputs), len(expectTxn.SiafundInputs))
+		} else if len(expectTxn.SiafundOutputs) != len(expectTxn.SiafundOutputs) {
+			t.Fatalf("expected %d siafund outputs, got %d", len(expectTxn.SiafundOutputs), len(expectTxn.SiafundOutputs))
 		}
 
 		for i := range expectTxn.SiacoinInputs {
@@ -282,17 +304,27 @@ func TestSendTransactions(t *testing.T) {
 				t.Fatalf("expected value %v, got %v", expectSco.Value, gotSco.Value)
 			}
 		}
+		for i := range expectTxn.SiafundInputs {
+			expectSfi := expectTxn.SiafundInputs[i]
+			gotSfi := gotTxn.SiafundInputs[i]
+			if expectSfi.ParentID != gotSfi.ParentID {
+				t.Fatalf("expected parent ID %v, got %v", expectSfi.ParentID, gotSfi.ParentID)
+			} else if expectSfi.ClaimAddress != gotSfi.ClaimAddress {
+				t.Fatalf("expected claim address %v, got %v", expectSfi.ClaimAddress, gotSfi.ClaimAddress)
+			} else if !reflect.DeepEqual(expectSfi.UnlockConditions, gotSfi.UnlockConditions) {
+				t.Fatalf("expected unlock conditions %v, got %v", expectSfi.UnlockConditions, gotSfi.UnlockConditions)
+			}
+		}
+		for i := range expectTxn.SiafundOutputs {
+			expectSfo := expectTxn.SiafundOutputs[i]
+			gotSfo := gotTxn.SiafundOutputs[i].SiafundOutput
+			if expectSfo.Address != gotSfo.Address {
+				t.Fatalf("expected address %v, got %v", expectSfo.Address, gotSfo.Address)
+			} else if expectSfo.Value != gotSfo.Value {
+				t.Fatalf("expected value %v, got %v", expectSfo.Value, gotSfo.Value)
+			}
+		}
 	}
-
-	// Generate three addresses: addr1, addr2, addr3
-	pk1 := types.GeneratePrivateKey()
-	addr1 := types.StandardUnlockHash(pk1.PublicKey())
-
-	pk2 := types.GeneratePrivateKey()
-	addr2 := types.StandardUnlockHash(pk2.PublicKey())
-
-	pk3 := types.GeneratePrivateKey()
-	addr3 := types.StandardUnlockHash(pk3.PublicKey())
 
 	expectedPayout := cm.TipState().BlockReward()
 	maturityHeight := cm.TipState().MaturityHeight() + 1
@@ -309,7 +341,7 @@ func TestSendTransactions(t *testing.T) {
 		}
 	}
 
-	checkBalance(addr1, expectedPayout, types.ZeroCurrency, 0)
+	checkBalance(addr1, expectedPayout, types.ZeroCurrency, giftSF)
 	checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
 	checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
 
@@ -323,14 +355,21 @@ func TestSendTransactions(t *testing.T) {
 		t.Fatalf("expected value %v, got %v", expectedPayout, utxos[0].SiacoinOutput.Value)
 	}
 
-	outputID := utxos[0].ID
+	sfOutputID := genesisBlock.Transactions[0].SiafundOutputID(0)
+	scOutputID := utxos[0].ID
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
 	// Send 1 SC to addr2 and 2 SC to addr3 100 times in consecutive blocks
 	for i := 0; i < 100; i++ {
 		parentTxn := types.Transaction{
 			SiacoinInputs: []types.SiacoinInput{
 				{
-					ParentID:         types.SiacoinOutputID(outputID),
+					ParentID:         types.SiacoinOutputID(scOutputID),
+					UnlockConditions: unlockConditions,
+				},
+			},
+			SiafundInputs: []types.SiafundInput{
+				{
+					ParentID:         sfOutputID,
 					UnlockConditions: unlockConditions,
 				},
 			},
@@ -339,19 +378,37 @@ func TestSendTransactions(t *testing.T) {
 				{Address: addr3, Value: types.Siacoins(2)},
 				{Address: addr1, Value: expectedPayout.Sub(types.Siacoins(1 + 2).Mul64(uint64(i + 1)))},
 			},
+			SiafundOutputs: []types.SiafundOutput{
+				{Address: addr2, Value: 1},
+				{Address: addr3, Value: 2},
+				{Address: addr1, Value: giftSF - (1+2)*uint64(i+1)},
+			},
 			Signatures: []types.TransactionSignature{
 				{
-					ParentID:       outputID,
+					ParentID:       scOutputID,
+					PublicKeyIndex: 0,
+					CoveredFields:  types.CoveredFields{WholeTransaction: true},
+				},
+				{
+					ParentID:       types.Hash256(sfOutputID),
 					PublicKeyIndex: 0,
 					CoveredFields:  types.CoveredFields{WholeTransaction: true},
 				},
 			},
 		}
 
-		parentSigHash := cm.TipState().WholeSigHash(parentTxn, outputID, 0, 0, nil)
-		parentSig := pk1.SignHash(parentSigHash)
-		parentTxn.Signatures[0].Signature = parentSig[:]
-		outputID = types.Hash256(parentTxn.SiacoinOutputID(2))
+		{
+			parentSigHash := cm.TipState().WholeSigHash(parentTxn, scOutputID, 0, 0, nil)
+			parentSig := pk1.SignHash(parentSigHash)
+			parentTxn.Signatures[0].Signature = parentSig[:]
+		}
+		{
+			parentSigHash := cm.TipState().WholeSigHash(parentTxn, types.Hash256(sfOutputID), 0, 0, nil)
+			parentSig := pk1.SignHash(parentSigHash)
+			parentTxn.Signatures[1].Signature = parentSig[:]
+		}
+		scOutputID = types.Hash256(parentTxn.SiacoinOutputID(2))
+		sfOutputID = parentTxn.SiafundOutputID(2)
 
 		// Mine a block with the above transaction
 		b := mineBlock(cm.TipState(), []types.Transaction{parentTxn}, types.VoidAddress)
@@ -359,9 +416,9 @@ func TestSendTransactions(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		checkBalance(addr1, expectedPayout.Sub(types.Siacoins(1+2).Mul64(uint64(i+1))), types.ZeroCurrency, 0)
-		checkBalance(addr2, types.Siacoins(1).Mul64(uint64(i+1)), types.ZeroCurrency, 0)
-		checkBalance(addr3, types.Siacoins(2).Mul64(uint64(i+1)), types.ZeroCurrency, 0)
+		checkBalance(addr1, expectedPayout.Sub(types.Siacoins(1+2).Mul64(uint64(i+1))), types.ZeroCurrency, giftSF-(1+2)*uint64(i+1))
+		checkBalance(addr2, types.Siacoins(1).Mul64(uint64(i+1)), types.ZeroCurrency, 1*uint64(i+1))
+		checkBalance(addr3, types.Siacoins(2).Mul64(uint64(i+1)), types.ZeroCurrency, 2*uint64(i+1))
 
 		// Ensure the block we retrieved from the database is the same as the
 		// actual block
@@ -420,7 +477,7 @@ func TestTip(t *testing.T) {
 	}
 	defer bdb.Close()
 
-	network, genesisBlock := testV1Network()
+	network, genesisBlock := testV1Network(types.VoidAddress)
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
