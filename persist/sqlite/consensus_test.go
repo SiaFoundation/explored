@@ -302,6 +302,8 @@ func TestSendTransactions(t *testing.T) {
 				t.Fatalf("expected address %v, got %v", expectSco.Address, gotSco.Address)
 			} else if expectSco.Value != gotSco.Value {
 				t.Fatalf("expected value %v, got %v", expectSco.Value, gotSco.Value)
+			} else if gotTxn.SiacoinOutputs[i].Source != explorer.SourceTransaction {
+				t.Fatalf("expected source %v, got %v", explorer.SourceTransaction, gotTxn.SiacoinOutputs[i].Source)
 			}
 		}
 		for i := range expectTxn.SiafundInputs {
@@ -353,6 +355,8 @@ func TestSendTransactions(t *testing.T) {
 		t.Fatalf("expected 1 utxo, got %d", len(utxos))
 	} else if utxos[0].SiacoinOutput.Value != expectedPayout {
 		t.Fatalf("expected value %v, got %v", expectedPayout, utxos[0].SiacoinOutput.Value)
+	} else if utxos[0].Source != explorer.SourceMinerPayout {
+		t.Fatalf("expected source %v, got %v", explorer.SourceMinerPayout, utxos[0].Source)
 	}
 
 	sfOutputID := genesisBlock.Transactions[0].SiafundOutputID(0)
