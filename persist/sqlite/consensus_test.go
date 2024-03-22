@@ -347,8 +347,10 @@ func TestSendTransactions(t *testing.T) {
 	checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
 	checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
 
+	const n = 100
+
 	// Check that addr1 has the miner payout output
-	utxos, err := db.UnspentSiacoinOutputs(addr1, 100, 0)
+	utxos, err := db.UnspentSiacoinOutputs(addr1, n, 0)
 	if err != nil {
 		t.Fatal(err)
 	} else if len(utxos) != 1 {
@@ -363,7 +365,10 @@ func TestSendTransactions(t *testing.T) {
 	scOutputID := utxos[0].ID
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
 	// Send 1 SC to addr2 and 2 SC to addr3 100 times in consecutive blocks
-	for i := 0; i < 100; i++ {
+	for i := 0; i < n; i++ {
+		addr1SCs := expectedPayout.Sub(types.Siacoins(1 + 2).Mul64(uint64(i + 1)))
+		addr1SFs := giftSF - (1+2)*uint64(i+1)
+
 		parentTxn := types.Transaction{
 			SiacoinInputs: []types.SiacoinInput{
 				{
@@ -380,12 +385,12 @@ func TestSendTransactions(t *testing.T) {
 			SiacoinOutputs: []types.SiacoinOutput{
 				{Address: addr2, Value: types.Siacoins(1)},
 				{Address: addr3, Value: types.Siacoins(2)},
-				{Address: addr1, Value: expectedPayout.Sub(types.Siacoins(1 + 2).Mul64(uint64(i + 1)))},
+				{Address: addr1, Value: addr1SCs},
 			},
 			SiafundOutputs: []types.SiafundOutput{
 				{Address: addr2, Value: 1},
 				{Address: addr3, Value: 2},
-				{Address: addr1, Value: giftSF - (1+2)*uint64(i+1)},
+				{Address: addr1, Value: addr1SFs},
 			},
 			Signatures: []types.TransactionSignature{
 				{
@@ -420,7 +425,7 @@ func TestSendTransactions(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		checkBalance(addr1, expectedPayout.Sub(types.Siacoins(1+2).Mul64(uint64(i+1))), types.ZeroCurrency, giftSF-(1+2)*uint64(i+1))
+		checkBalance(addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
 		checkBalance(addr2, types.Siacoins(1).Mul64(uint64(i+1)), types.ZeroCurrency, 1*uint64(i+1))
 		checkBalance(addr3, types.Siacoins(2).Mul64(uint64(i+1)), types.ZeroCurrency, 2*uint64(i+1))
 
@@ -462,6 +467,54 @@ func TestSendTransactions(t *testing.T) {
 				t.Fatal("failed to get transaction")
 			}
 			checkTransaction(b.Transactions[i], txns[0])
+		}
+
+		type expectedUTXOs struct {
+			addr types.Address
+
+			sc      int
+			scValue types.Currency
+
+			sf      int
+			sfValue uint64
+		}
+		expected := []expectedUTXOs{
+			{addr1, 1, addr1SCs, 1, addr1SFs},
+			{addr2, i + 1, types.Siacoins(1), i + 1, 1},
+			{addr3, i + 1, types.Siacoins(2), i + 1, 2},
+		}
+		for _, e := range expected {
+			sc, err := db.UnspentSiacoinOutputs(e.addr, n, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sf, err := db.UnspentSiafundOutputs(e.addr, n, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if e.sc != len(sc) {
+				t.Fatalf("expected %d siacoin utxos, got %d", e.sc, len(sc))
+			} else if e.sf != len(sf) {
+				t.Fatalf("expected %d siafund utxos, got %d", e.sf, len(sf))
+			}
+
+			for _, sco := range sc {
+				if e.addr != sco.SiacoinOutput.Address {
+					t.Fatalf("expected address %v, got %v", e.addr, sco.SiacoinOutput.Address)
+				} else if e.scValue != sco.SiacoinOutput.Value {
+					t.Fatalf("expected value %v, got %v", e.scValue, sco.SiacoinOutput.Value)
+				} else if explorer.SourceTransaction != sco.Source {
+					t.Fatalf("expected source %v, got %v", explorer.SourceTransaction, sco.Source)
+				}
+			}
+			for _, sfo := range sf {
+				if e.addr != sfo.SiafundOutput.Address {
+					t.Fatalf("expected address %v, got %v", e.addr, sfo.SiafundOutput.Address)
+				} else if e.sfValue != sfo.SiafundOutput.Value {
+					t.Fatalf("expected value %v, got %v", e.sfValue, sfo.SiafundOutput.Value)
+				}
+			}
 		}
 	}
 }
