@@ -1,6 +1,7 @@
 package sqlite_test
 
 import (
+	"math/bits"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -556,5 +557,138 @@ func TestTip(t *testing.T) {
 		if cmBest, ok := cm.BestIndex(uint64(i)); !ok || cmBest != best {
 			t.Fatal("best tip mismatch")
 		}
+	}
+}
+
+// copied from rhp/v2 to avoid import cycle
+func prepareContractFormation(renterPubKey types.PublicKey, hostKey types.PublicKey, renterPayout, hostCollateral types.Currency, endHeight uint64, windowSize uint64, refundAddr types.Address) types.FileContract {
+	taxAdjustedPayout := func(target types.Currency) types.Currency {
+		guess := target.Mul64(1000).Div64(961)
+		mod64 := func(c types.Currency, v uint64) types.Currency {
+			var r uint64
+			if c.Hi < v {
+				_, r = bits.Div64(c.Hi, c.Lo, v)
+			} else {
+				_, r = bits.Div64(0, c.Hi, v)
+				_, r = bits.Div64(r, c.Lo, v)
+			}
+			return types.NewCurrency64(r)
+		}
+		sfc := (consensus.State{}).SiafundCount()
+		tm := mod64(target, sfc)
+		gm := mod64(guess, sfc)
+		if gm.Cmp(tm) < 0 {
+			guess = guess.Sub(types.NewCurrency64(sfc))
+		}
+		return guess.Add(tm).Sub(gm)
+	}
+	uc := types.UnlockConditions{
+		PublicKeys: []types.UnlockKey{
+			{Algorithm: types.SpecifierEd25519, Key: renterPubKey[:]},
+			{Algorithm: types.SpecifierEd25519, Key: hostKey[:]},
+		},
+		SignaturesRequired: 2,
+	}
+	hostPayout := hostCollateral
+	payout := taxAdjustedPayout(renterPayout.Add(hostPayout))
+	return types.FileContract{
+		Filesize:       0,
+		FileMerkleRoot: types.Hash256{},
+		WindowStart:    endHeight,
+		WindowEnd:      endHeight + windowSize,
+		Payout:         payout,
+		UnlockHash:     types.Hash256(uc.UnlockHash()),
+		RevisionNumber: 0,
+		ValidProofOutputs: []types.SiacoinOutput{
+			{Value: renterPayout, Address: refundAddr},
+			{Value: hostPayout, Address: types.VoidAddress},
+		},
+		MissedProofOutputs: []types.SiacoinOutput{
+			{Value: renterPayout, Address: refundAddr},
+			{Value: hostPayout, Address: types.VoidAddress},
+			{Value: types.ZeroCurrency, Address: types.VoidAddress},
+		},
+	}
+}
+
+func TestFileContract(t *testing.T) {
+	log := zaptest.NewLogger(t)
+	dir := t.TempDir()
+
+	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bdb.Close()
+
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+
+	renterPrivateKey := types.GeneratePrivateKey()
+	renterPublicKey := renterPrivateKey.PublicKey()
+
+	hostPrivateKey := types.GeneratePrivateKey()
+	hostPublicKey := hostPrivateKey.PublicKey()
+
+	giftSC := types.Siacoins(1000)
+	network, genesisBlock := testV1Network(addr1, giftSC, 0)
+	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	cm := chain.NewManager(store, genesisState)
+	// if err := cm.AddSubscriber(db, types.ChainIndex{}); err != nil {
+	// 	t.Fatal(err)
+	// }
+
+	scOutputID := genesisBlock.Transactions[0].SiacoinOutputID(0)
+	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
+
+	signTxn := func(cs consensus.State, txn *types.Transaction) {
+		appendSig := func(key types.PrivateKey, pubkeyIndex uint64, parentID types.Hash256) {
+			sig := key.SignHash(cs.WholeSigHash(*txn, parentID, pubkeyIndex, 0, nil))
+			txn.Signatures = append(txn.Signatures, types.TransactionSignature{
+				ParentID:       parentID,
+				CoveredFields:  types.CoveredFields{WholeTransaction: true},
+				PublicKeyIndex: pubkeyIndex,
+				Signature:      sig[:],
+			})
+		}
+		for i := range txn.SiacoinInputs {
+			appendSig(pk1, 0, types.Hash256(txn.SiacoinInputs[i].ParentID))
+		}
+		for i := range txn.SiafundInputs {
+			appendSig(pk1, 0, types.Hash256(txn.SiafundInputs[i].ParentID))
+		}
+		for i := range txn.FileContractRevisions {
+			appendSig(renterPrivateKey, 0, types.Hash256(txn.FileContractRevisions[i].ParentID))
+			appendSig(hostPrivateKey, 1, types.Hash256(txn.FileContractRevisions[i].ParentID))
+		}
+	}
+
+	fc := prepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), cm.Tip().Height+1, 100, types.VoidAddress)
+	txn := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         scOutputID,
+			UnlockConditions: unlockConditions,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   giftSC.Sub(fc.Payout),
+		}},
+		FileContracts: []types.FileContract{fc},
+	}
+	signTxn(cm.TipState(), &txn)
+
+	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
 	}
 }
