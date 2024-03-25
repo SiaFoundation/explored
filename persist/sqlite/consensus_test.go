@@ -14,9 +14,7 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
-const giftSF = 10000
-
-func testV1Network(giftAddr types.Address) (*consensus.Network, types.Block) {
+func testV1Network(giftAddr types.Address, sc types.Currency, sf uint64) (*consensus.Network, types.Block) {
 	// use a modified version of Zen
 	n, genesisBlock := chain.TestnetZen()
 	n.InitialTarget = types.BlockID{0xFF}
@@ -28,12 +26,19 @@ func testV1Network(giftAddr types.Address) (*consensus.Network, types.Block) {
 	n.HardforkFoundation.Height = 1
 	n.HardforkV2.AllowHeight = 1000
 	n.HardforkV2.RequireHeight = 1000
-	genesisBlock.Transactions = []types.Transaction{{
-		SiafundOutputs: []types.SiafundOutput{{
+	genesisBlock.Transactions = []types.Transaction{{}}
+	if sf > 0 {
+		genesisBlock.Transactions[0].SiafundOutputs = []types.SiafundOutput{{
 			Address: giftAddr,
-			Value:   giftSF,
-		}},
-	}}
+			Value:   sf,
+		}}
+	}
+	if sc.Cmp(types.ZeroCurrency) == 1 {
+		genesisBlock.Transactions[0].SiacoinOutputs = []types.SiacoinOutput{{
+			Address: giftAddr,
+			Value:   sc,
+		}}
+	}
 	return n, genesisBlock
 }
 
@@ -83,6 +88,24 @@ func mineV2Block(state consensus.State, txns []types.V2Transaction, minerAddr ty
 	return b
 }
 
+func signTxn(cs consensus.State, pk types.PrivateKey, txn *types.Transaction) {
+	appendSig := func(key types.PrivateKey, pubkeyIndex uint64, parentID types.Hash256) {
+		sig := key.SignHash(cs.WholeSigHash(*txn, parentID, pubkeyIndex, 0, nil))
+		txn.Signatures = append(txn.Signatures, types.TransactionSignature{
+			ParentID:       parentID,
+			CoveredFields:  types.CoveredFields{WholeTransaction: true},
+			PublicKeyIndex: pubkeyIndex,
+			Signature:      sig[:],
+		})
+	}
+	for i := range txn.SiacoinInputs {
+		appendSig(pk, 0, types.Hash256(txn.SiacoinInputs[i].ParentID))
+	}
+	for i := range txn.SiafundInputs {
+		appendSig(pk, 0, types.Hash256(txn.SiafundInputs[i].ParentID))
+	}
+}
+
 func TestBalance(t *testing.T) {
 	log := zaptest.NewLogger(t)
 	dir := t.TempDir()
@@ -98,7 +121,7 @@ func TestBalance(t *testing.T) {
 	}
 	defer bdb.Close()
 
-	network, genesisBlock := testV1Network(types.VoidAddress)
+	network, genesisBlock := testV1Network(types.VoidAddress, types.ZeroCurrency, 0)
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -177,17 +200,8 @@ func TestBalance(t *testing.T) {
 			{Address: addr1, Value: types.Siacoins(100)},
 			{Address: addr2, Value: utxos[0].SiacoinOutput.Value.Sub(types.Siacoins(100))},
 		},
-		Signatures: []types.TransactionSignature{
-			{
-				ParentID:       utxos[0].ID,
-				PublicKeyIndex: 0,
-				CoveredFields:  types.CoveredFields{WholeTransaction: true},
-			},
-		},
 	}
-	parentSigHash := cm.TipState().WholeSigHash(parentTxn, utxos[0].ID, 0, 0, nil)
-	parentSig := pk1.SignHash(parentSigHash)
-	parentTxn.Signatures[0].Signature = parentSig[:]
+	signTxn(cm.TipState(), pk1, &parentTxn)
 
 	// In the same block, have addr1 send the 100 SC it still has left to
 	// addr3
@@ -202,17 +216,8 @@ func TestBalance(t *testing.T) {
 		SiacoinOutputs: []types.SiacoinOutput{
 			{Address: addr3, Value: types.Siacoins(100)},
 		},
-		Signatures: []types.TransactionSignature{
-			{
-				ParentID:       types.Hash256(outputID),
-				PublicKeyIndex: 0,
-				CoveredFields:  types.CoveredFields{WholeTransaction: true},
-			},
-		},
 	}
-	sigHash := cm.TipState().WholeSigHash(txn, types.Hash256(outputID), 0, 0, nil)
-	sig := pk1.SignHash(sigHash)
-	txn.Signatures[0].Signature = sig[:]
+	signTxn(cm.TipState(), pk1, &txn)
 
 	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{parentTxn, txn}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
@@ -247,7 +252,8 @@ func TestSendTransactions(t *testing.T) {
 	pk3 := types.GeneratePrivateKey()
 	addr3 := types.StandardUnlockHash(pk3.PublicKey())
 
-	network, genesisBlock := testV1Network(addr1)
+	const giftSF = 10000
+	network, genesisBlock := testV1Network(addr1, types.ZeroCurrency, giftSF)
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -392,30 +398,9 @@ func TestSendTransactions(t *testing.T) {
 				{Address: addr3, Value: 2},
 				{Address: addr1, Value: addr1SFs},
 			},
-			Signatures: []types.TransactionSignature{
-				{
-					ParentID:       scOutputID,
-					PublicKeyIndex: 0,
-					CoveredFields:  types.CoveredFields{WholeTransaction: true},
-				},
-				{
-					ParentID:       types.Hash256(sfOutputID),
-					PublicKeyIndex: 0,
-					CoveredFields:  types.CoveredFields{WholeTransaction: true},
-				},
-			},
 		}
 
-		{
-			parentSigHash := cm.TipState().WholeSigHash(parentTxn, scOutputID, 0, 0, nil)
-			parentSig := pk1.SignHash(parentSigHash)
-			parentTxn.Signatures[0].Signature = parentSig[:]
-		}
-		{
-			parentSigHash := cm.TipState().WholeSigHash(parentTxn, types.Hash256(sfOutputID), 0, 0, nil)
-			parentSig := pk1.SignHash(parentSigHash)
-			parentTxn.Signatures[1].Signature = parentSig[:]
-		}
+		signTxn(cm.TipState(), pk1, &parentTxn)
 		scOutputID = types.Hash256(parentTxn.SiacoinOutputID(2))
 		sfOutputID = parentTxn.SiafundOutputID(2)
 
@@ -534,7 +519,7 @@ func TestTip(t *testing.T) {
 	}
 	defer bdb.Close()
 
-	network, genesisBlock := testV1Network(types.VoidAddress)
+	network, genesisBlock := testV1Network(types.VoidAddress, types.ZeroCurrency, 0)
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
