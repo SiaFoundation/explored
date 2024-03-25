@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"database/sql"
 	"fmt"
 
 	"go.sia.tech/core/types"
@@ -53,7 +54,9 @@ func (s *Store) UnspentSiafundOutputs(address types.Address, limit, offset uint6
 func (s *Store) Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error) {
 	err = s.transaction(func(tx txn) error {
 		err = tx.QueryRow(`SELECT siacoin_balance, immature_siacoin_balance, siafund_balance FROM address_balance WHERE address = ?`, dbEncode(address)).Scan(dbDecode(&sc), dbDecode(&immatureSC), dbDecode(&sf))
-		if err != nil {
+		if err == sql.ErrNoRows {
+			return nil
+		} else if err != nil {
 			return fmt.Errorf("failed to query balances: %w", err)
 		}
 		return nil
