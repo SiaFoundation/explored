@@ -161,7 +161,7 @@ func TestBalance(t *testing.T) {
 	addr3 := types.StandardUnlockHash(pk3.PublicKey())
 
 	expectedPayout := cm.TipState().BlockReward()
-	maturityHeight := cm.TipState().MaturityHeight() + 1
+	maturityHeight := cm.TipState().MaturityHeight()
 
 	// Mine a block sending the payout to addr1
 	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, addr1)}); err != nil {
@@ -336,7 +336,7 @@ func TestSendTransactions(t *testing.T) {
 	}
 
 	expectedPayout := cm.TipState().BlockReward()
-	maturityHeight := cm.TipState().MaturityHeight() + 1
+	maturityHeight := cm.TipState().MaturityHeight()
 
 	// Mine a block sending the payout to the addr1
 	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, addr1)}); err != nil {
@@ -645,9 +645,9 @@ func TestFileContract(t *testing.T) {
 	defer store.Close()
 
 	cm := chain.NewManager(store, genesisState)
-	// if err := cm.AddSubscriber(db, types.ChainIndex{}); err != nil {
-	// 	t.Fatal(err)
-	// }
+	if err := cm.AddSubscriber(db, types.ChainIndex{}); err != nil {
+		t.Fatal(err)
+	}
 
 	scOutputID := genesisBlock.Transactions[0].SiacoinOutputID(0)
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
