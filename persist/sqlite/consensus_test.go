@@ -181,7 +181,7 @@ func TestBalance(t *testing.T) {
 	check(t, "source", explorer.SourceMinerPayout, utxos[0].Source)
 
 	// Mine until the payout matures
-	for i := cm.TipState().Index.Height; i < maturityHeight; i++ {
+	for i := cm.Tip().Height; i < maturityHeight; i++ {
 		checkBalance(addr1, types.ZeroCurrency, expectedPayout, 0)
 		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
 			t.Fatal(err)
@@ -328,7 +328,7 @@ func TestSendTransactions(t *testing.T) {
 	}
 
 	// Mine until the payout matures
-	for i := cm.TipState().Index.Height; i < maturityHeight; i++ {
+	for i := cm.Tip().Height; i < maturityHeight; i++ {
 		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
 			t.Fatal(err)
 		}
@@ -496,7 +496,7 @@ func TestTip(t *testing.T) {
 	}
 
 	const n = 100
-	for i := cm.TipState().Index.Height; i < n; i++ {
+	for i := cm.Tip().Height; i < n; i++ {
 		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
 			t.Fatal(err)
 		}
@@ -633,9 +633,9 @@ func TestFileContract(t *testing.T) {
 		}
 	}
 
-	checkFC := func(expected types.FileContract, got explorer.FileContract) {
-		check(t, "resolved state", false, got.Resolved)
-		check(t, "valid state", true, got.Valid)
+	checkFC := func(resolved, valid bool, expected types.FileContract, got explorer.FileContract) {
+		check(t, "resolved state", resolved, got.Resolved)
+		check(t, "valid state", valid, got.Valid)
 		check(t, "filesize", expected.Filesize, got.Filesize)
 		check(t, "file merkle root", expected.FileMerkleRoot, got.FileMerkleRoot)
 		check(t, "window start", expected.WindowStart, got.WindowStart)
@@ -655,7 +655,9 @@ func TestFileContract(t *testing.T) {
 		}
 	}
 
-	fc := prepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), cm.Tip().Height+10, 100, types.VoidAddress)
+	windowStart := cm.Tip().Height + 10
+	windowEnd := windowStart + 10
+	fc := prepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), windowStart, windowEnd, types.VoidAddress)
 	txn := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
 			ParentID:         scOutputID,
@@ -667,6 +669,7 @@ func TestFileContract(t *testing.T) {
 		}},
 		FileContracts: []types.FileContract{fc},
 	}
+	fcID := txn.FileContractID(0)
 	signTxn(&txn)
 
 	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn}, types.VoidAddress)}); err != nil {
@@ -674,12 +677,12 @@ func TestFileContract(t *testing.T) {
 	}
 
 	{
-		dbFCs, err := db.Contracts([]types.FileContractID{txn.FileContractID(0)})
+		dbFCs, err := db.Contracts([]types.FileContractID{fcID})
 		if err != nil {
 			t.Fatal(err)
 		}
 		check(t, "fcs", 1, len(dbFCs))
-		checkFC(fc, dbFCs[0])
+		checkFC(false, true, fc, dbFCs[0])
 	}
 
 	{
@@ -689,7 +692,7 @@ func TestFileContract(t *testing.T) {
 		}
 		check(t, "transactions", 1, len(txns))
 		check(t, "file contracts", 1, len(txns[0].FileContracts))
-		checkFC(fc, txns[0].FileContracts[0])
+		checkFC(false, true, fc, txns[0].FileContracts[0])
 	}
 
 	uc := types.UnlockConditions{
@@ -702,7 +705,7 @@ func TestFileContract(t *testing.T) {
 	fc.RevisionNumber++
 	reviseTxn := types.Transaction{
 		FileContractRevisions: []types.FileContractRevision{{
-			ParentID:         txn.FileContractID(0),
+			ParentID:         fcID,
 			UnlockConditions: uc,
 			FileContract:     fc,
 		}},
@@ -715,12 +718,12 @@ func TestFileContract(t *testing.T) {
 
 	// Explorer.Contracts should return latest revision
 	{
-		dbFCs, err := db.Contracts([]types.FileContractID{txn.FileContractID(0)})
+		dbFCs, err := db.Contracts([]types.FileContractID{fcID})
 		if err != nil {
 			t.Fatal(err)
 		}
 		check(t, "fcs", 1, len(dbFCs))
-		checkFC(fc, dbFCs[0])
+		checkFC(false, true, fc, dbFCs[0])
 	}
 
 	{
@@ -735,6 +738,21 @@ func TestFileContract(t *testing.T) {
 		check(t, "parent id", txn.FileContractID(0), fcr.ParentID)
 		check(t, "unlock conditions", uc, fcr.UnlockConditions)
 
-		checkFC(fc, fcr.FileContract)
+		checkFC(false, true, fc, fcr.FileContract)
+	}
+
+	for i := cm.Tip().Height; i < windowEnd+10; i++ {
+		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	{
+		dbFCs, err := db.Contracts([]types.FileContractID{fcID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "fcs", 1, len(dbFCs))
+		checkFC(true, false, fc, dbFCs[0])
 	}
 }
