@@ -637,6 +637,28 @@ func TestFileContract(t *testing.T) {
 		}
 	}
 
+	checkFC := func(expected types.FileContract, got explorer.FileContract) {
+		check(t, "resolved state", false, got.Resolved)
+		check(t, "valid state", true, got.Valid)
+		check(t, "filesize", expected.Filesize, got.Filesize)
+		check(t, "file merkle root", expected.FileMerkleRoot, got.FileMerkleRoot)
+		check(t, "window start", expected.WindowStart, got.WindowStart)
+		check(t, "window end", expected.WindowEnd, got.WindowEnd)
+		check(t, "payout", expected.Payout, got.Payout)
+		check(t, "unlock hash", expected.UnlockHash, got.UnlockHash)
+		check(t, "revision number", expected.RevisionNumber, got.RevisionNumber)
+		check(t, "valid proof outputs", len(expected.ValidProofOutputs), len(got.ValidProofOutputs))
+		for i := range expected.ValidProofOutputs {
+			check(t, "valid proof output address", expected.ValidProofOutputs[i].Address, got.ValidProofOutputs[i].Address)
+			check(t, "valid proof output value", expected.ValidProofOutputs[i].Value, got.ValidProofOutputs[i].Value)
+		}
+		check(t, "missed proof outputs", len(expected.MissedProofOutputs), len(got.MissedProofOutputs))
+		for i := range expected.MissedProofOutputs {
+			check(t, "missed proof output address", expected.MissedProofOutputs[i].Address, got.MissedProofOutputs[i].Address)
+			check(t, "missed proof output value", expected.MissedProofOutputs[i].Value, got.MissedProofOutputs[i].Value)
+		}
+	}
+
 	fc := prepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), cm.Tip().Height+1, 100, types.VoidAddress)
 	txn := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
@@ -661,26 +683,26 @@ func TestFileContract(t *testing.T) {
 			t.Fatal(err)
 		}
 		check(t, "fcs", 1, len(dbFCs))
+		checkFC(fc, dbFCs[0])
+	}
 
-		dbFC := dbFCs[0]
-		check(t, "resolved state", false, dbFC.Resolved)
-		check(t, "valid state", true, dbFC.Valid)
-		check(t, "filesize", fc.Filesize, dbFC.Filesize)
-		check(t, "file merkle root", fc.FileMerkleRoot, dbFC.FileMerkleRoot)
-		check(t, "window start", fc.WindowStart, dbFC.WindowStart)
-		check(t, "window end", fc.WindowEnd, dbFC.WindowEnd)
-		check(t, "payout", fc.Payout, dbFC.Payout)
-		check(t, "unlock hash", fc.UnlockHash, dbFC.UnlockHash)
-		check(t, "revision number", fc.RevisionNumber, dbFC.RevisionNumber)
-		check(t, "valid proof outputs", len(fc.ValidProofOutputs), len(dbFC.ValidProofOutputs))
-		for i := range fc.ValidProofOutputs {
-			check(t, "valid proof output address", fc.ValidProofOutputs[i].Address, dbFC.ValidProofOutputs[i].Address)
-			check(t, "valid proof output value", fc.ValidProofOutputs[i].Value, dbFC.ValidProofOutputs[i].Value)
+	{
+		block, err := db.Block(cm.Tip().ID)
+		if err != nil {
+			t.Fatal(err)
 		}
-		check(t, "missed proof outputs", len(fc.MissedProofOutputs), len(dbFC.MissedProofOutputs))
-		for i := range fc.MissedProofOutputs {
-			check(t, "missed proof output address", fc.MissedProofOutputs[i].Address, dbFC.MissedProofOutputs[i].Address)
-			check(t, "missed proof output value", fc.MissedProofOutputs[i].Value, dbFC.MissedProofOutputs[i].Value)
+		check(t, "transactions", 1, len(block.Transactions))
+		check(t, "file contracts", 1, len(block.Transactions[0].FileContracts))
+		checkFC(fc, block.Transactions[0].FileContracts[0])
+	}
+
+	{
+		txns, err := db.Transactions([]types.TransactionID{txn.ID()})
+		if err != nil {
+			t.Fatal(err)
 		}
+		check(t, "transactions", 1, len(txns))
+		check(t, "file contracts", 1, len(txns[0].FileContracts))
+		checkFC(fc, txns[0].FileContracts[0])
 	}
 }
