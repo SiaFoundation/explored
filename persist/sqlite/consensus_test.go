@@ -147,13 +147,10 @@ func TestBalance(t *testing.T) {
 		sc, immatureSC, sf, err := db.Balance(addr)
 		if err != nil {
 			t.Fatal(err)
-		} else if sc != expectSC {
-			t.Fatalf("expected %v siacoins, got %v", expectSC, sc)
-		} else if immatureSC != expectImmatureSC {
-			t.Fatalf("expected %v immature siacoins, got %v", expectImmatureSC, immatureSC)
-		} else if sf != expectSF {
-			t.Fatalf("expected %d siafunds, got %d", expectSF, sf)
 		}
+		check(t, "siacoins", expectSC, sc)
+		check(t, "immature siacoins", expectImmatureSC, immatureSC)
+		check(t, "siafunds", expectSF, sf)
 	}
 
 	// Generate three addresses: addr1, addr2, addr3
@@ -178,11 +175,10 @@ func TestBalance(t *testing.T) {
 	utxos, err := db.UnspentSiacoinOutputs(addr1, 100, 0)
 	if err != nil {
 		t.Fatal(err)
-	} else if len(utxos) != 1 {
-		t.Fatalf("expected 1 utxo, got %d", len(utxos))
-	} else if utxos[0].SiacoinOutput.Value != expectedPayout {
-		t.Fatalf("expected value %v, got %v", expectedPayout, utxos[0].SiacoinOutput.Value)
 	}
+	check(t, "utxos", 1, len(utxos))
+	check(t, "value", expectedPayout, utxos[0].SiacoinOutput.Value)
+	check(t, "source", explorer.SourceMinerPayout, utxos[0].Source)
 
 	// Mine until the payout matures
 	for i := cm.TipState().Index.Height; i < maturityHeight; i++ {
@@ -279,65 +275,51 @@ func TestSendTransactions(t *testing.T) {
 		sc, immatureSC, sf, err := db.Balance(addr)
 		if err != nil {
 			t.Fatal(err)
-		} else if sc != expectSC {
-			t.Fatalf("expected %v siacoins, got %v", expectSC, sc)
-		} else if immatureSC != expectImmatureSC {
-			t.Fatalf("expected %v immature siacoins, got %v", expectImmatureSC, immatureSC)
-		} else if sf != expectSF {
-			t.Fatalf("expected %d siafunds, got %d", expectSF, sf)
 		}
+		check(t, "siacoins", expectSC, sc)
+		check(t, "immature siacoins", expectImmatureSC, immatureSC)
+		check(t, "siafunds", expectSF, sf)
 	}
 
 	checkTransaction := func(expectTxn types.Transaction, gotTxn explorer.Transaction) {
-		if len(expectTxn.SiacoinInputs) != len(gotTxn.SiacoinInputs) {
-			t.Fatalf("expected %d siacoin inputs, got %d", len(expectTxn.SiacoinInputs), len(gotTxn.SiacoinInputs))
-		} else if len(expectTxn.SiacoinOutputs) != len(gotTxn.SiacoinOutputs) {
-			t.Fatalf("expected %d siacoin outputs, got %d", len(expectTxn.SiacoinOutputs), len(gotTxn.SiacoinOutputs))
-		} else if len(expectTxn.SiafundInputs) != len(gotTxn.SiafundInputs) {
-			t.Fatalf("expected %d siafund inputs, got %d", len(expectTxn.SiafundInputs), len(gotTxn.SiafundInputs))
-		} else if len(expectTxn.SiafundOutputs) != len(gotTxn.SiafundOutputs) {
-			t.Fatalf("expected %d siafund outputs, got %d", len(expectTxn.SiafundOutputs), len(gotTxn.SiafundOutputs))
-		}
+		check(t, "siacoin inputs", len(expectTxn.SiacoinInputs), len(gotTxn.SiacoinInputs))
+		check(t, "siacoin outputs", len(expectTxn.SiacoinOutputs), len(gotTxn.SiacoinOutputs))
+		check(t, "siafund inputs", len(expectTxn.SiafundInputs), len(gotTxn.SiafundInputs))
+		check(t, "siafund outputs", len(expectTxn.SiafundOutputs), len(gotTxn.SiafundOutputs))
 
 		for i := range expectTxn.SiacoinInputs {
 			expectSci := expectTxn.SiacoinInputs[i]
 			gotSci := gotTxn.SiacoinInputs[i]
-			if expectSci.ParentID != gotSci.ParentID {
-				t.Fatalf("expected parent ID %v, got %v", expectSci.ParentID, gotSci.ParentID)
-			} else if !reflect.DeepEqual(expectSci.UnlockConditions, gotSci.UnlockConditions) {
+
+			check(t, "parent ID", expectSci.ParentID, gotSci.ParentID)
+			if !reflect.DeepEqual(expectSci.UnlockConditions, gotSci.UnlockConditions) {
 				t.Fatalf("expected unlock conditions %v, got %v", expectSci.UnlockConditions, gotSci.UnlockConditions)
 			}
 		}
 		for i := range expectTxn.SiacoinOutputs {
 			expectSco := expectTxn.SiacoinOutputs[i]
 			gotSco := gotTxn.SiacoinOutputs[i].SiacoinOutput
-			if expectSco.Address != gotSco.Address {
-				t.Fatalf("expected address %v, got %v", expectSco.Address, gotSco.Address)
-			} else if expectSco.Value != gotSco.Value {
-				t.Fatalf("expected value %v, got %v", expectSco.Value, gotSco.Value)
-			} else if gotTxn.SiacoinOutputs[i].Source != explorer.SourceTransaction {
-				t.Fatalf("expected source %v, got %v", explorer.SourceTransaction, gotTxn.SiacoinOutputs[i].Source)
-			}
+
+			check(t, "address", expectSco.Address, gotSco.Address)
+			check(t, "value", expectSco.Value, gotSco.Value)
+			check(t, "source", explorer.SourceTransaction, gotTxn.SiacoinOutputs[i].Source)
 		}
 		for i := range expectTxn.SiafundInputs {
 			expectSfi := expectTxn.SiafundInputs[i]
 			gotSfi := gotTxn.SiafundInputs[i]
-			if expectSfi.ParentID != gotSfi.ParentID {
-				t.Fatalf("expected parent ID %v, got %v", expectSfi.ParentID, gotSfi.ParentID)
-			} else if expectSfi.ClaimAddress != gotSfi.ClaimAddress {
-				t.Fatalf("expected claim address %v, got %v", expectSfi.ClaimAddress, gotSfi.ClaimAddress)
-			} else if !reflect.DeepEqual(expectSfi.UnlockConditions, gotSfi.UnlockConditions) {
+
+			check(t, "parent ID", expectSfi.ParentID, gotSfi.ParentID)
+			check(t, "claim address", expectSfi.ClaimAddress, gotSfi.ClaimAddress)
+			if !reflect.DeepEqual(expectSfi.UnlockConditions, gotSfi.UnlockConditions) {
 				t.Fatalf("expected unlock conditions %v, got %v", expectSfi.UnlockConditions, gotSfi.UnlockConditions)
 			}
 		}
 		for i := range expectTxn.SiafundOutputs {
 			expectSfo := expectTxn.SiafundOutputs[i]
 			gotSfo := gotTxn.SiafundOutputs[i].SiafundOutput
-			if expectSfo.Address != gotSfo.Address {
-				t.Fatalf("expected address %v, got %v", expectSfo.Address, gotSfo.Address)
-			} else if expectSfo.Value != gotSfo.Value {
-				t.Fatalf("expected value %v, got %v", expectSfo.Value, gotSfo.Value)
-			}
+
+			check(t, "address", expectSfo.Address, gotSfo.Address)
+			check(t, "value", expectSfo.Value, gotSfo.Value)
 		}
 	}
 
@@ -366,13 +348,10 @@ func TestSendTransactions(t *testing.T) {
 	utxos, err := db.UnspentSiacoinOutputs(addr1, n, 0)
 	if err != nil {
 		t.Fatal(err)
-	} else if len(utxos) != 1 {
-		t.Fatalf("expected 1 utxo, got %d", len(utxos))
-	} else if utxos[0].SiacoinOutput.Value != expectedPayout {
-		t.Fatalf("expected value %v, got %v", expectedPayout, utxos[0].SiacoinOutput.Value)
-	} else if utxos[0].Source != explorer.SourceMinerPayout {
-		t.Fatalf("expected source %v, got %v", explorer.SourceMinerPayout, utxos[0].Source)
 	}
+	check(t, "utxos", 1, len(utxos))
+	check(t, "value", expectedPayout, utxos[0].SiacoinOutput.Value)
+	check(t, "source", explorer.SourceMinerPayout, utxos[0].Source)
 
 	sfOutputID := genesisBlock.Transactions[0].SiafundOutputID(0)
 	scOutputID := utxos[0].ID
@@ -426,25 +405,16 @@ func TestSendTransactions(t *testing.T) {
 		block, err := db.Block(b.ID())
 		if err != nil {
 			t.Fatal(err)
-		} else if len(b.Transactions) != len(block.Transactions) {
-			t.Fatalf("expected %d transactions, got %d", len(b.Transactions), len(block.Transactions))
-		} else if b.Nonce != block.Nonce {
-			t.Fatalf("expected nonce %d, got %d", b.Nonce, block.Nonce)
-		} else if b.Timestamp != block.Timestamp {
-			t.Fatalf("expected timestamp %d, got %d", b.Timestamp.Unix(), block.Timestamp.Unix())
-		} else if len(b.MinerPayouts) != len(block.MinerPayouts) {
-			t.Fatalf("expected %d miner payouts, got %d", len(b.MinerPayouts), len(block.MinerPayouts))
-		} else if len(b.Transactions) != len(block.Transactions) {
-			t.Fatalf("expected %d transactions, got %d", len(b.Transactions), len(block.Transactions))
 		}
+		check(t, "transactions", len(b.Transactions), len(block.Transactions))
+		check(t, "miner payouts", len(b.MinerPayouts), len(block.MinerPayouts))
+		check(t, "nonce", b.Nonce, block.Nonce)
+		check(t, "timestamp", b.Timestamp, block.Timestamp)
 
 		// Ensure the miner payouts in the block match
 		for i := range b.MinerPayouts {
-			if b.MinerPayouts[i].Address != block.MinerPayouts[i].SiacoinOutput.Address {
-				t.Fatalf("expected address %v, got %v", b.MinerPayouts[i].Address, block.MinerPayouts[i].SiacoinOutput.Address)
-			} else if b.MinerPayouts[i].Value != block.MinerPayouts[i].SiacoinOutput.Value {
-				t.Fatalf("expected value %v, got %v", b.MinerPayouts[i].Value, block.MinerPayouts[i].SiacoinOutput.Value)
-			}
+			check(t, "address", b.MinerPayouts[i].Address, b.MinerPayouts[i].Address)
+			check(t, "value", b.MinerPayouts[i].Value, b.MinerPayouts[i].Value)
 		}
 
 		// Ensure the transactions in the block and retrieved separately match
@@ -455,9 +425,8 @@ func TestSendTransactions(t *testing.T) {
 			txns, err := db.Transactions([]types.TransactionID{b.Transactions[i].ID()})
 			if err != nil {
 				t.Fatal(err)
-			} else if len(txns) != 1 {
-				t.Fatal("failed to get transaction")
 			}
+			check(t, "transactions", 1, len(txns))
 			checkTransaction(b.Transactions[i], txns[0])
 		}
 
@@ -485,27 +454,17 @@ func TestSendTransactions(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if e.sc != len(sc) {
-				t.Fatalf("expected %d siacoin utxos, got %d", e.sc, len(sc))
-			} else if e.sf != len(sf) {
-				t.Fatalf("expected %d siafund utxos, got %d", e.sf, len(sf))
-			}
+			check(t, "sc utxos", e.sc, len(sc))
+			check(t, "sf utxos", e.sf, len(sf))
 
 			for _, sco := range sc {
-				if e.addr != sco.SiacoinOutput.Address {
-					t.Fatalf("expected address %v, got %v", e.addr, sco.SiacoinOutput.Address)
-				} else if e.scValue != sco.SiacoinOutput.Value {
-					t.Fatalf("expected value %v, got %v", e.scValue, sco.SiacoinOutput.Value)
-				} else if explorer.SourceTransaction != sco.Source {
-					t.Fatalf("expected source %v, got %v", explorer.SourceTransaction, sco.Source)
-				}
+				check(t, "address", e.addr, sco.SiacoinOutput.Address)
+				check(t, "value", e.scValue, sco.SiacoinOutput.Value)
+				check(t, "source", explorer.SourceTransaction, sco.Source)
 			}
 			for _, sfo := range sf {
-				if e.addr != sfo.SiafundOutput.Address {
-					t.Fatalf("expected address %v, got %v", e.addr, sfo.SiafundOutput.Address)
-				} else if e.sfValue != sfo.SiafundOutput.Value {
-					t.Fatalf("expected value %v, got %v", e.sfValue, sfo.SiafundOutput.Value)
-				}
+				check(t, "address", e.addr, sfo.SiafundOutput.Address)
+				check(t, "value", e.sfValue, sfo.SiafundOutput.Value)
 			}
 		}
 	}
@@ -550,9 +509,7 @@ func TestTip(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if cm.Tip() != tip {
-			t.Fatal("tip mismatch")
-		}
+		check(t, "tip", cm.Tip(), tip)
 	}
 
 	for i := 0; i < n; i++ {
@@ -658,9 +615,9 @@ func TestFileContract(t *testing.T) {
 	scOutputID := genesisBlock.Transactions[0].SiacoinOutputID(0)
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
 
-	signTxn := func(cs consensus.State, txn *types.Transaction) {
+	signTxn := func(txn *types.Transaction) {
 		appendSig := func(key types.PrivateKey, pubkeyIndex uint64, parentID types.Hash256) {
-			sig := key.SignHash(cs.WholeSigHash(*txn, parentID, pubkeyIndex, 0, nil))
+			sig := key.SignHash(cm.TipState().WholeSigHash(*txn, parentID, pubkeyIndex, 0, nil))
 			txn.Signatures = append(txn.Signatures, types.TransactionSignature{
 				ParentID:       parentID,
 				CoveredFields:  types.CoveredFields{WholeTransaction: true},
@@ -692,36 +649,38 @@ func TestFileContract(t *testing.T) {
 		}},
 		FileContracts: []types.FileContract{fc},
 	}
-	signTxn(cm.TipState(), &txn)
+	signTxn(&txn)
 
 	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
 
-	dbFCs, err := db.Contracts([]types.FileContractID{txn.FileContractID(0)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	check(t, "fcs", 1, len(dbFCs))
+	{
+		dbFCs, err := db.Contracts([]types.FileContractID{txn.FileContractID(0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "fcs", 1, len(dbFCs))
 
-	dbFC := dbFCs[0]
-	check(t, "resolved state", false, dbFC.Resolved)
-	check(t, "valid state", true, dbFC.Valid)
-	check(t, "filesize", fc.Filesize, dbFC.Filesize)
-	check(t, "file merkle root", fc.FileMerkleRoot, dbFC.FileMerkleRoot)
-	check(t, "window start", fc.WindowStart, dbFC.WindowStart)
-	check(t, "window end", fc.WindowEnd, dbFC.WindowEnd)
-	check(t, "payout", fc.Payout, dbFC.Payout)
-	check(t, "unlock hash", fc.UnlockHash, dbFC.UnlockHash)
-	check(t, "revision number", fc.RevisionNumber, dbFC.RevisionNumber)
-	check(t, "valid proof outputs", len(fc.ValidProofOutputs), len(dbFC.ValidProofOutputs))
-	for i := range fc.ValidProofOutputs {
-		check(t, "valid proof output address", fc.ValidProofOutputs[i].Address, dbFC.ValidProofOutputs[i].Address)
-		check(t, "valid proof output value", fc.ValidProofOutputs[i].Value, dbFC.ValidProofOutputs[i].Value)
-	}
-	check(t, "missed proof outputs", len(fc.MissedProofOutputs), len(dbFC.MissedProofOutputs))
-	for i := range fc.MissedProofOutputs {
-		check(t, "missed proof output address", fc.MissedProofOutputs[i].Address, dbFC.MissedProofOutputs[i].Address)
-		check(t, "missed proof output value", fc.MissedProofOutputs[i].Value, dbFC.MissedProofOutputs[i].Value)
+		dbFC := dbFCs[0]
+		check(t, "resolved state", false, dbFC.Resolved)
+		check(t, "valid state", true, dbFC.Valid)
+		check(t, "filesize", fc.Filesize, dbFC.Filesize)
+		check(t, "file merkle root", fc.FileMerkleRoot, dbFC.FileMerkleRoot)
+		check(t, "window start", fc.WindowStart, dbFC.WindowStart)
+		check(t, "window end", fc.WindowEnd, dbFC.WindowEnd)
+		check(t, "payout", fc.Payout, dbFC.Payout)
+		check(t, "unlock hash", fc.UnlockHash, dbFC.UnlockHash)
+		check(t, "revision number", fc.RevisionNumber, dbFC.RevisionNumber)
+		check(t, "valid proof outputs", len(fc.ValidProofOutputs), len(dbFC.ValidProofOutputs))
+		for i := range fc.ValidProofOutputs {
+			check(t, "valid proof output address", fc.ValidProofOutputs[i].Address, dbFC.ValidProofOutputs[i].Address)
+			check(t, "valid proof output value", fc.ValidProofOutputs[i].Value, dbFC.ValidProofOutputs[i].Value)
+		}
+		check(t, "missed proof outputs", len(fc.MissedProofOutputs), len(dbFC.MissedProofOutputs))
+		for i := range fc.MissedProofOutputs {
+			check(t, "missed proof output address", fc.MissedProofOutputs[i].Address, dbFC.MissedProofOutputs[i].Address)
+			check(t, "missed proof output value", fc.MissedProofOutputs[i].Value, dbFC.MissedProofOutputs[i].Value)
+		}
 	}
 }
