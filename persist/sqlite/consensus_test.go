@@ -108,7 +108,7 @@ func signTxn(cs consensus.State, pk types.PrivateKey, txn *types.Transaction) {
 }
 
 func check(t *testing.T, desc string, expect, got any) {
-	if expect != got {
+	if !reflect.DeepEqual(expect, got) {
 		t.Fatalf("expected %v %s, got %v", expect, desc, got)
 	}
 }
@@ -292,9 +292,7 @@ func TestSendTransactions(t *testing.T) {
 			gotSci := gotTxn.SiacoinInputs[i]
 
 			check(t, "parent ID", expectSci.ParentID, gotSci.ParentID)
-			if !reflect.DeepEqual(expectSci.UnlockConditions, gotSci.UnlockConditions) {
-				t.Fatalf("expected unlock conditions %v, got %v", expectSci.UnlockConditions, gotSci.UnlockConditions)
-			}
+			check(t, "unlock conditions", expectSci.UnlockConditions, gotSci.UnlockConditions)
 		}
 		for i := range expectTxn.SiacoinOutputs {
 			expectSco := expectTxn.SiacoinOutputs[i]
@@ -310,9 +308,7 @@ func TestSendTransactions(t *testing.T) {
 
 			check(t, "parent ID", expectSfi.ParentID, gotSfi.ParentID)
 			check(t, "claim address", expectSfi.ClaimAddress, gotSfi.ClaimAddress)
-			if !reflect.DeepEqual(expectSfi.UnlockConditions, gotSfi.UnlockConditions) {
-				t.Fatalf("expected unlock conditions %v, got %v", expectSfi.UnlockConditions, gotSfi.UnlockConditions)
-			}
+			check(t, "unlock conditions", expectSfi.UnlockConditions, gotSfi.UnlockConditions)
 		}
 		for i := range expectTxn.SiafundOutputs {
 			expectSfo := expectTxn.SiafundOutputs[i]
@@ -547,8 +543,8 @@ func prepareContractFormation(renterPubKey types.PublicKey, hostKey types.Public
 	}
 	uc := types.UnlockConditions{
 		PublicKeys: []types.UnlockKey{
-			{Algorithm: types.SpecifierEd25519, Key: renterPubKey[:]},
-			{Algorithm: types.SpecifierEd25519, Key: hostKey[:]},
+			renterPubKey.UnlockKey(),
+			hostKey.UnlockKey(),
 		},
 		SignaturesRequired: 2,
 	}
@@ -659,7 +655,7 @@ func TestFileContract(t *testing.T) {
 		}
 	}
 
-	fc := prepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), cm.Tip().Height+1, 100, types.VoidAddress)
+	fc := prepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), cm.Tip().Height+10, 100, types.VoidAddress)
 	txn := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
 			ParentID:         scOutputID,
@@ -687,16 +683,6 @@ func TestFileContract(t *testing.T) {
 	}
 
 	{
-		block, err := db.Block(cm.Tip().ID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		check(t, "transactions", 1, len(block.Transactions))
-		check(t, "file contracts", 1, len(block.Transactions[0].FileContracts))
-		checkFC(fc, block.Transactions[0].FileContracts[0])
-	}
-
-	{
 		txns, err := db.Transactions([]types.TransactionID{txn.ID()})
 		if err != nil {
 			t.Fatal(err)
@@ -704,5 +690,51 @@ func TestFileContract(t *testing.T) {
 		check(t, "transactions", 1, len(txns))
 		check(t, "file contracts", 1, len(txns[0].FileContracts))
 		checkFC(fc, txns[0].FileContracts[0])
+	}
+
+	uc := types.UnlockConditions{
+		PublicKeys: []types.UnlockKey{
+			renterPublicKey.UnlockKey(),
+			hostPublicKey.UnlockKey(),
+		},
+		SignaturesRequired: 2,
+	}
+	fc.RevisionNumber++
+	reviseTxn := types.Transaction{
+		FileContractRevisions: []types.FileContractRevision{{
+			ParentID:         txn.FileContractID(0),
+			UnlockConditions: uc,
+			FileContract:     fc,
+		}},
+	}
+	signTxn(&reviseTxn)
+
+	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{reviseTxn}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Explorer.Contracts should return latest revision
+	{
+		dbFCs, err := db.Contracts([]types.FileContractID{txn.FileContractID(0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "fcs", 1, len(dbFCs))
+		checkFC(fc, dbFCs[0])
+	}
+
+	{
+		txns, err := db.Transactions([]types.TransactionID{reviseTxn.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "transactions", 1, len(txns))
+		check(t, "file contracts", 1, len(txns[0].FileContractRevisions))
+
+		fcr := txns[0].FileContractRevisions[0]
+		check(t, "parent id", txn.FileContractID(0), fcr.ParentID)
+		check(t, "unlock conditions", uc, fcr.UnlockConditions)
+
+		checkFC(fc, fcr.FileContract)
 	}
 }

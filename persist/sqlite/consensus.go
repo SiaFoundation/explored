@@ -191,7 +191,7 @@ func (s *Store) addFileContractRevisions(dbTxn txn, id int64, txn types.Transact
 			return errors.New("addFileContractRevisions: dbID not in map")
 		}
 
-		if _, err := stmt.Exec(id, i, dbID, dbEncode(fcr.UnlockConditions), dbEncode(fcr.UnlockHash)); err != nil {
+		if _, err := stmt.Exec(id, i, dbID, dbEncode(fcr.ParentID), dbEncode(fcr.UnlockConditions)); err != nil {
 			return fmt.Errorf("addFileContractRevisions: failed to execute statement: %w", err)
 		}
 
