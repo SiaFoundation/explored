@@ -107,6 +107,12 @@ func signTxn(cs consensus.State, pk types.PrivateKey, txn *types.Transaction) {
 	}
 }
 
+func check(t *testing.T, desc string, expect, got any) {
+	if expect != got {
+		t.Fatalf("expected %v %s, got %v", expect, desc, got)
+	}
+}
+
 func TestBalance(t *testing.T) {
 	log := zaptest.NewLogger(t)
 	dir := t.TempDir()
@@ -690,5 +696,32 @@ func TestFileContract(t *testing.T) {
 
 	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
+	}
+
+	dbFCs, err := db.Contracts([]types.FileContractID{txn.FileContractID(0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(t, "fcs", 1, len(dbFCs))
+
+	dbFC := dbFCs[0]
+	check(t, "resolved state", false, dbFC.Resolved)
+	check(t, "valid state", true, dbFC.Valid)
+	check(t, "filesize", fc.Filesize, dbFC.Filesize)
+	check(t, "file merkle root", fc.FileMerkleRoot, dbFC.FileMerkleRoot)
+	check(t, "window start", fc.WindowStart, dbFC.WindowStart)
+	check(t, "window end", fc.WindowEnd, dbFC.WindowEnd)
+	check(t, "payout", fc.Payout, dbFC.Payout)
+	check(t, "unlock hash", fc.UnlockHash, dbFC.UnlockHash)
+	check(t, "revision number", fc.RevisionNumber, dbFC.RevisionNumber)
+	check(t, "valid proof outputs", len(fc.ValidProofOutputs), len(dbFC.ValidProofOutputs))
+	for i := range fc.ValidProofOutputs {
+		check(t, "valid proof output address", fc.ValidProofOutputs[i].Address, dbFC.ValidProofOutputs[i].Address)
+		check(t, "valid proof output value", fc.ValidProofOutputs[i].Value, dbFC.ValidProofOutputs[i].Value)
+	}
+	check(t, "missed proof outputs", len(fc.MissedProofOutputs), len(dbFC.MissedProofOutputs))
+	for i := range fc.MissedProofOutputs {
+		check(t, "missed proof output address", fc.MissedProofOutputs[i].Address, dbFC.MissedProofOutputs[i].Address)
+		check(t, "missed proof output value", fc.MissedProofOutputs[i].Value, dbFC.MissedProofOutputs[i].Value)
 	}
 }
