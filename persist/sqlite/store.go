@@ -7,11 +7,9 @@ import (
 	"fmt"
 	"math"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/mattn/go-sqlite3"
-	"go.sia.tech/coreutils/chain"
 	"go.uber.org/zap"
 	"lukechampine.com/frand"
 )
@@ -22,9 +20,7 @@ type (
 		db  *sql.DB
 		log *zap.Logger
 
-		mu             sync.Mutex
-		numLeaves      uint64
-		pendingUpdates []*chain.ApplyUpdate
+		numLeaves uint64
 	}
 )
 

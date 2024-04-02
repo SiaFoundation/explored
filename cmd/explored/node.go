@@ -3,9 +3,7 @@ package main
 import (
 	"context"
 	"errors"
-	"io/fs"
 	"net"
-	"os"
 	"path/filepath"
 	"strconv"
 	"time"
@@ -162,23 +160,14 @@ func newNode(addr, dir string, chainNetwork string, useUPNP bool, logger *zap.Lo
 		return nil, err
 	}
 
-	tip, err := store.Tip()
-	if errors.Is(err, sqlite.ErrNoTip) {
-		tip = types.ChainIndex{
-			ID:     genesisBlock.ID(),
-			Height: 0,
-		}
-	} else if err != nil {
+	genesisIndex := types.ChainIndex{
+		ID:     genesisBlock.ID(),
+		Height: 0,
+	}
+	e, err := explorer.NewExplorer(cm, store, genesisIndex, logger.Named("explorer"))
+	if err != nil {
 		return nil, err
 	}
-	cm.AddSubscriber(store, tip)
-
-	hashPath := filepath.Join(dir, "./hash")
-	if err := os.MkdirAll(hashPath, fs.ModePerm); err != nil {
-		return nil, err
-	}
-
-	e := explorer.NewExplorer(store)
 
 	l, err := net.Listen("tcp", addr)
 	if err != nil {

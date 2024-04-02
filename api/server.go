@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -31,7 +32,7 @@ type (
 	Syncer interface {
 		Addr() string
 		Peers() []*syncer.Peer
-		Connect(addr string) (*syncer.Peer, error)
+		Connect(ctx context.Context, addr string) (*syncer.Peer, error)
 		BroadcastHeader(bh gateway.BlockHeader)
 		BroadcastTransactionSet(txns []types.Transaction)
 		BroadcastV2TransactionSet(index types.ChainIndex, txns []types.V2Transaction)
@@ -70,7 +71,7 @@ func (s *server) syncerConnectHandler(jc jape.Context) {
 	if jc.Decode(&addr) != nil {
 		return
 	}
-	_, err := s.s.Connect(addr)
+	_, err := s.s.Connect(context.Background(), addr)
 	jc.Check("couldn't connect to peer", err)
 }
 

@@ -83,11 +83,14 @@ func (eps *EphemeralPeerStore) UpdatePeerInfo(peer string, fn func(*syncer.PeerI
 }
 
 // PeerInfo implements PeerStore.
-func (eps *EphemeralPeerStore) PeerInfo(peer string) (syncer.PeerInfo, bool) {
+func (eps *EphemeralPeerStore) PeerInfo(peer string) (syncer.PeerInfo, error) {
 	eps.mu.Lock()
 	defer eps.mu.Unlock()
 	info, ok := eps.peers[peer]
-	return info, ok
+	if !ok {
+		return info, errors.New("no such peer")
+	}
+	return info, nil
 }
 
 // Ban implements PeerStore.

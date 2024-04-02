@@ -1,18 +1,10 @@
 package sqlite
 
 import (
-	"errors"
 	"fmt"
 
 	"go.sia.tech/core/types"
 	"go.sia.tech/explored/explorer"
-)
-
-var (
-	// ErrNoTip is returned when Tip() is unable to find any blocks in the
-	// database and thus there is no tip. It does not mean there was an
-	// error in the underlying database.
-	ErrNoTip = errors.New("no tip found")
 )
 
 // transactionArbitraryData returns the arbitrary data for each transaction.

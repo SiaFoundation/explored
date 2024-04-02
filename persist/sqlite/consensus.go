@@ -368,7 +368,7 @@ func (s *Store) updateMaturedBalances(dbTxn txn, update consensusUpdate, height 
 		return nil
 	}
 
-	_, isRevert := update.(*chain.RevertUpdate)
+	_, isRevert := update.(chain.RevertUpdate)
 	if isRevert {
 		height++
 	}
@@ -445,7 +445,7 @@ func (s *Store) updateMaturedBalances(dbTxn txn, update consensusUpdate, height 
 
 func (s *Store) addSiacoinElements(dbTxn txn, bid types.BlockID, update consensusUpdate) (map[types.SiacoinOutputID]int64, error) {
 	sources := make(map[types.SiacoinOutputID]explorer.Source)
-	if applyUpdate, ok := update.(*chain.ApplyUpdate); ok {
+	if applyUpdate, ok := update.(chain.ApplyUpdate); ok {
 		block := applyUpdate.Block
 		for i := range block.MinerPayouts {
 			sources[bid.MinerOutputID(i)] = explorer.SourceMinerPayout
@@ -593,9 +593,28 @@ func (s *Store) deleteBlock(dbTxn txn, bid types.BlockID) error {
 	return err
 }
 
-func (s *Store) applyUpdates() error {
+// ProcessChainUpdates implements explorer.Store.
+func (s *Store) ProcessChainUpdates(crus []chain.RevertUpdate, caus []chain.ApplyUpdate) error {
 	return s.transaction(func(dbTxn txn) error {
-		for _, update := range s.pendingUpdates {
+		for _, cru := range crus {
+			if err := s.deleteBlock(dbTxn, cru.Block.ID()); err != nil {
+				return fmt.Errorf("revertUpdate: failed to delete block: %w", err)
+			} else if _, err := s.addSiacoinElements(dbTxn, cru.Block.ID(), cru); err != nil {
+				return fmt.Errorf("revertUpdate: failed to update siacoin output state: %w", err)
+			} else if _, err := s.addSiafundElements(dbTxn, cru.Block.ID(), cru); err != nil {
+				return fmt.Errorf("revertUpdate: failed to update siafund output state: %w", err)
+			} else if err := s.updateBalances(dbTxn, cru, cru.State.Index.Height); err != nil {
+				return fmt.Errorf("revertUpdate: failed to update balances: %w", err)
+			} else if err := s.updateMaturedBalances(dbTxn, cru, cru.State.Index.Height); err != nil {
+				return fmt.Errorf("revertUpdate: failed to update matured balances: %w", err)
+			} else if _, err := s.addFileContractElements(dbTxn, cru.Block.ID(), cru); err != nil {
+				return fmt.Errorf("revertUpdate: failed to update file contract state: %w", err)
+			} else if err := s.updateLeaves(dbTxn, cru); err != nil {
+				return fmt.Errorf("revertUpdate: failed to update leaves: %w", err)
+			}
+		}
+
+		for _, update := range caus {
 			scDBIds, err := s.addSiacoinElements(dbTxn, update.Block.ID(), update)
 			if err != nil {
 				return fmt.Errorf("applyUpdates: failed to add siacoin outputs: %w", err)
@@ -627,53 +646,8 @@ func (s *Store) applyUpdates() error {
 				return err
 			}
 		}
-		s.pendingUpdates = s.pendingUpdates[:0]
 		return nil
 	})
-}
-
-func (s *Store) revertUpdate(cru *chain.RevertUpdate) error {
-	return s.transaction(func(dbTxn txn) error {
-		if err := s.deleteBlock(dbTxn, cru.Block.ID()); err != nil {
-			return fmt.Errorf("revertUpdate: failed to delete block: %w", err)
-		} else if _, err := s.addSiacoinElements(dbTxn, cru.Block.ID(), cru); err != nil {
-			return fmt.Errorf("revertUpdate: failed to update siacoin output state: %w", err)
-		} else if _, err := s.addSiafundElements(dbTxn, cru.Block.ID(), cru); err != nil {
-			return fmt.Errorf("revertUpdate: failed to update siafund output state: %w", err)
-		} else if err := s.updateBalances(dbTxn, cru, cru.State.Index.Height); err != nil {
-			return fmt.Errorf("revertUpdate: failed to update balances: %w", err)
-		} else if err := s.updateMaturedBalances(dbTxn, cru, cru.State.Index.Height); err != nil {
-			return fmt.Errorf("revertUpdate: failed to update matured balances: %w", err)
-		} else if _, err := s.addFileContractElements(dbTxn, cru.Block.ID(), cru); err != nil {
-			return fmt.Errorf("revertUpdate: failed to update file contract state: %w", err)
-		}
-
-		return s.updateLeaves(dbTxn, cru)
-	})
-}
-
-// ProcessChainApplyUpdate implements chain.Subscriber.
-func (s *Store) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.pendingUpdates = append(s.pendingUpdates, cau)
-	if mayCommit {
-		return s.applyUpdates()
-	}
-	return nil
-}
-
-// ProcessChainRevertUpdate implements chain.Subscriber.
-func (s *Store) ProcessChainRevertUpdate(cru *chain.RevertUpdate) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if len(s.pendingUpdates) > 0 && s.pendingUpdates[len(s.pendingUpdates)-1].Block.ID() == cru.Block.ID() {
-		s.pendingUpdates = s.pendingUpdates[:len(s.pendingUpdates)-1]
-		return nil
-	}
-	return s.revertUpdate(cru)
 }
 
 // Tip implements explorer.Store.
@@ -683,7 +657,7 @@ func (s *Store) Tip() (result types.ChainIndex, err error) {
 		return dbTx.QueryRow(query).Scan(dbDecode(&result.ID), &result.Height)
 	})
 	if errors.Is(err, sql.ErrNoRows) {
-		return types.ChainIndex{}, ErrNoTip
+		return types.ChainIndex{}, explorer.ErrNoTip
 	}
 	return
 }
