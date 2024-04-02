@@ -191,7 +191,7 @@ func (s *Store) addFileContractRevisions(dbTxn txn, id int64, txn types.Transact
 			return errors.New("addFileContractRevisions: dbID not in map")
 		}
 
-		if _, err := stmt.Exec(id, i, dbID, dbEncode(fcr.UnlockConditions), dbEncode(fcr.UnlockHash)); err != nil {
+		if _, err := stmt.Exec(id, i, dbID, dbEncode(fcr.ParentID), dbEncode(fcr.UnlockConditions)); err != nil {
 			return fmt.Errorf("addFileContractRevisions: failed to execute statement: %w", err)
 		}
 
@@ -371,8 +371,6 @@ func (s *Store) updateMaturedBalances(dbTxn txn, update consensusUpdate, height 
 	_, isRevert := update.(*chain.RevertUpdate)
 	if isRevert {
 		height++
-	} else {
-		height--
 	}
 
 	rows, err := dbTxn.Query(`SELECT address, value
@@ -546,7 +544,8 @@ func (s *Store) addFileContractElements(dbTxn txn, bid types.BlockID, update con
 	stmt, err := dbTxn.Prepare(`INSERT INTO file_contract_elements(block_id, contract_id, leaf_index, merkle_proof, resolved, valid, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number)
 		VALUES (?, ?, ?, ?, FALSE, TRUE, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (contract_id, revision_number)
-		DO UPDATE SET resolved = ? AND valid = ?`)
+		DO UPDATE SET resolved = ?, valid = ?
+		RETURNING id;`)
 	if err != nil {
 		return nil, fmt.Errorf("addFileContractElements: failed to prepare file_contract_elements statement: %w", err)
 	}
@@ -554,7 +553,7 @@ func (s *Store) addFileContractElements(dbTxn txn, bid types.BlockID, update con
 
 	revisionStmt, err := dbTxn.Prepare(`INSERT INTO last_contract_revision(contract_id, contract_element_id)
 	VALUES (?, ?)
-	ON CONFLICT
+	ON CONFLICT (contract_id)
 	DO UPDATE SET contract_element_id = ?`)
 	if err != nil {
 		return nil, fmt.Errorf("addFileContractElements: failed to prepare last_contract_revision statement: %w", err)
@@ -572,15 +571,10 @@ func (s *Store) addFileContractElements(dbTxn txn, bid types.BlockID, update con
 			fc = &rev.FileContract
 		}
 
-		result, err := stmt.Exec(dbEncode(bid), dbEncode(fce.StateElement.ID), dbEncode(fce.StateElement.LeafIndex), dbEncode(fce.StateElement.MerkleProof), fc.Filesize, dbEncode(fc.FileMerkleRoot), fc.WindowStart, fc.WindowEnd, dbEncode(fc.Payout), dbEncode(fc.UnlockHash), fc.RevisionNumber, resolved, valid)
+		var dbID int64
+		err := stmt.QueryRow(dbEncode(bid), dbEncode(fce.StateElement.ID), dbEncode(fce.StateElement.LeafIndex), dbEncode(fce.StateElement.MerkleProof), fc.Filesize, dbEncode(fc.FileMerkleRoot), fc.WindowStart, fc.WindowEnd, dbEncode(fc.Payout), dbEncode(fc.UnlockHash), fc.RevisionNumber, resolved, valid).Scan(&dbID)
 		if err != nil {
 			updateErr = fmt.Errorf("addFileContractElements: failed to execute file_contract_elements statement: %w", err)
-			return
-		}
-
-		dbID, err := result.LastInsertId()
-		if err != nil {
-			updateErr = fmt.Errorf("addFileContractElements: failed to get last insert ID: %w", err)
 			return
 		}
 
