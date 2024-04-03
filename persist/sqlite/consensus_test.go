@@ -1,6 +1,7 @@
 package sqlite_test
 
 import (
+	"errors"
 	"math/bits"
 	"path/filepath"
 	"reflect"
@@ -113,6 +114,30 @@ func check(t *testing.T, desc string, expect, got any) {
 	}
 }
 
+func syncDB(t *testing.T, db *sqlite.Store, cm *chain.Manager) {
+	index, err := db.Tip()
+	if err != nil && !errors.Is(err, explorer.ErrNoTip) {
+		t.Fatal(err)
+	}
+
+	for index != cm.Tip() {
+		crus, caus, err := cm.UpdatesSince(index, 1000)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if err := db.ProcessChainUpdates(crus, caus); err != nil {
+			t.Fatal("failed to process updates:", err)
+		}
+		if len(crus) > 0 {
+			index = crus[len(crus)-1].State.Index
+		}
+		if len(caus) > 0 {
+			index = caus[len(caus)-1].State.Index
+		}
+	}
+}
+
 func TestBalance(t *testing.T) {
 	log := zaptest.NewLogger(t)
 	dir := t.TempDir()
@@ -134,13 +159,8 @@ func TestBalance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
 
 	cm := chain.NewManager(store, genesisState)
-
-	if err := cm.AddSubscriber(db, types.ChainIndex{}); err != nil {
-		t.Fatal(err)
-	}
 
 	// checkBalance checks that an address has the balances we expect
 	checkBalance := func(addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
@@ -170,6 +190,7 @@ func TestBalance(t *testing.T) {
 	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, addr1)}); err != nil {
 		t.Fatal(err)
 	}
+	syncDB(t, db, cm)
 
 	// Check that addr1 has the miner payout output
 	utxos, err := db.UnspentSiacoinOutputs(addr1, 100, 0)
@@ -186,6 +207,7 @@ func TestBalance(t *testing.T) {
 		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
 			t.Fatal(err)
 		}
+		syncDB(t, db, cm)
 	}
 
 	checkBalance(addr1, expectedPayout, types.ZeroCurrency, 0)
@@ -225,6 +247,7 @@ func TestBalance(t *testing.T) {
 	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{parentTxn, txn}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
+	syncDB(t, db, cm)
 
 	checkBalance(addr2, utxos[0].SiacoinOutput.Value.Sub(types.Siacoins(100)), types.ZeroCurrency, 0)
 	checkBalance(addr3, types.Siacoins(100), types.ZeroCurrency, 0)
@@ -262,13 +285,8 @@ func TestSendTransactions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
 
 	cm := chain.NewManager(store, genesisState)
-
-	if err := cm.AddSubscriber(db, types.ChainIndex{}); err != nil {
-		t.Fatal(err)
-	}
 
 	// checkBalance checks that an address has the balances we expect
 	checkBalance := func(addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
@@ -326,12 +344,14 @@ func TestSendTransactions(t *testing.T) {
 	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, addr1)}); err != nil {
 		t.Fatal(err)
 	}
+	syncDB(t, db, cm)
 
 	// Mine until the payout matures
 	for i := cm.Tip().Height; i < maturityHeight; i++ {
 		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
 			t.Fatal(err)
 		}
+		syncDB(t, db, cm)
 	}
 
 	checkBalance(addr1, expectedPayout, types.ZeroCurrency, giftSF)
@@ -391,6 +411,7 @@ func TestSendTransactions(t *testing.T) {
 		if err := cm.AddBlocks([]types.Block{b}); err != nil {
 			t.Fatal(err)
 		}
+		syncDB(t, db, cm)
 
 		checkBalance(addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
 		checkBalance(addr2, types.Siacoins(1).Mul64(uint64(i+1)), types.ZeroCurrency, 1*uint64(i+1))
@@ -487,19 +508,15 @@ func TestTip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
 
 	cm := chain.NewManager(store, genesisState)
-
-	if err := cm.AddSubscriber(db, types.ChainIndex{}); err != nil {
-		t.Fatal(err)
-	}
 
 	const n = 100
 	for i := cm.Tip().Height; i < n; i++ {
 		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
 			t.Fatal(err)
 		}
+		syncDB(t, db, cm)
 
 		tip, err := db.Tip()
 		if err != nil {
@@ -601,12 +618,8 @@ func TestFileContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
 
 	cm := chain.NewManager(store, genesisState)
-	if err := cm.AddSubscriber(db, types.ChainIndex{}); err != nil {
-		t.Fatal(err)
-	}
 
 	scOutputID := genesisBlock.Transactions[0].SiacoinOutputID(0)
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
@@ -675,6 +688,7 @@ func TestFileContract(t *testing.T) {
 	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
+	syncDB(t, db, cm)
 
 	{
 		dbFCs, err := db.Contracts([]types.FileContractID{fcID})
@@ -715,6 +729,7 @@ func TestFileContract(t *testing.T) {
 	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{reviseTxn}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
+	syncDB(t, db, cm)
 
 	// Explorer.Contracts should return latest revision
 	{
@@ -745,6 +760,7 @@ func TestFileContract(t *testing.T) {
 		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
 			t.Fatal(err)
 		}
+		syncDB(t, db, cm)
 	}
 
 	{
