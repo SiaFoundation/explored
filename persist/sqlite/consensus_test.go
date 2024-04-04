@@ -772,3 +772,80 @@ func TestFileContract(t *testing.T) {
 		checkFC(true, false, fc, dbFCs[0])
 	}
 }
+
+func TestRevertTip(t *testing.T) {
+	log := zaptest.NewLogger(t)
+	dir := t.TempDir()
+	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bdb.Close()
+
+	network, genesisBlock := testV1Network(types.VoidAddress, types.ZeroCurrency, 0)
+
+	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cm := chain.NewManager(store, genesisState)
+
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
+	const n = 100
+	for i := cm.Tip().Height; i < n; i++ {
+		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, addr1)}); err != nil {
+			t.Fatal(err)
+		}
+		syncDB(t, db, cm)
+
+		tip, err := db.Tip()
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "tip", cm.Tip(), tip)
+	}
+
+	{
+		// mine to trigger a reorg
+		var blocks []types.Block
+		state := genesisState
+		for i := uint64(0); i < n+5; i++ {
+			blocks = append(blocks, mineBlock(state, nil, addr2))
+			state.Index.ID = blocks[len(blocks)-1].ID()
+			state.Index.Height++
+		}
+		if err := cm.AddBlocks(blocks); err != nil {
+			t.Fatal(err)
+		}
+		syncDB(t, db, cm)
+		t.Log(cm.Tip())
+
+		tip, err := db.Tip()
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "tip", cm.Tip(), tip)
+	}
+
+	for i := 0; i < n; i++ {
+		best, err := db.BestTip(uint64(i))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cmBest, ok := cm.BestIndex(uint64(i)); !ok || cmBest != best {
+			t.Fatal("best tip mismatch")
+		}
+	}
+}
