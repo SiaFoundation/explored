@@ -830,7 +830,6 @@ func TestRevertTip(t *testing.T) {
 			t.Fatal(err)
 		}
 		syncDB(t, db, cm)
-		t.Log(cm.Tip())
 
 		tip, err := db.Tip()
 		if err != nil {
@@ -848,4 +847,155 @@ func TestRevertTip(t *testing.T) {
 			t.Fatal("best tip mismatch")
 		}
 	}
+}
+
+func TestRevertBalance(t *testing.T) {
+	log := zaptest.NewLogger(t)
+	dir := t.TempDir()
+	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bdb.Close()
+
+	network, genesisBlock := testV1Network(types.VoidAddress, types.ZeroCurrency, 0)
+
+	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cm := chain.NewManager(store, genesisState)
+
+	// checkBalance checks that an address has the balances we expect
+	checkBalance := func(addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
+		sc, immatureSC, sf, err := db.Balance(addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "siacoins", expectSC, sc)
+		check(t, "immature siacoins", expectImmatureSC, immatureSC)
+		check(t, "siafunds", expectSF, sf)
+	}
+
+	// Generate three addresses: addr1, addr2, addr3
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
+	pk3 := types.GeneratePrivateKey()
+	addr3 := types.StandardUnlockHash(pk3.PublicKey())
+
+	expectedPayout := cm.TipState().BlockReward()
+	maturityHeight := cm.TipState().MaturityHeight()
+
+	// Mine a block sending the payout to addr1
+	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, addr1)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	// Check that addr1 has the miner payout output
+	utxos, err := db.UnspentSiacoinOutputs(addr1, 100, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(t, "utxos", 1, len(utxos))
+	check(t, "value", expectedPayout, utxos[0].SiacoinOutput.Value)
+	check(t, "source", explorer.SourceMinerPayout, utxos[0].Source)
+
+	{
+		// Mine to trigger a reorg
+		// Send payout to addr2 instead of addr1 for these blocks
+		var blocks []types.Block
+		state := genesisState
+		for i := uint64(0); i < 2; i++ {
+			blocks = append(blocks, mineBlock(state, nil, addr2))
+			state.Index.ID = blocks[len(blocks)-1].ID()
+			state.Index.Height++
+		}
+		if err := cm.AddBlocks(blocks); err != nil {
+			t.Fatal(err)
+		}
+		syncDB(t, db, cm)
+	}
+
+	// Mine until the payout matures
+	for i := cm.Tip().Height; i < maturityHeight; i++ {
+		checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+		checkBalance(addr2, types.ZeroCurrency, expectedPayout.Mul64(2), 0)
+		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
+			t.Fatal(err)
+		}
+		syncDB(t, db, cm)
+	}
+	checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+	checkBalance(addr2, expectedPayout.Mul64(1), expectedPayout.Mul64(1), 0)
+
+	utxos1, err := db.UnspentSiacoinOutputs(addr1, 100, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(t, "addr1 utxos", 0, len(utxos1))
+
+	utxos2, err := db.UnspentSiacoinOutputs(addr2, 100, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(t, "addr2 utxos", 2, len(utxos2))
+	for i := 0; i < len(utxos2); i++ {
+		check(t, "value", expectedPayout, utxos2[i].SiacoinOutput.Value)
+		check(t, "source", explorer.SourceMinerPayout, utxos2[i].Source)
+	}
+
+	// Send all of the payout except 100 SC to addr3
+	hundredSC := types.Siacoins(100)
+	unlockConditions := types.StandardUnlockConditions(pk2.PublicKey())
+	parentTxn := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{
+			{
+				ParentID:         types.SiacoinOutputID(utxos2[0].ID),
+				UnlockConditions: unlockConditions,
+			},
+		},
+		SiacoinOutputs: []types.SiacoinOutput{
+			{Address: addr2, Value: hundredSC},
+			{Address: addr3, Value: utxos2[0].SiacoinOutput.Value.Sub(hundredSC)},
+		},
+	}
+	signTxn(cm.TipState(), pk2, &parentTxn)
+
+	// In the same block, have addr2 send the 100 SC it still has left to
+	// addr1
+	outputID := parentTxn.SiacoinOutputID(0)
+	txn := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{
+			{
+				ParentID:         outputID,
+				UnlockConditions: unlockConditions,
+			},
+		},
+		SiacoinOutputs: []types.SiacoinOutput{
+			{Address: addr1, Value: hundredSC},
+		},
+	}
+	signTxn(cm.TipState(), pk2, &txn)
+
+	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{parentTxn, txn}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	checkBalance(addr1, hundredSC, types.ZeroCurrency, 0)
+	// second block added in reorg has now matured
+	checkBalance(addr2, utxos2[1].SiacoinOutput.Value, types.ZeroCurrency, 0)
+	checkBalance(addr3, utxos2[0].SiacoinOutput.Value.Sub(hundredSC), types.ZeroCurrency, 0)
 }

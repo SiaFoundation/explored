@@ -267,6 +267,11 @@ type balance struct {
 }
 
 func (s *Store) updateBalances(dbTxn txn, update consensusUpdate, height uint64) error {
+	_, isRevert := update.(chain.RevertUpdate)
+	if isRevert {
+		height++
+	}
+
 	addresses := make(map[types.Address]balance)
 	update.ForEachSiacoinElement(func(sce types.SiacoinElement, spent bool) {
 		addresses[sce.SiacoinOutput.Address] = balance{}
@@ -300,6 +305,7 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate, height uint64)
 	// log.Println("New block")
 	update.ForEachSiacoinElement(func(sce types.SiacoinElement, spent bool) {
 		bal := addresses[sce.SiacoinOutput.Address]
+		// log.Printf("%v (spent: %v): %s siacoins, %s immature siacoins, %d siafunds", sce.SiacoinOutput.Address, spent, bal.sc, bal.immatureSC, bal.sf)
 		if sce.MaturityHeight < height {
 			if spent {
 				// If within the same block, an address A receives SC in one
@@ -322,10 +328,13 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate, height uint64)
 				bal.sc = bal.sc.Add(sce.SiacoinOutput.Value)
 			}
 		} else {
-			if !spent {
+			if isRevert {
+				bal.immatureSC = bal.immatureSC.Sub(sce.SiacoinOutput.Value)
+			} else {
 				bal.immatureSC = bal.immatureSC.Add(sce.SiacoinOutput.Value)
 			}
 		}
+		// log.Printf("%v (spent: %v): %s siacoins, %s immature siacoins, %d siafunds", sce.SiacoinOutput.Address, spent, bal.sc, bal.immatureSC, bal.sf)
 		addresses[sce.SiacoinOutput.Address] = bal
 	})
 	update.ForEachSiafundElement(func(sfe types.SiafundElement, spent bool) {
@@ -413,13 +422,20 @@ func (s *Store) updateMaturedBalances(dbTxn txn, update consensusUpdate, height 
 	// If the update is an apply update then we add the amounts.
 	// If we are reverting then we subtract them.
 	for _, sco := range scos {
+		var underflow bool
 		bal := addresses[sco.Address]
 		if isRevert {
-			bal.sc = bal.sc.Sub(sco.Value)
+			bal.sc, underflow = bal.sc.SubWithUnderflow(sco.Value)
+			if underflow {
+				continue
+			}
 			bal.immatureSC = bal.immatureSC.Add(sco.Value)
 		} else {
 			bal.sc = bal.sc.Add(sco.Value)
-			bal.immatureSC = bal.immatureSC.Sub(sco.Value)
+			bal.immatureSC, underflow = bal.immatureSC.SubWithUnderflow(sco.Value)
+			if underflow {
+				continue
+			}
 		}
 		addresses[sco.Address] = bal
 	}
@@ -470,7 +486,7 @@ func (s *Store) addSiacoinElements(dbTxn txn, bid types.BlockID, update consensu
 
 	stmt, err := dbTxn.Prepare(`INSERT INTO siacoin_elements(output_id, block_id, leaf_index, merkle_proof, spent, source, maturity_height, address, value)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT
+			ON CONFLICT (output_id)
 			DO UPDATE SET spent = ?`)
 	if err != nil {
 		return nil, fmt.Errorf("addSiacoinElements: failed to prepare siacoin_elements statement: %w", err)
@@ -483,6 +499,7 @@ func (s *Store) addSiacoinElements(dbTxn txn, bid types.BlockID, update consensu
 		if updateErr != nil {
 			return
 		}
+		// log.Printf("Adding siacoin element: %+v", sce)
 
 		result, err := stmt.Exec(dbEncode(sce.StateElement.ID), dbEncode(bid), dbEncode(sce.StateElement.LeafIndex), dbEncode(sce.StateElement.MerkleProof), spent, int(sources[types.SiacoinOutputID(sce.StateElement.ID)]), sce.MaturityHeight, dbEncode(sce.SiacoinOutput.Address), dbEncode(sce.SiacoinOutput.Value), spent)
 		if err != nil {
@@ -599,10 +616,10 @@ func (s *Store) ProcessChainUpdates(crus []chain.RevertUpdate, caus []chain.Appl
 		for _, cru := range crus {
 			if err := s.deleteBlock(dbTxn, cru.Block.ID()); err != nil {
 				return fmt.Errorf("revertUpdate: failed to delete block: %w", err)
-			} else if _, err := s.addSiacoinElements(dbTxn, cru.Block.ID(), cru); err != nil {
-				return fmt.Errorf("revertUpdate: failed to update siacoin output state: %w", err)
-			} else if _, err := s.addSiafundElements(dbTxn, cru.Block.ID(), cru); err != nil {
-				return fmt.Errorf("revertUpdate: failed to update siafund output state: %w", err)
+				// } else if _, err := s.addSiacoinElements(dbTxn, cru.Block.ID(), cru); err != nil {
+				// return fmt.Errorf("revertUpdate: failed to update siacoin output state: %w", err)
+				// } else if _, err := s.addSiafundElements(dbTxn, cru.Block.ID(), cru); err != nil {
+				// return fmt.Errorf("revertUpdate: failed to update siafund output state: %w", err)
 			} else if err := s.updateBalances(dbTxn, cru, cru.State.Index.Height); err != nil {
 				return fmt.Errorf("revertUpdate: failed to update balances: %w", err)
 			} else if err := s.updateMaturedBalances(dbTxn, cru, cru.State.Index.Height); err != nil {
@@ -615,6 +632,10 @@ func (s *Store) ProcessChainUpdates(crus []chain.RevertUpdate, caus []chain.Appl
 		}
 
 		for _, update := range caus {
+			if err := s.addBlock(dbTxn, update.Block, update.State.Index.Height); err != nil {
+				return fmt.Errorf("applyUpdates: failed to add block: %w", err)
+			}
+
 			scDBIds, err := s.addSiacoinElements(dbTxn, update.Block.ID(), update)
 			if err != nil {
 				return fmt.Errorf("applyUpdates: failed to add siacoin outputs: %w", err)
@@ -634,9 +655,7 @@ func (s *Store) ProcessChainUpdates(crus []chain.RevertUpdate, caus []chain.Appl
 				return fmt.Errorf("applyUpdates: failed to add file contracts: %w", err)
 			}
 
-			if err := s.addBlock(dbTxn, update.Block, update.State.Index.Height); err != nil {
-				return fmt.Errorf("applyUpdates: failed to add block: %w", err)
-			} else if err := s.addMinerPayouts(dbTxn, update.Block.ID(), update.State.Index.Height, update.Block.MinerPayouts, scDBIds); err != nil {
+			if err := s.addMinerPayouts(dbTxn, update.Block.ID(), update.State.Index.Height, update.Block.MinerPayouts, scDBIds); err != nil {
 				return fmt.Errorf("applyUpdates: failed to add miner payouts: %w", err)
 			} else if err := s.addTransactions(dbTxn, update.Block.ID(), update.Block.Transactions, scDBIds, sfDBIds, fcDBIds); err != nil {
 				return fmt.Errorf("applyUpdates: failed to add transactions: addTransactions: %w", err)

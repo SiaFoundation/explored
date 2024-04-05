@@ -25,8 +25,8 @@ CREATE TABLE siacoin_elements (
         block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
 
         output_id BLOB UNIQUE NOT NULL,
-        leaf_index BLOB UNIQUE NOT NULL,
-        merkle_proof BLOB UNIQUE NOT NULL,
+        leaf_index BLOB NOT NULL,
+        merkle_proof BLOB NOT NULL,
 
         spent INTEGER NOT NULL,
         source INTEGER NOT NULL,
@@ -43,8 +43,8 @@ CREATE TABLE siafund_elements (
         block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
 
         output_id BLOB UNIQUE NOT NULL,
-        leaf_index BLOB UNIQUE NOT NULL,
-        merkle_proof BLOB UNIQUE NOT NULL,
+        leaf_index BLOB NOT NULL,
+        merkle_proof BLOB NOT NULL,
 
         spent INTEGER NOT NULL,
         claim_start BLOB NOT NULL,
