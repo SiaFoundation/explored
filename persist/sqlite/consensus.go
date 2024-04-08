@@ -304,10 +304,11 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate, height uint64)
 
 	// log.Println("New block")
 	update.ForEachSiacoinElement(func(sce types.SiacoinElement, spent bool) {
+		var underflow bool
 		bal := addresses[sce.SiacoinOutput.Address]
-		// log.Printf("%v (spent: %v): %s siacoins, %s immature siacoins, %d siafunds", sce.SiacoinOutput.Address, spent, bal.sc, bal.immatureSC, bal.sf)
+		// log.Printf("\n\n%v (revert: %v, spent: %v): %s siacoins, %s immature siacoins, %d siafunds (current height: %d, maturity height: %d): change %v", sce.SiacoinOutput.Address, isRevert, spent, bal.sc, bal.immatureSC, bal.sf, height, sce.MaturityHeight, sce.SiacoinOutput.Value)
 		if sce.MaturityHeight < height {
-			if spent {
+			if spent || isRevert {
 				// If within the same block, an address A receives SC in one
 				// transaction and sends it to another address in a later
 				// transaction, the chain update will not contain the unspent
@@ -318,10 +319,9 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate, height uint64)
 				// Example: https://siascan.com/block/506
 
 				// log.Println("Spend:", sce.SiacoinOutput.Address, sce.SiacoinOutput.Value)
-				underflow := false
 				bal.sc, underflow = bal.sc.SubWithUnderflow(sce.SiacoinOutput.Value)
 				if underflow {
-					return
+					bal.sc = types.ZeroCurrency
 				}
 			} else {
 				// log.Println("Gain:", sce.SiacoinOutput.Address, sce.SiacoinOutput.Value)
@@ -329,12 +329,15 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate, height uint64)
 			}
 		} else {
 			if isRevert {
-				bal.immatureSC = bal.immatureSC.Sub(sce.SiacoinOutput.Value)
+				bal.immatureSC, underflow = bal.immatureSC.SubWithUnderflow(sce.SiacoinOutput.Value)
+				if underflow {
+					bal.sc = types.ZeroCurrency
+				}
 			} else {
 				bal.immatureSC = bal.immatureSC.Add(sce.SiacoinOutput.Value)
 			}
 		}
-		// log.Printf("%v (spent: %v): %s siacoins, %s immature siacoins, %d siafunds", sce.SiacoinOutput.Address, spent, bal.sc, bal.immatureSC, bal.sf)
+		// log.Printf("%v (revert: %v, spent: %v): %s siacoins, %s immature siacoins, %d siafunds (current height: %d, maturity height: %d): change %v", sce.SiacoinOutput.Address, isRevert, spent, bal.sc, bal.immatureSC, bal.sf, height, sce.MaturityHeight, sce.SiacoinOutput.Value)
 		addresses[sce.SiacoinOutput.Address] = bal
 	})
 	update.ForEachSiafundElement(func(sfe types.SiafundElement, spent bool) {
@@ -342,9 +345,10 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate, height uint64)
 		if spent {
 			underflow := (bal.sf - sfe.SiafundOutput.Value) > bal.sf
 			if underflow {
-				return
+				bal.sf = 0
+			} else {
+				bal.sf -= sfe.SiafundOutput.Value
 			}
-			bal.sf -= sfe.SiafundOutput.Value
 		} else {
 			bal.sf += sfe.SiafundOutput.Value
 		}
@@ -427,14 +431,14 @@ func (s *Store) updateMaturedBalances(dbTxn txn, update consensusUpdate, height 
 		if isRevert {
 			bal.sc, underflow = bal.sc.SubWithUnderflow(sco.Value)
 			if underflow {
-				continue
+				bal.sc = types.ZeroCurrency
 			}
 			bal.immatureSC = bal.immatureSC.Add(sco.Value)
 		} else {
 			bal.sc = bal.sc.Add(sco.Value)
 			bal.immatureSC, underflow = bal.immatureSC.SubWithUnderflow(sco.Value)
 			if underflow {
-				continue
+				bal.immatureSC = types.ZeroCurrency
 			}
 		}
 		addresses[sco.Address] = bal

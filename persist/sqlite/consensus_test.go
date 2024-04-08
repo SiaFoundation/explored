@@ -894,6 +894,10 @@ func TestRevertBalance(t *testing.T) {
 	pk3 := types.GeneratePrivateKey()
 	addr3 := types.StandardUnlockHash(pk3.PublicKey())
 
+	// t.Log("addr1:", addr1)
+	// t.Log("addr2:", addr2)
+	// t.Log("addr3:", addr3)
+
 	expectedPayout := cm.TipState().BlockReward()
 	maturityHeight := cm.TipState().MaturityHeight()
 
@@ -998,4 +1002,26 @@ func TestRevertBalance(t *testing.T) {
 	// second block added in reorg has now matured
 	checkBalance(addr2, utxos2[1].SiacoinOutput.Value, types.ZeroCurrency, 0)
 	checkBalance(addr3, utxos2[0].SiacoinOutput.Value.Sub(hundredSC), types.ZeroCurrency, 0)
+
+	t.Log(cm.Tip())
+	{
+		// Reorg everything from before
+		// Send payout to void instead of addr2 for these blocks
+		var blocks []types.Block
+		state := genesisState
+		for i := uint64(0); i < maturityHeight+10; i++ {
+			blocks = append(blocks, mineBlock(state, nil, types.VoidAddress))
+			state.Index.ID = blocks[len(blocks)-1].ID()
+			state.Index.Height++
+		}
+		if err := cm.AddBlocks(blocks); err != nil {
+			t.Fatal(err)
+		}
+		syncDB(t, db, cm)
+	}
+	t.Log(cm.Tip())
+
+	checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+	checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
+	checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
 }
