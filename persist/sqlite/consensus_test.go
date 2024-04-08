@@ -1003,7 +1003,6 @@ func TestRevertBalance(t *testing.T) {
 	checkBalance(addr2, utxos2[1].SiacoinOutput.Value, types.ZeroCurrency, 0)
 	checkBalance(addr3, utxos2[0].SiacoinOutput.Value.Sub(hundredSC), types.ZeroCurrency, 0)
 
-	t.Log(cm.Tip())
 	{
 		// Reorg everything from before
 		// Send payout to void instead of addr2 for these blocks
@@ -1019,9 +1018,26 @@ func TestRevertBalance(t *testing.T) {
 		}
 		syncDB(t, db, cm)
 	}
-	t.Log(cm.Tip())
 
 	checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
 	checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
 	checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
+
+	utxos1, err = db.UnspentSiacoinOutputs(addr1, 100, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(t, "addr1 utxos", 0, len(utxos1))
+
+	utxos2, err = db.UnspentSiacoinOutputs(addr2, 100, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(t, "addr2 utxos", 0, len(utxos2))
+
+	utxos3, err := db.UnspentSiacoinOutputs(addr2, 100, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(t, "addr3 utxos", 0, len(utxos3))
 }
