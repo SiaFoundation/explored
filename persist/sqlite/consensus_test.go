@@ -1099,10 +1099,9 @@ func TestRevertSendTransactions(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_ = sf
 		check(t, "siacoins", expectSC, sc)
 		check(t, "immature siacoins", expectImmatureSC, immatureSC)
-		// check(t, "siafunds", expectSF, sf)
+		check(t, "siafunds", expectSF, sf)
 	}
 
 	checkTransaction := func(expectTxn types.Transaction, gotTxn explorer.Transaction) {
@@ -1318,10 +1317,10 @@ func TestRevertSendTransactions(t *testing.T) {
 		}
 		syncDB(t, db, cm)
 
-		// addr1SCs := expectedPayout.Sub(types.Siacoins(1 + 2).Mul64(uint64(n - 3)))
-		// addr1SFs := giftSF - (1+2)*uint64(n-3)
+		addr1SCs := expectedPayout.Sub(types.Siacoins(1 + 2).Mul64(uint64(n - 3)))
+		addr1SFs := giftSF - (1+2)*uint64(n-3)
 
-		// checkBalance(addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
+		checkBalance(addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
 		checkBalance(addr2, types.Siacoins(1).Mul64(uint64(n-3)), types.ZeroCurrency, 1*uint64(n-3))
 		checkBalance(addr3, types.Siacoins(2).Mul64(uint64(n-3)), types.ZeroCurrency, 2*uint64(n-3))
 	}

@@ -343,7 +343,7 @@ func (s *Store) updateBalances(dbTxn txn, update consensusUpdate, height uint64)
 	})
 	update.ForEachSiafundElement(func(sfe types.SiafundElement, spent bool) {
 		bal := addresses[sfe.SiafundOutput.Address]
-		if spent {
+		if spent || isRevert {
 			underflow := (bal.sf - sfe.SiafundOutput.Value) > bal.sf
 			if underflow {
 				bal.sf = 0
