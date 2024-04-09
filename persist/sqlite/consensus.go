@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
@@ -618,6 +619,7 @@ func (s *Store) deleteBlock(dbTxn txn, bid types.BlockID) error {
 func (s *Store) ProcessChainUpdates(crus []chain.RevertUpdate, caus []chain.ApplyUpdate) error {
 	return s.transaction(func(dbTxn txn) error {
 		for _, cru := range crus {
+			log.Println("REVERT!")
 			if err := s.deleteBlock(dbTxn, cru.Block.ID()); err != nil {
 				return fmt.Errorf("revertUpdate: failed to delete block: %w", err)
 				// } else if _, err := s.addSiacoinElements(dbTxn, cru.Block.ID(), cru); err != nil {

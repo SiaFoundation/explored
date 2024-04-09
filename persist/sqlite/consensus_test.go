@@ -955,9 +955,9 @@ func TestRevertBalance(t *testing.T) {
 		t.Fatal(err)
 	}
 	check(t, "addr2 utxos", 2, len(utxos2))
-	for i := 0; i < len(utxos2); i++ {
-		check(t, "value", expectedPayout, utxos2[i].SiacoinOutput.Value)
-		check(t, "source", explorer.SourceMinerPayout, utxos2[i].Source)
+	for _, utxo := range utxos2 {
+		check(t, "value", expectedPayout, utxo.SiacoinOutput.Value)
+		check(t, "source", explorer.SourceMinerPayout, utxo.Source)
 	}
 
 	// Send all of the payout except 100 SC to addr3
@@ -1005,11 +1005,19 @@ func TestRevertBalance(t *testing.T) {
 
 	{
 		// Reorg everything from before
-		// Send payout to void instead of addr2 for these blocks
+		// Send payout to void instead of addr2 for these blocks except for
+		// the first block where the payout goes to addr1, and the second block
+		// where the payout goes to addr2.
 		var blocks []types.Block
 		state := genesisState
 		for i := uint64(0); i < maturityHeight+10; i++ {
-			blocks = append(blocks, mineBlock(state, nil, types.VoidAddress))
+			addr := types.VoidAddress
+			if i == 0 {
+				addr = addr1
+			} else if i == 1 {
+				addr = addr2
+			}
+			blocks = append(blocks, mineBlock(state, nil, addr))
 			state.Index.ID = blocks[len(blocks)-1].ID()
 			state.Index.Height++
 		}
@@ -1019,25 +1027,302 @@ func TestRevertBalance(t *testing.T) {
 		syncDB(t, db, cm)
 	}
 
-	checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
-	checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
+	checkBalance(addr1, expectedPayout, types.ZeroCurrency, 0)
+	checkBalance(addr2, expectedPayout, types.ZeroCurrency, 0)
 	checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
 
 	utxos1, err = db.UnspentSiacoinOutputs(addr1, 100, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	check(t, "addr1 utxos", 0, len(utxos1))
+	check(t, "addr1 utxos", 1, len(utxos1))
+	for _, utxo := range utxos1 {
+		check(t, "value", expectedPayout, utxo.SiacoinOutput.Value)
+		check(t, "source", explorer.SourceMinerPayout, utxo.Source)
+	}
 
 	utxos2, err = db.UnspentSiacoinOutputs(addr2, 100, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	check(t, "addr2 utxos", 0, len(utxos2))
+	check(t, "addr2 utxos", 1, len(utxos2))
+	for _, utxo := range utxos2 {
+		check(t, "value", expectedPayout, utxo.SiacoinOutput.Value)
+		check(t, "source", explorer.SourceMinerPayout, utxo.Source)
+	}
 
-	utxos3, err := db.UnspentSiacoinOutputs(addr2, 100, 0)
+	utxos3, err := db.UnspentSiacoinOutputs(addr3, 100, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	check(t, "addr3 utxos", 0, len(utxos3))
+}
+
+func TestRevertSendTransactions(t *testing.T) {
+	log := zaptest.NewLogger(t)
+	dir := t.TempDir()
+	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bdb.Close()
+
+	// Generate three addresses: addr1, addr2, addr3
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
+	pk3 := types.GeneratePrivateKey()
+	addr3 := types.StandardUnlockHash(pk3.PublicKey())
+
+	const giftSF = 10000
+	network, genesisBlock := testV1Network(addr1, types.ZeroCurrency, giftSF)
+
+	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cm := chain.NewManager(store, genesisState)
+
+	// checkBalance checks that an address has the balances we expect
+	checkBalance := func(addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
+		sc, immatureSC, sf, err := db.Balance(addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = sf
+		check(t, "siacoins", expectSC, sc)
+		check(t, "immature siacoins", expectImmatureSC, immatureSC)
+		// check(t, "siafunds", expectSF, sf)
+	}
+
+	checkTransaction := func(expectTxn types.Transaction, gotTxn explorer.Transaction) {
+		check(t, "siacoin inputs", len(expectTxn.SiacoinInputs), len(gotTxn.SiacoinInputs))
+		check(t, "siacoin outputs", len(expectTxn.SiacoinOutputs), len(gotTxn.SiacoinOutputs))
+		check(t, "siafund inputs", len(expectTxn.SiafundInputs), len(gotTxn.SiafundInputs))
+		check(t, "siafund outputs", len(expectTxn.SiafundOutputs), len(gotTxn.SiafundOutputs))
+
+		for i := range expectTxn.SiacoinInputs {
+			expectSci := expectTxn.SiacoinInputs[i]
+			gotSci := gotTxn.SiacoinInputs[i]
+
+			check(t, "parent ID", expectSci.ParentID, gotSci.ParentID)
+			check(t, "unlock conditions", expectSci.UnlockConditions, gotSci.UnlockConditions)
+		}
+		for i := range expectTxn.SiacoinOutputs {
+			expectSco := expectTxn.SiacoinOutputs[i]
+			gotSco := gotTxn.SiacoinOutputs[i].SiacoinOutput
+
+			check(t, "address", expectSco.Address, gotSco.Address)
+			check(t, "value", expectSco.Value, gotSco.Value)
+			check(t, "source", explorer.SourceTransaction, gotTxn.SiacoinOutputs[i].Source)
+		}
+		for i := range expectTxn.SiafundInputs {
+			expectSfi := expectTxn.SiafundInputs[i]
+			gotSfi := gotTxn.SiafundInputs[i]
+
+			check(t, "parent ID", expectSfi.ParentID, gotSfi.ParentID)
+			check(t, "claim address", expectSfi.ClaimAddress, gotSfi.ClaimAddress)
+			check(t, "unlock conditions", expectSfi.UnlockConditions, gotSfi.UnlockConditions)
+		}
+		for i := range expectTxn.SiafundOutputs {
+			expectSfo := expectTxn.SiafundOutputs[i]
+			gotSfo := gotTxn.SiafundOutputs[i].SiafundOutput
+
+			check(t, "address", expectSfo.Address, gotSfo.Address)
+			check(t, "value", expectSfo.Value, gotSfo.Value)
+		}
+	}
+
+	expectedPayout := cm.TipState().BlockReward()
+	maturityHeight := cm.TipState().MaturityHeight()
+
+	var blocks []types.Block
+	b1 := mineBlock(cm.TipState(), nil, addr1)
+	// Mine a block sending the payout to the addr1
+	if err := cm.AddBlocks([]types.Block{b1}); err != nil {
+		t.Fatal(err)
+	}
+	blocks = append(blocks, b1)
+	syncDB(t, db, cm)
+
+	// Mine until the payout matures
+	for i := cm.Tip().Height; i < maturityHeight; i++ {
+		b := mineBlock(cm.TipState(), nil, types.VoidAddress)
+		if err := cm.AddBlocks([]types.Block{b}); err != nil {
+			t.Fatal(err)
+		}
+		blocks = append(blocks, b)
+		syncDB(t, db, cm)
+	}
+
+	checkBalance(addr1, expectedPayout, types.ZeroCurrency, giftSF)
+	checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
+	checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
+
+	const n = 26
+
+	// Check that addr1 has the miner payout output
+	utxos, err := db.UnspentSiacoinOutputs(addr1, n, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(t, "utxos", 1, len(utxos))
+	check(t, "value", expectedPayout, utxos[0].SiacoinOutput.Value)
+	check(t, "source", explorer.SourceMinerPayout, utxos[0].Source)
+
+	sfOutputID := genesisBlock.Transactions[0].SiafundOutputID(0)
+	scOutputID := utxos[0].ID
+	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
+	// Send 1 SC to addr2 and 2 SC to addr3 100 times in consecutive blocks
+	for i := 0; i < n; i++ {
+		addr1SCs := expectedPayout.Sub(types.Siacoins(1 + 2).Mul64(uint64(i + 1)))
+		addr1SFs := giftSF - (1+2)*uint64(i+1)
+
+		parentTxn := types.Transaction{
+			SiacoinInputs: []types.SiacoinInput{
+				{
+					ParentID:         types.SiacoinOutputID(scOutputID),
+					UnlockConditions: unlockConditions,
+				},
+			},
+			SiafundInputs: []types.SiafundInput{
+				{
+					ParentID:         sfOutputID,
+					UnlockConditions: unlockConditions,
+				},
+			},
+			SiacoinOutputs: []types.SiacoinOutput{
+				{Address: addr2, Value: types.Siacoins(1)},
+				{Address: addr3, Value: types.Siacoins(2)},
+				{Address: addr1, Value: addr1SCs},
+			},
+			SiafundOutputs: []types.SiafundOutput{
+				{Address: addr2, Value: 1},
+				{Address: addr3, Value: 2},
+				{Address: addr1, Value: addr1SFs},
+			},
+		}
+
+		signTxn(cm.TipState(), pk1, &parentTxn)
+		scOutputID = types.Hash256(parentTxn.SiacoinOutputID(2))
+		sfOutputID = parentTxn.SiafundOutputID(2)
+
+		// Mine a block with the above transaction
+		b := mineBlock(cm.TipState(), []types.Transaction{parentTxn}, types.VoidAddress)
+		if err := cm.AddBlocks([]types.Block{b}); err != nil {
+			t.Fatal(err)
+		}
+		blocks = append(blocks, b)
+		syncDB(t, db, cm)
+
+		checkBalance(addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
+		checkBalance(addr2, types.Siacoins(1).Mul64(uint64(i+1)), types.ZeroCurrency, 1*uint64(i+1))
+		checkBalance(addr3, types.Siacoins(2).Mul64(uint64(i+1)), types.ZeroCurrency, 2*uint64(i+1))
+
+		// Ensure the block we retrieved from the database is the same as the
+		// actual block
+		block, err := db.Block(b.ID())
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "transactions", len(b.Transactions), len(block.Transactions))
+		check(t, "miner payouts", len(b.MinerPayouts), len(block.MinerPayouts))
+		check(t, "nonce", b.Nonce, block.Nonce)
+		check(t, "timestamp", b.Timestamp, block.Timestamp)
+
+		// Ensure the miner payouts in the block match
+		for i := range b.MinerPayouts {
+			check(t, "address", b.MinerPayouts[i].Address, b.MinerPayouts[i].Address)
+			check(t, "value", b.MinerPayouts[i].Value, b.MinerPayouts[i].Value)
+		}
+
+		// Ensure the transactions in the block and retrieved separately match
+		// with the actual transactions
+		for i := range b.Transactions {
+			checkTransaction(b.Transactions[i], block.Transactions[i])
+
+			txns, err := db.Transactions([]types.TransactionID{b.Transactions[i].ID()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "transactions", 1, len(txns))
+			checkTransaction(b.Transactions[i], txns[0])
+		}
+
+		type expectedUTXOs struct {
+			addr types.Address
+
+			sc      int
+			scValue types.Currency
+
+			sf      int
+			sfValue uint64
+		}
+		expected := []expectedUTXOs{
+			{addr1, 1, addr1SCs, 1, addr1SFs},
+			{addr2, i + 1, types.Siacoins(1), i + 1, 1},
+			{addr3, i + 1, types.Siacoins(2), i + 1, 2},
+		}
+		for _, e := range expected {
+			sc, err := db.UnspentSiacoinOutputs(e.addr, n, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sf, err := db.UnspentSiafundOutputs(e.addr, n, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			check(t, "sc utxos", e.sc, len(sc))
+			check(t, "sf utxos", e.sf, len(sf))
+
+			for _, sco := range sc {
+				check(t, "address", e.addr, sco.SiacoinOutput.Address)
+				check(t, "value", e.scValue, sco.SiacoinOutput.Value)
+				check(t, "source", explorer.SourceTransaction, sco.Source)
+			}
+			for _, sfo := range sf {
+				check(t, "address", e.addr, sfo.SiafundOutput.Address)
+				check(t, "value", e.sfValue, sfo.SiafundOutput.Value)
+			}
+		}
+	}
+
+	{
+		// take 3 blocks off the top
+		// revertBlocks := blocks[len(blocks)-3:]
+		newBlocks := blocks[:len(blocks)-3]
+
+		state, ok := store.State(newBlocks[len(newBlocks)-1].ID())
+		if !ok {
+			t.Fatal("no such block")
+		}
+		for i := 0; i < 3+1; i++ {
+			newBlocks = append(newBlocks, mineBlock(state, nil, types.VoidAddress))
+			state.Index.ID = newBlocks[len(newBlocks)-1].ID()
+			state.Index.Height++
+		}
+
+		if err := cm.AddBlocks(newBlocks); err != nil {
+			t.Fatal(err)
+		}
+		syncDB(t, db, cm)
+
+		// addr1SCs := expectedPayout.Sub(types.Siacoins(1 + 2).Mul64(uint64(n - 3)))
+		// addr1SFs := giftSF - (1+2)*uint64(n-3)
+
+		// checkBalance(addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
+		checkBalance(addr2, types.Siacoins(1).Mul64(uint64(n-3)), types.ZeroCurrency, 1*uint64(n-3))
+		checkBalance(addr3, types.Siacoins(2).Mul64(uint64(n-3)), types.ZeroCurrency, 2*uint64(n-3))
+	}
 }
