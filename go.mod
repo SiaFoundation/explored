@@ -5,7 +5,7 @@ go 1.21.6
 require (
 	github.com/mattn/go-sqlite3 v1.14.22
 	go.etcd.io/bbolt v1.3.9
-	go.sia.tech/core v0.2.2-0.20240325122830-e781eaa57d37
+	go.sia.tech/core v0.2.2
 	go.sia.tech/coreutils v0.0.4-0.20240327130436-3fc21abba2db
 	go.sia.tech/jape v0.11.1
 	go.uber.org/zap v1.27.0
