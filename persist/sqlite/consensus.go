@@ -329,7 +329,7 @@ func (s *Store) updateBalances(dbTxn txn, height uint64, spentSiacoinElements, n
 	}
 	for _, sfe := range spentSiafundElements {
 		bal := addresses[sfe.SiafundOutput.Address]
-		if sfe.SiafundOutput.Value > bal.sf {
+		if bal.sf < sfe.SiafundOutput.Value {
 			panic("sf underflow")
 		}
 		bal.sf -= sfe.SiafundOutput.Value
