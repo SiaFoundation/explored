@@ -253,6 +253,94 @@ func TestBalance(t *testing.T) {
 	checkBalance(addr3, types.Siacoins(100), types.ZeroCurrency, 0)
 }
 
+func TestSiafundBalance(t *testing.T) {
+	log := zaptest.NewLogger(t)
+	dir := t.TempDir()
+	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bdb.Close()
+
+	// Generate three addresses: addr1, addr2, addr3
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
+	pk3 := types.GeneratePrivateKey()
+	addr3 := types.StandardUnlockHash(pk3.PublicKey())
+
+	const giftSF = 10000
+	network, genesisBlock := testV1Network(addr1, types.ZeroCurrency, giftSF)
+
+	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cm := chain.NewManager(store, genesisState)
+
+	// checkBalance checks that an address has the balances we expect
+	checkBalance := func(addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
+		sc, immatureSC, sf, err := db.Balance(addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "siacoins", expectSC, sc)
+		check(t, "immature siacoins", expectImmatureSC, immatureSC)
+		check(t, "siafunds", expectSF, sf)
+	}
+
+	// Send all of the payout except 100 SF to addr2
+	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
+	parentTxn := types.Transaction{
+		SiafundInputs: []types.SiafundInput{
+			{
+				ParentID:         types.SiafundOutputID(genesisBlock.Transactions[0].SiafundOutputID(0)),
+				UnlockConditions: unlockConditions,
+			},
+		},
+		SiafundOutputs: []types.SiafundOutput{
+			{Address: addr1, Value: 100},
+			{Address: addr2, Value: genesisBlock.Transactions[0].SiafundOutputs[0].Value - 100},
+		},
+	}
+	signTxn(cm.TipState(), pk1, &parentTxn)
+
+	// In the same block, have addr1 send the 100 SF it still has left to
+	// addr3
+	outputID := parentTxn.SiafundOutputID(0)
+	txn := types.Transaction{
+		SiafundInputs: []types.SiafundInput{
+			{
+				ParentID:         outputID,
+				UnlockConditions: unlockConditions,
+			},
+		},
+		SiafundOutputs: []types.SiafundOutput{
+			{Address: addr3, Value: 100},
+		},
+	}
+	signTxn(cm.TipState(), pk1, &txn)
+
+	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{parentTxn, txn}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+	checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency, giftSF-100)
+	checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 100)
+}
+
 func TestSendTransactions(t *testing.T) {
 	log := zaptest.NewLogger(t)
 	dir := t.TempDir()

@@ -355,16 +355,11 @@ func (s *Store) updateBalances(dbTxn txn, height uint64, spentSiacoinElements, n
 	return nil
 }
 
-func (s *Store) updateMaturedBalances(dbTxn txn, update consensusUpdate, height uint64) error {
+func (s *Store) updateMaturedBalances(dbTxn txn, revert bool, height uint64) error {
 	// Prevent double counting - outputs with a maturity height of 0 are
 	// handled in updateBalances
 	if height == 0 {
 		return nil
-	}
-
-	_, isRevert := update.(chain.RevertUpdate)
-	if isRevert {
-		height++
 	}
 
 	rows, err := dbTxn.Query(`SELECT address, value
@@ -408,7 +403,7 @@ func (s *Store) updateMaturedBalances(dbTxn txn, update consensusUpdate, height 
 	// If we are reverting then we subtract them.
 	for _, sco := range scos {
 		bal := addresses[sco.Address]
-		if isRevert {
+		if revert {
 			bal.sc = bal.sc.Sub(sco.Value)
 			bal.immatureSC = bal.immatureSC.Add(sco.Value)
 		} else {
@@ -605,7 +600,7 @@ func (s *Store) deleteBlock(dbTxn txn, bid types.BlockID) error {
 func (s *Store) ProcessChainUpdates(crus []chain.RevertUpdate, caus []chain.ApplyUpdate) error {
 	return s.transaction(func(dbTxn txn) error {
 		for _, cru := range crus {
-			if err := s.updateMaturedBalances(dbTxn, cru, cru.State.Index.Height); err != nil {
+			if err := s.updateMaturedBalances(dbTxn, true, cru.State.Index.Height+1); err != nil {
 				return fmt.Errorf("revertUpdate: failed to update matured balances: %w", err)
 			}
 
@@ -662,15 +657,15 @@ func (s *Store) ProcessChainUpdates(crus []chain.RevertUpdate, caus []chain.Appl
 				dbTxn,
 				cru.Block.ID(),
 				cru,
-				append(spentSiacoinElements, ephemeralSiacoinElements...),
-				newSiacoinElements,
+				spentSiacoinElements,
+				append(newSiacoinElements, ephemeralSiacoinElements...),
 			); err != nil {
 				return fmt.Errorf("revertUpdate: failed to update siacoin output state: %w", err)
 			} else if _, err := s.addSiafundElements(
 				dbTxn,
 				cru.Block.ID(),
-				append(spentSiafundElements, ephemeralSiafundElements...),
-				newSiafundElements,
+				spentSiafundElements,
+				append(newSiafundElements, ephemeralSiafundElements...),
 			); err != nil {
 				return fmt.Errorf("revertUpdate: failed to update siafund output state: %w", err)
 			} else if err := s.updateBalances(dbTxn, cru.State.Index.Height+1, spentSiacoinElements, newSiacoinElements, spentSiafundElements, newSiafundElements); err != nil {
@@ -687,7 +682,7 @@ func (s *Store) ProcessChainUpdates(crus []chain.RevertUpdate, caus []chain.Appl
 		for _, cau := range caus {
 			if err := s.addBlock(dbTxn, cau.Block, cau.State.Index.Height); err != nil {
 				return fmt.Errorf("applyUpdates: failed to add block: %w", err)
-			} else if err := s.updateMaturedBalances(dbTxn, cau, cau.State.Index.Height); err != nil {
+			} else if err := s.updateMaturedBalances(dbTxn, false, cau.State.Index.Height); err != nil {
 				return fmt.Errorf("applyUpdates: failed to update matured balances: %w", err)
 			}
 
