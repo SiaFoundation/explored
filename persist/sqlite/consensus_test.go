@@ -1083,6 +1083,10 @@ func TestRevertSendTransactions(t *testing.T) {
 	pk3 := types.GeneratePrivateKey()
 	addr3 := types.StandardUnlockHash(pk3.PublicKey())
 
+	// t.Log("addr1:", addr1)
+	// t.Log("addr2:", addr2)
+	// t.Log("addr3:", addr3)
+
 	const giftSF = 10000
 	network, genesisBlock := testV1Network(addr1, types.ZeroCurrency, giftSF)
 
@@ -1323,5 +1327,68 @@ func TestRevertSendTransactions(t *testing.T) {
 		checkBalance(addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
 		checkBalance(addr2, types.Siacoins(1).Mul64(uint64(n-3)), types.ZeroCurrency, 1*uint64(n-3))
 		checkBalance(addr3, types.Siacoins(2).Mul64(uint64(n-3)), types.ZeroCurrency, 2*uint64(n-3))
+
+		scUtxos1, err := db.UnspentSiacoinOutputs(addr1, n, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr1 sc utxos", 1, len(scUtxos1))
+		for _, sce := range scUtxos1 {
+			check(t, "address", addr1, sce.SiacoinOutput.Address)
+			check(t, "value", addr1SCs, sce.SiacoinOutput.Value)
+			check(t, "source", explorer.SourceTransaction, sce.Source)
+		}
+
+		scUtxos2, err := db.UnspentSiacoinOutputs(addr2, n, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr2 sc utxos", n-3, len(scUtxos2))
+		for _, sce := range scUtxos2 {
+			check(t, "address", addr2, sce.SiacoinOutput.Address)
+			check(t, "value", types.Siacoins(1), sce.SiacoinOutput.Value)
+			check(t, "source", explorer.SourceTransaction, sce.Source)
+		}
+
+		scUtxos3, err := db.UnspentSiacoinOutputs(addr3, n, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr3 sc utxos", n-3, len(scUtxos3))
+		for _, sce := range scUtxos3 {
+			check(t, "address", addr3, sce.SiacoinOutput.Address)
+			check(t, "value", types.Siacoins(2), sce.SiacoinOutput.Value)
+			check(t, "source", explorer.SourceTransaction, sce.Source)
+		}
+
+		sfUtxos1, err := db.UnspentSiafundOutputs(addr1, n, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr1 sf utxos", 1, len(sfUtxos1))
+		for _, sfe := range sfUtxos1 {
+			check(t, "address", addr1, sfe.SiafundOutput.Address)
+			check(t, "value", addr1SFs, sfe.SiafundOutput.Value)
+		}
+
+		sfUtxos2, err := db.UnspentSiafundOutputs(addr2, n, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr2 sf utxos", n-3, len(sfUtxos2))
+		for _, sfe := range sfUtxos2 {
+			check(t, "address", addr2, sfe.SiafundOutput.Address)
+			check(t, "value", uint64(1), sfe.SiafundOutput.Value)
+		}
+
+		sfUtxos3, err := db.UnspentSiafundOutputs(addr3, n, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr3 sf utxos", n-3, len(sfUtxos3))
+		for _, sfe := range sfUtxos3 {
+			check(t, "address", addr3, sfe.SiafundOutput.Address)
+			check(t, "value", uint64(2), sfe.SiafundOutput.Value)
+		}
 	}
 }
