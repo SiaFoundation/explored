@@ -160,11 +160,7 @@ func newNode(addr, dir string, chainNetwork string, useUPNP bool, logger *zap.Lo
 		return nil, err
 	}
 
-	genesisIndex := types.ChainIndex{
-		ID:     genesisBlock.ID(),
-		Height: 0,
-	}
-	e, err := explorer.NewExplorer(cm, store, genesisIndex, logger.Named("explorer"))
+	e, err := explorer.NewExplorer(cm, store, logger.Named("explorer"))
 	if err != nil {
 		return nil, err
 	}

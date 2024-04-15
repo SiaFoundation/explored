@@ -72,12 +72,12 @@ func syncStore(store Store, cm ChainManager, index types.ChainIndex) error {
 }
 
 // NewExplorer returns a Sia explorer.
-func NewExplorer(cm ChainManager, store Store, genesisIndex types.ChainIndex, log *zap.Logger) (*Explorer, error) {
+func NewExplorer(cm ChainManager, store Store, log *zap.Logger) (*Explorer, error) {
 	e := &Explorer{s: store}
 
 	tip, err := store.Tip()
 	if errors.Is(err, ErrNoTip) {
-		tip = genesisIndex
+		tip = types.ChainIndex{}
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to get tip: %w", err)
 	}
@@ -91,7 +91,7 @@ func NewExplorer(cm ChainManager, store Store, genesisIndex types.ChainIndex, lo
 			e.mu.Lock()
 			lastTip, err := store.Tip()
 			if errors.Is(err, ErrNoTip) {
-				lastTip = genesisIndex
+				lastTip = types.ChainIndex{}
 			} else if err != nil {
 				log.Error("failed to get tip", zap.Error(err))
 			}
