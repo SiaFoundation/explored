@@ -128,6 +128,14 @@ CREATE TABLE block_transactions (
 
 CREATE INDEX block_transactions_block_id_index ON block_transactions(block_id);
 
+CREATE TABLE transaction_addresses (
+        transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
+        address BLOB NOT NULL,
+        UNIQUE(transaction_id, address)
+);
+
+CREATE INDEX transaction_addresses_transaction_id_index ON transaction_addresses(transaction_id);
+
 CREATE TABLE transaction_arbitrary_data (
         transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
         transaction_order INTEGER NOT NULL,

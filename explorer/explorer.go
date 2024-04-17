@@ -35,6 +35,7 @@ type Store interface {
 	Block(id types.BlockID) (Block, error)
 	BestTip(height uint64) (types.ChainIndex, error)
 	Transactions(ids []types.TransactionID) ([]Transaction, error)
+	AddressTransactions(addr types.Address, limit, offset uint64) (results []types.TransactionID, err error)
 	UnspentSiacoinOutputs(address types.Address, limit, offset uint64) ([]SiacoinOutput, error)
 	UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]SiafundOutput, error)
 	Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
@@ -134,6 +135,11 @@ func (e *Explorer) BestTip(height uint64) (types.ChainIndex, error) {
 // Transactions returns the transactions with the specified IDs.
 func (e *Explorer) Transactions(ids []types.TransactionID) ([]Transaction, error) {
 	return e.s.Transactions(ids)
+}
+
+// AddressTransactions returns the transactions involving the address.
+func (e *Explorer) AddressTransactions(addr types.Address, limit, offset uint64) (results []types.TransactionID, err error) {
+	return e.s.AddressTransactions(addr, limit, offset)
 }
 
 // UnspentSiacoinOutputs returns the unspent siacoin outputs owned by the

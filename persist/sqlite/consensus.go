@@ -36,6 +36,53 @@ func (s *Store) addMinerPayouts(dbTxn txn, bid types.BlockID, height uint64, sco
 	return nil
 }
 
+func (s *Store) addTransactionAddresses(dbTxn txn, id int64, txn types.Transaction) error {
+	m := make(map[types.Address]struct{})
+	for _, sci := range txn.SiacoinInputs {
+		m[sci.UnlockConditions.UnlockHash()] = struct{}{}
+	}
+	for _, sco := range txn.SiacoinOutputs {
+		m[sco.Address] = struct{}{}
+	}
+	for _, sfi := range txn.SiafundInputs {
+		m[sfi.UnlockConditions.UnlockHash()] = struct{}{}
+	}
+	for _, sfo := range txn.SiafundOutputs {
+		m[sfo.Address] = struct{}{}
+	}
+	for _, fc := range txn.FileContracts {
+		for _, vpo := range fc.ValidProofOutputs {
+			m[vpo.Address] = struct{}{}
+		}
+		for _, mpo := range fc.MissedProofOutputs {
+			m[mpo.Address] = struct{}{}
+		}
+		m[types.Address(fc.UnlockHash)] = struct{}{}
+	}
+	for _, fcr := range txn.FileContractRevisions {
+		for _, vpo := range fcr.FileContract.ValidProofOutputs {
+			m[vpo.Address] = struct{}{}
+		}
+		for _, mpo := range fcr.FileContract.MissedProofOutputs {
+			m[mpo.Address] = struct{}{}
+		}
+		m[fcr.UnlockConditions.UnlockHash()] = struct{}{}
+	}
+
+	stmt, err := dbTxn.Prepare(`INSERT INTO transaction_addresses(transaction_id, address) VALUES (?, ?);`)
+	if err != nil {
+		return fmt.Errorf("addTransactionAddresses: failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for addr := range m {
+		if _, err := stmt.Exec(id, dbEncode(addr)); err != nil {
+			return fmt.Errorf("addTransactionAddresses: failed to execute statement: %w", err)
+		}
+	}
+	return nil
+}
+
 func (s *Store) addArbitraryData(dbTxn txn, id int64, txn types.Transaction) error {
 	stmt, err := dbTxn.Prepare(`INSERT INTO transaction_arbitrary_data(transaction_id, transaction_order, data) VALUES (?, ?, ?)`)
 	if err != nil {
@@ -235,6 +282,8 @@ func (s *Store) addTransactions(dbTxn txn, bid types.BlockID, txns []types.Trans
 
 		if _, err := blockTransactionsStmt.Exec(dbEncode(bid), txnID, i); err != nil {
 			return fmt.Errorf("failed to insert into block_transactions: %w", err)
+		} else if err := s.addTransactionAddresses(dbTxn, txnID, txn); err != nil {
+			return fmt.Errorf("failed to add transaction addresses: %w", err)
 		} else if err := s.addArbitraryData(dbTxn, txnID, txn); err != nil {
 			return fmt.Errorf("failed to add arbitrary data: %w", err)
 		} else if err := s.addSiacoinInputs(dbTxn, txnID, txn); err != nil {

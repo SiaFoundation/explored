@@ -417,3 +417,32 @@ func (s *Store) Transactions(ids []types.TransactionID) (results []explorer.Tran
 	})
 	return
 }
+
+// AddressTransactions implements explorer.Store.
+func (s *Store) AddressTransactions(addr types.Address, limit, offset uint64) (results []types.TransactionID, err error) {
+	err = s.transaction(func(tx txn) error {
+		query := `SELECT transactions.transaction_id
+FROM transaction_addresses
+INNER JOIN transactions ON (transactions.id = transaction_addresses.transaction_id)
+WHERE transaction_addresses.address = ?
+ORDER BY transactions.transaction_id ASC
+LIMIT ? OFFSET ?
+`
+
+		rows, err := tx.Query(query, dbEncode(addr), limit, offset)
+		if err != nil {
+			return fmt.Errorf("failed to get txn IDs: %w", err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var id types.TransactionID
+			if err := rows.Scan(dbDecode(&id)); err != nil {
+				return fmt.Errorf("failed to scan txn ID: %w", err)
+			}
+			results = append(results, id)
+		}
+		return nil
+	})
+	return
+}
