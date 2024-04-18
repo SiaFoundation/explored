@@ -17,7 +17,7 @@ func (s *Store) Contracts(ids []types.FileContractID) (result []explorer.FileCon
 		return result
 	}
 
-	err = s.transaction(func(tx txn) error {
+	err = s.transaction(func(tx *txn) error {
 		query := `SELECT fc1.id, fc1.contract_id, fc1.leaf_index, fc1.merkle_proof, fc1.resolved, fc1.valid, fc1.filesize, fc1.file_merkle_root, fc1.window_start, fc1.window_end, fc1.payout, fc1.unlock_hash, fc1.revision_number
 			FROM file_contract_elements fc1
 			INNER JOIN last_contract_revision rev ON (rev.contract_element_id = fc1.id)

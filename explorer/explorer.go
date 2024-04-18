@@ -39,8 +39,6 @@ type Store interface {
 	UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]SiafundOutput, error)
 	Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 	Contracts(ids []types.FileContractID) (result []FileContract, err error)
-
-	MerkleProof(leafIndex uint64) ([]types.Hash256, error)
 }
 
 // Explorer implements a Sia explorer.
@@ -109,11 +107,6 @@ func NewExplorer(cm ChainManager, store Store, log *zap.Logger) (*Explorer, erro
 		}
 	})
 	return e, nil
-}
-
-// MerkleProof gets the merkle proof with the given leaf index.
-func (e *Explorer) MerkleProof(leafIndex uint64) ([]types.Hash256, error) {
-	return e.s.MerkleProof(leafIndex)
 }
 
 // Tip returns the tip of the best known valid chain.

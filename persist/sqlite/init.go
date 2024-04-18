@@ -17,7 +17,7 @@ import (
 var initDatabase string
 
 func (s *Store) initNewDatabase(target int64) error {
-	return s.transaction(func(tx txn) error {
+	return s.transaction(func(tx *txn) error {
 		if _, err := tx.Exec(initDatabase); err != nil {
 			return fmt.Errorf("failed to initialize database: %w", err)
 		} else if err := setDBVersion(tx, target); err != nil {
@@ -42,7 +42,7 @@ func (s *Store) upgradeDatabase(current, target int64) error {
 		}
 	}()
 
-	return s.transaction(func(tx txn) error {
+	return s.transaction(func(tx *txn) error {
 		for _, fn := range migrations[current-1:] {
 			current++
 			start := time.Now()

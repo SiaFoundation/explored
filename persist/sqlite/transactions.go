@@ -8,7 +8,7 @@ import (
 )
 
 // transactionArbitraryData returns the arbitrary data for each transaction.
-func transactionArbitraryData(tx txn, txnIDs []int64) (map[int64][][]byte, error) {
+func transactionArbitraryData(tx *txn, txnIDs []int64) (map[int64][][]byte, error) {
 	query := `SELECT transaction_id, data
 FROM transaction_arbitrary_data
 WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
@@ -32,7 +32,7 @@ ORDER BY transaction_order ASC`
 }
 
 // transactionSiacoinOutputs returns the siacoin outputs for each transaction.
-func transactionSiacoinOutputs(tx txn, txnIDs []int64) (map[int64][]explorer.SiacoinOutput, error) {
+func transactionSiacoinOutputs(tx *txn, txnIDs []int64) (map[int64][]explorer.SiacoinOutput, error) {
 	query := `SELECT ts.transaction_id, sc.output_id, sc.leaf_index, sc.merkle_proof, sc.source, sc.maturity_height, sc.address, sc.value
 FROM siacoin_elements sc
 INNER JOIN transaction_siacoin_outputs ts ON (ts.output_id = sc.id)
@@ -58,7 +58,7 @@ ORDER BY ts.transaction_order ASC`
 }
 
 // transactionSiacoinInputs returns the siacoin inputs for each transaction.
-func transactionSiacoinInputs(tx txn, txnIDs []int64) (map[int64][]types.SiacoinInput, error) {
+func transactionSiacoinInputs(tx *txn, txnIDs []int64) (map[int64][]types.SiacoinInput, error) {
 	query := `SELECT transaction_id, parent_id, unlock_conditions
 FROM transaction_siacoin_inputs
 WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
@@ -82,7 +82,7 @@ ORDER BY transaction_order ASC`
 }
 
 // transactionSiafundInputs returns the siafund inputs for each transaction.
-func transactionSiafundInputs(tx txn, txnIDs []int64) (map[int64][]types.SiafundInput, error) {
+func transactionSiafundInputs(tx *txn, txnIDs []int64) (map[int64][]types.SiafundInput, error) {
 	query := `SELECT transaction_id, parent_id, unlock_conditions, claim_address
 FROM transaction_siafund_inputs
 WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
@@ -106,7 +106,7 @@ ORDER BY transaction_order ASC`
 }
 
 // transactionSiafundOutputs returns the siafund outputs for each transaction.
-func transactionSiafundOutputs(tx txn, txnIDs []int64) (map[int64][]explorer.SiafundOutput, error) {
+func transactionSiafundOutputs(tx *txn, txnIDs []int64) (map[int64][]explorer.SiafundOutput, error) {
 	query := `SELECT ts.transaction_id, sf.output_id, sf.leaf_index, sf.merkle_proof, sf.claim_start, sf.address, sf.value
 FROM siafund_elements sf
 INNER JOIN transaction_siafund_outputs ts ON (ts.output_id = sf.id)
@@ -136,7 +136,7 @@ type fileContractProofOutputs struct {
 	missed []types.SiacoinOutput
 }
 
-func fileContractOutputs(tx txn, contractIDs []int64) (map[int64]fileContractProofOutputs, error) {
+func fileContractOutputs(tx *txn, contractIDs []int64) (map[int64]fileContractProofOutputs, error) {
 	result := make(map[int64]fileContractProofOutputs)
 
 	validQuery := `SELECT contract_id, address, value
@@ -192,7 +192,7 @@ type contractOrder struct {
 }
 
 // transactionFileContracts returns the file contracts for each transaction.
-func transactionFileContracts(tx txn, txnIDs []int64) (map[int64][]explorer.FileContract, error) {
+func transactionFileContracts(tx *txn, txnIDs []int64) (map[int64][]explorer.FileContract, error) {
 	query := `SELECT ts.transaction_id, fc.id, fc.contract_id, fc.leaf_index, fc.merkle_proof, fc.resolved, fc.valid, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
 FROM file_contract_elements fc
 INNER JOIN transaction_file_contracts ts ON (ts.contract_id = fc.id)
@@ -235,7 +235,7 @@ ORDER BY ts.transaction_order ASC`
 }
 
 // transactionFileContracts returns the file contract revisions for each transaction.
-func transactionFileContractRevisions(tx txn, txnIDs []int64) (map[int64][]explorer.FileContractRevision, error) {
+func transactionFileContractRevisions(tx *txn, txnIDs []int64) (map[int64][]explorer.FileContractRevision, error) {
 	query := `SELECT ts.transaction_id, fc.id, ts.parent_id, ts.unlock_conditions, fc.contract_id, fc.leaf_index, fc.merkle_proof, fc.resolved, fc.valid, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
 FROM file_contract_elements fc
 INNER JOIN transaction_file_contract_revisions ts ON (ts.contract_id = fc.id)
@@ -279,7 +279,7 @@ ORDER BY ts.transaction_order ASC`
 
 // blockTransactionIDs returns the database ID for each transaction in the
 // block.
-func blockTransactionIDs(tx txn, blockID types.BlockID) (dbIDs []int64, err error) {
+func blockTransactionIDs(tx *txn, blockID types.BlockID) (dbIDs []int64, err error) {
 	rows, err := tx.Query(`SELECT transaction_id FROM block_transactions WHERE block_id = ? ORDER BY block_order`, dbEncode(blockID))
 	if err != nil {
 		return nil, err
@@ -297,7 +297,7 @@ func blockTransactionIDs(tx txn, blockID types.BlockID) (dbIDs []int64, err erro
 }
 
 // blockMinerPayouts returns the miner payouts for the block.
-func blockMinerPayouts(tx txn, blockID types.BlockID) ([]explorer.SiacoinOutput, error) {
+func blockMinerPayouts(tx *txn, blockID types.BlockID) ([]explorer.SiacoinOutput, error) {
 	query := `SELECT sc.output_id, sc.leaf_index, sc.merkle_proof, sc.source, sc.maturity_height, sc.address, sc.value
 FROM siacoin_elements sc
 INNER JOIN miner_payouts mp ON (mp.output_id = sc.id)
@@ -321,7 +321,7 @@ ORDER BY mp.block_order ASC`
 }
 
 // transactionDatabaseIDs returns the database ID for each transaction.
-func transactionDatabaseIDs(tx txn, txnIDs []types.TransactionID) (dbIDs []int64, err error) {
+func transactionDatabaseIDs(tx *txn, txnIDs []types.TransactionID) (dbIDs []int64, err error) {
 	encodedIDs := func(ids []types.TransactionID) []any {
 		result := make([]any, len(ids))
 		for i, id := range ids {
@@ -347,7 +347,7 @@ func transactionDatabaseIDs(tx txn, txnIDs []types.TransactionID) (dbIDs []int64
 	return
 }
 
-func (s *Store) getTransactions(tx txn, dbIDs []int64) ([]explorer.Transaction, error) {
+func (s *Store) getTransactions(tx *txn, dbIDs []int64) ([]explorer.Transaction, error) {
 	txnArbitraryData, err := transactionArbitraryData(tx, dbIDs)
 	if err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get arbitrary data: %w", err)
@@ -404,7 +404,7 @@ func (s *Store) getTransactions(tx txn, dbIDs []int64) ([]explorer.Transaction, 
 
 // Transactions implements explorer.Store.
 func (s *Store) Transactions(ids []types.TransactionID) (results []explorer.Transaction, err error) {
-	err = s.transaction(func(tx txn) error {
+	err = s.transaction(func(tx *txn) error {
 		dbIDs, err := transactionDatabaseIDs(tx, ids)
 		if err != nil {
 			return fmt.Errorf("failed to get transaction IDs: %w", err)
