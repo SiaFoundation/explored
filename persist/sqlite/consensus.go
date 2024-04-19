@@ -127,7 +127,7 @@ func (ut *updateTx) AddSiafundOutputs(id int64, txn types.Transaction, dbIDs map
 	return nil
 }
 
-func (ut *updateTx) AddFileContracts(id int64, txn types.Transaction, fcDBIds map[fileContract]int64) error {
+func (ut *updateTx) AddFileContracts(id int64, txn types.Transaction, fcDBIds map[explorer.DBFileContract]int64) error {
 	stmt, err := ut.tx.Prepare(`INSERT INTO transaction_file_contracts(transaction_id, transaction_order, contract_id) VALUES (?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("addFileContracts: failed to prepare statement: %w", err)
@@ -147,7 +147,7 @@ func (ut *updateTx) AddFileContracts(id int64, txn types.Transaction, fcDBIds ma
 	defer missedOutputsStmt.Close()
 
 	for i := range txn.FileContracts {
-		dbID, ok := fcDBIds[fileContract{txn.FileContractID(i), 0}]
+		dbID, ok := fcDBIds[explorer.DBFileContract{txn.FileContractID(i), 0}]
 		if !ok {
 			return errors.New("addFileContracts: fcDbID not in map")
 		}
@@ -171,7 +171,7 @@ func (ut *updateTx) AddFileContracts(id int64, txn types.Transaction, fcDBIds ma
 	return nil
 }
 
-func (ut *updateTx) AddFileContractRevisions(id int64, txn types.Transaction, dbIDs map[fileContract]int64) error {
+func (ut *updateTx) AddFileContractRevisions(id int64, txn types.Transaction, dbIDs map[explorer.DBFileContract]int64) error {
 	stmt, err := ut.tx.Prepare(`INSERT INTO transaction_file_contract_revisions(transaction_id, transaction_order, contract_id, parent_id, unlock_conditions) VALUES (?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("addFileContractRevisions: failed to prepare statement: %w", err)
@@ -192,7 +192,7 @@ func (ut *updateTx) AddFileContractRevisions(id int64, txn types.Transaction, db
 
 	for i := range txn.FileContractRevisions {
 		fcr := &txn.FileContractRevisions[i]
-		dbID, ok := dbIDs[fileContract{fcr.ParentID, fcr.FileContract.RevisionNumber}]
+		dbID, ok := dbIDs[explorer.DBFileContract{fcr.ParentID, fcr.FileContract.RevisionNumber}]
 		if !ok {
 			return errors.New("addFileContractRevisions: dbID not in map")
 		}
@@ -217,7 +217,7 @@ func (ut *updateTx) AddFileContractRevisions(id int64, txn types.Transaction, db
 	return nil
 }
 
-func (ut *updateTx) AddTransactions(bid types.BlockID, txns []types.Transaction, scDBIds map[types.SiacoinOutputID]int64, sfDBIds map[types.SiafundOutputID]int64, fcDBIds map[fileContract]int64) error {
+func (ut *updateTx) AddTransactions(bid types.BlockID, txns []types.Transaction, scDBIds map[types.SiacoinOutputID]int64, sfDBIds map[types.SiafundOutputID]int64, fcDBIds map[explorer.DBFileContract]int64) error {
 	insertTransactionStmt, err := ut.tx.Prepare(`INSERT INTO transactions (transaction_id) VALUES (?)
 	ON CONFLICT (transaction_id) DO UPDATE SET transaction_id=EXCLUDED.transaction_id -- technically a no-op, but necessary for the RETURNING clause
 	RETURNING id;`)
@@ -258,12 +258,6 @@ func (ut *updateTx) AddTransactions(bid types.BlockID, txns []types.Transaction,
 		}
 	}
 	return nil
-}
-
-type consensusUpdate interface {
-	ForEachSiacoinElement(fn func(sce types.SiacoinElement, spent bool))
-	ForEachSiafundElement(fn func(sfe types.SiafundElement, spent bool))
-	ForEachFileContractElement(fn func(fce types.FileContractElement, rev *types.FileContractElement, resolved, valid bool))
 }
 
 type balance struct {
@@ -438,7 +432,7 @@ func (ut *updateTx) UpdateMaturedBalances(revert bool, height uint64) error {
 	return nil
 }
 
-func (ut *updateTx) AddSiacoinElements(bid types.BlockID, update consensusUpdate, spentElements, newElements []types.SiacoinElement) (map[types.SiacoinOutputID]int64, error) {
+func (ut *updateTx) AddSiacoinElements(bid types.BlockID, update explorer.ConsensusUpdate, spentElements, newElements []types.SiacoinElement) (map[types.SiacoinOutputID]int64, error) {
 	sources := make(map[types.SiacoinOutputID]explorer.Source)
 	if applyUpdate, ok := update.(chain.ApplyUpdate); ok {
 		block := applyUpdate.Block
@@ -544,12 +538,7 @@ func (ut *updateTx) AddSiafundElements(bid types.BlockID, spentElements, newElem
 	return sfDBIds, nil
 }
 
-type fileContract struct {
-	id             types.FileContractID
-	revisionNumber uint64
-}
-
-func (ut *updateTx) AddFileContractElements(bid types.BlockID, update consensusUpdate) (map[fileContract]int64, error) {
+func (ut *updateTx) AddFileContractElements(bid types.BlockID, update explorer.ConsensusUpdate) (map[explorer.DBFileContract]int64, error) {
 	stmt, err := ut.tx.Prepare(`INSERT INTO file_contract_elements(block_id, contract_id, leaf_index, merkle_proof, resolved, valid, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number)
 		VALUES (?, ?, ?, ?, FALSE, TRUE, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (contract_id, revision_number)
@@ -569,7 +558,7 @@ func (ut *updateTx) AddFileContractElements(bid types.BlockID, update consensusU
 	}
 
 	var updateErr error
-	fcDBIds := make(map[fileContract]int64)
+	fcDBIds := make(map[explorer.DBFileContract]int64)
 	update.ForEachFileContractElement(func(fce types.FileContractElement, rev *types.FileContractElement, resolved, valid bool) {
 		if updateErr != nil {
 			return
@@ -592,7 +581,7 @@ func (ut *updateTx) AddFileContractElements(bid types.BlockID, update consensusU
 			return
 		}
 
-		fcDBIds[fileContract{types.FileContractID(fce.StateElement.ID), fc.RevisionNumber}] = dbID
+		fcDBIds[explorer.DBFileContract{types.FileContractID(fce.StateElement.ID), fc.RevisionNumber}] = dbID
 	})
 	return fcDBIds, updateErr
 }
@@ -602,173 +591,16 @@ func (ut *updateTx) DeleteBlock(bid types.BlockID) error {
 	return err
 }
 
-// ProcessChainUpdates implements explorer.Store.
-func (s *Store) ProcessChainUpdates(crus []chain.RevertUpdate, caus []chain.ApplyUpdate) error {
-	return s.transaction(func(dbTxn *txn) error {
-		tx := &updateTx{tx: dbTxn}
-
-		for _, cru := range crus {
-			if err := tx.UpdateMaturedBalances(true, cru.State.Index.Height+1); err != nil {
-				return fmt.Errorf("revertUpdate: failed to update matured balances: %w", err)
-			}
-
-			created := make(map[types.Hash256]bool)
-			ephemeral := make(map[types.Hash256]bool)
-			for _, txn := range cru.Block.Transactions {
-				for i := range txn.SiacoinOutputs {
-					created[types.Hash256(txn.SiacoinOutputID(i))] = true
-				}
-				for _, input := range txn.SiacoinInputs {
-					ephemeral[types.Hash256(input.ParentID)] = created[types.Hash256(input.ParentID)]
-				}
-				for i := range txn.SiafundOutputs {
-					created[types.Hash256(txn.SiafundOutputID(i))] = true
-				}
-				for _, input := range txn.SiafundInputs {
-					ephemeral[types.Hash256(input.ParentID)] = created[types.Hash256(input.ParentID)]
-				}
-			}
-
-			// add new siacoin elements to the store
-			var newSiacoinElements, spentSiacoinElements []types.SiacoinElement
-			var ephemeralSiacoinElements []types.SiacoinElement
-			cru.ForEachSiacoinElement(func(se types.SiacoinElement, spent bool) {
-				if ephemeral[se.ID] {
-					ephemeralSiacoinElements = append(ephemeralSiacoinElements, se)
-					return
-				}
-
-				if spent {
-					newSiacoinElements = append(newSiacoinElements, se)
-				} else {
-					spentSiacoinElements = append(spentSiacoinElements, se)
-				}
-			})
-
-			var newSiafundElements, spentSiafundElements []types.SiafundElement
-			var ephemeralSiafundElements []types.SiafundElement
-			cru.ForEachSiafundElement(func(se types.SiafundElement, spent bool) {
-				if ephemeral[se.ID] {
-					ephemeralSiafundElements = append(ephemeralSiafundElements, se)
-					return
-				}
-
-				if spent {
-					newSiafundElements = append(newSiafundElements, se)
-				} else {
-					spentSiafundElements = append(spentSiafundElements, se)
-				}
-			})
-
-			// log.Println("REVERT!")
-			if _, err := tx.AddSiacoinElements(
-				cru.Block.ID(),
-				cru,
-				spentSiacoinElements,
-				append(newSiacoinElements, ephemeralSiacoinElements...),
-			); err != nil {
-				return fmt.Errorf("revertUpdate: failed to update siacoin output state: %w", err)
-			} else if _, err := tx.AddSiafundElements(
-				cru.Block.ID(),
-				spentSiafundElements,
-				append(newSiafundElements, ephemeralSiafundElements...),
-			); err != nil {
-				return fmt.Errorf("revertUpdate: failed to update siafund output state: %w", err)
-			} else if err := tx.UpdateBalances(cru.State.Index.Height+1, spentSiacoinElements, newSiacoinElements, spentSiafundElements, newSiafundElements); err != nil {
-				return fmt.Errorf("revertUpdate: failed to update balances: %w", err)
-			} else if _, err := tx.AddFileContractElements(cru.Block.ID(), cru); err != nil {
-				return fmt.Errorf("revertUpdate: failed to update file contract state: %w", err)
-			} else if err := tx.DeleteBlock(cru.Block.ID()); err != nil {
-				return fmt.Errorf("revertUpdate: failed to delete block: %w", err)
-			}
+// UpdateChainState implements explorer.Store
+func (s *Store) UpdateChainState(reverted []chain.RevertUpdate, applied []chain.ApplyUpdate) error {
+	return s.transaction(func(tx *txn) error {
+		utx := &updateTx{
+			tx:                tx,
+			relevantAddresses: make(map[types.Address]bool),
 		}
 
-		for _, cau := range caus {
-			if err := tx.AddBlock(cau.Block, cau.State.Index.Height); err != nil {
-				return fmt.Errorf("applyUpdates: failed to add block: %w", err)
-			} else if err := tx.UpdateMaturedBalances(false, cau.State.Index.Height); err != nil {
-				return fmt.Errorf("applyUpdates: failed to update matured balances: %w", err)
-			}
-
-			created := make(map[types.Hash256]bool)
-			ephemeral := make(map[types.Hash256]bool)
-			for _, txn := range cau.Block.Transactions {
-				for i := range txn.SiacoinOutputs {
-					created[types.Hash256(txn.SiacoinOutputID(i))] = true
-				}
-				for _, input := range txn.SiacoinInputs {
-					ephemeral[types.Hash256(input.ParentID)] = created[types.Hash256(input.ParentID)]
-				}
-				for i := range txn.SiafundOutputs {
-					created[types.Hash256(txn.SiafundOutputID(i))] = true
-				}
-				for _, input := range txn.SiafundInputs {
-					ephemeral[types.Hash256(input.ParentID)] = created[types.Hash256(input.ParentID)]
-				}
-			}
-
-			// add new siacoin elements to the store
-			var newSiacoinElements, spentSiacoinElements []types.SiacoinElement
-			var ephemeralSiacoinElements []types.SiacoinElement
-			cau.ForEachSiacoinElement(func(se types.SiacoinElement, spent bool) {
-				if ephemeral[se.ID] {
-					ephemeralSiacoinElements = append(ephemeralSiacoinElements, se)
-					return
-				}
-
-				if spent {
-					spentSiacoinElements = append(spentSiacoinElements, se)
-				} else {
-					newSiacoinElements = append(newSiacoinElements, se)
-				}
-			})
-
-			var newSiafundElements, spentSiafundElements []types.SiafundElement
-			var ephemeralSiafundElements []types.SiafundElement
-			cau.ForEachSiafundElement(func(se types.SiafundElement, spent bool) {
-				if ephemeral[se.ID] {
-					ephemeralSiafundElements = append(ephemeralSiafundElements, se)
-					return
-				}
-
-				if spent {
-					spentSiafundElements = append(spentSiafundElements, se)
-				} else {
-					newSiafundElements = append(newSiafundElements, se)
-				}
-			})
-
-			scDBIds, err := tx.AddSiacoinElements(
-				cau.Block.ID(),
-				cau,
-				append(spentSiacoinElements, ephemeralSiacoinElements...),
-				newSiacoinElements,
-			)
-			if err != nil {
-				return fmt.Errorf("applyUpdates: failed to add siacoin outputs: %w", err)
-			}
-			sfDBIds, err := tx.AddSiafundElements(
-				cau.Block.ID(),
-				append(spentSiafundElements, ephemeralSiafundElements...),
-				newSiafundElements,
-			)
-			if err != nil {
-				return fmt.Errorf("applyUpdates: failed to add siafund outputs: %w", err)
-			}
-			if err := tx.UpdateBalances(cau.State.Index.Height, spentSiacoinElements, newSiacoinElements, spentSiafundElements, newSiafundElements); err != nil {
-				return fmt.Errorf("applyUpdates: failed to update balances: %w", err)
-			}
-
-			fcDBIds, err := tx.AddFileContractElements(cau.Block.ID(), cau)
-			if err != nil {
-				return fmt.Errorf("applyUpdates: failed to add file contracts: %w", err)
-			}
-
-			if err := tx.AddMinerPayouts(cau.Block.ID(), cau.State.Index.Height, cau.Block.MinerPayouts, scDBIds); err != nil {
-				return fmt.Errorf("applyUpdates: failed to add miner payouts: %w", err)
-			} else if err := tx.AddTransactions(cau.Block.ID(), cau.Block.Transactions, scDBIds, sfDBIds, fcDBIds); err != nil {
-				return fmt.Errorf("applyUpdates: failed to add transactions: addTransactions: %w", err)
-			}
+		if err := explorer.UpdateChainState(utx, reverted, applied); err != nil {
+			return fmt.Errorf("failed to update chain state: %w", err)
 		}
 		return nil
 	})

@@ -29,7 +29,7 @@ type ChainManager interface {
 // A Store is a database that stores information about elements, contracts,
 // and blocks.
 type Store interface {
-	ProcessChainUpdates(crus []chain.RevertUpdate, caus []chain.ApplyUpdate) error
+	UpdateChainState(reverted []chain.RevertUpdate, applied []chain.ApplyUpdate) error
 
 	Tip() (types.ChainIndex, error)
 	Block(id types.BlockID) (Block, error)
@@ -56,7 +56,7 @@ func syncStore(store Store, cm ChainManager, index types.ChainIndex) error {
 			return fmt.Errorf("failed to subscribe to chain manager: %w", err)
 		}
 
-		if err := store.ProcessChainUpdates(crus, caus); err != nil {
+		if err := store.UpdateChainState(crus, caus); err != nil {
 			return fmt.Errorf("failed to process updates: %w", err)
 		}
 		if len(crus) > 0 {

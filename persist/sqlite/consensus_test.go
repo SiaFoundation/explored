@@ -126,7 +126,7 @@ func syncDB(t *testing.T, db *sqlite.Store, cm *chain.Manager) {
 			t.Fatal(err)
 		}
 
-		if err := db.ProcessChainUpdates(crus, caus); err != nil {
+		if err := db.UpdateChainState(crus, caus); err != nil {
 			t.Fatal("failed to process updates:", err)
 		}
 		if len(crus) > 0 {
