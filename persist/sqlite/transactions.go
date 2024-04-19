@@ -49,7 +49,7 @@ ORDER BY ts.transaction_order ASC`
 	for rows.Next() {
 		var txnID int64
 		var sco explorer.SiacoinOutput
-		if err := rows.Scan(&txnID, dbDecode(&sco.StateElement.ID), dbDecode(&sco.LeafIndex), dbDecode(&sco.MerkleProof), &sco.Source, &sco.MaturityHeight, dbDecode(&sco.SiacoinOutput.Address), dbDecode(&sco.SiacoinOutput.Value)); err != nil {
+		if err := rows.Scan(&txnID, decode(&sco.StateElement.ID), decode(&sco.LeafIndex), decodeSlice(&sco.MerkleProof), &sco.Source, &sco.MaturityHeight, decode(&sco.SiacoinOutput.Address), decode(&sco.SiacoinOutput.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan siacoin output: %w", err)
 		}
 		result[txnID] = append(result[txnID], sco)
@@ -73,7 +73,7 @@ ORDER BY transaction_order ASC`
 	for rows.Next() {
 		var txnID int64
 		var sci types.SiacoinInput
-		if err := rows.Scan(&txnID, dbDecode(&sci.ParentID), dbDecode(&sci.UnlockConditions)); err != nil {
+		if err := rows.Scan(&txnID, decode(&sci.ParentID), decode(&sci.UnlockConditions)); err != nil {
 			return nil, fmt.Errorf("failed to scan siacoin input: %w", err)
 		}
 		result[txnID] = append(result[txnID], sci)
@@ -97,7 +97,7 @@ ORDER BY transaction_order ASC`
 	for rows.Next() {
 		var txnID int64
 		var sfi types.SiafundInput
-		if err := rows.Scan(&txnID, dbDecode(&sfi.ParentID), dbDecode(&sfi.UnlockConditions), dbDecode(&sfi.ClaimAddress)); err != nil {
+		if err := rows.Scan(&txnID, decode(&sfi.ParentID), decode(&sfi.UnlockConditions), decode(&sfi.ClaimAddress)); err != nil {
 			return nil, fmt.Errorf("failed to scan siafund input: %w", err)
 		}
 		result[txnID] = append(result[txnID], sfi)
@@ -123,7 +123,7 @@ ORDER BY ts.transaction_order ASC`
 	for rows.Next() {
 		var txnID int64
 		var sfo explorer.SiafundOutput
-		if err := rows.Scan(&txnID, dbDecode(&sfo.StateElement.ID), dbDecode(&sfo.StateElement.LeafIndex), dbDecode(&sfo.StateElement.MerkleProof), dbDecode(&sfo.ClaimStart), dbDecode(&sfo.SiafundOutput.Address), dbDecode(&sfo.SiafundOutput.Value)); err != nil {
+		if err := rows.Scan(&txnID, decode(&sfo.StateElement.ID), decode(&sfo.StateElement.LeafIndex), decodeSlice(&sfo.StateElement.MerkleProof), decode(&sfo.ClaimStart), decode(&sfo.SiafundOutput.Address), decode(&sfo.SiafundOutput.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan siafund output: %w", err)
 		}
 		result[txnID] = append(result[txnID], sfo)
@@ -152,7 +152,7 @@ ORDER BY contract_order`
 	for validRows.Next() {
 		var contractID int64
 		var sco types.SiacoinOutput
-		if err := validRows.Scan(&contractID, dbDecode(&sco.Address), dbDecode(&sco.Value)); err != nil {
+		if err := validRows.Scan(&contractID, decode(&sco.Address), decode(&sco.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan valid proof output: %w", err)
 		}
 
@@ -174,7 +174,7 @@ ORDER BY contract_order`
 	for missedRows.Next() {
 		var contractID int64
 		var sco types.SiacoinOutput
-		if err := missedRows.Scan(&contractID, dbDecode(&sco.Address), dbDecode(&sco.Value)); err != nil {
+		if err := missedRows.Scan(&contractID, decode(&sco.Address), decode(&sco.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan missed proof output: %w", err)
 		}
 
@@ -212,7 +212,7 @@ ORDER BY ts.transaction_order ASC`
 	for rows.Next() {
 		var txnID, contractID int64
 		var fc explorer.FileContract
-		if err := rows.Scan(&txnID, &contractID, dbDecode(&fc.StateElement.ID), dbDecode(&fc.StateElement.LeafIndex), dbDecode(&fc.StateElement.MerkleProof), &fc.Resolved, &fc.Valid, &fc.Filesize, dbDecode(&fc.FileMerkleRoot), &fc.WindowStart, &fc.WindowEnd, dbDecode(&fc.Payout), dbDecode(&fc.UnlockHash), &fc.RevisionNumber); err != nil {
+		if err := rows.Scan(&txnID, &contractID, decode(&fc.StateElement.ID), decode(&fc.StateElement.LeafIndex), decodeSlice(&fc.StateElement.MerkleProof), &fc.Resolved, &fc.Valid, &fc.Filesize, decode(&fc.FileMerkleRoot), &fc.WindowStart, &fc.WindowEnd, decode(&fc.Payout), decode(&fc.UnlockHash), &fc.RevisionNumber); err != nil {
 			return nil, fmt.Errorf("failed to scan file contract: %w", err)
 		}
 
@@ -255,7 +255,7 @@ ORDER BY ts.transaction_order ASC`
 	for rows.Next() {
 		var txnID, contractID int64
 		var fc explorer.FileContractRevision
-		if err := rows.Scan(&txnID, &contractID, dbDecode(&fc.ParentID), dbDecode(&fc.UnlockConditions), dbDecode(&fc.StateElement.ID), dbDecode(&fc.StateElement.LeafIndex), dbDecode(&fc.StateElement.MerkleProof), &fc.Resolved, &fc.Valid, &fc.Filesize, dbDecode(&fc.FileMerkleRoot), &fc.WindowStart, &fc.WindowEnd, dbDecode(&fc.Payout), dbDecode(&fc.UnlockHash), &fc.RevisionNumber); err != nil {
+		if err := rows.Scan(&txnID, &contractID, decode(&fc.ParentID), decode(&fc.UnlockConditions), decode(&fc.StateElement.ID), decode(&fc.StateElement.LeafIndex), decodeSlice(&fc.StateElement.MerkleProof), &fc.Resolved, &fc.Valid, &fc.Filesize, decode(&fc.FileMerkleRoot), &fc.WindowStart, &fc.WindowEnd, decode(&fc.Payout), decode(&fc.UnlockHash), &fc.RevisionNumber); err != nil {
 			return nil, fmt.Errorf("failed to scan file contract: %w", err)
 		}
 
@@ -280,7 +280,7 @@ ORDER BY ts.transaction_order ASC`
 // blockTransactionIDs returns the database ID for each transaction in the
 // block.
 func blockTransactionIDs(tx *txn, blockID types.BlockID) (dbIDs []int64, err error) {
-	rows, err := tx.Query(`SELECT transaction_id FROM block_transactions WHERE block_id = ? ORDER BY block_order`, dbEncode(blockID))
+	rows, err := tx.Query(`SELECT transaction_id FROM block_transactions WHERE block_id = ? ORDER BY block_order`, encode(blockID))
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +303,7 @@ FROM siacoin_elements sc
 INNER JOIN miner_payouts mp ON (mp.output_id = sc.id)
 WHERE mp.block_id = ?
 ORDER BY mp.block_order ASC`
-	rows, err := tx.Query(query, dbEncode(blockID))
+	rows, err := tx.Query(query, encode(blockID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query miner payout ids: %w", err)
 	}
@@ -312,7 +312,7 @@ ORDER BY mp.block_order ASC`
 	var result []explorer.SiacoinOutput
 	for rows.Next() {
 		var output explorer.SiacoinOutput
-		if err := rows.Scan(dbDecode(&output.StateElement.ID), dbDecode(&output.StateElement.LeafIndex), dbDecode(&output.StateElement.MerkleProof), &output.Source, &output.MaturityHeight, dbDecode(&output.SiacoinOutput.Address), dbDecode(&output.SiacoinOutput.Value)); err != nil {
+		if err := rows.Scan(decode(&output.StateElement.ID), decode(&output.StateElement.LeafIndex), decodeSlice(&output.StateElement.MerkleProof), &output.Source, &output.MaturityHeight, decode(&output.SiacoinOutput.Address), decode(&output.SiacoinOutput.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan miner payout: %w", err)
 		}
 		result = append(result, output)
@@ -325,7 +325,7 @@ func transactionDatabaseIDs(tx *txn, txnIDs []types.TransactionID) (dbIDs []int6
 	encodedIDs := func(ids []types.TransactionID) []any {
 		result := make([]any, len(ids))
 		for i, id := range ids {
-			result[i] = dbEncode(id)
+			result[i] = encode(id)
 		}
 		return result
 	}

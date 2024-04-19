@@ -17,7 +17,7 @@ type updateTx struct {
 
 func (ut *updateTx) AddBlock(b types.Block, height uint64) error {
 	// nonce is encoded because database/sql doesn't support uint64 with high bit set
-	_, err := ut.tx.Exec("INSERT INTO blocks(id, height, parent_id, nonce, timestamp) VALUES (?, ?, ?, ?, ?);", dbEncode(b.ID()), height, dbEncode(b.ParentID), dbEncode(b.Nonce), dbEncode(b.Timestamp))
+	_, err := ut.tx.Exec("INSERT INTO blocks(id, height, parent_id, nonce, timestamp) VALUES (?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encode(b.Nonce), encode(b.Timestamp))
 	return err
 }
 
@@ -34,7 +34,7 @@ func (ut *updateTx) AddMinerPayouts(bid types.BlockID, height uint64, scos []typ
 			return errors.New("addMinerPayouts: dbID not in map")
 		}
 
-		if _, err := stmt.Exec(dbEncode(bid), i, dbID); err != nil {
+		if _, err := stmt.Exec(encode(bid), i, dbID); err != nil {
 			return fmt.Errorf("addMinerPayouts: failed to execute statement: %w", err)
 		}
 	}
@@ -65,7 +65,7 @@ func (ut *updateTx) AddSiacoinInputs(id int64, txn types.Transaction) error {
 	defer stmt.Close()
 
 	for i, sci := range txn.SiacoinInputs {
-		if _, err := stmt.Exec(id, i, dbEncode(sci.ParentID), dbEncode(sci.UnlockConditions)); err != nil {
+		if _, err := stmt.Exec(id, i, encode(sci.ParentID), encode(sci.UnlockConditions)); err != nil {
 			return fmt.Errorf("addSiacoinInputs: failed to execute statement: %w", err)
 		}
 	}
@@ -100,7 +100,7 @@ func (ut *updateTx) AddSiafundInputs(id int64, txn types.Transaction) error {
 	defer stmt.Close()
 
 	for i, sci := range txn.SiafundInputs {
-		if _, err := stmt.Exec(id, i, dbEncode(sci.ParentID), dbEncode(sci.UnlockConditions), dbEncode(sci.ClaimAddress)); err != nil {
+		if _, err := stmt.Exec(id, i, encode(sci.ParentID), encode(sci.UnlockConditions), encode(sci.ClaimAddress)); err != nil {
 			return fmt.Errorf("addSiafundInputs: failed to execute statement: %w", err)
 		}
 	}
@@ -157,13 +157,13 @@ func (ut *updateTx) AddFileContracts(id int64, txn types.Transaction, fcDBIds ma
 		}
 
 		for j, sco := range txn.FileContracts[i].ValidProofOutputs {
-			if _, err := validOutputsStmt.Exec(dbID, j, dbEncode(sco.Address), dbEncode(sco.Value)); err != nil {
+			if _, err := validOutputsStmt.Exec(dbID, j, encode(sco.Address), encode(sco.Value)); err != nil {
 				return fmt.Errorf("addFileContracts: failed to execute valid proof outputs statement: %w", err)
 			}
 		}
 
 		for j, sco := range txn.FileContracts[i].MissedProofOutputs {
-			if _, err := missedOutputsStmt.Exec(dbID, j, dbEncode(sco.Address), dbEncode(sco.Value)); err != nil {
+			if _, err := missedOutputsStmt.Exec(dbID, j, encode(sco.Address), encode(sco.Value)); err != nil {
 				return fmt.Errorf("addFileContracts: failed to execute missed proof outputs statement: %w", err)
 			}
 		}
@@ -197,18 +197,18 @@ func (ut *updateTx) AddFileContractRevisions(id int64, txn types.Transaction, db
 			return errors.New("addFileContractRevisions: dbID not in map")
 		}
 
-		if _, err := stmt.Exec(id, i, dbID, dbEncode(fcr.ParentID), dbEncode(fcr.UnlockConditions)); err != nil {
+		if _, err := stmt.Exec(id, i, dbID, encode(fcr.ParentID), encode(fcr.UnlockConditions)); err != nil {
 			return fmt.Errorf("addFileContractRevisions: failed to execute statement: %w", err)
 		}
 
 		for j, sco := range txn.FileContractRevisions[i].ValidProofOutputs {
-			if _, err := validOutputsStmt.Exec(dbID, j, dbEncode(sco.Address), dbEncode(sco.Value)); err != nil {
+			if _, err := validOutputsStmt.Exec(dbID, j, encode(sco.Address), encode(sco.Value)); err != nil {
 				return fmt.Errorf("addFileContractRevisions: failed to execute valid proof outputs statement: %w", err)
 			}
 		}
 
 		for j, sco := range txn.FileContractRevisions[i].MissedProofOutputs {
-			if _, err := missedOutputsStmt.Exec(dbID, j, dbEncode(sco.Address), dbEncode(sco.Value)); err != nil {
+			if _, err := missedOutputsStmt.Exec(dbID, j, encode(sco.Address), encode(sco.Value)); err != nil {
 				return fmt.Errorf("addFileContractRevisions: failed to execute missed proof outputs statement: %w", err)
 			}
 		}
@@ -234,12 +234,12 @@ func (ut *updateTx) AddTransactions(bid types.BlockID, txns []types.Transaction,
 
 	for i, txn := range txns {
 		var txnID int64
-		err := insertTransactionStmt.QueryRow(dbEncode(txn.ID())).Scan(&txnID)
+		err := insertTransactionStmt.QueryRow(encode(txn.ID())).Scan(&txnID)
 		if err != nil {
 			return fmt.Errorf("failed to insert into transactions: %w", err)
 		}
 
-		if _, err := blockTransactionsStmt.Exec(dbEncode(bid), txnID, i); err != nil {
+		if _, err := blockTransactionsStmt.Exec(encode(bid), txnID, i); err != nil {
 			return fmt.Errorf("failed to insert into block_transactions: %w", err)
 		} else if err := ut.AddArbitraryData(txnID, txn); err != nil {
 			return fmt.Errorf("failed to add arbitrary data: %w", err)
@@ -283,7 +283,7 @@ func (ut *updateTx) UpdateBalances(height uint64, spentSiacoinElements, newSiaco
 
 	var addressList []any
 	for address := range addresses {
-		addressList = append(addressList, dbEncode(address))
+		addressList = append(addressList, encode(address))
 	}
 
 	rows, err := ut.tx.Query(`SELECT address, siacoin_balance, immature_siacoin_balance, siafund_balance
@@ -297,7 +297,7 @@ func (ut *updateTx) UpdateBalances(height uint64, spentSiacoinElements, newSiaco
 	for rows.Next() {
 		var bal balance
 		var address types.Address
-		if err := rows.Scan(dbDecode(&address), dbDecode(&bal.sc), dbDecode(&bal.immatureSC), dbDecode(&bal.sf)); err != nil {
+		if err := rows.Scan(decode(&address), decode(&bal.sc), decode(&bal.immatureSC), decode(&bal.sf)); err != nil {
 			return err
 		}
 		addresses[address] = bal
@@ -346,7 +346,7 @@ func (ut *updateTx) UpdateBalances(height uint64, spentSiacoinElements, newSiaco
 	defer stmt.Close()
 
 	for addr, bal := range addresses {
-		if _, err := stmt.Exec(dbEncode(addr), dbEncode(bal.sc), dbEncode(bal.immatureSC), dbEncode(bal.sf), dbEncode(bal.sc), dbEncode(bal.immatureSC), dbEncode(bal.sf)); err != nil {
+		if _, err := stmt.Exec(encode(addr), encode(bal.sc), encode(bal.immatureSC), encode(bal.sf), encode(bal.sc), encode(bal.immatureSC), encode(bal.sf)); err != nil {
 			return fmt.Errorf("updateBalances: failed to exec statement: %w", err)
 		}
 		// log.Println(addr, "=", bal.sc)
@@ -374,11 +374,11 @@ func (ut *updateTx) UpdateMaturedBalances(revert bool, height uint64) error {
 	var scos []types.SiacoinOutput
 	for rows.Next() {
 		var sco types.SiacoinOutput
-		if err := rows.Scan(dbDecode(&sco.Address), dbDecode(&sco.Value)); err != nil {
+		if err := rows.Scan(decode(&sco.Address), decode(&sco.Value)); err != nil {
 			return fmt.Errorf("updateMaturedBalances: failed to scan maturing outputs: %w", err)
 		}
 		scos = append(scos, sco)
-		addressList = append(addressList, dbEncode(sco.Address))
+		addressList = append(addressList, encode(sco.Address))
 	}
 
 	balanceRows, err := ut.tx.Query(`SELECT address, siacoin_balance, immature_siacoin_balance
@@ -393,7 +393,7 @@ func (ut *updateTx) UpdateMaturedBalances(revert bool, height uint64) error {
 	for balanceRows.Next() {
 		var address types.Address
 		var bal balance
-		if err := balanceRows.Scan(dbDecode(&address), dbDecode(&bal.sc), dbDecode(&bal.immatureSC)); err != nil {
+		if err := balanceRows.Scan(decode(&address), decode(&bal.sc), decode(&bal.immatureSC)); err != nil {
 			return fmt.Errorf("updateMaturedBalances: failed to scan balance: %w", err)
 		}
 		addresses[address] = bal
@@ -422,9 +422,9 @@ func (ut *updateTx) UpdateMaturedBalances(revert bool, height uint64) error {
 	}
 	defer stmt.Close()
 
-	initialSF := dbEncode(uint64(0))
+	initialSF := encode(uint64(0))
 	for addr, bal := range addresses {
-		if _, err := stmt.Exec(dbEncode(addr), dbEncode(bal.sc), dbEncode(bal.immatureSC), initialSF, dbEncode(bal.sc), dbEncode(bal.immatureSC)); err != nil {
+		if _, err := stmt.Exec(encode(addr), encode(bal.sc), encode(bal.immatureSC), initialSF, encode(bal.sc), encode(bal.immatureSC)); err != nil {
 			return fmt.Errorf("updateMaturedBalances: failed to exec statement: %w", err)
 		}
 	}
@@ -468,7 +468,7 @@ func (ut *updateTx) AddSiacoinElements(bid types.BlockID, update explorer.Consen
 
 	scDBIds := make(map[types.SiacoinOutputID]int64)
 	for _, sce := range newElements {
-		result, err := stmt.Exec(dbEncode(sce.StateElement.ID), dbEncode(bid), dbEncode(sce.StateElement.LeafIndex), dbEncode(sce.StateElement.MerkleProof), false, int(sources[types.SiacoinOutputID(sce.StateElement.ID)]), sce.MaturityHeight, dbEncode(sce.SiacoinOutput.Address), dbEncode(sce.SiacoinOutput.Value), false, dbEncode(sce.StateElement.LeafIndex), dbEncode(sce.StateElement.MerkleProof))
+		result, err := stmt.Exec(encode(sce.StateElement.ID), encode(bid), encode(sce.StateElement.LeafIndex), encodeSlice(sce.StateElement.MerkleProof), false, int(sources[types.SiacoinOutputID(sce.StateElement.ID)]), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), false, encode(sce.StateElement.LeafIndex), encodeSlice(sce.StateElement.MerkleProof))
 		if err != nil {
 			return nil, fmt.Errorf("addSiacoinElements: failed to execute siacoin_elements statement: %w", err)
 		}
@@ -481,7 +481,7 @@ func (ut *updateTx) AddSiacoinElements(bid types.BlockID, update explorer.Consen
 		scDBIds[types.SiacoinOutputID(sce.StateElement.ID)] = dbID
 	}
 	for _, sce := range spentElements {
-		result, err := stmt.Exec(dbEncode(sce.StateElement.ID), dbEncode(bid), dbEncode(sce.StateElement.LeafIndex), dbEncode(sce.StateElement.MerkleProof), true, int(sources[types.SiacoinOutputID(sce.StateElement.ID)]), sce.MaturityHeight, dbEncode(sce.SiacoinOutput.Address), dbEncode(sce.SiacoinOutput.Value), true, dbEncode(sce.StateElement.LeafIndex), dbEncode(sce.StateElement.MerkleProof))
+		result, err := stmt.Exec(encode(sce.StateElement.ID), encode(bid), encode(sce.StateElement.LeafIndex), encodeSlice(sce.StateElement.MerkleProof), true, int(sources[types.SiacoinOutputID(sce.StateElement.ID)]), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), true, encode(sce.StateElement.LeafIndex), encodeSlice(sce.StateElement.MerkleProof))
 		if err != nil {
 			return nil, fmt.Errorf("addSiacoinElements: failed to execute siacoin_elements statement: %w", err)
 		}
@@ -509,7 +509,7 @@ func (ut *updateTx) AddSiafundElements(bid types.BlockID, spentElements, newElem
 
 	sfDBIds := make(map[types.SiafundOutputID]int64)
 	for _, sfe := range newElements {
-		result, err := stmt.Exec(dbEncode(sfe.StateElement.ID), dbEncode(bid), dbEncode(sfe.StateElement.LeafIndex), dbEncode(sfe.StateElement.MerkleProof), false, dbEncode(sfe.ClaimStart), dbEncode(sfe.SiafundOutput.Address), dbEncode(sfe.SiafundOutput.Value), false, dbEncode(sfe.StateElement.LeafIndex), dbEncode(sfe.StateElement.MerkleProof))
+		result, err := stmt.Exec(encode(sfe.StateElement.ID), encode(bid), encode(sfe.StateElement.LeafIndex), encodeSlice(sfe.StateElement.MerkleProof), false, encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), false, encode(sfe.StateElement.LeafIndex), encodeSlice(sfe.StateElement.MerkleProof))
 		if err != nil {
 			return nil, fmt.Errorf("addSiafundElements: failed to execute siafund_elements statement: %w", err)
 		}
@@ -522,7 +522,7 @@ func (ut *updateTx) AddSiafundElements(bid types.BlockID, spentElements, newElem
 		sfDBIds[types.SiafundOutputID(sfe.StateElement.ID)] = dbID
 	}
 	for _, sfe := range spentElements {
-		result, err := stmt.Exec(dbEncode(sfe.StateElement.ID), dbEncode(bid), dbEncode(sfe.StateElement.LeafIndex), dbEncode(sfe.StateElement.MerkleProof), true, dbEncode(sfe.ClaimStart), dbEncode(sfe.SiafundOutput.Address), dbEncode(sfe.SiafundOutput.Value), true, dbEncode(sfe.StateElement.LeafIndex), dbEncode(sfe.StateElement.MerkleProof))
+		result, err := stmt.Exec(encode(sfe.StateElement.ID), encode(bid), encode(sfe.StateElement.LeafIndex), encodeSlice(sfe.StateElement.MerkleProof), true, encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), true, encode(sfe.StateElement.LeafIndex), encodeSlice(sfe.StateElement.MerkleProof))
 		if err != nil {
 			return nil, fmt.Errorf("addSiafundElements: failed to execute siafund_elements statement: %w", err)
 		}
@@ -570,13 +570,13 @@ func (ut *updateTx) AddFileContractElements(bid types.BlockID, update explorer.C
 		}
 
 		var dbID int64
-		err := stmt.QueryRow(dbEncode(bid), dbEncode(fce.StateElement.ID), dbEncode(fce.StateElement.LeafIndex), dbEncode(fce.StateElement.MerkleProof), fc.Filesize, dbEncode(fc.FileMerkleRoot), fc.WindowStart, fc.WindowEnd, dbEncode(fc.Payout), dbEncode(fc.UnlockHash), fc.RevisionNumber, resolved, valid, dbEncode(fce.StateElement.LeafIndex), dbEncode(fce.StateElement.MerkleProof)).Scan(&dbID)
+		err := stmt.QueryRow(encode(bid), encode(fce.StateElement.ID), encode(fce.StateElement.LeafIndex), encodeSlice(fce.StateElement.MerkleProof), fc.Filesize, encode(fc.FileMerkleRoot), fc.WindowStart, fc.WindowEnd, encode(fc.Payout), encode(fc.UnlockHash), fc.RevisionNumber, resolved, valid, encode(fce.StateElement.LeafIndex), encodeSlice(fce.StateElement.MerkleProof)).Scan(&dbID)
 		if err != nil {
 			updateErr = fmt.Errorf("addFileContractElements: failed to execute file_contract_elements statement: %w", err)
 			return
 		}
 
-		if _, err := revisionStmt.Exec(dbEncode(fce.StateElement.ID), dbID, dbID); err != nil {
+		if _, err := revisionStmt.Exec(encode(fce.StateElement.ID), dbID, dbID); err != nil {
 			updateErr = fmt.Errorf("addFileContractElements: failed to update last revision number: %w", err)
 			return
 		}
@@ -587,7 +587,7 @@ func (ut *updateTx) AddFileContractElements(bid types.BlockID, update explorer.C
 }
 
 func (ut *updateTx) DeleteBlock(bid types.BlockID) error {
-	_, err := ut.tx.Exec("DELETE FROM blocks WHERE id = ?", dbEncode(bid))
+	_, err := ut.tx.Exec("DELETE FROM blocks WHERE id = ?", encode(bid))
 	return err
 }
 
@@ -610,7 +610,7 @@ func (s *Store) UpdateChainState(reverted []chain.RevertUpdate, applied []chain.
 func (s *Store) Tip() (result types.ChainIndex, err error) {
 	const query = `SELECT id, height FROM blocks ORDER BY height DESC LIMIT 1`
 	err = s.transaction(func(dbTxn *txn) error {
-		return dbTxn.QueryRow(query).Scan(dbDecode(&result.ID), &result.Height)
+		return dbTxn.QueryRow(query).Scan(decode(&result.ID), &result.Height)
 	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return types.ChainIndex{}, explorer.ErrNoTip

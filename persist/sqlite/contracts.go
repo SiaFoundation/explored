@@ -12,7 +12,7 @@ func (s *Store) Contracts(ids []types.FileContractID) (result []explorer.FileCon
 	encodedIDs := func(ids []types.FileContractID) []any {
 		result := make([]any, len(ids))
 		for i, id := range ids {
-			result[i] = dbEncode(id)
+			result[i] = encode(id)
 		}
 		return result
 	}
@@ -33,7 +33,7 @@ func (s *Store) Contracts(ids []types.FileContractID) (result []explorer.FileCon
 		for rows.Next() {
 			var contractID int64
 			var fc explorer.FileContract
-			if err := rows.Scan(&contractID, dbDecode(&fc.StateElement.ID), dbDecode(&fc.StateElement.LeafIndex), dbDecode(&fc.StateElement.MerkleProof), &fc.Resolved, &fc.Valid, &fc.Filesize, dbDecode(&fc.FileMerkleRoot), &fc.WindowStart, &fc.WindowEnd, dbDecode(&fc.Payout), dbDecode(&fc.UnlockHash), &fc.RevisionNumber); err != nil {
+			if err := rows.Scan(&contractID, decode(&fc.StateElement.ID), decode(&fc.StateElement.LeafIndex), decodeSlice(&fc.StateElement.MerkleProof), &fc.Resolved, &fc.Valid, &fc.Filesize, decode(&fc.FileMerkleRoot), &fc.WindowStart, &fc.WindowEnd, decode(&fc.Payout), decode(&fc.UnlockHash), &fc.RevisionNumber); err != nil {
 				return fmt.Errorf("failed to scan transaction: %w", err)
 			}
 

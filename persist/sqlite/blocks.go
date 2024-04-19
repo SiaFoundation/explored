@@ -10,7 +10,7 @@ import (
 // Block implements explorer.Store.
 func (s *Store) Block(id types.BlockID) (result explorer.Block, err error) {
 	err = s.transaction(func(tx *txn) error {
-		err = tx.QueryRow(`SELECT parent_id, nonce, timestamp, height FROM blocks WHERE id=?`, dbEncode(id)).Scan(dbDecode(&result.ParentID), dbDecode(&result.Nonce), dbDecode(&result.Timestamp), &result.Height)
+		err = tx.QueryRow(`SELECT parent_id, nonce, timestamp, height FROM blocks WHERE id=?`, encode(id)).Scan(decode(&result.ParentID), decode(&result.Nonce), decode(&result.Timestamp), &result.Height)
 		if err != nil {
 			return err
 		}
@@ -39,7 +39,7 @@ func (s *Store) Block(id types.BlockID) (result explorer.Block, err error) {
 // BestTip implements explorer.Store.
 func (s *Store) BestTip(height uint64) (result types.ChainIndex, err error) {
 	err = s.transaction(func(tx *txn) error {
-		err = tx.QueryRow(`SELECT id, height FROM blocks WHERE height=?`, height).Scan(dbDecode(&result.ID), dbDecode(&result.Height))
+		err = tx.QueryRow(`SELECT id, height FROM blocks WHERE height=?`, height).Scan(decode(&result.ID), decode(&result.Height))
 		if err != nil {
 			return err
 		}
