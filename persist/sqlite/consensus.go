@@ -147,7 +147,7 @@ func (ut *updateTx) AddFileContracts(id int64, txn types.Transaction, fcDBIds ma
 	defer missedOutputsStmt.Close()
 
 	for i := range txn.FileContracts {
-		dbID, ok := fcDBIds[explorer.DBFileContract{txn.FileContractID(i), 0}]
+		dbID, ok := fcDBIds[explorer.DBFileContract{ID: txn.FileContractID(i), RevisionNumber: 0}]
 		if !ok {
 			return errors.New("addFileContracts: fcDbID not in map")
 		}
@@ -192,7 +192,7 @@ func (ut *updateTx) AddFileContractRevisions(id int64, txn types.Transaction, db
 
 	for i := range txn.FileContractRevisions {
 		fcr := &txn.FileContractRevisions[i]
-		dbID, ok := dbIDs[explorer.DBFileContract{fcr.ParentID, fcr.FileContract.RevisionNumber}]
+		dbID, ok := dbIDs[explorer.DBFileContract{ID: fcr.ParentID, RevisionNumber: fcr.FileContract.RevisionNumber}]
 		if !ok {
 			return errors.New("addFileContractRevisions: dbID not in map")
 		}
@@ -581,7 +581,7 @@ func (ut *updateTx) AddFileContractElements(bid types.BlockID, update explorer.C
 			return
 		}
 
-		fcDBIds[explorer.DBFileContract{types.FileContractID(fce.StateElement.ID), fc.RevisionNumber}] = dbID
+		fcDBIds[explorer.DBFileContract{ID: types.FileContractID(fce.StateElement.ID), RevisionNumber: fc.RevisionNumber}] = dbID
 	})
 	return fcDBIds, updateErr
 }
