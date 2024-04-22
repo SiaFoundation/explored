@@ -473,10 +473,10 @@ func (ut *updateTx) AddSiacoinElements(bid types.BlockID, update explorer.Consen
 		}
 	}
 
-	stmt, err := ut.tx.Prepare(`INSERT INTO siacoin_elements(output_id, block_id, leaf_index, merkle_proof, spent, source, maturity_height, address, value)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	stmt, err := ut.tx.Prepare(`INSERT INTO siacoin_elements(output_id, block_id, leaf_index, spent, source, maturity_height, address, value)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT (output_id)
-			DO UPDATE SET spent = ?, leaf_index = ?, merkle_proof = ?`)
+			DO UPDATE SET spent = ?, leaf_index = ?`)
 	if err != nil {
 		return nil, fmt.Errorf("addSiacoinElements: failed to prepare siacoin_elements statement: %w", err)
 	}
@@ -484,7 +484,7 @@ func (ut *updateTx) AddSiacoinElements(bid types.BlockID, update explorer.Consen
 
 	scDBIds := make(map[types.SiacoinOutputID]int64)
 	for _, sce := range newElements {
-		result, err := stmt.Exec(encode(sce.StateElement.ID), encode(bid), encode(sce.StateElement.LeafIndex), encodeSlice(sce.StateElement.MerkleProof), false, int(sources[types.SiacoinOutputID(sce.StateElement.ID)]), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), false, encode(sce.StateElement.LeafIndex), encodeSlice(sce.StateElement.MerkleProof))
+		result, err := stmt.Exec(encode(sce.StateElement.ID), encode(bid), encode(sce.StateElement.LeafIndex), false, int(sources[types.SiacoinOutputID(sce.StateElement.ID)]), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), false, encode(sce.StateElement.LeafIndex))
 		if err != nil {
 			return nil, fmt.Errorf("addSiacoinElements: failed to execute siacoin_elements statement: %w", err)
 		}
@@ -497,7 +497,7 @@ func (ut *updateTx) AddSiacoinElements(bid types.BlockID, update explorer.Consen
 		scDBIds[types.SiacoinOutputID(sce.StateElement.ID)] = dbID
 	}
 	for _, sce := range spentElements {
-		result, err := stmt.Exec(encode(sce.StateElement.ID), encode(bid), encode(sce.StateElement.LeafIndex), encodeSlice(sce.StateElement.MerkleProof), true, int(sources[types.SiacoinOutputID(sce.StateElement.ID)]), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), true, encode(sce.StateElement.LeafIndex), encodeSlice(sce.StateElement.MerkleProof))
+		result, err := stmt.Exec(encode(sce.StateElement.ID), encode(bid), encode(sce.StateElement.LeafIndex), true, int(sources[types.SiacoinOutputID(sce.StateElement.ID)]), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), true, encode(sce.StateElement.LeafIndex))
 		if err != nil {
 			return nil, fmt.Errorf("addSiacoinElements: failed to execute siacoin_elements statement: %w", err)
 		}
@@ -514,10 +514,10 @@ func (ut *updateTx) AddSiacoinElements(bid types.BlockID, update explorer.Consen
 }
 
 func (ut *updateTx) AddSiafundElements(bid types.BlockID, spentElements, newElements []types.SiafundElement) (map[types.SiafundOutputID]int64, error) {
-	stmt, err := ut.tx.Prepare(`INSERT INTO siafund_elements(output_id, block_id, leaf_index, merkle_proof, spent, claim_start, address, value)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	stmt, err := ut.tx.Prepare(`INSERT INTO siafund_elements(output_id, block_id, leaf_index, spent, claim_start, address, value)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT
-		DO UPDATE SET spent = ?, leaf_index = ?, merkle_proof = ?`)
+		DO UPDATE SET spent = ?, leaf_index = ?`)
 	if err != nil {
 		return nil, fmt.Errorf("addSiafundElements: failed to prepare siafund_elements statement: %w", err)
 	}
@@ -525,7 +525,7 @@ func (ut *updateTx) AddSiafundElements(bid types.BlockID, spentElements, newElem
 
 	sfDBIds := make(map[types.SiafundOutputID]int64)
 	for _, sfe := range newElements {
-		result, err := stmt.Exec(encode(sfe.StateElement.ID), encode(bid), encode(sfe.StateElement.LeafIndex), encodeSlice(sfe.StateElement.MerkleProof), false, encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), false, encode(sfe.StateElement.LeafIndex), encodeSlice(sfe.StateElement.MerkleProof))
+		result, err := stmt.Exec(encode(sfe.StateElement.ID), encode(bid), encode(sfe.StateElement.LeafIndex), false, encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), false, encode(sfe.StateElement.LeafIndex))
 		if err != nil {
 			return nil, fmt.Errorf("addSiafundElements: failed to execute siafund_elements statement: %w", err)
 		}
@@ -538,7 +538,7 @@ func (ut *updateTx) AddSiafundElements(bid types.BlockID, spentElements, newElem
 		sfDBIds[types.SiafundOutputID(sfe.StateElement.ID)] = dbID
 	}
 	for _, sfe := range spentElements {
-		result, err := stmt.Exec(encode(sfe.StateElement.ID), encode(bid), encode(sfe.StateElement.LeafIndex), encodeSlice(sfe.StateElement.MerkleProof), true, encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), true, encode(sfe.StateElement.LeafIndex), encodeSlice(sfe.StateElement.MerkleProof))
+		result, err := stmt.Exec(encode(sfe.StateElement.ID), encode(bid), encode(sfe.StateElement.LeafIndex), true, encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), true, encode(sfe.StateElement.LeafIndex))
 		if err != nil {
 			return nil, fmt.Errorf("addSiafundElements: failed to execute siafund_elements statement: %w", err)
 		}
@@ -555,10 +555,10 @@ func (ut *updateTx) AddSiafundElements(bid types.BlockID, spentElements, newElem
 }
 
 func (ut *updateTx) AddFileContractElements(bid types.BlockID, update explorer.ConsensusUpdate) (map[explorer.DBFileContract]int64, error) {
-	stmt, err := ut.tx.Prepare(`INSERT INTO file_contract_elements(block_id, contract_id, leaf_index, merkle_proof, resolved, valid, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number)
-		VALUES (?, ?, ?, ?, FALSE, TRUE, ?, ?, ?, ?, ?, ?, ?)
+	stmt, err := ut.tx.Prepare(`INSERT INTO file_contract_elements(block_id, contract_id, leaf_index, resolved, valid, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number)
+		VALUES (?, ?, ?, FALSE, TRUE, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (contract_id, revision_number)
-		DO UPDATE SET resolved = ?, valid = ?, leaf_index = ?, merkle_proof = ?
+		DO UPDATE SET resolved = ?, valid = ?, leaf_index = ?
 		RETURNING id;`)
 	if err != nil {
 		return nil, fmt.Errorf("addFileContractElements: failed to prepare file_contract_elements statement: %w", err)
@@ -586,7 +586,7 @@ func (ut *updateTx) AddFileContractElements(bid types.BlockID, update explorer.C
 		}
 
 		var dbID int64
-		err := stmt.QueryRow(encode(bid), encode(fce.StateElement.ID), encode(fce.StateElement.LeafIndex), encodeSlice(fce.StateElement.MerkleProof), fc.Filesize, encode(fc.FileMerkleRoot), fc.WindowStart, fc.WindowEnd, encode(fc.Payout), encode(fc.UnlockHash), fc.RevisionNumber, resolved, valid, encode(fce.StateElement.LeafIndex), encodeSlice(fce.StateElement.MerkleProof)).Scan(&dbID)
+		err := stmt.QueryRow(encode(bid), encode(fce.StateElement.ID), encode(fce.StateElement.LeafIndex), fc.Filesize, encode(fc.FileMerkleRoot), fc.WindowStart, fc.WindowEnd, encode(fc.Payout), encode(fc.UnlockHash), fc.RevisionNumber, resolved, valid, encode(fce.StateElement.LeafIndex)).Scan(&dbID)
 		if err != nil {
 			updateErr = fmt.Errorf("addFileContractElements: failed to execute file_contract_elements statement: %w", err)
 			return

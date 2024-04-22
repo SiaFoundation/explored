@@ -18,7 +18,7 @@ func (s *Store) Contracts(ids []types.FileContractID) (result []explorer.FileCon
 	}
 
 	err = s.transaction(func(tx *txn) error {
-		query := `SELECT fc1.id, fc1.contract_id, fc1.leaf_index, fc1.merkle_proof, fc1.resolved, fc1.valid, fc1.filesize, fc1.file_merkle_root, fc1.window_start, fc1.window_end, fc1.payout, fc1.unlock_hash, fc1.revision_number
+		query := `SELECT fc1.id, fc1.contract_id, fc1.leaf_index, fc1.resolved, fc1.valid, fc1.filesize, fc1.file_merkle_root, fc1.window_start, fc1.window_end, fc1.payout, fc1.unlock_hash, fc1.revision_number
 			FROM file_contract_elements fc1
 			INNER JOIN last_contract_revision rev ON (rev.contract_element_id = fc1.id)
 			WHERE rev.contract_id IN (` + queryPlaceHolders(len(ids)) + `)`
@@ -33,7 +33,7 @@ func (s *Store) Contracts(ids []types.FileContractID) (result []explorer.FileCon
 		for rows.Next() {
 			var contractID int64
 			var fc explorer.FileContract
-			if err := rows.Scan(&contractID, decode(&fc.StateElement.ID), decode(&fc.StateElement.LeafIndex), decodeSlice(&fc.StateElement.MerkleProof), &fc.Resolved, &fc.Valid, &fc.Filesize, decode(&fc.FileMerkleRoot), &fc.WindowStart, &fc.WindowEnd, decode(&fc.Payout), decode(&fc.UnlockHash), &fc.RevisionNumber); err != nil {
+			if err := rows.Scan(&contractID, decode(&fc.StateElement.ID), decode(&fc.StateElement.LeafIndex), &fc.Resolved, &fc.Valid, &fc.Filesize, decode(&fc.FileMerkleRoot), &fc.WindowStart, &fc.WindowEnd, decode(&fc.Payout), decode(&fc.UnlockHash), &fc.RevisionNumber); err != nil {
 				return fmt.Errorf("failed to scan transaction: %w", err)
 			}
 
