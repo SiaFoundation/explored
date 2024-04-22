@@ -432,6 +432,22 @@ func (ut *updateTx) UpdateMaturedBalances(revert bool, height uint64) error {
 	return nil
 }
 
+func (ut *updateTx) UpdateStateTree(changes []explorer.TreeNodeUpdate) error {
+	stmt, err := ut.tx.Prepare(`INSERT INTO state_tree (row, column, value) VALUES($1, $2, $3) ON CONFLICT (row, column) DO UPDATE SET value=EXCLUDED.value;`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, change := range changes {
+		_, err := stmt.Exec(change.Row, change.Column, encode(change.Hash))
+		if err != nil {
+			return fmt.Errorf("failed to execute statement: %w", err)
+		}
+	}
+	return nil
+}
+
 func (ut *updateTx) AddSiacoinElements(bid types.BlockID, update explorer.ConsensusUpdate, spentElements, newElements []types.SiacoinElement) (map[types.SiacoinOutputID]int64, error) {
 	sources := make(map[types.SiacoinOutputID]explorer.Source)
 	if applyUpdate, ok := update.(chain.ApplyUpdate); ok {

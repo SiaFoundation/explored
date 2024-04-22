@@ -34,6 +34,7 @@ type Store interface {
 	Tip() (types.ChainIndex, error)
 	Block(id types.BlockID) (Block, error)
 	BestTip(height uint64) (types.ChainIndex, error)
+	MerkleProof(leafIndex uint64) ([]types.Hash256, error)
 	Transactions(ids []types.TransactionID) ([]Transaction, error)
 	UnspentSiacoinOutputs(address types.Address, limit, offset uint64) ([]SiacoinOutput, error)
 	UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]SiafundOutput, error)
@@ -122,6 +123,11 @@ func (e *Explorer) Block(id types.BlockID) (Block, error) {
 // BestTip returns the chain index at the specified height.
 func (e *Explorer) BestTip(height uint64) (types.ChainIndex, error) {
 	return e.s.BestTip(height)
+}
+
+// MerkleProof returns the proof of a given leaf.
+func (e *Explorer) MerkleProof(leafIndex uint64) ([]types.Hash256, error) {
+	return e.s.MerkleProof(leafIndex)
 }
 
 // Transactions returns the transactions with the specified IDs.

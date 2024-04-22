@@ -65,9 +65,6 @@ func (s *Store) init() error {
 	// calculate the expected final database version
 	target := int64(len(migrations) + 1)
 
-	// error is ignored -- the database may not have been initialized yet.
-	s.db.QueryRow("SELECT COUNT(*) FROM merkle_proofs WHERE i = 0").Scan(&s.numLeaves)
-
 	version := getDBVersion(s.db)
 	switch {
 	case version == 0:

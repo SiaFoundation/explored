@@ -196,11 +196,11 @@ CREATE TABLE transaction_file_contract_revisions (
 
 CREATE INDEX transaction_file_contract_revisions_transaction_id_index ON transaction_file_contract_revisions(transaction_id);
 
-CREATE TABLE merkle_proofs (
-        i INTEGER NOT NULL,
-        j INTEGER NOT NULL,
-        hash BLOB NOT NULL,
-        PRIMARY KEY(i ,j)
+CREATE TABLE state_tree (
+        row INTEGER NOT NULL,
+        column INTEGER NOT NULL,
+        value BLOB NOT NULL,
+        PRIMARY KEY(row, column)
 );
 
 -- initialize the global settings table

@@ -19,8 +19,6 @@ type (
 	Store struct {
 		db  *sql.DB
 		log *zap.Logger
-
-		numLeaves uint64
 	}
 )
 
