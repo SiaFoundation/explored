@@ -448,31 +448,7 @@ func (ut *updateTx) UpdateStateTree(changes []explorer.TreeNodeUpdate) error {
 	return nil
 }
 
-func (ut *updateTx) AddSiacoinElements(bid types.BlockID, update explorer.ConsensusUpdate, spentElements, newElements []types.SiacoinElement) (map[types.SiacoinOutputID]int64, error) {
-	sources := make(map[types.SiacoinOutputID]explorer.Source)
-	if applyUpdate, ok := update.(chain.ApplyUpdate); ok {
-		block := applyUpdate.Block
-		for i := range block.MinerPayouts {
-			sources[bid.MinerOutputID(i)] = explorer.SourceMinerPayout
-		}
-
-		for _, txn := range block.Transactions {
-			for i := range txn.SiacoinOutputs {
-				sources[txn.SiacoinOutputID(i)] = explorer.SourceTransaction
-			}
-
-			for i := range txn.FileContracts {
-				fcid := txn.FileContractID(i)
-				for j := range txn.FileContracts[i].ValidProofOutputs {
-					sources[fcid.ValidOutputID(j)] = explorer.SourceValidProofOutput
-				}
-				for j := range txn.FileContracts[i].MissedProofOutputs {
-					sources[fcid.MissedOutputID(j)] = explorer.SourceMissedProofOutput
-				}
-			}
-		}
-	}
-
+func (ut *updateTx) AddSiacoinElements(bid types.BlockID, sources map[types.SiacoinOutputID]explorer.Source, spentElements, newElements []types.SiacoinElement) (map[types.SiacoinOutputID]int64, error) {
 	stmt, err := ut.tx.Prepare(`INSERT INTO siacoin_elements(output_id, block_id, leaf_index, spent, source, maturity_height, address, value)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT (output_id)
@@ -554,7 +530,7 @@ func (ut *updateTx) AddSiafundElements(bid types.BlockID, spentElements, newElem
 	return sfDBIds, nil
 }
 
-func (ut *updateTx) AddFileContractElements(bid types.BlockID, update explorer.ConsensusUpdate) (map[explorer.DBFileContract]int64, error) {
+func (ut *updateTx) AddFileContractElements(bid types.BlockID, fces []explorer.FileContractUpdate) (map[explorer.DBFileContract]int64, error) {
 	stmt, err := ut.tx.Prepare(`INSERT INTO file_contract_elements(block_id, contract_id, leaf_index, resolved, valid, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number)
 		VALUES (?, ?, ?, FALSE, TRUE, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (contract_id, revision_number)
@@ -575,30 +551,26 @@ func (ut *updateTx) AddFileContractElements(bid types.BlockID, update explorer.C
 
 	var updateErr error
 	fcDBIds := make(map[explorer.DBFileContract]int64)
-	update.ForEachFileContractElement(func(fce types.FileContractElement, rev *types.FileContractElement, resolved, valid bool) {
-		if updateErr != nil {
-			return
-		}
+	for _, update := range fces {
+		fce := update.FileContractElement
 
 		fc := &fce.FileContract
-		if rev != nil {
-			fc = &rev.FileContract
+		if update.Revision != nil {
+			fc = &update.Revision.FileContract
 		}
 
 		var dbID int64
-		err := stmt.QueryRow(encode(bid), encode(fce.StateElement.ID), encode(fce.StateElement.LeafIndex), fc.Filesize, encode(fc.FileMerkleRoot), fc.WindowStart, fc.WindowEnd, encode(fc.Payout), encode(fc.UnlockHash), fc.RevisionNumber, resolved, valid, encode(fce.StateElement.LeafIndex)).Scan(&dbID)
+		err := stmt.QueryRow(encode(bid), encode(fce.StateElement.ID), encode(fce.StateElement.LeafIndex), fc.Filesize, encode(fc.FileMerkleRoot), fc.WindowStart, fc.WindowEnd, encode(fc.Payout), encode(fc.UnlockHash), fc.RevisionNumber, update.Resolved, update.Valid, encode(fce.StateElement.LeafIndex)).Scan(&dbID)
 		if err != nil {
-			updateErr = fmt.Errorf("addFileContractElements: failed to execute file_contract_elements statement: %w", err)
-			return
+			return nil, fmt.Errorf("addFileContractElements: failed to execute file_contract_elements statement: %w", err)
 		}
 
 		if _, err := revisionStmt.Exec(encode(fce.StateElement.ID), dbID, dbID); err != nil {
-			updateErr = fmt.Errorf("addFileContractElements: failed to update last revision number: %w", err)
-			return
+			return nil, fmt.Errorf("addFileContractElements: failed to update last revision number: %w", err)
 		}
 
 		fcDBIds[explorer.DBFileContract{ID: types.FileContractID(fce.StateElement.ID), RevisionNumber: fc.RevisionNumber}] = dbID
-	})
+	}
 	return fcDBIds, updateErr
 }
 

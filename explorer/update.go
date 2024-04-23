@@ -8,12 +8,11 @@ import (
 )
 
 type (
-
-	// A ConsensusUpdate is a chain apply or revert update.
-	ConsensusUpdate interface {
-		ForEachSiacoinElement(fn func(sce types.SiacoinElement, spent bool))
-		ForEachSiafundElement(fn func(sfe types.SiafundElement, spent bool))
-		ForEachFileContractElement(fn func(fce types.FileContractElement, rev *types.FileContractElement, resolved, valid bool))
+	// FileContractUpdate represents a file contract from a consensus update.
+	FileContractUpdate struct {
+		FileContractElement types.FileContractElement
+		Revision            *types.FileContractElement
+		Resolved, Valid     bool
 	}
 
 	// A DBFileContract represents a file contract element in the DB.
@@ -32,9 +31,9 @@ type (
 	// An UpdateTx atomically updates the state of a store.
 	UpdateTx interface {
 		UpdateStateTree(changes []TreeNodeUpdate) error
-		AddSiacoinElements(bid types.BlockID, update ConsensusUpdate, spentElements, newElements []types.SiacoinElement) (map[types.SiacoinOutputID]int64, error)
+		AddSiacoinElements(bid types.BlockID, sources map[types.SiacoinOutputID]Source, spentElements, newElements []types.SiacoinElement) (map[types.SiacoinOutputID]int64, error)
 		AddSiafundElements(bid types.BlockID, spentElements, newElements []types.SiafundElement) (map[types.SiafundOutputID]int64, error)
-		AddFileContractElements(bid types.BlockID, update ConsensusUpdate) (map[DBFileContract]int64, error)
+		AddFileContractElements(bid types.BlockID, fces []FileContractUpdate) (map[DBFileContract]int64, error)
 
 		UpdateBalances(height uint64, spentSiacoinElements, newSiacoinElements []types.SiacoinElement, spentSiafundElements, newSiafundElements []types.SiafundElement) error
 		UpdateMaturedBalances(revert bool, height uint64) error
@@ -53,6 +52,27 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 		return fmt.Errorf("applyUpdates: failed to add block: %w", err)
 	} else if err := tx.UpdateMaturedBalances(false, cau.State.Index.Height); err != nil {
 		return fmt.Errorf("applyUpdates: failed to update matured balances: %w", err)
+	}
+
+	sources := make(map[types.SiacoinOutputID]Source)
+	for i := range cau.Block.MinerPayouts {
+		sources[cau.Block.ID().MinerOutputID(i)] = SourceMinerPayout
+	}
+
+	for _, txn := range cau.Block.Transactions {
+		for i := range txn.SiacoinOutputs {
+			sources[txn.SiacoinOutputID(i)] = SourceTransaction
+		}
+
+		for i := range txn.FileContracts {
+			fcid := txn.FileContractID(i)
+			for j := range txn.FileContracts[i].ValidProofOutputs {
+				sources[fcid.ValidOutputID(j)] = SourceValidProofOutput
+			}
+			for j := range txn.FileContracts[i].MissedProofOutputs {
+				sources[fcid.MissedOutputID(j)] = SourceMissedProofOutput
+			}
+		}
 	}
 
 	created := make(map[types.Hash256]bool)
@@ -103,6 +123,16 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 		}
 	})
 
+	var fces []FileContractUpdate
+	cau.ForEachFileContractElement(func(fce types.FileContractElement, rev *types.FileContractElement, resolved, valid bool) {
+		fces = append(fces, FileContractUpdate{
+			FileContractElement: fce,
+			Revision:            rev,
+			Resolved:            resolved,
+			Valid:               valid,
+		})
+	})
+
 	var treeUpdates []TreeNodeUpdate
 	cau.ForEachTreeNode(func(row, column uint64, hash types.Hash256) {
 		treeUpdates = append(treeUpdates, TreeNodeUpdate{
@@ -114,7 +144,7 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 
 	scDBIds, err := tx.AddSiacoinElements(
 		cau.Block.ID(),
-		cau,
+		sources,
 		append(spentSiacoinElements, ephemeralSiacoinElements...),
 		newSiacoinElements,
 	)
@@ -133,7 +163,7 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 		return fmt.Errorf("applyUpdates: failed to update balances: %w", err)
 	}
 
-	fcDBIds, err := tx.AddFileContractElements(cau.Block.ID(), cau)
+	fcDBIds, err := tx.AddFileContractElements(cau.Block.ID(), fces)
 	if err != nil {
 		return fmt.Errorf("applyUpdates: failed to add file contracts: %w", err)
 	}
@@ -203,6 +233,16 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 		}
 	})
 
+	var fces []FileContractUpdate
+	cru.ForEachFileContractElement(func(fce types.FileContractElement, rev *types.FileContractElement, resolved, valid bool) {
+		fces = append(fces, FileContractUpdate{
+			FileContractElement: fce,
+			Revision:            rev,
+			Resolved:            resolved,
+			Valid:               valid,
+		})
+	})
+
 	var treeUpdates []TreeNodeUpdate
 	cru.ForEachTreeNode(func(row, column uint64, hash types.Hash256) {
 		treeUpdates = append(treeUpdates, TreeNodeUpdate{
@@ -215,7 +255,7 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 	// log.Println("REVERT!")
 	if _, err := tx.AddSiacoinElements(
 		cru.Block.ID(),
-		cru,
+		nil,
 		spentSiacoinElements,
 		append(newSiacoinElements, ephemeralSiacoinElements...),
 	); err != nil {
@@ -228,7 +268,7 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 		return fmt.Errorf("revertUpdate: failed to update siafund output state: %w", err)
 	} else if err := tx.UpdateBalances(revertedIndex.Height, spentSiacoinElements, newSiacoinElements, spentSiafundElements, newSiafundElements); err != nil {
 		return fmt.Errorf("revertUpdate: failed to update balances: %w", err)
-	} else if _, err := tx.AddFileContractElements(cru.Block.ID(), cru); err != nil {
+	} else if _, err := tx.AddFileContractElements(cru.Block.ID(), fces); err != nil {
 		return fmt.Errorf("revertUpdate: failed to update file contract state: %w", err)
 	} else if err := tx.DeleteBlock(cru.Block.ID()); err != nil {
 		return fmt.Errorf("revertUpdate: failed to delete block: %w", err)
