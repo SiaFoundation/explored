@@ -80,9 +80,9 @@ func (s *Store) AddressEvents(address types.Address, offset, limit int) (events 
 }
 
 // UnspentSiacoinOutputs implements explorer.Store.
-func (s *Store) UnspentSiacoinOutputs(address types.Address, limit, offset uint64) (result []explorer.SiacoinOutput, err error) {
+func (s *Store) UnspentSiacoinOutputs(address types.Address, offset, limit uint64) (result []explorer.SiacoinOutput, err error) {
 	err = s.transaction(func(tx *txn) error {
-		rows, err := tx.Query(`SELECT output_id, leaf_index, source, maturity_height, address, value FROM siacoin_elements WHERE address = ? AND spent = 0 LIMIT ? OFFSET ?`, encode(address), limit, offset)
+		rows, err := tx.Query(`SELECT output_id, leaf_index, source, maturity_height, address, value FROM siacoin_elements WHERE address = ? AND spent = 0 LIMIT ? OFFSET ?`, encode(address), offset, limit)
 		if err != nil {
 			return fmt.Errorf("failed to query siacoin outputs: %w", err)
 		}
@@ -101,9 +101,9 @@ func (s *Store) UnspentSiacoinOutputs(address types.Address, limit, offset uint6
 }
 
 // UnspentSiafundOutputs implements explorer.Store.
-func (s *Store) UnspentSiafundOutputs(address types.Address, limit, offset uint64) (result []explorer.SiafundOutput, err error) {
+func (s *Store) UnspentSiafundOutputs(address types.Address, offset, limit uint64) (result []explorer.SiafundOutput, err error) {
 	err = s.transaction(func(tx *txn) error {
-		rows, err := tx.Query(`SELECT output_id, leaf_index, claim_start, address, value FROM siafund_elements WHERE address = ? AND spent = 0 LIMIT ? OFFSET ?`, encode(address), limit, offset)
+		rows, err := tx.Query(`SELECT output_id, leaf_index, claim_start, address, value FROM siafund_elements WHERE address = ? AND spent = 0 LIMIT ? OFFSET ?`, encode(address), offset, limit)
 		if err != nil {
 			return fmt.Errorf("failed to query siafund outputs: %w", err)
 		}
