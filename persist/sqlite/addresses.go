@@ -2,11 +2,82 @@ package sqlite
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 
 	"go.sia.tech/core/types"
 	"go.sia.tech/explored/explorer"
 )
+
+func scanEvent(s scanner) (ev explorer.Event, eventID int64, err error) {
+	var eventType string
+	var eventBuf []byte
+
+	err = s.Scan(&eventID, decode(&ev.ID), &ev.MaturityHeight, decode(&ev.Timestamp), &ev.Index.Height, decode(&ev.Index.ID), &eventType, &eventBuf)
+	if err != nil {
+		return
+	}
+
+	switch eventType {
+	case explorer.EventTypeTransaction:
+		var tx explorer.EventTransaction
+		if err = json.Unmarshal(eventBuf, &tx); err != nil {
+			return explorer.Event{}, 0, fmt.Errorf("failed to unmarshal transaction event: %w", err)
+		}
+		ev.Data = &tx
+	case explorer.EventTypeContractPayout:
+		var m explorer.EventContractPayout
+		if err = json.Unmarshal(eventBuf, &m); err != nil {
+			return explorer.Event{}, 0, fmt.Errorf("failed to unmarshal missed file contract event: %w", err)
+		}
+		ev.Data = &m
+	case explorer.EventTypeMinerPayout:
+		var m explorer.EventMinerPayout
+		if err = json.Unmarshal(eventBuf, &m); err != nil {
+			return explorer.Event{}, 0, fmt.Errorf("failed to unmarshal payout event: %w", err)
+		}
+		ev.Data = &m
+	case explorer.EventTypeFoundationSubsidy:
+		var m explorer.EventFoundationSubsidy
+		if err = json.Unmarshal(eventBuf, &m); err != nil {
+			return explorer.Event{}, 0, fmt.Errorf("failed to unmarshal foundation subsidy event: %w", err)
+		}
+		ev.Data = &m
+	default:
+		return explorer.Event{}, 0, fmt.Errorf("unknown event type: %s", eventType)
+	}
+	return
+}
+
+// AddressEvents returns the events of a single address.
+func (s *Store) AddressEvents(address types.Address, offset, limit int) (events []explorer.Event, err error) {
+	err = s.transaction(func(tx *txn) error {
+		const query = `SELECT ev.id, ev.event_id, ev.maturity_height, ev.date_created, ev.height, ev.block_id, ev.event_type, ev.event_data
+	FROM events ev
+	INNER JOIN event_addresses ea ON (ev.id = ea.event_id)
+	INNER JOIN address_balance sa ON (ea.address_id = sa.id)
+	WHERE sa.address = $1
+	ORDER BY ev.maturity_height DESC, ev.id DESC
+	LIMIT $2 OFFSET $3`
+
+		rows, err := tx.Query(query, encode(address), limit, offset)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			event, _, err := scanEvent(rows)
+			if err != nil {
+				return fmt.Errorf("failed to scan event: %w", err)
+			}
+
+			events = append(events, event)
+		}
+		return rows.Err()
+	})
+	return
+}
 
 // UnspentSiacoinOutputs implements explorer.Store.
 func (s *Store) UnspentSiacoinOutputs(address types.Address, limit, offset uint64) (result []explorer.SiacoinOutput, err error) {

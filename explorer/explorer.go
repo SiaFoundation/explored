@@ -40,6 +40,7 @@ type Store interface {
 	UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]SiafundOutput, error)
 	Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 	Contracts(ids []types.FileContractID) (result []FileContract, err error)
+	AddressEvents(address types.Address, offset, limit int) (events []Event, err error)
 }
 
 // Explorer implements a Sia explorer.
@@ -145,6 +146,11 @@ func (e *Explorer) UnspentSiacoinOutputs(address types.Address, limit, offset ui
 // specified address.
 func (e *Explorer) UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]SiafundOutput, error) {
 	return e.s.UnspentSiafundOutputs(address, limit, offset)
+}
+
+// AddressEvents returns the events of a single address.
+func (e *Explorer) AddressEvents(address types.Address, offset, limit int) (events []Event, err error) {
+	return e.s.AddressEvents(address, offset, limit)
 }
 
 // Balance returns the balance of an address.
