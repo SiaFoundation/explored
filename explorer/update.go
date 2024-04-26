@@ -28,32 +28,34 @@ type (
 		Hash   types.Hash256
 	}
 
+	// An UpdateState contains information relevant to the block being applied
+	// or reverted.
+	UpdateState struct {
+		Block       types.Block
+		Index       types.ChainIndex
+		TreeUpdates []TreeNodeUpdate
+
+		Sources                  map[types.SiacoinOutputID]Source
+		NewSiacoinElements       []types.SiacoinElement
+		SpentSiacoinElements     []types.SiacoinElement
+		EphemeralSiacoinElements []types.SiacoinElement
+
+		NewSiafundElements       []types.SiafundElement
+		SpentSiafundElements     []types.SiafundElement
+		EphemeralSiafundElements []types.SiafundElement
+
+		FileContractElements []FileContractUpdate
+	}
+
 	// An UpdateTx atomically updates the state of a store.
 	UpdateTx interface {
-		UpdateStateTree(changes []TreeNodeUpdate) error
-		AddSiacoinElements(bid types.BlockID, sources map[types.SiacoinOutputID]Source, spentElements, newElements []types.SiacoinElement) (map[types.SiacoinOutputID]int64, error)
-		AddSiafundElements(bid types.BlockID, spentElements, newElements []types.SiafundElement) (map[types.SiafundOutputID]int64, error)
-		AddFileContractElements(bid types.BlockID, fces []FileContractUpdate) (map[DBFileContract]int64, error)
-
-		UpdateBalances(height uint64, spentSiacoinElements, newSiacoinElements []types.SiacoinElement, spentSiafundElements, newSiafundElements []types.SiafundElement) error
-		UpdateMaturedBalances(revert bool, height uint64) error
-
-		AddBlock(b types.Block, height uint64) error
-		AddMinerPayouts(bid types.BlockID, height uint64, scos []types.SiacoinOutput, dbIDs map[types.SiacoinOutputID]int64) error
-		AddTransactions(bid types.BlockID, txns []types.Transaction, scDBIds map[types.SiacoinOutputID]int64, sfDBIds map[types.SiafundOutputID]int64, fcDBIds map[DBFileContract]int64) error
-
-		DeleteBlock(bid types.BlockID) error
+		ApplyIndex(state UpdateState) error
+		RevertIndex(state UpdateState) error
 	}
 )
 
 // applyChainUpdate atomically applies a chain update to a store
 func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
-	if err := tx.AddBlock(cau.Block, cau.State.Index.Height); err != nil {
-		return fmt.Errorf("applyUpdates: failed to add block: %w", err)
-	} else if err := tx.UpdateMaturedBalances(false, cau.State.Index.Height); err != nil {
-		return fmt.Errorf("applyUpdates: failed to update matured balances: %w", err)
-	}
-
 	sources := make(map[types.SiacoinOutputID]Source)
 	for i := range cau.Block.MinerPayouts {
 		sources[cau.Block.ID().MinerOutputID(i)] = SourceMinerPayout
@@ -142,49 +144,27 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 		})
 	})
 
-	scDBIds, err := tx.AddSiacoinElements(
-		cau.Block.ID(),
-		sources,
-		append(spentSiacoinElements, ephemeralSiacoinElements...),
-		newSiacoinElements,
-	)
-	if err != nil {
-		return fmt.Errorf("applyUpdates: failed to add siacoin outputs: %w", err)
-	}
-	sfDBIds, err := tx.AddSiafundElements(
-		cau.Block.ID(),
-		append(spentSiafundElements, ephemeralSiafundElements...),
-		newSiafundElements,
-	)
-	if err != nil {
-		return fmt.Errorf("applyUpdates: failed to add siafund outputs: %w", err)
-	}
-	if err := tx.UpdateBalances(cau.State.Index.Height, spentSiacoinElements, newSiacoinElements, spentSiafundElements, newSiafundElements); err != nil {
-		return fmt.Errorf("applyUpdates: failed to update balances: %w", err)
-	}
+	state := UpdateState{
+		Block:       cau.Block,
+		Index:       cau.State.Index,
+		TreeUpdates: treeUpdates,
 
-	fcDBIds, err := tx.AddFileContractElements(cau.Block.ID(), fces)
-	if err != nil {
-		return fmt.Errorf("applyUpdates: failed to add file contracts: %w", err)
-	}
+		Sources:                  sources,
+		NewSiacoinElements:       newSiacoinElements,
+		SpentSiacoinElements:     spentSiacoinElements,
+		EphemeralSiacoinElements: ephemeralSiacoinElements,
 
-	if err := tx.AddMinerPayouts(cau.Block.ID(), cau.State.Index.Height, cau.Block.MinerPayouts, scDBIds); err != nil {
-		return fmt.Errorf("applyUpdates: failed to add miner payouts: %w", err)
-	} else if err := tx.AddTransactions(cau.Block.ID(), cau.Block.Transactions, scDBIds, sfDBIds, fcDBIds); err != nil {
-		return fmt.Errorf("applyUpdates: failed to add transactions: addTransactions: %w", err)
-	} else if err := tx.UpdateStateTree(treeUpdates); err != nil {
-		return fmt.Errorf("applyUpdates: failed to update state tree: %w", err)
-	}
+		NewSiafundElements:       newSiafundElements,
+		SpentSiafundElements:     spentSiafundElements,
+		EphemeralSiafundElements: ephemeralSiafundElements,
 
-	return nil
+		FileContractElements: fces,
+	}
+	return tx.ApplyIndex(state)
 }
 
 // revertChainUpdate atomically reverts a chain update from a store
 func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.ChainIndex) error {
-	if err := tx.UpdateMaturedBalances(true, revertedIndex.Height); err != nil {
-		return fmt.Errorf("revertUpdate: failed to update matured balances: %w", err)
-	}
-
 	created := make(map[types.Hash256]bool)
 	ephemeral := make(map[types.Hash256]bool)
 	for _, txn := range cru.Block.Transactions {
@@ -252,30 +232,22 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 		})
 	})
 
-	// log.Println("REVERT!")
-	if _, err := tx.AddSiacoinElements(
-		cru.Block.ID(),
-		nil,
-		spentSiacoinElements,
-		append(newSiacoinElements, ephemeralSiacoinElements...),
-	); err != nil {
-		return fmt.Errorf("revertUpdate: failed to update siacoin output state: %w", err)
-	} else if _, err := tx.AddSiafundElements(
-		cru.Block.ID(),
-		spentSiafundElements,
-		append(newSiafundElements, ephemeralSiafundElements...),
-	); err != nil {
-		return fmt.Errorf("revertUpdate: failed to update siafund output state: %w", err)
-	} else if err := tx.UpdateBalances(revertedIndex.Height, spentSiacoinElements, newSiacoinElements, spentSiafundElements, newSiafundElements); err != nil {
-		return fmt.Errorf("revertUpdate: failed to update balances: %w", err)
-	} else if _, err := tx.AddFileContractElements(cru.Block.ID(), fces); err != nil {
-		return fmt.Errorf("revertUpdate: failed to update file contract state: %w", err)
-	} else if err := tx.DeleteBlock(cru.Block.ID()); err != nil {
-		return fmt.Errorf("revertUpdate: failed to delete block: %w", err)
-	} else if err := tx.UpdateStateTree(treeUpdates); err != nil {
-		return fmt.Errorf("revertUpdate: failed to update state tree: %w", err)
+	state := UpdateState{
+		Block:       cru.Block,
+		Index:       revertedIndex,
+		TreeUpdates: treeUpdates,
+
+		NewSiacoinElements:       newSiacoinElements,
+		SpentSiacoinElements:     spentSiacoinElements,
+		EphemeralSiacoinElements: ephemeralSiacoinElements,
+
+		NewSiafundElements:       newSiafundElements,
+		SpentSiafundElements:     spentSiafundElements,
+		EphemeralSiafundElements: ephemeralSiafundElements,
+
+		FileContractElements: fces,
 	}
-	return nil
+	return tx.RevertIndex(state)
 }
 
 // UpdateChainState applies the reverts and updates.

@@ -530,6 +530,11 @@ func (ut *updateTx) AddSiafundElements(bid types.BlockID, spentElements, newElem
 	return sfDBIds, nil
 }
 
+func (ut *updateTx) DeleteBlock(bid types.BlockID) error {
+	_, err := ut.tx.Exec("DELETE FROM blocks WHERE id = ?", encode(bid))
+	return err
+}
+
 func (ut *updateTx) AddFileContractElements(bid types.BlockID, fces []explorer.FileContractUpdate) (map[explorer.DBFileContract]int64, error) {
 	stmt, err := ut.tx.Prepare(`INSERT INTO file_contract_elements(block_id, contract_id, leaf_index, resolved, valid, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number)
 		VALUES (?, ?, ?, FALSE, TRUE, ?, ?, ?, ?, ?, ?, ?)
@@ -574,9 +579,77 @@ func (ut *updateTx) AddFileContractElements(bid types.BlockID, fces []explorer.F
 	return fcDBIds, updateErr
 }
 
-func (ut *updateTx) DeleteBlock(bid types.BlockID) error {
-	_, err := ut.tx.Exec("DELETE FROM blocks WHERE id = ?", encode(bid))
-	return err
+func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
+	if err := ut.AddBlock(state.Block, state.Index.Height); err != nil {
+		return fmt.Errorf("ApplyIndex: failed to add block: %w", err)
+	} else if err := ut.UpdateMaturedBalances(false, state.Index.Height); err != nil {
+		return fmt.Errorf("ApplyIndex: failed to update matured balances: %w", err)
+	}
+
+	scDBIds, err := ut.AddSiacoinElements(
+		state.Block.ID(),
+		state.Sources,
+		append(state.SpentSiacoinElements, state.EphemeralSiacoinElements...),
+		state.NewSiacoinElements,
+	)
+	if err != nil {
+		return fmt.Errorf("ApplyIndex: failed to add siacoin outputs: %w", err)
+	}
+	sfDBIds, err := ut.AddSiafundElements(
+		state.Block.ID(),
+		append(state.SpentSiafundElements, state.EphemeralSiafundElements...),
+		state.NewSiafundElements,
+	)
+	if err != nil {
+		return fmt.Errorf("ApplyIndex: failed to add siafund outputs: %w", err)
+	}
+	if err := ut.UpdateBalances(state.Index.Height, state.SpentSiacoinElements, state.NewSiacoinElements, state.SpentSiafundElements, state.NewSiafundElements); err != nil {
+		return fmt.Errorf("ApplyIndex: failed to update balances: %w", err)
+	}
+
+	fcDBIds, err := ut.AddFileContractElements(state.Block.ID(), state.FileContractElements)
+	if err != nil {
+		return fmt.Errorf("v: failed to add file contracts: %w", err)
+	}
+
+	if err := ut.AddMinerPayouts(state.Block.ID(), state.Index.Height, state.Block.MinerPayouts, scDBIds); err != nil {
+		return fmt.Errorf("ApplyIndex: failed to add miner payouts: %w", err)
+	} else if err := ut.AddTransactions(state.Block.ID(), state.Block.Transactions, scDBIds, sfDBIds, fcDBIds); err != nil {
+		return fmt.Errorf("ApplyIndex: failed to add transactions: addTransactions: %w", err)
+	} else if err := ut.UpdateStateTree(state.TreeUpdates); err != nil {
+		return fmt.Errorf("ApplyIndex: failed to update state tree: %w", err)
+	}
+
+	return nil
+}
+
+func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
+	if err := ut.UpdateMaturedBalances(true, state.Index.Height); err != nil {
+		return fmt.Errorf("RevertIndex: failed to update matured balances: %w", err)
+	} else if _, err := ut.AddSiacoinElements(
+		state.Block.ID(),
+		nil,
+		state.SpentSiacoinElements,
+		append(state.NewSiacoinElements, state.EphemeralSiacoinElements...),
+	); err != nil {
+		return fmt.Errorf("RevertIndex: failed to update siacoin output state: %w", err)
+	} else if _, err := ut.AddSiafundElements(
+		state.Block.ID(),
+		state.SpentSiafundElements,
+		append(state.NewSiafundElements, state.EphemeralSiafundElements...),
+	); err != nil {
+		return fmt.Errorf("RevertIndex: failed to update siafund output state: %w", err)
+	} else if err := ut.UpdateBalances(state.Index.Height, state.SpentSiacoinElements, state.NewSiacoinElements, state.SpentSiafundElements, state.NewSiafundElements); err != nil {
+		return fmt.Errorf("RevertIndex: failed to update balances: %w", err)
+	} else if _, err := ut.AddFileContractElements(state.Block.ID(), state.FileContractElements); err != nil {
+		return fmt.Errorf("RevertIndex: failed to update file contract state: %w", err)
+	} else if err := ut.DeleteBlock(state.Block.ID()); err != nil {
+		return fmt.Errorf("RevertIndex: failed to delete block: %w", err)
+	} else if err := ut.UpdateStateTree(state.TreeUpdates); err != nil {
+		return fmt.Errorf("RevertIndex: failed to update state tree: %w", err)
+	}
+
+	return nil
 }
 
 // UpdateChainState implements explorer.Store
