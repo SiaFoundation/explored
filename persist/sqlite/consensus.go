@@ -266,7 +266,7 @@ type balance struct {
 	sf         uint64
 }
 
-func (ut *updateTx) updateBalances(height uint64, spentSiacoinElements, newSiacoinElements []types.SiacoinElement, spentSiafundElements, newSiafundElements []types.SiafundElement) error {
+func (ut *updateTx) updateBalances(height uint64, spentSiacoinElements, newSiacoinElements []explorer.SiacoinOutput, spentSiafundElements, newSiafundElements []types.SiafundElement) error {
 	addresses := make(map[types.Address]balance)
 	for _, sce := range spentSiacoinElements {
 		addresses[sce.SiacoinOutput.Address] = balance{}
@@ -448,7 +448,7 @@ func (ut *updateTx) updateStateTree(changes []explorer.TreeNodeUpdate) error {
 	return nil
 }
 
-func (ut *updateTx) addSiacoinElements(bid types.BlockID, sources map[types.SiacoinOutputID]explorer.Source, spentElements, newElements []types.SiacoinElement) (map[types.SiacoinOutputID]int64, error) {
+func (ut *updateTx) addSiacoinElements(bid types.BlockID, spentElements, newElements []explorer.SiacoinOutput) (map[types.SiacoinOutputID]int64, error) {
 	stmt, err := ut.tx.Prepare(`INSERT INTO siacoin_elements(output_id, block_id, leaf_index, spent, source, maturity_height, address, value)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT (output_id)
@@ -460,7 +460,7 @@ func (ut *updateTx) addSiacoinElements(bid types.BlockID, sources map[types.Siac
 
 	scDBIds := make(map[types.SiacoinOutputID]int64)
 	for _, sce := range newElements {
-		result, err := stmt.Exec(encode(sce.StateElement.ID), encode(bid), encode(sce.StateElement.LeafIndex), false, int(sources[types.SiacoinOutputID(sce.StateElement.ID)]), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), false, encode(sce.StateElement.LeafIndex))
+		result, err := stmt.Exec(encode(sce.StateElement.ID), encode(bid), encode(sce.StateElement.LeafIndex), false, int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), false, encode(sce.StateElement.LeafIndex))
 		if err != nil {
 			return nil, fmt.Errorf("addSiacoinElements: failed to execute siacoin_elements statement: %w", err)
 		}
@@ -473,7 +473,7 @@ func (ut *updateTx) addSiacoinElements(bid types.BlockID, sources map[types.Siac
 		scDBIds[types.SiacoinOutputID(sce.StateElement.ID)] = dbID
 	}
 	for _, sce := range spentElements {
-		result, err := stmt.Exec(encode(sce.StateElement.ID), encode(bid), encode(sce.StateElement.LeafIndex), true, int(sources[types.SiacoinOutputID(sce.StateElement.ID)]), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), true, encode(sce.StateElement.LeafIndex))
+		result, err := stmt.Exec(encode(sce.StateElement.ID), encode(bid), encode(sce.StateElement.LeafIndex), true, int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), true, encode(sce.StateElement.LeafIndex))
 		if err != nil {
 			return nil, fmt.Errorf("addSiacoinElements: failed to execute siacoin_elements statement: %w", err)
 		}
@@ -588,7 +588,6 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 
 	scDBIds, err := ut.addSiacoinElements(
 		state.Block.ID(),
-		state.Sources,
 		append(state.SpentSiacoinElements, state.EphemeralSiacoinElements...),
 		state.NewSiacoinElements,
 	)
@@ -628,7 +627,6 @@ func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("RevertIndex: failed to update matured balances: %w", err)
 	} else if _, err := ut.addSiacoinElements(
 		state.Block.ID(),
-		nil,
 		state.SpentSiacoinElements,
 		append(state.NewSiacoinElements, state.EphemeralSiacoinElements...),
 	); err != nil {

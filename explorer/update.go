@@ -35,10 +35,9 @@ type (
 		Index       types.ChainIndex
 		TreeUpdates []TreeNodeUpdate
 
-		Sources                  map[types.SiacoinOutputID]Source
-		NewSiacoinElements       []types.SiacoinElement
-		SpentSiacoinElements     []types.SiacoinElement
-		EphemeralSiacoinElements []types.SiacoinElement
+		NewSiacoinElements       []SiacoinOutput
+		SpentSiacoinElements     []SiacoinOutput
+		EphemeralSiacoinElements []SiacoinOutput
 
 		NewSiafundElements       []types.SiafundElement
 		SpentSiafundElements     []types.SiafundElement
@@ -95,18 +94,27 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 	}
 
 	// add new siacoin elements to the store
-	var newSiacoinElements, spentSiacoinElements []types.SiacoinElement
-	var ephemeralSiacoinElements []types.SiacoinElement
+	var newSiacoinElements, spentSiacoinElements []SiacoinOutput
+	var ephemeralSiacoinElements []SiacoinOutput
 	cau.ForEachSiacoinElement(func(se types.SiacoinElement, spent bool) {
 		if ephemeral[se.ID] {
-			ephemeralSiacoinElements = append(ephemeralSiacoinElements, se)
+			ephemeralSiacoinElements = append(ephemeralSiacoinElements, SiacoinOutput{
+				SiacoinElement: se,
+				Source:         sources[types.SiacoinOutputID(se.StateElement.ID)],
+			})
 			return
 		}
 
 		if spent {
-			spentSiacoinElements = append(spentSiacoinElements, se)
+			spentSiacoinElements = append(spentSiacoinElements, SiacoinOutput{
+				SiacoinElement: se,
+				Source:         sources[types.SiacoinOutputID(se.StateElement.ID)],
+			})
 		} else {
-			newSiacoinElements = append(newSiacoinElements, se)
+			newSiacoinElements = append(newSiacoinElements, SiacoinOutput{
+				SiacoinElement: se,
+				Source:         sources[types.SiacoinOutputID(se.StateElement.ID)],
+			})
 		}
 	})
 
@@ -149,7 +157,6 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 		Index:       cau.State.Index,
 		TreeUpdates: treeUpdates,
 
-		Sources:                  sources,
 		NewSiacoinElements:       newSiacoinElements,
 		SpentSiacoinElements:     spentSiacoinElements,
 		EphemeralSiacoinElements: ephemeralSiacoinElements,
@@ -183,18 +190,24 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 	}
 
 	// add new siacoin elements to the store
-	var newSiacoinElements, spentSiacoinElements []types.SiacoinElement
-	var ephemeralSiacoinElements []types.SiacoinElement
+	var newSiacoinElements, spentSiacoinElements []SiacoinOutput
+	var ephemeralSiacoinElements []SiacoinOutput
 	cru.ForEachSiacoinElement(func(se types.SiacoinElement, spent bool) {
 		if ephemeral[se.ID] {
-			ephemeralSiacoinElements = append(ephemeralSiacoinElements, se)
+			ephemeralSiacoinElements = append(ephemeralSiacoinElements, SiacoinOutput{
+				SiacoinElement: se,
+			})
 			return
 		}
 
 		if spent {
-			newSiacoinElements = append(newSiacoinElements, se)
+			newSiacoinElements = append(newSiacoinElements, SiacoinOutput{
+				SiacoinElement: se,
+			})
 		} else {
-			spentSiacoinElements = append(spentSiacoinElements, se)
+			spentSiacoinElements = append(spentSiacoinElements, SiacoinOutput{
+				SiacoinElement: se,
+			})
 		}
 	})
 
