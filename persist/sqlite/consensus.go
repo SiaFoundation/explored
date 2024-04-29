@@ -218,9 +218,12 @@ func (ut *updateTx) addFileContractRevisions(id int64, txn types.Transaction, db
 }
 
 func (ut *updateTx) addTransactions(bid types.BlockID, txns []types.Transaction, scDBIds map[types.SiacoinOutputID]int64, sfDBIds map[types.SiafundOutputID]int64, fcDBIds map[explorer.DBFileContract]int64) error {
-	insertTransactionStmt, err := ut.tx.Prepare(`INSERT INTO transactions (transaction_id) VALUES (?)
-	ON CONFLICT (transaction_id) DO UPDATE SET transaction_id=EXCLUDED.transaction_id -- technically a no-op, but necessary for the RETURNING clause
-	RETURNING id;`)
+	checkTransactionStmt, err := ut.tx.Prepare(`SELECT id FROM transactions WHERE transaction_id = ?`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare check transaction statement: %v", err)
+	}
+
+	insertTransactionStmt, err := ut.tx.Prepare(`INSERT INTO transactions (transaction_id) VALUES (?)`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare insert transaction statement: %v", err)
 	}
@@ -233,15 +236,34 @@ func (ut *updateTx) addTransactions(bid types.BlockID, txns []types.Transaction,
 	defer blockTransactionsStmt.Close()
 
 	for i, txn := range txns {
+		var exist bool
 		var txnID int64
-		err := insertTransactionStmt.QueryRow(encode(txn.ID())).Scan(&txnID)
-		if err != nil {
-			return fmt.Errorf("failed to insert into transactions: %w", err)
+		if err := checkTransactionStmt.QueryRow(encode(txn.ID())).Scan(&txnID); err != nil && err != sql.ErrNoRows {
+			return fmt.Errorf("failed to insert transaction ID: %w", err)
+		} else if err == nil {
+			exist = true
+		}
+
+		if !exist {
+			result, err := insertTransactionStmt.Exec(encode(txn.ID()))
+			if err != nil {
+				return fmt.Errorf("failed to insert into transactions: %w", err)
+			}
+			txnID, err = result.LastInsertId()
+			if err != nil {
+				return fmt.Errorf("failed to get transaction ID: %w", err)
+			}
 		}
 
 		if _, err := blockTransactionsStmt.Exec(encode(bid), txnID, i); err != nil {
 			return fmt.Errorf("failed to insert into block_transactions: %w", err)
-		} else if err := ut.addArbitraryData(txnID, txn); err != nil {
+		}
+
+		// transaction already exists, don't reinsert its fields
+		if exist {
+			continue
+		}
+		if err := ut.addArbitraryData(txnID, txn); err != nil {
 			return fmt.Errorf("failed to add arbitrary data: %w", err)
 		} else if err := ut.addSiacoinInputs(txnID, txn); err != nil {
 			return fmt.Errorf("failed to add siacoin inputs: %w", err)
