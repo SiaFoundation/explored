@@ -27,7 +27,7 @@ func encode(obj any) any {
 		return buf.Bytes()
 	case uint64:
 		b := make([]byte, 8)
-		binary.LittleEndian.PutUint64(b, obj)
+		binary.BigEndian.PutUint64(b, obj)
 		return b
 	case time.Time:
 		return obj.Unix()
@@ -60,7 +60,7 @@ func (d *decodable) Scan(src any) error {
 			v.DecodeFrom(dec)
 			return dec.Err()
 		case *uint64:
-			*v = binary.LittleEndian.Uint64(src)
+			*v = binary.BigEndian.Uint64(src)
 		default:
 			return fmt.Errorf("cannot scan %T to %T", src, d.v)
 		}
