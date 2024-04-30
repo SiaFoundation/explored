@@ -193,7 +193,7 @@ func TestBalance(t *testing.T) {
 	syncDB(t, db, cm)
 
 	// Check that addr1 has the miner payout output
-	utxos, err := db.UnspentSiacoinOutputs(addr1, 100, 0)
+	utxos, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -449,7 +449,7 @@ func TestSendTransactions(t *testing.T) {
 	const n = 100
 
 	// Check that addr1 has the miner payout output
-	utxos, err := db.UnspentSiacoinOutputs(addr1, n, 0)
+	utxos, err := db.UnspentSiacoinOutputs(addr1, 0, n)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -550,11 +550,11 @@ func TestSendTransactions(t *testing.T) {
 			{addr3, i + 1, types.Siacoins(2), i + 1, 2},
 		}
 		for _, e := range expected {
-			sc, err := db.UnspentSiacoinOutputs(e.addr, n, 0)
+			sc, err := db.UnspentSiacoinOutputs(e.addr, 0, n)
 			if err != nil {
 				t.Fatal(err)
 			}
-			sf, err := db.UnspentSiafundOutputs(e.addr, n, 0)
+			sf, err := db.UnspentSiafundOutputs(e.addr, 0, n)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -996,7 +996,7 @@ func TestRevertBalance(t *testing.T) {
 	syncDB(t, db, cm)
 
 	// Check that addr1 has the miner payout output
-	utxos, err := db.UnspentSiacoinOutputs(addr1, 100, 0)
+	utxos, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1032,13 +1032,13 @@ func TestRevertBalance(t *testing.T) {
 	checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
 	checkBalance(addr2, expectedPayout.Mul64(1), expectedPayout.Mul64(1), 0)
 
-	utxos1, err := db.UnspentSiacoinOutputs(addr1, 100, 0)
+	utxos1, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
 	check(t, "addr1 utxos", 0, len(utxos1))
 
-	utxos2, err := db.UnspentSiacoinOutputs(addr2, 100, 0)
+	utxos2, err := db.UnspentSiacoinOutputs(addr2, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1119,7 +1119,7 @@ func TestRevertBalance(t *testing.T) {
 	checkBalance(addr2, expectedPayout, types.ZeroCurrency, 0)
 	checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
 
-	utxos1, err = db.UnspentSiacoinOutputs(addr1, 100, 0)
+	utxos1, err = db.UnspentSiacoinOutputs(addr1, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1129,7 +1129,7 @@ func TestRevertBalance(t *testing.T) {
 		check(t, "source", explorer.SourceMinerPayout, utxo.Source)
 	}
 
-	utxos2, err = db.UnspentSiacoinOutputs(addr2, 100, 0)
+	utxos2, err = db.UnspentSiacoinOutputs(addr2, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1139,7 +1139,7 @@ func TestRevertBalance(t *testing.T) {
 		check(t, "source", explorer.SourceMinerPayout, utxo.Source)
 	}
 
-	utxos3, err := db.UnspentSiacoinOutputs(addr3, 100, 0)
+	utxos3, err := db.UnspentSiacoinOutputs(addr3, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1263,7 +1263,7 @@ func TestRevertSendTransactions(t *testing.T) {
 	const n = 26
 
 	// Check that addr1 has the miner payout output
-	utxos, err := db.UnspentSiacoinOutputs(addr1, n, 0)
+	utxos, err := db.UnspentSiacoinOutputs(addr1, 0, n)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1365,11 +1365,11 @@ func TestRevertSendTransactions(t *testing.T) {
 			{addr3, i + 1, types.Siacoins(2), i + 1, 2},
 		}
 		for _, e := range expected {
-			sc, err := db.UnspentSiacoinOutputs(e.addr, n, 0)
+			sc, err := db.UnspentSiacoinOutputs(e.addr, 0, n)
 			if err != nil {
 				t.Fatal(err)
 			}
-			sf, err := db.UnspentSiafundOutputs(e.addr, n, 0)
+			sf, err := db.UnspentSiafundOutputs(e.addr, 0, n)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1416,7 +1416,7 @@ func TestRevertSendTransactions(t *testing.T) {
 		checkBalance(addr2, types.Siacoins(1).Mul64(uint64(n-3)), types.ZeroCurrency, 1*uint64(n-3))
 		checkBalance(addr3, types.Siacoins(2).Mul64(uint64(n-3)), types.ZeroCurrency, 2*uint64(n-3))
 
-		scUtxos1, err := db.UnspentSiacoinOutputs(addr1, n, 0)
+		scUtxos1, err := db.UnspentSiacoinOutputs(addr1, 0, n)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1427,7 +1427,7 @@ func TestRevertSendTransactions(t *testing.T) {
 			check(t, "source", explorer.SourceTransaction, sce.Source)
 		}
 
-		scUtxos2, err := db.UnspentSiacoinOutputs(addr2, n, 0)
+		scUtxos2, err := db.UnspentSiacoinOutputs(addr2, 0, n)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1438,7 +1438,7 @@ func TestRevertSendTransactions(t *testing.T) {
 			check(t, "source", explorer.SourceTransaction, sce.Source)
 		}
 
-		scUtxos3, err := db.UnspentSiacoinOutputs(addr3, n, 0)
+		scUtxos3, err := db.UnspentSiacoinOutputs(addr3, 0, n)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1449,7 +1449,7 @@ func TestRevertSendTransactions(t *testing.T) {
 			check(t, "source", explorer.SourceTransaction, sce.Source)
 		}
 
-		sfUtxos1, err := db.UnspentSiafundOutputs(addr1, n, 0)
+		sfUtxos1, err := db.UnspentSiafundOutputs(addr1, 0, n)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1459,7 +1459,7 @@ func TestRevertSendTransactions(t *testing.T) {
 			check(t, "value", addr1SFs, sfe.SiafundOutput.Value)
 		}
 
-		sfUtxos2, err := db.UnspentSiafundOutputs(addr2, n, 0)
+		sfUtxos2, err := db.UnspentSiafundOutputs(addr2, 0, n)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1469,7 +1469,7 @@ func TestRevertSendTransactions(t *testing.T) {
 			check(t, "value", uint64(1), sfe.SiafundOutput.Value)
 		}
 
-		sfUtxos3, err := db.UnspentSiafundOutputs(addr3, n, 0)
+		sfUtxos3, err := db.UnspentSiafundOutputs(addr3, 0, n)
 		if err != nil {
 			t.Fatal(err)
 		}

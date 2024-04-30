@@ -36,8 +36,9 @@ type Store interface {
 	BestTip(height uint64) (types.ChainIndex, error)
 	MerkleProof(leafIndex uint64) ([]types.Hash256, error)
 	Transactions(ids []types.TransactionID) ([]Transaction, error)
-	UnspentSiacoinOutputs(address types.Address, limit, offset uint64) ([]SiacoinOutput, error)
-	UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]SiafundOutput, error)
+	UnspentSiacoinOutputs(address types.Address, offset, limit uint64) ([]SiacoinOutput, error)
+	UnspentSiafundOutputs(address types.Address, offset, limit uint64) ([]SiafundOutput, error)
+	AddressEvents(address types.Address, offset, limit uint64) (events []Event, err error)
 	Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 	Contracts(ids []types.FileContractID) (result []FileContract, err error)
 }
@@ -137,14 +138,19 @@ func (e *Explorer) Transactions(ids []types.TransactionID) ([]Transaction, error
 
 // UnspentSiacoinOutputs returns the unspent siacoin outputs owned by the
 // specified address.
-func (e *Explorer) UnspentSiacoinOutputs(address types.Address, limit, offset uint64) ([]SiacoinOutput, error) {
-	return e.s.UnspentSiacoinOutputs(address, limit, offset)
+func (e *Explorer) UnspentSiacoinOutputs(address types.Address, offset, limit uint64) ([]SiacoinOutput, error) {
+	return e.s.UnspentSiacoinOutputs(address, offset, limit)
 }
 
 // UnspentSiafundOutputs returns the unspent siafund outputs owned by the
 // specified address.
-func (e *Explorer) UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]SiafundOutput, error) {
-	return e.s.UnspentSiafundOutputs(address, limit, offset)
+func (e *Explorer) UnspentSiafundOutputs(address types.Address, offset, limit uint64) ([]SiafundOutput, error) {
+	return e.s.UnspentSiafundOutputs(address, offset, limit)
+}
+
+// AddressEvents returns the events of a single address.
+func (e *Explorer) AddressEvents(address types.Address, offset, limit uint64) (events []Event, err error) {
+	return e.s.AddressEvents(address, offset, limit)
 }
 
 // Balance returns the balance of an address.
