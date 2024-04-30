@@ -11,28 +11,20 @@ import (
 	"go.sia.tech/core/types"
 )
 
-func dbEncode(obj any) any {
+func encode(obj any) any {
 	switch obj := obj.(type) {
+	case types.Currency:
+		// Currency is encoded as two 64-bit big-endian integers for sorting
+		buf := make([]byte, 16)
+		binary.BigEndian.PutUint64(buf, obj.Hi)
+		binary.BigEndian.PutUint64(buf[8:], obj.Lo)
+		return buf
 	case types.EncoderTo:
 		var buf bytes.Buffer
 		e := types.NewEncoder(&buf)
 		obj.EncodeTo(e)
 		e.Flush()
 		return buf.Bytes()
-	case []types.Hash256:
-		var buf bytes.Buffer
-		e := types.NewEncoder(&buf)
-		e.WritePrefix(len(obj))
-		for _, o := range obj {
-			o.EncodeTo(e)
-		}
-		e.Flush()
-		return buf.Bytes()
-	case types.Currency:
-		buf := make([]byte, 16)
-		binary.BigEndian.PutUint64(buf[:8], obj.Hi)
-		binary.BigEndian.PutUint64(buf[8:], obj.Lo)
-		return buf
 	case uint64:
 		b := make([]byte, 8)
 		binary.BigEndian.PutUint64(b, obj)
@@ -57,19 +49,16 @@ func (d *decodable) Scan(src any) error {
 	switch src := src.(type) {
 	case []byte:
 		switch v := d.v.(type) {
+		case *types.Currency:
+			if len(src) != 16 {
+				return fmt.Errorf("cannot scan %d bytes into Currency", len(src))
+			}
+			v.Hi = binary.BigEndian.Uint64(src)
+			v.Lo = binary.BigEndian.Uint64(src[8:])
 		case types.DecoderFrom:
 			dec := types.NewBufDecoder(src)
 			v.DecodeFrom(dec)
 			return dec.Err()
-		case *[]types.Hash256:
-			dec := types.NewBufDecoder(src)
-			*v = make([]types.Hash256, dec.ReadPrefix())
-			for i := range *v {
-				(*v)[i].DecodeFrom(dec)
-			}
-		case *types.Currency:
-			v.Hi = binary.BigEndian.Uint64(src[:8])
-			v.Lo = binary.BigEndian.Uint64(src[8:])
 		case *uint64:
 			*v = binary.BigEndian.Uint64(src)
 		default:
@@ -91,6 +80,6 @@ func (d *decodable) Scan(src any) error {
 	}
 }
 
-func dbDecode(obj any) sql.Scanner {
+func decode(obj any) sql.Scanner {
 	return &decodable{obj}
 }

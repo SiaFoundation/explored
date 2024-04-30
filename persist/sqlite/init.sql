@@ -26,7 +26,6 @@ CREATE TABLE siacoin_elements (
 
         output_id BLOB UNIQUE NOT NULL,
         leaf_index BLOB NOT NULL,
-        merkle_proof BLOB NOT NULL,
 
         spent INTEGER NOT NULL,
         source INTEGER NOT NULL,
@@ -44,7 +43,6 @@ CREATE TABLE siafund_elements (
 
         output_id BLOB UNIQUE NOT NULL,
         leaf_index BLOB NOT NULL,
-        merkle_proof BLOB NOT NULL,
 
         spent INTEGER NOT NULL,
         claim_start BLOB NOT NULL,
@@ -61,7 +59,6 @@ CREATE TABLE file_contract_elements (
 
         contract_id BLOB NOT NULL,
         leaf_index BLOB NOT NULL,
-        merkle_proof BLOB NOT NULL,
 
         resolved INTEGER NOT NULL,
         valid INTEGER NOT NULL,
@@ -196,11 +193,11 @@ CREATE TABLE transaction_file_contract_revisions (
 
 CREATE INDEX transaction_file_contract_revisions_transaction_id_index ON transaction_file_contract_revisions(transaction_id);
 
-CREATE TABLE merkle_proofs (
-        i INTEGER NOT NULL,
-        j INTEGER NOT NULL,
-        hash BLOB NOT NULL,
-        PRIMARY KEY(i ,j)
+CREATE TABLE state_tree (
+        row INTEGER NOT NULL,
+        column INTEGER NOT NULL,
+        value BLOB NOT NULL,
+        PRIMARY KEY(row, column)
 );
 
 -- initialize the global settings table

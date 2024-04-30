@@ -29,18 +29,17 @@ type ChainManager interface {
 // A Store is a database that stores information about elements, contracts,
 // and blocks.
 type Store interface {
-	ProcessChainUpdates(crus []chain.RevertUpdate, caus []chain.ApplyUpdate) error
+	UpdateChainState(reverted []chain.RevertUpdate, applied []chain.ApplyUpdate) error
 
 	Tip() (types.ChainIndex, error)
 	Block(id types.BlockID) (Block, error)
 	BestTip(height uint64) (types.ChainIndex, error)
+	MerkleProof(leafIndex uint64) ([]types.Hash256, error)
 	Transactions(ids []types.TransactionID) ([]Transaction, error)
 	UnspentSiacoinOutputs(address types.Address, limit, offset uint64) ([]SiacoinOutput, error)
 	UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]SiafundOutput, error)
 	Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 	Contracts(ids []types.FileContractID) (result []FileContract, err error)
-
-	MerkleProof(leafIndex uint64) ([]types.Hash256, error)
 }
 
 // Explorer implements a Sia explorer.
@@ -58,7 +57,7 @@ func syncStore(store Store, cm ChainManager, index types.ChainIndex) error {
 			return fmt.Errorf("failed to subscribe to chain manager: %w", err)
 		}
 
-		if err := store.ProcessChainUpdates(crus, caus); err != nil {
+		if err := store.UpdateChainState(crus, caus); err != nil {
 			return fmt.Errorf("failed to process updates: %w", err)
 		}
 		if len(crus) > 0 {
@@ -111,11 +110,6 @@ func NewExplorer(cm ChainManager, store Store, log *zap.Logger) (*Explorer, erro
 	return e, nil
 }
 
-// MerkleProof gets the merkle proof with the given leaf index.
-func (e *Explorer) MerkleProof(leafIndex uint64) ([]types.Hash256, error) {
-	return e.s.MerkleProof(leafIndex)
-}
-
 // Tip returns the tip of the best known valid chain.
 func (e *Explorer) Tip() (types.ChainIndex, error) {
 	return e.s.Tip()
@@ -129,6 +123,11 @@ func (e *Explorer) Block(id types.BlockID) (Block, error) {
 // BestTip returns the chain index at the specified height.
 func (e *Explorer) BestTip(height uint64) (types.ChainIndex, error) {
 	return e.s.BestTip(height)
+}
+
+// MerkleProof returns the proof of a given leaf.
+func (e *Explorer) MerkleProof(leafIndex uint64) ([]types.Hash256, error) {
+	return e.s.MerkleProof(leafIndex)
 }
 
 // Transactions returns the transactions with the specified IDs.
