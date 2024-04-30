@@ -11,8 +11,7 @@ import (
 )
 
 type updateTx struct {
-	tx                *txn
-	relevantAddresses map[types.Address]bool
+	tx *txn
 }
 
 func (ut *updateTx) addBlock(b types.Block, height uint64) error {
@@ -21,7 +20,7 @@ func (ut *updateTx) addBlock(b types.Block, height uint64) error {
 	return err
 }
 
-func (ut *updateTx) addMinerPayouts(bid types.BlockID, height uint64, scos []types.SiacoinOutput, dbIDs map[types.SiacoinOutputID]int64) error {
+func (ut *updateTx) addMinerPayouts(bid types.BlockID, scos []types.SiacoinOutput, dbIDs map[types.SiacoinOutputID]int64) error {
 	stmt, err := ut.tx.Prepare(`INSERT INTO miner_payouts(block_id, block_order, output_id) VALUES (?, ?, ?);`)
 	if err != nil {
 		return fmt.Errorf("addMinerPayouts: failed to prepare statement: %w", err)
@@ -633,7 +632,7 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("v: failed to add file contracts: %w", err)
 	}
 
-	if err := ut.addMinerPayouts(state.Block.ID(), state.Index.Height, state.Block.MinerPayouts, scDBIds); err != nil {
+	if err := ut.addMinerPayouts(state.Block.ID(), state.Block.MinerPayouts, scDBIds); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add miner payouts: %w", err)
 	} else if err := ut.addTransactions(state.Block.ID(), state.Block.Transactions, scDBIds, sfDBIds, fcDBIds); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add transactions: addTransactions: %w", err)
@@ -676,8 +675,7 @@ func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
 func (s *Store) UpdateChainState(reverted []chain.RevertUpdate, applied []chain.ApplyUpdate) error {
 	return s.transaction(func(tx *txn) error {
 		utx := &updateTx{
-			tx:                tx,
-			relevantAddresses: make(map[types.Address]bool),
+			tx: tx,
 		}
 
 		if err := explorer.UpdateChainState(utx, reverted, applied); err != nil {
