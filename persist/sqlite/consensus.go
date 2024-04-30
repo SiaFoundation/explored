@@ -1,7 +1,9 @@
 package sqlite
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -551,6 +553,68 @@ func addSiafundElements(tx *txn, bid types.BlockID, spentElements, newElements [
 	return sfDBIds, nil
 }
 
+func addEvents(tx *txn, events []explorer.Event) error {
+	if len(events) == 0 {
+		return nil
+	}
+
+	insertEventStmt, err := tx.Prepare(`INSERT INTO events (event_id, maturity_height, date_created, event_type, event_data, block_id, height) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (event_id) DO NOTHING RETURNING id`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare event statement: %w", err)
+	}
+	defer insertEventStmt.Close()
+
+	addrStmt, err := tx.Prepare(`INSERT INTO address_balance (address, siacoin_balance, immature_siacoin_balance, siafund_balance) VALUES ($1, $2, $3, 0) ON CONFLICT (address) DO UPDATE SET address=EXCLUDED.address RETURNING id`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare address statement: %w", err)
+	}
+	defer addrStmt.Close()
+
+	relevantAddrStmt, err := tx.Prepare(`INSERT INTO event_addresses (event_id, address_id) VALUES ($1, $2) ON CONFLICT (event_id, address_id) DO NOTHING`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare relevant address statement: %w", err)
+	}
+	defer relevantAddrStmt.Close()
+
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	for _, event := range events {
+		buf.Reset()
+		if err := enc.Encode(event.Data); err != nil {
+			return fmt.Errorf("failed to encode event: %w", err)
+		}
+
+		var eventID int64
+		err = insertEventStmt.QueryRow(encode(event.ID), event.MaturityHeight, encode(event.Timestamp), event.Data.EventType(), buf.String(), encode(event.Index.ID), event.Index.Height).Scan(&eventID)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue // skip if the event already exists
+		} else if err != nil {
+			return fmt.Errorf("failed to add event: %w", err)
+		}
+
+		used := make(map[types.Address]bool)
+		for _, addr := range event.Relevant {
+			if used[addr] {
+				continue
+			}
+
+			var addressID int64
+			err = addrStmt.QueryRow(encode(addr), encode(types.ZeroCurrency), 0).Scan(&addressID)
+			if err != nil {
+				return fmt.Errorf("failed to get address: %w", err)
+			}
+
+			_, err = relevantAddrStmt.Exec(eventID, addressID)
+			if err != nil {
+				return fmt.Errorf("failed to add relevant address: %w", err)
+			}
+
+			used[addr] = true
+		}
+	}
+	return nil
+}
+
 func deleteBlock(tx *txn, bid types.BlockID) error {
 	_, err := tx.Exec("DELETE FROM blocks WHERE id = ?", encode(bid))
 	return err
@@ -681,6 +745,8 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to add transactions: addTransactions: %w", err)
 	} else if err := updateStateTree(ut.tx, state.TreeUpdates); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update state tree: %w", err)
+	} else if err := addEvents(ut.tx, state.Events); err != nil {
+		return fmt.Errorf("ApplyIndex: failed to add events: %w", err)
 	}
 
 	return nil
