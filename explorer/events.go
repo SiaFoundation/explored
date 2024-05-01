@@ -101,13 +101,13 @@ type HostAnnouncement struct {
 	NetAddress string          `json:"netAddress"`
 }
 
-// A SiafundInput represents a siafund input within an EventTransaction.
+// An EventSiafundInput represents a siafund input within an EventTransaction.
 type EventSiafundInput struct {
 	SiafundElement types.SiafundElement `json:"siafundElement"`
 	ClaimElement   types.SiacoinElement `json:"claimElement"`
 }
 
-// A FileContract represents a file contract within an EventTransaction.
+// An EventFileContract represents a file contract within an EventTransaction.
 type EventFileContract struct {
 	FileContract types.FileContractElement `json:"fileContract"`
 	// only non-nil if transaction revised contract
@@ -116,7 +116,7 @@ type EventFileContract struct {
 	ValidOutputs []types.SiacoinElement `json:"validOutputs,omitempty"`
 }
 
-// A EventV2FileContract represents a v2 file contract within an EventTransaction.
+// An EventV2FileContract represents a v2 file contract within an EventTransaction.
 type EventV2FileContract struct {
 	FileContract types.V2FileContractElement `json:"fileContract"`
 	// only non-nil if transaction revised contract
