@@ -599,7 +599,7 @@ func addEvents(tx *txn, events []explorer.Event) error {
 			}
 
 			var addressID int64
-			err = addrStmt.QueryRow(encode(addr), encode(types.ZeroCurrency), 0).Scan(&addressID)
+			err = addrStmt.QueryRow(encode(addr), encode(types.ZeroCurrency), encode(types.ZeroCurrency)).Scan(&addressID)
 			if err != nil {
 				return fmt.Errorf("failed to get address: %w", err)
 			}
