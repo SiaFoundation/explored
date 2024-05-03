@@ -186,7 +186,7 @@ CREATE TABLE transaction_file_contract_revisions (
         transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
         transaction_order INTEGER NOT NULL,
         contract_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL,
-        parent_id BLOB UNIQUE NOT NULL,
+        parent_id BLOB NOT NULL,
         unlock_conditions BLOB NOT NULL,
         UNIQUE(transaction_id, transaction_order)
 );
