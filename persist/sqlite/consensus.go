@@ -575,27 +575,31 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 		return nil, fmt.Errorf("addFileContractElements: failed to prepare last_contract_revision statement: %w", err)
 	}
 
-	var updateErr error
 	fcDBIds := make(map[explorer.DBFileContract]int64)
-	for _, update := range fces {
-		fce := update.FileContractElement
-
-		fc := &fce.FileContract
-		if update.Revision != nil {
-			fc = &update.Revision.FileContract
-		}
-
+	addFC := func(fcID types.FileContractID, leafIndex uint64, fc types.FileContract, resolved, valid bool) error {
 		var dbID int64
-		err := stmt.QueryRow(encode(b.ID()), encode(fce.StateElement.ID), encode(fce.StateElement.LeafIndex), fc.Filesize, encode(fc.FileMerkleRoot), fc.WindowStart, fc.WindowEnd, encode(fc.Payout), encode(fc.UnlockHash), fc.RevisionNumber, update.Resolved, update.Valid, encode(fce.StateElement.LeafIndex)).Scan(&dbID)
+		err := stmt.QueryRow(encode(b.ID()), encode(fcID), encode(leafIndex), fc.Filesize, encode(fc.FileMerkleRoot), fc.WindowStart, fc.WindowEnd, encode(fc.Payout), encode(fc.UnlockHash), fc.RevisionNumber, resolved, valid, encode(leafIndex)).Scan(&dbID)
 		if err != nil {
-			return nil, fmt.Errorf("addFileContractElements: failed to execute file_contract_elements statement: %w", err)
+			return fmt.Errorf("failed to execute file_contract_elements statement: %w", err)
 		}
 
-		if _, err := revisionStmt.Exec(encode(fce.StateElement.ID), dbID, dbID); err != nil {
-			return nil, fmt.Errorf("addFileContractElements: failed to update last revision number: %w", err)
+		if _, err := revisionStmt.Exec(encode(fcID), dbID, dbID); err != nil {
+			return fmt.Errorf("failed to update last revision number: %w", err)
 		}
 
-		fcDBIds[explorer.DBFileContract{ID: types.FileContractID(fce.StateElement.ID), RevisionNumber: fc.RevisionNumber}] = dbID
+		fcDBIds[explorer.DBFileContract{ID: fcID, RevisionNumber: fc.RevisionNumber}] = dbID
+		return nil
+	}
+
+	var updateErr error
+	for _, update := range fces {
+		fce := &update.FileContractElement
+		if update.Revision != nil {
+			fce = update.Revision
+		}
+		if err := addFC(types.FileContractID(fce.StateElement.ID), fce.StateElement.LeafIndex, fce.FileContract, update.Resolved, update.Valid); err != nil {
+			return nil, fmt.Errorf("addFileContractElements: %w", err)
+		}
 	}
 	for _, txn := range b.Transactions {
 		for j, fc := range txn.FileContracts {
@@ -605,17 +609,9 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 				continue
 			}
 
-			var dbID int64
-			err := stmt.QueryRow(encode(b.ID()), encode(fcID), encode(uint64(0)), fc.Filesize, encode(fc.FileMerkleRoot), fc.WindowStart, fc.WindowEnd, encode(fc.Payout), encode(fc.UnlockHash), fc.RevisionNumber, false, true, encode(uint64(0))).Scan(&dbID)
-			if err != nil {
-				return nil, fmt.Errorf("addFileContractElements: failed to execute file_contract_elements statement: %w", err)
+			if err := addFC(fcID, 0, fc, false, true); err != nil {
+				return nil, fmt.Errorf("addFileContractElements: %w", err)
 			}
-
-			if _, err := revisionStmt.Exec(encode(fcID), dbID, dbID); err != nil {
-				return nil, fmt.Errorf("addFileContractElements: failed to update last revision number: %w", err)
-			}
-
-			fcDBIds[dbFC] = dbID
 		}
 		for _, fcr := range txn.FileContractRevisions {
 			fc := fcr.FileContract
@@ -624,17 +620,9 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 				continue
 			}
 
-			var dbID int64
-			err := stmt.QueryRow(encode(b.ID()), encode(fcr.ParentID), encode(uint64(0)), fc.Filesize, encode(fc.FileMerkleRoot), fc.WindowStart, fc.WindowEnd, encode(fc.Payout), encode(fc.UnlockHash), fc.RevisionNumber, false, true, encode(uint64(0))).Scan(&dbID)
-			if err != nil {
-				return nil, fmt.Errorf("addFileContractElements: failed to execute file_contract_elements statement: %w", err)
+			if err := addFC(fcr.ParentID, 0, fc, false, true); err != nil {
+				return nil, fmt.Errorf("addFileContractElements: %w", err)
 			}
-
-			if _, err := revisionStmt.Exec(encode(fcr.ParentID), dbID, dbID); err != nil {
-				return nil, fmt.Errorf("addFileContractElements: failed to update last revision number: %w", err)
-			}
-
-			fcDBIds[dbFC] = dbID
 		}
 	}
 
