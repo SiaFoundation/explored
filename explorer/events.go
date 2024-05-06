@@ -28,7 +28,7 @@ type Event struct {
 	Index          types.ChainIndex `json:"index"`
 	Timestamp      time.Time        `json:"timestamp"`
 	MaturityHeight uint64           `json:"maturityHeight"`
-	Relevant       []types.Address  `json:"relevant"`
+	Addresses      []types.Address  `json:"addresses"`
 	Data           eventData        `json:"data"`
 }
 
@@ -51,14 +51,14 @@ func (e Event) MarshalJSON() ([]byte, error) {
 		ID        types.Hash256    `json:"id"`
 		Timestamp time.Time        `json:"timestamp"`
 		Index     types.ChainIndex `json:"index"`
-		Relevant  []types.Address  `json:"relevant"`
+		Addresses []types.Address  `json:"addresses"`
 		Type      string           `json:"type"`
 		Val       json.RawMessage  `json:"val"`
 	}{
 		ID:        e.ID,
 		Timestamp: e.Timestamp,
 		Index:     e.Index,
-		Relevant:  e.Relevant,
+		Addresses: e.Addresses,
 		Type:      e.Data.EventType(),
 		Val:       val,
 	})
@@ -70,7 +70,7 @@ func (e *Event) UnmarshalJSON(data []byte) error {
 		ID        types.Hash256    `json:"id"`
 		Timestamp time.Time        `json:"timestamp"`
 		Index     types.ChainIndex `json:"index"`
-		Relevant  []types.Address  `json:"relevant"`
+		Addresses []types.Address  `json:"Addresses"`
 		Type      string           `json:"type"`
 		Val       json.RawMessage  `json:"val"`
 	}
@@ -80,7 +80,7 @@ func (e *Event) UnmarshalJSON(data []byte) error {
 	e.ID = s.ID
 	e.Timestamp = s.Timestamp
 	e.Index = s.Index
-	e.Relevant = s.Relevant
+	e.Addresses = s.Addresses
 	switch s.Type {
 	case (*EventTransaction)(nil).EventType():
 		e.Data = new(EventTransaction)
@@ -164,13 +164,13 @@ type ChainUpdate interface {
 }
 
 // AppliedEvents extracts a list of relevant events from a chain update.
-func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate, relevant func(types.Address) bool) []Event {
+func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 	var events []Event
-	addEvent := func(id types.Hash256, maturityHeight uint64, v eventData, relevant []types.Address) {
+	addEvent := func(id types.Hash256, maturityHeight uint64, v eventData, addresses []types.Address) {
 		// dedup relevant addresses
 		seen := make(map[types.Address]bool)
-		unique := relevant[:0]
-		for _, addr := range relevant {
+		unique := addresses[:0]
+		for _, addr := range addresses {
 			if !seen[addr] {
 				unique = append(unique, addr)
 				seen[addr] = true
@@ -182,26 +182,9 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate, relevant f
 			Timestamp:      b.Timestamp,
 			Index:          cs.Index,
 			MaturityHeight: maturityHeight,
-			Relevant:       unique,
+			Addresses:      unique,
 			Data:           v,
 		})
-	}
-
-	anythingRelevant := func() (ok bool) {
-		cu.ForEachSiacoinElement(func(sce types.SiacoinElement, spent bool) {
-			if ok || relevant(sce.SiacoinOutput.Address) {
-				ok = true
-			}
-		})
-		cu.ForEachSiafundElement(func(sfe types.SiafundElement, spent bool) {
-			if ok || relevant(sfe.SiafundOutput.Address) {
-				ok = true
-			}
-		})
-		return
-	}()
-	if !anythingRelevant {
-		return nil
 	}
 
 	// collect all elements
@@ -228,48 +211,32 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate, relevant f
 
 	relevantTxn := func(txn types.Transaction) (addrs []types.Address) {
 		for _, sci := range txn.SiacoinInputs {
-			if sce := sces[sci.ParentID]; relevant(sce.SiacoinOutput.Address) {
-				addrs = append(addrs, sce.SiacoinOutput.Address)
-			}
+			addrs = append(addrs, sces[sci.ParentID].SiacoinOutput.Address)
 		}
 		for _, sco := range txn.SiacoinOutputs {
-			if relevant(sco.Address) {
-				addrs = append(addrs, sco.Address)
-			}
+			addrs = append(addrs, sco.Address)
 		}
 		for _, sfi := range txn.SiafundInputs {
-			if sfe := sfes[sfi.ParentID]; relevant(sfe.SiafundOutput.Address) {
-				addrs = append(addrs, sfe.SiafundOutput.Address)
-			}
+			addrs = append(addrs, sfes[sfi.ParentID].SiafundOutput.Address)
 		}
 		for _, sfo := range txn.SiafundOutputs {
-			if relevant(sfo.Address) {
-				addrs = append(addrs, sfo.Address)
-			}
+			addrs = append(addrs, sfo.Address)
 		}
 		return
 	}
 
 	relevantV2Txn := func(txn types.V2Transaction) (addrs []types.Address) {
 		for _, sci := range txn.SiacoinInputs {
-			if relevant(sci.Parent.SiacoinOutput.Address) {
-				addrs = append(addrs, sci.Parent.SiacoinOutput.Address)
-			}
+			addrs = append(addrs, sci.Parent.SiacoinOutput.Address)
 		}
 		for _, sco := range txn.SiacoinOutputs {
-			if relevant(sco.Address) {
-				addrs = append(addrs, sco.Address)
-			}
+			addrs = append(addrs, sco.Address)
 		}
 		for _, sfi := range txn.SiafundInputs {
-			if relevant(sfi.Parent.SiafundOutput.Address) {
-				addrs = append(addrs, sfi.Parent.SiafundOutput.Address)
-			}
+			addrs = append(addrs, sfi.Parent.SiafundOutput.Address)
 		}
 		for _, sfo := range txn.SiafundOutputs {
-			if relevant(sfo.Address) {
-				addrs = append(addrs, sfo.Address)
-			}
+			addrs = append(addrs, sfo.Address)
 		}
 		return
 	}
@@ -427,10 +394,6 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate, relevant f
 
 		if valid {
 			for i := range fce.FileContract.ValidProofOutputs {
-				if !relevant(fce.FileContract.ValidProofOutputs[i].Address) {
-					continue
-				}
-
 				outputID := types.FileContractID(fce.ID).ValidOutputID(i)
 				addEvent(types.Hash256(outputID), cs.MaturityHeight(), &EventContractPayout{
 					FileContract:  fce,
@@ -440,10 +403,6 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate, relevant f
 			}
 		} else {
 			for i := range fce.FileContract.MissedProofOutputs {
-				if !relevant(fce.FileContract.MissedProofOutputs[i].Address) {
-					continue
-				}
-
 				outputID := types.FileContractID(fce.ID).MissedOutputID(i)
 				addEvent(types.Hash256(outputID), cs.MaturityHeight(), &EventContractPayout{
 					FileContract:  fce,
@@ -456,23 +415,19 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate, relevant f
 
 	// handle block rewards
 	for i := range b.MinerPayouts {
-		if relevant(b.MinerPayouts[i].Address) {
-			outputID := cs.Index.ID.MinerOutputID(i)
-			addEvent(types.Hash256(outputID), cs.MaturityHeight(), &EventMinerPayout{
-				SiacoinOutput: sces[outputID],
-			}, []types.Address{b.MinerPayouts[i].Address})
-		}
+		outputID := cs.Index.ID.MinerOutputID(i)
+		addEvent(types.Hash256(outputID), cs.MaturityHeight(), &EventMinerPayout{
+			SiacoinOutput: sces[outputID],
+		}, []types.Address{b.MinerPayouts[i].Address})
 	}
 
 	// handle foundation subsidy
-	if relevant(cs.FoundationPrimaryAddress) {
-		outputID := cs.Index.ID.FoundationOutputID()
-		sce, ok := sces[outputID]
-		if ok {
-			addEvent(types.Hash256(outputID), cs.MaturityHeight(), &EventFoundationSubsidy{
-				SiacoinOutput: sce,
-			}, []types.Address{cs.FoundationPrimaryAddress})
-		}
+	outputID := cs.Index.ID.FoundationOutputID()
+	sce, ok := sces[outputID]
+	if ok {
+		addEvent(types.Hash256(outputID), cs.MaturityHeight(), &EventFoundationSubsidy{
+			SiacoinOutput: sce,
+		}, []types.Address{cs.FoundationPrimaryAddress})
 	}
 
 	return events

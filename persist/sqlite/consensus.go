@@ -593,7 +593,7 @@ func addEvents(tx *txn, events []explorer.Event) error {
 		}
 
 		used := make(map[types.Address]bool)
-		for _, addr := range event.Relevant {
+		for _, addr := range event.Addresses {
 			if used[addr] {
 				continue
 			}
