@@ -154,9 +154,7 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 		})
 	})
 
-	relevant := func(types.Address) bool { return true }
-	events := AppliedEvents(cau.State, cau.Block, cau, relevant)
-
+	events := AppliedEvents(cau.State, cau.Block, cau)
 	state := UpdateState{
 		Block: cau.Block,
 		Index: cau.State.Index,
