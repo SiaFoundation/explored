@@ -70,7 +70,7 @@ func (e *Event) UnmarshalJSON(data []byte) error {
 		ID        types.Hash256    `json:"id"`
 		Timestamp time.Time        `json:"timestamp"`
 		Index     types.ChainIndex `json:"index"`
-		Addresses []types.Address  `json:"Addresses"`
+		Addresses []types.Address  `json:"addresses"`
 		Type      string           `json:"type"`
 		Val       json.RawMessage  `json:"val"`
 	}
