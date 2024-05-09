@@ -229,17 +229,19 @@ CREATE TABLE transaction_events (
 
 CREATE TABLE contract_payout_events (
     event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
-    data BLOB NOT NULL
+    output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL,
+    contract_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL,
+    missed INTEGER NOT NULL
 );
 
 CREATE TABLE miner_payout_events (
     event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
-    data BLOB NOT NULL
+    output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL
 );
 
 CREATE TABLE foundation_subsidy_events (
     event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
-    data BLOB NOT NULL
+    output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL
 );
 
 -- initialize the global settings table

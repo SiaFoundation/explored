@@ -30,38 +30,38 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 		}
 		ev.Data = &tx
 	case explorer.EventTypeContractPayout:
-		err = tx.QueryRow(`SELECT data FROM contract_payout_events WHERE event_id = ?`, eventID).Scan(&eventBuf)
-		if err != nil {
-			return explorer.Event{}, 0, fmt.Errorf("failed to fetch contract payout event data: %w", err)
-		}
 		var m explorer.EventContractPayout
-		if err = json.Unmarshal(eventBuf, &m); err != nil {
-			return explorer.Event{}, 0, fmt.Errorf("failed to unmarshal missed file contract event: %w", err)
-		}
+		err = tx.QueryRow(`SELECT sce.output_id, sce.leaf_index, sce.maturity_height, sce.address, sce.value, fce.contract_id, fce.leaf_index, fce.filesize, fce.file_merkle_root, fce.window_start, fce.window_end, fce.payout, fce.unlock_hash, fce.revision_number, ev.missed
+FROM contract_payout_events ev
+JOIN siacoin_elements sce ON ev.output_id = sce.id
+JOIN file_contract_elements fce ON ev.contract_id = fce.id
+WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.StateElement.ID), decode(&m.SiacoinOutput.StateElement.LeafIndex), &m.SiacoinOutput.MaturityHeight, decode(&m.SiacoinOutput.SiacoinOutput.Address), decode(&m.SiacoinOutput.SiacoinOutput.Value), decode(&m.FileContract.StateElement.ID), decode(&m.FileContract.StateElement.LeafIndex), &m.FileContract.FileContract.Filesize, decode(&m.FileContract.FileContract.FileMerkleRoot), &m.FileContract.FileContract.WindowStart, &m.FileContract.FileContract.WindowEnd, decode(&m.FileContract.FileContract.Payout), decode(&m.FileContract.FileContract.UnlockHash), &m.FileContract.FileContract.RevisionNumber, &m.Missed)
 		ev.Data = &m
 	case explorer.EventTypeMinerPayout:
-		err = tx.QueryRow(`SELECT data FROM miner_payout_events WHERE event_id = ?`, eventID).Scan(&eventBuf)
+		var m explorer.EventMinerPayout
+		err = tx.QueryRow(`SELECT sc.output_id, sc.leaf_index, sc.maturity_height, sc.address, sc.value
+FROM siacoin_elements sc
+INNER JOIN miner_payout_events ev ON (ev.output_id = sc.id)
+WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.StateElement.ID), decode(&m.SiacoinOutput.StateElement.LeafIndex), decode(&m.SiacoinOutput.MaturityHeight), decode(&m.SiacoinOutput.SiacoinOutput.Address), decode(&m.SiacoinOutput.SiacoinOutput.Value))
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to fetch miner payout event data: %w", err)
 		}
-		var m explorer.EventMinerPayout
-		if err = json.Unmarshal(eventBuf, &m); err != nil {
-			return explorer.Event{}, 0, fmt.Errorf("failed to unmarshal payout event: %w", err)
-		}
 		ev.Data = &m
 	case explorer.EventTypeFoundationSubsidy:
-		err = tx.QueryRow(`SELECT data FROM foundation_subsidy_events WHERE event_id = ?`, eventID).Scan(&eventBuf)
-		if err != nil {
-			return explorer.Event{}, 0, fmt.Errorf("failed to fetch foundation subsidy event data: %w", err)
-		}
 		var m explorer.EventFoundationSubsidy
-		if err = json.Unmarshal(eventBuf, &m); err != nil {
-			return explorer.Event{}, 0, fmt.Errorf("failed to unmarshal foundation subsidy event: %w", err)
-		}
+		err = tx.QueryRow(`SELECT sc.output_id, sc.leaf_index, sc.maturity_height, sc.address, sc.value
+FROM siacoin_elements sc
+INNER JOIN foundation_subsidy_events ev ON (ev.output_id = sc.id)
+WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.StateElement.ID), decode(&m.SiacoinOutput.StateElement.LeafIndex), decode(&m.SiacoinOutput.MaturityHeight), decode(&m.SiacoinOutput.SiacoinOutput.Address), decode(&m.SiacoinOutput.SiacoinOutput.Value))
 		ev.Data = &m
 	default:
 		return explorer.Event{}, 0, fmt.Errorf("unknown event type: %s", eventType)
 	}
+
+	if err != nil {
+		return explorer.Event{}, 0, fmt.Errorf("failed to fetch transaction event data: %w", err)
+	}
+
 	return
 }
 
