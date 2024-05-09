@@ -553,7 +553,7 @@ func addSiafundElements(tx *txn, bid types.BlockID, spentElements, newElements [
 	return sfDBIds, nil
 }
 
-func addEvents(tx *txn, events []explorer.Event) error {
+func addEvents(tx *txn, events []explorer.Event, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[explorer.DBFileContract]int64) error {
 	if len(events) == 0 {
 		return nil
 	}
@@ -582,19 +582,19 @@ func addEvents(tx *txn, events []explorer.Event) error {
 	}
 	defer transactionEventStmt.Close()
 
-	minerPayoutEventStmt, err := tx.Prepare(`INSERT INTO miner_payout_events (event_id, data) VALUES (?, ?)`)
+	minerPayoutEventStmt, err := tx.Prepare(`INSERT INTO miner_payout_events (event_id, output_id) VALUES (?, ?)`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare miner payout event statement: %w", err)
 	}
 	defer minerPayoutEventStmt.Close()
 
-	contractPayoutEventStmt, err := tx.Prepare(`INSERT INTO contract_payout_events (event_id, data) VALUES (?, ?)`)
+	contractPayoutEventStmt, err := tx.Prepare(`INSERT INTO contract_payout_events (event_id, output_id, contract_id, missed) VALUES (?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare contract payout event statement: %w", err)
 	}
 	defer contractPayoutEventStmt.Close()
 
-	foundationSubsidyEventStmt, err := tx.Prepare(`INSERT INTO foundation_subsidy_events (event_id, data) VALUES (?, ?)`)
+	foundationSubsidyEventStmt, err := tx.Prepare(`INSERT INTO foundation_subsidy_events (event_id, output_id) VALUES (?, ?)`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare foundation subsidy event statement: %w", err)
 	}
@@ -616,15 +616,15 @@ func addEvents(tx *txn, events []explorer.Event) error {
 			return fmt.Errorf("failed to add event: %w", err)
 		}
 
-		switch event.Data.EventType() {
-		case explorer.EventTypeTransaction:
+		switch v := event.Data.(type) {
+		case *explorer.EventTransaction:
 			_, err = transactionEventStmt.Exec(eventID, buf.String())
-		case explorer.EventTypeMinerPayout:
-			_, err = minerPayoutEventStmt.Exec(eventID, buf.String())
-		case explorer.EventTypeContractPayout:
-			_, err = contractPayoutEventStmt.Exec(eventID, buf.String())
-		case explorer.EventTypeFoundationSubsidy:
-			_, err = foundationSubsidyEventStmt.Exec(eventID, buf.String())
+		case *explorer.EventMinerPayout:
+			_, err = minerPayoutEventStmt.Exec(eventID, scDBIds[types.SiacoinOutputID(v.SiacoinOutput.StateElement.ID)])
+		case *explorer.EventContractPayout:
+			_, err = contractPayoutEventStmt.Exec(eventID, scDBIds[types.SiacoinOutputID(v.SiacoinOutput.StateElement.ID)], fcDBIds[explorer.DBFileContract{types.FileContractID(v.FileContract.StateElement.ID), v.FileContract.FileContract.RevisionNumber}], v.Missed)
+		case *explorer.EventFoundationSubsidy:
+			_, err = foundationSubsidyEventStmt.Exec(eventID, scDBIds[types.SiacoinOutputID(v.SiacoinOutput.StateElement.ID)])
 		default:
 			return errors.New("unknown event type")
 		}
@@ -785,7 +785,7 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to add transactions: addTransactions: %w", err)
 	} else if err := updateStateTree(ut.tx, state.TreeUpdates); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update state tree: %w", err)
-	} else if err := addEvents(ut.tx, state.Events); err != nil {
+	} else if err := addEvents(ut.tx, state.Events, scDBIds, fcDBIds); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add events: %w", err)
 	}
 
