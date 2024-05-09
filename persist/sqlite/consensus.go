@@ -558,7 +558,7 @@ func addEvents(tx *txn, events []explorer.Event) error {
 		return nil
 	}
 
-	insertEventStmt, err := tx.Prepare(`INSERT INTO events (event_id, maturity_height, date_created, event_type, event_data, block_id, height) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (event_id) DO NOTHING RETURNING id`)
+	insertEventStmt, err := tx.Prepare(`INSERT INTO events (event_id, maturity_height, date_created, event_type, block_id, height) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (event_id) DO NOTHING RETURNING id`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare event statement: %w", err)
 	}
@@ -576,6 +576,30 @@ func addEvents(tx *txn, events []explorer.Event) error {
 	}
 	defer relevantAddrStmt.Close()
 
+	transactionEventStmt, err := tx.Prepare(`INSERT INTO transaction_events (event_id, data) VALUES (?, ?)`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare transaction event statement: %w", err)
+	}
+	defer transactionEventStmt.Close()
+
+	minerPayoutEventStmt, err := tx.Prepare(`INSERT INTO miner_payout_events (event_id, data) VALUES (?, ?)`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare miner payout event statement: %w", err)
+	}
+	defer minerPayoutEventStmt.Close()
+
+	contractPayoutEventStmt, err := tx.Prepare(`INSERT INTO contract_payout_events (event_id, data) VALUES (?, ?)`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare contract payout event statement: %w", err)
+	}
+	defer contractPayoutEventStmt.Close()
+
+	foundationSubsidyEventStmt, err := tx.Prepare(`INSERT INTO foundation_subsidy_events (event_id, data) VALUES (?, ?)`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare foundation subsidy event statement: %w", err)
+	}
+	defer foundationSubsidyEventStmt.Close()
+
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	for _, event := range events {
@@ -585,11 +609,27 @@ func addEvents(tx *txn, events []explorer.Event) error {
 		}
 
 		var eventID int64
-		err = insertEventStmt.QueryRow(encode(event.ID), event.MaturityHeight, encode(event.Timestamp), event.Data.EventType(), buf.String(), encode(event.Index.ID), event.Index.Height).Scan(&eventID)
+		err = insertEventStmt.QueryRow(encode(event.ID), event.MaturityHeight, encode(event.Timestamp), event.Data.EventType(), encode(event.Index.ID), event.Index.Height).Scan(&eventID)
 		if errors.Is(err, sql.ErrNoRows) {
 			continue // skip if the event already exists
 		} else if err != nil {
 			return fmt.Errorf("failed to add event: %w", err)
+		}
+
+		switch event.Data.EventType() {
+		case explorer.EventTypeTransaction:
+			_, err = transactionEventStmt.Exec(eventID, buf.String())
+		case explorer.EventTypeMinerPayout:
+			_, err = minerPayoutEventStmt.Exec(eventID, buf.String())
+		case explorer.EventTypeContractPayout:
+			_, err = contractPayoutEventStmt.Exec(eventID, buf.String())
+		case explorer.EventTypeFoundationSubsidy:
+			_, err = foundationSubsidyEventStmt.Exec(eventID, buf.String())
+		default:
+			return errors.New("unknown event type")
+		}
+		if err != nil {
+			return fmt.Errorf("failed to insert specific invent: %w", err)
 		}
 
 		used := make(map[types.Address]bool)

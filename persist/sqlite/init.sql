@@ -209,7 +209,6 @@ CREATE TABLE events (
         maturity_height INTEGER NOT NULL,
         date_created INTEGER NOT NULL,
         event_type TEXT NOT NULL,
-        event_data BLOB NOT NULL,
         block_id BLOB NOT NULL REFERENCES blocks(id) ON DELETE CASCADE,
         height INTEGER NOT NULL
 );
@@ -222,6 +221,26 @@ CREATE TABLE event_addresses (
 );
 CREATE INDEX event_addresses_event_id_index ON event_addresses(event_id);
 CREATE INDEX event_addresses_address_id_index ON event_addresses(address_id);
+
+CREATE TABLE transaction_events (
+    event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
+    data BLOB NOT NULL
+);
+
+CREATE TABLE contract_payout_events (
+    event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
+    data BLOB NOT NULL
+);
+
+CREATE TABLE miner_payout_events (
+    event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
+    data BLOB NOT NULL
+);
+
+CREATE TABLE foundation_subsidy_events (
+    event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
+    data BLOB NOT NULL
+);
 
 -- initialize the global settings table
 INSERT INTO global_settings (id, db_version) VALUES (0, 0); -- should not be changed

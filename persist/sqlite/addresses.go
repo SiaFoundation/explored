@@ -9,35 +9,51 @@ import (
 	"go.sia.tech/explored/explorer"
 )
 
-func scanEvent(s scanner) (ev explorer.Event, eventID int64, err error) {
+func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error) {
 	var eventType string
-	var eventBuf []byte
 
-	err = s.Scan(&eventID, decode(&ev.ID), &ev.MaturityHeight, decode(&ev.Timestamp), &ev.Index.Height, decode(&ev.Index.ID), &eventType, &eventBuf)
+	err = s.Scan(&eventID, decode(&ev.ID), &ev.MaturityHeight, decode(&ev.Timestamp), &ev.Index.Height, decode(&ev.Index.ID), &eventType)
 	if err != nil {
 		return
 	}
 
+	var eventBuf []byte
 	switch eventType {
 	case explorer.EventTypeTransaction:
+		err = tx.QueryRow(`SELECT data FROM transaction_events WHERE event_id = ?`, eventID).Scan(&eventBuf)
+		if err != nil {
+			return explorer.Event{}, 0, fmt.Errorf("failed to fetch transaction event data: %w", err)
+		}
 		var tx explorer.EventTransaction
 		if err = json.Unmarshal(eventBuf, &tx); err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to unmarshal transaction event: %w", err)
 		}
 		ev.Data = &tx
 	case explorer.EventTypeContractPayout:
+		err = tx.QueryRow(`SELECT data FROM contract_payout_events WHERE event_id = ?`, eventID).Scan(&eventBuf)
+		if err != nil {
+			return explorer.Event{}, 0, fmt.Errorf("failed to fetch contract payout event data: %w", err)
+		}
 		var m explorer.EventContractPayout
 		if err = json.Unmarshal(eventBuf, &m); err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to unmarshal missed file contract event: %w", err)
 		}
 		ev.Data = &m
 	case explorer.EventTypeMinerPayout:
+		err = tx.QueryRow(`SELECT data FROM miner_payout_events WHERE event_id = ?`, eventID).Scan(&eventBuf)
+		if err != nil {
+			return explorer.Event{}, 0, fmt.Errorf("failed to fetch miner payout event data: %w", err)
+		}
 		var m explorer.EventMinerPayout
 		if err = json.Unmarshal(eventBuf, &m); err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to unmarshal payout event: %w", err)
 		}
 		ev.Data = &m
 	case explorer.EventTypeFoundationSubsidy:
+		err = tx.QueryRow(`SELECT data FROM foundation_subsidy_events WHERE event_id = ?`, eventID).Scan(&eventBuf)
+		if err != nil {
+			return explorer.Event{}, 0, fmt.Errorf("failed to fetch foundation subsidy event data: %w", err)
+		}
 		var m explorer.EventFoundationSubsidy
 		if err = json.Unmarshal(eventBuf, &m); err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to unmarshal foundation subsidy event: %w", err)
@@ -52,7 +68,7 @@ func scanEvent(s scanner) (ev explorer.Event, eventID int64, err error) {
 // AddressEvents returns the events of a single address.
 func (s *Store) AddressEvents(address types.Address, offset, limit uint64) (events []explorer.Event, err error) {
 	err = s.transaction(func(tx *txn) error {
-		const query = `SELECT ev.id, ev.event_id, ev.maturity_height, ev.date_created, ev.height, ev.block_id, ev.event_type, ev.event_data
+		const query = `SELECT ev.id, ev.event_id, ev.maturity_height, ev.date_created, ev.height, ev.block_id, ev.event_type
 	FROM events ev
 	INNER JOIN event_addresses ea ON (ev.id = ea.event_id)
 	INNER JOIN address_balance sa ON (ea.address_id = sa.id)
@@ -67,7 +83,7 @@ func (s *Store) AddressEvents(address types.Address, offset, limit uint64) (even
 		defer rows.Close()
 
 		for rows.Next() {
-			event, _, err := scanEvent(rows)
+			event, _, err := scanEvent(tx, rows)
 			if err != nil {
 				return fmt.Errorf("failed to scan event: %w", err)
 			}
