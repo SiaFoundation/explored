@@ -622,7 +622,7 @@ func addEvents(tx *txn, events []explorer.Event, scDBIds map[types.SiacoinOutput
 		case *explorer.EventMinerPayout:
 			_, err = minerPayoutEventStmt.Exec(eventID, scDBIds[types.SiacoinOutputID(v.SiacoinOutput.StateElement.ID)])
 		case *explorer.EventContractPayout:
-			_, err = contractPayoutEventStmt.Exec(eventID, scDBIds[types.SiacoinOutputID(v.SiacoinOutput.StateElement.ID)], fcDBIds[explorer.DBFileContract{types.FileContractID(v.FileContract.StateElement.ID), v.FileContract.FileContract.RevisionNumber}], v.Missed)
+			_, err = contractPayoutEventStmt.Exec(eventID, scDBIds[types.SiacoinOutputID(v.SiacoinOutput.StateElement.ID)], fcDBIds[explorer.DBFileContract{ID: types.FileContractID(v.FileContract.StateElement.ID), RevisionNumber: v.FileContract.FileContract.RevisionNumber}], v.Missed)
 		case *explorer.EventFoundationSubsidy:
 			_, err = foundationSubsidyEventStmt.Exec(eventID, scDBIds[types.SiacoinOutputID(v.SiacoinOutput.StateElement.ID)])
 		default:
