@@ -224,7 +224,7 @@ CREATE INDEX event_addresses_address_id_index ON event_addresses(address_id);
 
 CREATE TABLE transaction_events (
     event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
-    data BLOB NOT NULL
+    transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL
 );
 
 CREATE TABLE contract_payout_events (

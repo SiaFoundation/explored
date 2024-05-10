@@ -1,8 +1,6 @@
 package explorer
 
 import (
-	"encoding/json"
-	"fmt"
 	"time"
 
 	"go.sia.tech/core/consensus"
@@ -44,57 +42,6 @@ func (*EventFoundationSubsidy) EventType() string { return EventTypeFoundationSu
 // EventType implements Event.
 func (*EventContractPayout) EventType() string { return EventTypeContractPayout }
 
-// MarshalJSON implements json.Marshaler.
-func (e Event) MarshalJSON() ([]byte, error) {
-	val, _ := json.Marshal(e.Data)
-	return json.Marshal(struct {
-		ID        types.Hash256    `json:"id"`
-		Timestamp time.Time        `json:"timestamp"`
-		Index     types.ChainIndex `json:"index"`
-		Addresses []types.Address  `json:"addresses"`
-		Type      string           `json:"type"`
-		Val       json.RawMessage  `json:"val"`
-	}{
-		ID:        e.ID,
-		Timestamp: e.Timestamp,
-		Index:     e.Index,
-		Addresses: e.Addresses,
-		Type:      e.Data.EventType(),
-		Val:       val,
-	})
-}
-
-// UnmarshalJSON implements json.Unarshaler.
-func (e *Event) UnmarshalJSON(data []byte) error {
-	var s struct {
-		ID        types.Hash256    `json:"id"`
-		Timestamp time.Time        `json:"timestamp"`
-		Index     types.ChainIndex `json:"index"`
-		Addresses []types.Address  `json:"addresses"`
-		Type      string           `json:"type"`
-		Val       json.RawMessage  `json:"val"`
-	}
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	e.ID = s.ID
-	e.Timestamp = s.Timestamp
-	e.Index = s.Index
-	e.Addresses = s.Addresses
-	switch s.Type {
-	case (*EventTransaction)(nil).EventType():
-		e.Data = new(EventTransaction)
-	case (*EventMinerPayout)(nil).EventType():
-		e.Data = new(EventMinerPayout)
-	case (*EventContractPayout)(nil).EventType():
-		e.Data = new(EventContractPayout)
-	}
-	if e.Data == nil {
-		return fmt.Errorf("unknown event type %q", s.Type)
-	}
-	return json.Unmarshal(s.Val, e.Data)
-}
-
 // A HostAnnouncement represents a host announcement within an EventTransaction.
 type HostAnnouncement struct {
 	PublicKey  types.PublicKey `json:"publicKey"`
@@ -128,15 +75,12 @@ type EventV2FileContract struct {
 
 // An EventTransaction represents a transaction that affects the wallet.
 type EventTransaction struct {
-	SiacoinInputs     []types.SiacoinElement `json:"siacoinInputs"`
-	SiacoinOutputs    []types.SiacoinElement `json:"siacoinOutputs"`
-	SiafundInputs     []EventSiafundInput    `json:"siafundInputs"`
-	SiafundOutputs    []types.SiafundElement `json:"siafundOutputs"`
-	FileContracts     []EventFileContract    `json:"fileContracts"`
-	V2FileContracts   []EventV2FileContract  `json:"v2FileContracts"`
-	HostAnnouncements []HostAnnouncement     `json:"hostAnnouncements"`
-	Fee               types.Currency         `json:"fee"`
+	Transaction       Transaction        `json:"transaction"`
+	HostAnnouncements []HostAnnouncement `json:"hostAnnouncements"`
+	Fee               types.Currency     `json:"fee"`
 }
+
+// type EventTransaction Transaction
 
 // An EventMinerPayout represents a miner payout from a block.
 type EventMinerPayout struct {
@@ -248,52 +192,7 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 			continue
 		}
 
-		e := &EventTransaction{
-			SiacoinInputs:  make([]types.SiacoinElement, len(txn.SiacoinInputs)),
-			SiacoinOutputs: make([]types.SiacoinElement, len(txn.SiacoinOutputs)),
-			SiafundInputs:  make([]EventSiafundInput, len(txn.SiafundInputs)),
-			SiafundOutputs: make([]types.SiafundElement, len(txn.SiafundOutputs)),
-		}
-
-		for i := range txn.SiacoinInputs {
-			e.SiacoinInputs[i] = sces[txn.SiacoinInputs[i].ParentID]
-		}
-		for i := range txn.SiacoinOutputs {
-			e.SiacoinOutputs[i] = sces[txn.SiacoinOutputID(i)]
-		}
-		for i := range txn.SiafundInputs {
-			e.SiafundInputs[i] = EventSiafundInput{
-				SiafundElement: sfes[txn.SiafundInputs[i].ParentID],
-				ClaimElement:   sces[txn.SiafundClaimOutputID(i)],
-			}
-		}
-		for i := range txn.SiafundOutputs {
-			e.SiafundOutputs[i] = sfes[txn.SiafundOutputID(i)]
-		}
-		addContract := func(id types.FileContractID) *EventFileContract {
-			for i := range e.FileContracts {
-				if types.FileContractID(e.FileContracts[i].FileContract.ID) == id {
-					return &e.FileContracts[i]
-				}
-			}
-			e.FileContracts = append(e.FileContracts, EventFileContract{FileContract: fces[id]})
-			return &e.FileContracts[len(e.FileContracts)-1]
-		}
-		for i := range txn.FileContracts {
-			addContract(txn.FileContractID(i))
-		}
-		for i := range txn.FileContractRevisions {
-			fc := addContract(txn.FileContractRevisions[i].ParentID)
-			rev := txn.FileContractRevisions[i].FileContract
-			fc.Revision = &rev
-		}
-		for i := range txn.StorageProofs {
-			fc := addContract(txn.StorageProofs[i].ParentID)
-			fc.ValidOutputs = make([]types.SiacoinElement, len(fc.FileContract.FileContract.ValidProofOutputs))
-			for i := range fc.ValidOutputs {
-				fc.ValidOutputs[i] = sces[types.FileContractID(fc.FileContract.ID).ValidOutputID(i)]
-			}
-		}
+		var e EventTransaction
 		for _, arb := range txn.ArbitraryData {
 			var prefix types.Specifier
 			var uk types.UnlockKey
@@ -313,7 +212,7 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 			e.Fee = e.Fee.Add(txn.MinerFees[i])
 		}
 
-		addEvent(types.Hash256(txn.ID()), cs.Index.Height, e, relevant) // transaction maturity height is the current block height
+		addEvent(types.Hash256(txn.ID()), cs.Index.Height, &e, relevant) // transaction maturity height is the current block height
 	}
 
 	// handle v2 transactions
@@ -323,56 +222,7 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 			continue
 		}
 
-		txid := txn.ID()
-		e := &EventTransaction{
-			SiacoinInputs:  make([]types.SiacoinElement, len(txn.SiacoinInputs)),
-			SiacoinOutputs: make([]types.SiacoinElement, len(txn.SiacoinOutputs)),
-			SiafundInputs:  make([]EventSiafundInput, len(txn.SiafundInputs)),
-			SiafundOutputs: make([]types.SiafundElement, len(txn.SiafundOutputs)),
-		}
-		for i := range txn.SiacoinInputs {
-			// NOTE: here (and elsewhere), we fetch the element from our maps,
-			// rather than using the parent directly, because our copy has its
-			// Merkle proof nil'd out
-			e.SiacoinInputs[i] = sces[types.SiacoinOutputID(txn.SiacoinInputs[i].Parent.ID)]
-		}
-		for i := range txn.SiacoinOutputs {
-			e.SiacoinOutputs[i] = sces[txn.SiacoinOutputID(txid, i)]
-		}
-		for i := range txn.SiafundInputs {
-			sfoid := types.SiafundOutputID(txn.SiafundInputs[i].Parent.ID)
-			e.SiafundInputs[i] = EventSiafundInput{
-				SiafundElement: sfes[sfoid],
-				ClaimElement:   sces[sfoid.ClaimOutputID()],
-			}
-		}
-		for i := range txn.SiafundOutputs {
-			e.SiafundOutputs[i] = sfes[txn.SiafundOutputID(txid, i)]
-		}
-		addContract := func(id types.FileContractID) *EventV2FileContract {
-			for i := range e.V2FileContracts {
-				if types.FileContractID(e.V2FileContracts[i].FileContract.ID) == id {
-					return &e.V2FileContracts[i]
-				}
-			}
-			e.V2FileContracts = append(e.V2FileContracts, EventV2FileContract{FileContract: v2fces[id]})
-			return &e.V2FileContracts[len(e.V2FileContracts)-1]
-		}
-		for i := range txn.FileContracts {
-			addContract(txn.V2FileContractID(txid, i))
-		}
-		for _, fcr := range txn.FileContractRevisions {
-			fc := addContract(types.FileContractID(fcr.Parent.ID))
-			fc.Revision = &fcr.Revision
-		}
-		for _, fcr := range txn.FileContractResolutions {
-			fc := addContract(types.FileContractID(fcr.Parent.ID))
-			fc.Resolution = fcr.Resolution
-			fc.Outputs = []types.SiacoinElement{
-				sces[types.FileContractID(fcr.Parent.ID).V2RenterOutputID()],
-				sces[types.FileContractID(fcr.Parent.ID).V2HostOutputID()],
-			}
-		}
+		var e EventTransaction
 		for _, a := range txn.Attestations {
 			if a.Key == "HostAnnouncement" {
 				e.HostAnnouncements = append(e.HostAnnouncements, HostAnnouncement{
@@ -381,9 +231,7 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 				})
 			}
 		}
-
-		e.Fee = txn.MinerFee
-		addEvent(types.Hash256(txid), cs.Index.Height, e, relevant) // transaction maturity height is the current block height
+		addEvent(types.Hash256(txn.ID()), cs.Index.Height, &e, relevant) // transaction maturity height is the current block height
 	}
 
 	// handle missed contracts
