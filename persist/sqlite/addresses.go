@@ -19,7 +19,8 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 	switch eventType {
 	case explorer.EventTypeTransaction:
 		var txnID int64
-		err = tx.QueryRow(`SELECT transaction_id FROM transaction_events WHERE event_id = ?`, eventID).Scan(&txnID)
+		var eventTx explorer.EventTransaction
+		err = tx.QueryRow(`SELECT transaction_id, fee FROM transaction_events WHERE event_id = ?`, eventID).Scan(&txnID, decode(&eventTx.Fee))
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to fetch transaction ID: %w", err)
 		}
@@ -27,9 +28,22 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 		if err != nil || len(txns) == 0 {
 			return explorer.Event{}, 0, fmt.Errorf("failed to fetch transaction: %w", err)
 		}
-		ev.Data = &explorer.EventTransaction{
-			Transaction: txns[0],
+
+		rows, err := tx.Query(`SELECT public_key, net_address FROM host_announcements WHERE transaction_id = ? ORDER BY transaction_order ASC`, txnID)
+		if err != nil {
+			return explorer.Event{}, 0, fmt.Errorf("failed to get host announcements: %w", err)
 		}
+		defer rows.Close()
+
+		eventTx.Transaction = txns[0]
+		for rows.Next() {
+			var announcement explorer.HostAnnouncement
+			if err := rows.Scan(decode(&announcement.PublicKey), &announcement.NetAddress); err != nil {
+				return explorer.Event{}, 0, fmt.Errorf("failed to scan announcement: %w", err)
+			}
+			eventTx.HostAnnouncements = append(eventTx.HostAnnouncements, announcement)
+		}
+		ev.Data = &eventTx
 	case explorer.EventTypeContractPayout:
 		var m explorer.EventContractPayout
 		err = tx.QueryRow(`SELECT sce.output_id, sce.leaf_index, sce.maturity_height, sce.address, sce.value, fce.contract_id, fce.leaf_index, fce.filesize, fce.file_merkle_root, fce.window_start, fce.window_end, fce.payout, fce.unlock_hash, fce.revision_number, ev.missed
