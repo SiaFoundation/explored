@@ -347,7 +347,7 @@ func transactionDatabaseIDs(tx *txn, txnIDs []types.TransactionID) (dbIDs []int6
 	return
 }
 
-func (s *Store) getTransactions(tx *txn, dbIDs []int64) ([]explorer.Transaction, error) {
+func getTransactions(tx *txn, dbIDs []int64) ([]explorer.Transaction, error) {
 	txnArbitraryData, err := transactionArbitraryData(tx, dbIDs)
 	if err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get arbitrary data: %w", err)
@@ -409,7 +409,7 @@ func (s *Store) Transactions(ids []types.TransactionID) (results []explorer.Tran
 		if err != nil {
 			return fmt.Errorf("failed to get transaction IDs: %w", err)
 		}
-		results, err = s.getTransactions(tx, dbIDs)
+		results, err = getTransactions(tx, dbIDs)
 		if err != nil {
 			return fmt.Errorf("failed to get transactions: %w", err)
 		}

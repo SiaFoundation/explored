@@ -2,7 +2,6 @@ package sqlite
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 
 	"go.sia.tech/core/types"
@@ -17,18 +16,20 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 		return
 	}
 
-	var eventBuf []byte
 	switch eventType {
 	case explorer.EventTypeTransaction:
-		err = tx.QueryRow(`SELECT data FROM transaction_events WHERE event_id = ?`, eventID).Scan(&eventBuf)
+		var txnID int64
+		err = tx.QueryRow(`SELECT transaction_id FROM transaction_events WHERE event_id = ?`, eventID).Scan(&txnID)
 		if err != nil {
-			return explorer.Event{}, 0, fmt.Errorf("failed to fetch transaction event data: %w", err)
+			return explorer.Event{}, 0, fmt.Errorf("failed to fetch transaction ID: %w", err)
 		}
-		var tx explorer.EventTransaction
-		if err = json.Unmarshal(eventBuf, &tx); err != nil {
-			return explorer.Event{}, 0, fmt.Errorf("failed to unmarshal transaction event: %w", err)
+		txns, err := getTransactions(tx, []int64{txnID})
+		if err != nil || len(txns) == 0 {
+			return explorer.Event{}, 0, fmt.Errorf("failed to fetch transaction: %w", err)
 		}
-		ev.Data = &tx
+		ev.Data = &explorer.EventTransaction{
+			Transaction: txns[0],
+		}
 	case explorer.EventTypeContractPayout:
 		var m explorer.EventContractPayout
 		err = tx.QueryRow(`SELECT sce.output_id, sce.leaf_index, sce.maturity_height, sce.address, sce.value, fce.contract_id, fce.leaf_index, fce.filesize, fce.file_merkle_root, fce.window_start, fce.window_end, fce.payout, fce.unlock_hash, fce.revision_number, ev.missed
