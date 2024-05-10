@@ -578,11 +578,17 @@ func addEvents(tx *txn, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[exp
 	}
 	defer relevantAddrStmt.Close()
 
-	transactionEventStmt, err := tx.Prepare(`INSERT INTO transaction_events (event_id, transaction_id) VALUES (?, ?)`)
+	transactionEventStmt, err := tx.Prepare(`INSERT INTO transaction_events (event_id, transaction_id, fee) VALUES (?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare transaction event statement: %w", err)
 	}
 	defer transactionEventStmt.Close()
+
+	hostAnnouncementStmt, err := tx.Prepare(`INSERT INTO host_announcements (transaction_id, public_key, net_address) VALUES (?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare host anonouncement statement: %w", err)
+	}
+	defer hostAnnouncementStmt.Close()
 
 	minerPayoutEventStmt, err := tx.Prepare(`INSERT INTO miner_payout_events (event_id, output_id) VALUES (?, ?)`)
 	if err != nil {
@@ -620,7 +626,15 @@ func addEvents(tx *txn, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[exp
 
 		switch v := event.Data.(type) {
 		case *explorer.EventTransaction:
-			_, err = transactionEventStmt.Exec(eventID, txnDBIds[types.TransactionID(event.ID)])
+			dbID := txnDBIds[types.TransactionID(event.ID)]
+			if _, err = transactionEventStmt.Exec(eventID, dbID, encode(v.Fee)); err != nil {
+				return fmt.Errorf("failed to insert transaction event: %w", err)
+			}
+			for _, announcement := range v.HostAnnouncements {
+				if _, err = hostAnnouncementStmt.Exec(dbID, encode(announcement.PublicKey), announcement.NetAddress); err != nil {
+					return fmt.Errorf("failed to insert host announcement: %w", err)
+				}
+			}
 		case *explorer.EventMinerPayout:
 			_, err = minerPayoutEventStmt.Exec(eventID, scDBIds[types.SiacoinOutputID(event.ID)])
 		case *explorer.EventContractPayout:
@@ -631,7 +645,7 @@ func addEvents(tx *txn, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[exp
 			return errors.New("unknown event type")
 		}
 		if err != nil {
-			return fmt.Errorf("failed to insert specific invent: %w", err)
+			return fmt.Errorf("failed to insert %s event: %w", event.Data.EventType(), err)
 		}
 
 		used := make(map[types.Address]bool)
