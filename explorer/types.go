@@ -105,3 +105,23 @@ type Block struct {
 	MinerPayouts []SiacoinOutput `json:"minerPayouts"`
 	Transactions []Transaction   `json:"transactions"`
 }
+
+// Metrics contains various statistics relevant to the health of the Sia network.
+type Metrics struct {
+	// Current chain height
+	Height uint64
+	// Current storage utilization, in bytes
+	StorageUtilization uint64
+	// Total announced hosts
+	TotalHosts uint64
+
+	// Not possible until host scanning is implemented.
+	// Active hosts
+	// ActiveHosts uint64
+	// // Average storage price (per TB)
+	// AverageStoragePrice types.Currency
+	// // Average download price (per TB)
+	// AverageDownloadPrice types.Currency
+	// // Average upload price (per TB)
+	// AverageUploadPrice types.Currency
+}

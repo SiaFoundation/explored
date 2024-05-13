@@ -44,6 +44,7 @@ type (
 		Tip() (types.ChainIndex, error)
 		Block(id types.BlockID) (explorer.Block, error)
 		BestTip(height uint64) (types.ChainIndex, error)
+		Metrics() (explorer.Metrics, error)
 		Transactions(ids []types.TransactionID) ([]explorer.Transaction, error)
 		Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 		UnspentSiacoinOutputs(address types.Address, limit, offset uint64) ([]explorer.SiacoinOutput, error)
@@ -149,6 +150,14 @@ func (s *server) explorerTipHeightHandler(jc jape.Context) {
 		return
 	}
 	jc.Encode(tip)
+}
+
+func (s *server) explorerMetricsHandler(jc jape.Context) {
+	metrics, err := s.e.Metrics()
+	if jc.Check("failed to get metrics", err) != nil {
+		return
+	}
+	jc.Encode(metrics)
 }
 
 func (s *server) explorerBlockHandler(jc jape.Context) {
@@ -291,6 +300,7 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 
 		"GET    /explorer/tip":                        srv.explorerTipHandler,
 		"GET    /explorer/tip/:height":                srv.explorerTipHeightHandler,
+		"GET    /explorer/metrics":                    srv.explorerMetricsHandler,
 		"GET    /explorer/block/:id":                  srv.explorerBlockHandler,
 		"GET    /explorer/transactions/:id":           srv.explorerTransactionsIDHandler,
 		"POST   /explorer/transactions":               srv.explorerTransactionsHandler,
