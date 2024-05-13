@@ -7,14 +7,25 @@ import (
 )
 
 // Metrics implements explorer.Store
-func (s *Store) Metrics() (explorer.Metrics, error) {
-	tip, err := s.Tip()
-	if err != nil {
-		return explorer.Metrics{}, fmt.Errorf("failed to get tip: %w", err)
-	}
+func (s *Store) Metrics() (result explorer.Metrics, err error) {
+	err = s.transaction(func(tx *txn) error {
+		totalHosts := func() (count uint64, err error) {
+			err = tx.QueryRow("SELECT COUNT(*) FROM (SELECT DISTINCT public_key FROM host_announcements);").Scan(&count)
+			return
+		}
 
-	var m explorer.Metrics
-	m.Height = tip.Height
+		tip, err := s.Tip()
+		if err != nil {
+			return fmt.Errorf("failed to get tip: %w", err)
+		}
+		result.Height = tip.Height
 
-	return m, nil
+		hosts, err := totalHosts()
+		if err != nil {
+			return fmt.Errorf("failed to get tip: %w", err)
+		}
+		result.TotalHosts = hosts
+		return nil
+	})
+	return
 }
