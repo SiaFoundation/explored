@@ -115,3 +115,9 @@ func (c *Client) Contracts(ids []types.FileContractID) (resp []explorer.FileCont
 	err = c.c.POST("/explorer/contracts", ids, &resp)
 	return
 }
+
+// Metrics returns various metrics about Sia.
+func (c *Client) Metrics() (resp explorer.Metrics, err error) {
+	err = c.c.GET("/explorer/metrics", &resp)
+	return
+}
