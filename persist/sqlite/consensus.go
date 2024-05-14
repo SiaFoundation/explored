@@ -576,15 +576,19 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 	}
 
 	fcDBIds := make(map[explorer.DBFileContract]int64)
-	addFC := func(fcID types.FileContractID, leafIndex uint64, fc types.FileContract, resolved, valid bool) error {
+	addFC := func(fcID types.FileContractID, leafIndex uint64, fc types.FileContract, resolved, valid, lastRevision bool) error {
 		var dbID int64
 		err := stmt.QueryRow(encode(b.ID()), encode(fcID), encode(leafIndex), fc.Filesize, encode(fc.FileMerkleRoot), fc.WindowStart, fc.WindowEnd, encode(fc.Payout), encode(fc.UnlockHash), fc.RevisionNumber, resolved, valid, encode(leafIndex)).Scan(&dbID)
 		if err != nil {
 			return fmt.Errorf("failed to execute file_contract_elements statement: %w", err)
 		}
 
-		if _, err := revisionStmt.Exec(encode(fcID), dbID, dbID); err != nil {
-			return fmt.Errorf("failed to update last revision number: %w", err)
+		// only update if it's the most recent revision which will come from
+		// running ForEachFileContractElement on the update
+		if lastRevision {
+			if _, err := revisionStmt.Exec(encode(fcID), dbID, dbID); err != nil {
+				return fmt.Errorf("failed to update last revision number: %w", err)
+			}
 		}
 
 		fcDBIds[explorer.DBFileContract{ID: fcID, RevisionNumber: fc.RevisionNumber}] = dbID
@@ -597,7 +601,15 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 		if update.Revision != nil {
 			fce = update.Revision
 		}
-		if err := addFC(types.FileContractID(fce.StateElement.ID), fce.StateElement.LeafIndex, fce.FileContract, update.Resolved, update.Valid); err != nil {
+
+		if err := addFC(
+			types.FileContractID(fce.StateElement.ID),
+			fce.StateElement.LeafIndex,
+			fce.FileContract,
+			update.Resolved,
+			update.Valid,
+			true,
+		); err != nil {
 			return nil, fmt.Errorf("addFileContractElements: %w", err)
 		}
 	}
@@ -609,7 +621,7 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 				continue
 			}
 
-			if err := addFC(fcID, 0, fc, false, true); err != nil {
+			if err := addFC(fcID, 0, fc, false, true, false); err != nil {
 				return nil, fmt.Errorf("addFileContractElements: %w", err)
 			}
 		}
@@ -620,7 +632,7 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 				continue
 			}
 
-			if err := addFC(fcr.ParentID, 0, fc, false, true); err != nil {
+			if err := addFC(fcr.ParentID, 0, fc, false, true, false); err != nil {
 				return nil, fmt.Errorf("addFileContractElements: %w", err)
 			}
 		}
