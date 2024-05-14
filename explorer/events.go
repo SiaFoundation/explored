@@ -80,8 +80,6 @@ type EventTransaction struct {
 	Fee               types.Currency     `json:"fee"`
 }
 
-// type EventTransaction Transaction
-
 // An EventMinerPayout represents a miner payout from a block.
 type EventMinerPayout struct {
 	SiacoinOutput types.SiacoinElement `json:"siacoinOutput"`
