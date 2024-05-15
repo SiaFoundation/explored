@@ -5,7 +5,7 @@ go 1.21.6
 require (
 	github.com/mattn/go-sqlite3 v1.14.22
 	go.etcd.io/bbolt v1.3.10
-	go.sia.tech/core v0.2.2
+	go.sia.tech/core v0.2.3
 	go.sia.tech/coreutils v0.0.4-0.20240327130436-3fc21abba2db
 	go.sia.tech/jape v0.11.1
 	go.uber.org/zap v1.27.0
@@ -19,7 +19,7 @@ require (
 	github.com/julienschmidt/httprouter v1.3.0 // indirect
 	go.sia.tech/mux v1.2.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
-	golang.org/x/crypto v0.21.0 // indirect
+	golang.org/x/crypto v0.22.0 // indirect
 	golang.org/x/sys v0.20.0 // indirect
 	golang.org/x/tools v0.7.0 // indirect
 )
