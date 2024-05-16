@@ -584,7 +584,7 @@ func addEvents(tx *txn, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[exp
 	}
 	defer transactionEventStmt.Close()
 
-	hostAnnouncementStmt, err := tx.Prepare(`INSERT INTO host_announcements (transaction_id, public_key, net_address) VALUES (?, ?, ?)`)
+	hostAnnouncementStmt, err := tx.Prepare(`INSERT INTO host_announcements (transaction_id, transaction_order, public_key, net_address) VALUES (?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare host anonouncement statement: %w", err)
 	}
@@ -630,8 +630,8 @@ func addEvents(tx *txn, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[exp
 			if _, err = transactionEventStmt.Exec(eventID, dbID, encode(v.Fee)); err != nil {
 				return fmt.Errorf("failed to insert transaction event: %w", err)
 			}
-			for _, announcement := range v.HostAnnouncements {
-				if _, err = hostAnnouncementStmt.Exec(dbID, encode(announcement.PublicKey), announcement.NetAddress); err != nil {
+			for i, announcement := range v.HostAnnouncements {
+				if _, err = hostAnnouncementStmt.Exec(dbID, i, encode(announcement.PublicKey), announcement.NetAddress); err != nil {
 					return fmt.Errorf("failed to insert host announcement: %w", err)
 				}
 			}
