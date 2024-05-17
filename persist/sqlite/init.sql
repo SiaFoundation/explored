@@ -137,6 +137,16 @@ CREATE TABLE transaction_arbitrary_data (
 
 CREATE INDEX transaction_arbitrary_data_transaction_id_index ON transaction_arbitrary_data(transaction_id);
 
+CREATE TABLE transaction_miner_fees (
+        transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
+        transaction_order INTEGER NOT NULL,
+        fee BLOB NOT NULL,
+        UNIQUE(transaction_id, transaction_order)
+);
+
+CREATE INDEX transaction_miner_fees_transaction_id_index ON transaction_miner_fees(transaction_id);
+
+
 CREATE TABLE transaction_siacoin_inputs (
         transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
         transaction_order INTEGER NOT NULL,

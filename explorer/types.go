@@ -91,6 +91,7 @@ type Transaction struct {
 	SiafundOutputs        []SiafundOutput        `json:"siafundOutputs,omitempty"`
 	FileContracts         []FileContract         `json:"fileContracts,omitempty"`
 	FileContractRevisions []FileContractRevision `json:"fileContractRevisions,omitempty"`
+	MinerFees             []types.Currency       `json:"minerFees,omitempty"`
 	ArbitraryData         [][]byte               `json:"arbitraryData,omitempty"`
 }
 

@@ -7,6 +7,30 @@ import (
 	"go.sia.tech/explored/explorer"
 )
 
+// transactionMinerFee returns the miner fees for each transaction.
+func transactionMinerFee(tx *txn, txnIDs []int64) (map[int64][]types.Currency, error) {
+	query := `SELECT transaction_id, fee
+FROM transaction_miner_fees
+WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
+ORDER BY transaction_order ASC`
+	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64][]types.Currency)
+	for rows.Next() {
+		var txnID int64
+		var fee types.Currency
+		if err := rows.Scan(&txnID, decode(&fee)); err != nil {
+			return nil, fmt.Errorf("failed to scan arbitrary data: %w", err)
+		}
+		result[txnID] = append(result[txnID], fee)
+	}
+	return result, nil
+}
+
 // transactionArbitraryData returns the arbitrary data for each transaction.
 func transactionArbitraryData(tx *txn, txnIDs []int64) (map[int64][][]byte, error) {
 	query := `SELECT transaction_id, data
@@ -353,6 +377,11 @@ func getTransactions(tx *txn, dbIDs []int64) ([]explorer.Transaction, error) {
 		return nil, fmt.Errorf("getTransactions: failed to get arbitrary data: %w", err)
 	}
 
+	txnMinerFees, err := transactionMinerFee(tx, dbIDs)
+	if err != nil {
+		return nil, fmt.Errorf("getTransactions: failed to get miner fees: %w", err)
+	}
+
 	txnSiacoinInputs, err := transactionSiacoinInputs(tx, dbIDs)
 	if err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get siacoin inputs: %w", err)
@@ -389,13 +418,14 @@ func getTransactions(tx *txn, dbIDs []int64) ([]explorer.Transaction, error) {
 	var results []explorer.Transaction
 	for _, dbID := range dbIDs {
 		txn := explorer.Transaction{
-			ArbitraryData:         txnArbitraryData[dbID],
 			SiacoinInputs:         txnSiacoinInputs[dbID],
 			SiacoinOutputs:        txnSiacoinOutputs[dbID],
 			SiafundInputs:         txnSiafundInputs[dbID],
 			SiafundOutputs:        txnSiafundOutputs[dbID],
 			FileContracts:         txnFileContracts[dbID],
 			FileContractRevisions: txnFileContractRevisions[dbID],
+			MinerFees:             txnMinerFees[dbID],
+			ArbitraryData:         txnArbitraryData[dbID],
 		}
 		results = append(results, txn)
 	}

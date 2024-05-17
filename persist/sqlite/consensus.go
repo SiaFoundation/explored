@@ -42,6 +42,21 @@ func addMinerPayouts(tx *txn, bid types.BlockID, scos []types.SiacoinOutput, dbI
 	return nil
 }
 
+func addMinerFees(tx *txn, id int64, txn types.Transaction) error {
+	stmt, err := tx.Prepare(`INSERT INTO transaction_miner_fees(transaction_id, transaction_order, fee) VALUES (?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addMinerFees: failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for i, fee := range txn.MinerFees {
+		if _, err := stmt.Exec(id, i, encode(fee)); err != nil {
+			return fmt.Errorf("addMinerFees: failed to execute statement: %w", err)
+		}
+	}
+	return nil
+}
+
 func addArbitraryData(tx *txn, id int64, txn types.Transaction) error {
 	stmt, err := tx.Prepare(`INSERT INTO transaction_arbitrary_data(transaction_id, transaction_order, data) VALUES (?, ?, ?)`)
 
@@ -266,7 +281,10 @@ func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction, scDBI
 		if exist {
 			continue
 		}
-		if err := addArbitraryData(tx, txnID, txn); err != nil {
+
+		if err := addMinerFees(tx, txnID, txn); err != nil {
+			return nil, fmt.Errorf("failed to add miner fees: %w", err)
+		} else if err := addArbitraryData(tx, txnID, txn); err != nil {
 			return nil, fmt.Errorf("failed to add arbitrary data: %w", err)
 		} else if err := addSiacoinInputs(tx, txnID, txn); err != nil {
 			return nil, fmt.Errorf("failed to add siacoin inputs: %w", err)
