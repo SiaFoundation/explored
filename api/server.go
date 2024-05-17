@@ -46,8 +46,9 @@ type (
 		BestTip(height uint64) (types.ChainIndex, error)
 		Transactions(ids []types.TransactionID) ([]explorer.Transaction, error)
 		Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
-		UnspentSiacoinOutputs(address types.Address, limit, offset uint64) ([]explorer.SiacoinOutput, error)
-		UnspentSiafundOutputs(address types.Address, limit, offset uint64) ([]explorer.SiafundOutput, error)
+		UnspentSiacoinOutputs(address types.Address, offset, limit uint64) ([]explorer.SiacoinOutput, error)
+		UnspentSiafundOutputs(address types.Address, offset, limit uint64) ([]explorer.SiafundOutput, error)
+		AddressEvents(address types.Address, offset, limit uint64) (events []explorer.Event, err error)
 		Contracts(ids []types.FileContractID) (result []explorer.FileContract, err error)
 	}
 )
@@ -208,11 +209,11 @@ func (s *server) explorerAddressessAddressUtxosHandler(jc jape.Context) {
 		return
 	}
 
-	unspentSiacoinOutputs, err := s.e.UnspentSiacoinOutputs(address, limit, offset)
+	unspentSiacoinOutputs, err := s.e.UnspentSiacoinOutputs(address, offset, limit)
 	if jc.Check("failed to get unspent siacoin outputs", err) != nil {
 		return
 	}
-	unspentSiafundOutputs, err := s.e.UnspentSiafundOutputs(address, limit, offset)
+	unspentSiafundOutputs, err := s.e.UnspentSiafundOutputs(address, offset, limit)
 	if jc.Check("failed to get unspent siafund outputs", err) != nil {
 		return
 	}
@@ -239,6 +240,26 @@ func (s *server) explorerAddressessAddressBalanceHandler(jc jape.Context) {
 		ImmatureSiacoins: immatureSC,
 		UnspentSiafunds:  sf,
 	})
+}
+
+func (s *server) explorerAddressessAddressEventsHandler(jc jape.Context) {
+	var address types.Address
+	if jc.DecodeParam("address", &address) != nil {
+		return
+	}
+
+	limit := uint64(100)
+	offset := uint64(0)
+	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
+		return
+	}
+
+	events, err := s.e.AddressEvents(address, offset, limit)
+	if jc.Check("failed to get address events", err) != nil {
+		return
+	}
+
+	jc.Encode(events)
 }
 
 func (s *server) explorerContractIDHandler(jc jape.Context) {
@@ -295,6 +316,7 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET    /explorer/transactions/:id":           srv.explorerTransactionsIDHandler,
 		"POST   /explorer/transactions":               srv.explorerTransactionsHandler,
 		"GET    /explorer/addresses/:address/utxos":   srv.explorerAddressessAddressUtxosHandler,
+		"GET    /explorer/addresses/:address/events":  srv.explorerAddressessAddressEventsHandler,
 		"GET    /explorer/addresses/:address/balance": srv.explorerAddressessAddressBalanceHandler,
 		"GET    /explorer/contracts/:id":              srv.explorerContractIDHandler,
 		"POST   /explorer/contracts":                  srv.explorerContractsHandler,
