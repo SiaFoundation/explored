@@ -81,7 +81,7 @@ func addSignatures(tx *txn, id int64, txn types.Transaction) error {
 	defer stmt.Close()
 
 	for i, sig := range txn.Signatures {
-		if _, err := stmt.Exec(id, i, encode(sig.ParentID), sig.PublicKeyIndex, sig.Timelock, encode(sig.CoveredFields), sig.Signature); err != nil {
+		if _, err := stmt.Exec(id, i, encode(sig.ParentID), sig.PublicKeyIndex, encode(sig.Timelock), encode(sig.CoveredFields), sig.Signature); err != nil {
 			return fmt.Errorf("addMinerFees: failed to execute statement: %w", err)
 		}
 	}

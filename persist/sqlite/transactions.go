@@ -71,7 +71,7 @@ ORDER BY transaction_order ASC`
 	for rows.Next() {
 		var txnID int64
 		var sig types.TransactionSignature
-		if err := rows.Scan(&txnID, decode(&sig.ParentID), &sig.PublicKeyIndex, &sig.Timelock, decode(&sig.CoveredFields), &sig.Signature); err != nil {
+		if err := rows.Scan(&txnID, decode(&sig.ParentID), &sig.PublicKeyIndex, decode(&sig.Timelock), decode(&sig.CoveredFields), &sig.Signature); err != nil {
 			return nil, fmt.Errorf("failed to scan signature: %w", err)
 		}
 		result[txnID] = append(result[txnID], sig)
