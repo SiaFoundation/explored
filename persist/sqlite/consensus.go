@@ -333,7 +333,6 @@ func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction, scDBI
 		} else if err := addStorageProofs(tx, txnID, txn); err != nil {
 			return nil, fmt.Errorf("failed to add storage proofs: %w", err)
 		}
-
 	}
 	return txnDBIds, nil
 }
