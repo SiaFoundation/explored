@@ -392,6 +392,8 @@ func TestSendTransactions(t *testing.T) {
 		check(t, "siacoin outputs", len(expectTxn.SiacoinOutputs), len(gotTxn.SiacoinOutputs))
 		check(t, "siafund inputs", len(expectTxn.SiafundInputs), len(gotTxn.SiafundInputs))
 		check(t, "siafund outputs", len(expectTxn.SiafundOutputs), len(gotTxn.SiafundOutputs))
+		check(t, "miner fees", len(expectTxn.MinerFees), len(gotTxn.MinerFees))
+		check(t, "signatures", len(expectTxn.Signatures), len(gotTxn.Signatures))
 
 		for i := range expectTxn.SiacoinInputs {
 			expectSci := expectTxn.SiacoinInputs[i]
@@ -422,6 +424,23 @@ func TestSendTransactions(t *testing.T) {
 
 			check(t, "address", expectSfo.Address, gotSfo.Address)
 			check(t, "value", expectSfo.Value, gotSfo.Value)
+		}
+		for i := range expectTxn.MinerFees {
+			check(t, "miner fee", expectTxn.MinerFees[i], gotTxn.MinerFees[i])
+		}
+		for i := range expectTxn.Signatures {
+			expectSig := expectTxn.Signatures[i]
+			gotSig := gotTxn.Signatures[i]
+
+			check(t, "parent ID", expectSig.ParentID, gotSig.ParentID)
+			check(t, "public key index", expectSig.PublicKeyIndex, gotSig.PublicKeyIndex)
+			check(t, "timelock", expectSig.Timelock, gotSig.Timelock)
+			check(t, "signature", expectSig.Signature, gotSig.Signature)
+
+			// reflect.DeepEqual treats empty slices as different from nil
+			// slices so these will differ because the decoder is doing
+			// cf.X = make([]uint64, d.ReadPrefix()) and the prefix is 0
+			// check(t, "covered fields", expectSig.CoveredFields, gotSig.CoveredFields)
 		}
 	}
 

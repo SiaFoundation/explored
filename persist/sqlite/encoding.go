@@ -25,6 +25,15 @@ func encode(obj any) any {
 		obj.EncodeTo(e)
 		e.Flush()
 		return buf.Bytes()
+	case []types.Hash256:
+		var buf bytes.Buffer
+		e := types.NewEncoder(&buf)
+		e.WritePrefix(len(obj))
+		for _, o := range obj {
+			o.EncodeTo(e)
+		}
+		e.Flush()
+		return buf.Bytes()
 	case uint64:
 		b := make([]byte, 8)
 		binary.BigEndian.PutUint64(b, obj)
@@ -58,6 +67,13 @@ func (d *decodable) Scan(src any) error {
 		case types.DecoderFrom:
 			dec := types.NewBufDecoder(src)
 			v.DecodeFrom(dec)
+			return dec.Err()
+		case *[]types.Hash256:
+			dec := types.NewBufDecoder(src)
+			*v = make([]types.Hash256, dec.ReadPrefix())
+			for i := range *v {
+				(*v)[i].DecodeFrom(dec)
+			}
 			return dec.Err()
 		case *uint64:
 			*v = binary.BigEndian.Uint64(src)

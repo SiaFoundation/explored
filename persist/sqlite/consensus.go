@@ -42,6 +42,21 @@ func addMinerPayouts(tx *txn, bid types.BlockID, scos []types.SiacoinOutput, dbI
 	return nil
 }
 
+func addMinerFees(tx *txn, id int64, txn types.Transaction) error {
+	stmt, err := tx.Prepare(`INSERT INTO transaction_miner_fees(transaction_id, transaction_order, fee) VALUES (?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addMinerFees: failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for i, fee := range txn.MinerFees {
+		if _, err := stmt.Exec(id, i, encode(fee)); err != nil {
+			return fmt.Errorf("addMinerFees: failed to execute statement: %w", err)
+		}
+	}
+	return nil
+}
+
 func addArbitraryData(tx *txn, id int64, txn types.Transaction) error {
 	stmt, err := tx.Prepare(`INSERT INTO transaction_arbitrary_data(transaction_id, transaction_order, data) VALUES (?, ?, ?)`)
 
@@ -53,6 +68,21 @@ func addArbitraryData(tx *txn, id int64, txn types.Transaction) error {
 	for i, arbitraryData := range txn.ArbitraryData {
 		if _, err := stmt.Exec(id, i, arbitraryData); err != nil {
 			return fmt.Errorf("addArbitraryData: failed to execute statement: %w", err)
+		}
+	}
+	return nil
+}
+
+func addSignatures(tx *txn, id int64, txn types.Transaction) error {
+	stmt, err := tx.Prepare(`INSERT INTO transaction_signatures(transaction_id, transaction_order, parent_id, public_key_index, timelock, covered_fields, signature) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addMinerFees: failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for i, sig := range txn.Signatures {
+		if _, err := stmt.Exec(id, i, encode(sig.ParentID), sig.PublicKeyIndex, encode(sig.Timelock), encode(sig.CoveredFields), sig.Signature); err != nil {
+			return fmt.Errorf("addMinerFees: failed to execute statement: %w", err)
 		}
 	}
 	return nil
@@ -218,6 +248,21 @@ func addFileContractRevisions(tx *txn, id int64, txn types.Transaction, dbIDs ma
 	return nil
 }
 
+func addStorageProofs(tx *txn, id int64, txn types.Transaction) error {
+	stmt, err := tx.Prepare(`INSERT INTO transaction_storage_proofs(transaction_id, transaction_order, parent_id, leaf, proof) VALUES (?, ?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addStorageProofs: failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for i, proof := range txn.StorageProofs {
+		if _, err := stmt.Exec(id, i, encode(proof.ParentID), proof.Leaf[:], encode(proof.Proof)); err != nil {
+			return fmt.Errorf("addStorageProofs: failed to execute statement: %w", err)
+		}
+	}
+	return nil
+}
+
 func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction, scDBIds map[types.SiacoinOutputID]int64, sfDBIds map[types.SiafundOutputID]int64, fcDBIds map[explorer.DBFileContract]int64) (map[types.TransactionID]int64, error) {
 	checkTransactionStmt, err := tx.Prepare(`SELECT id FROM transactions WHERE transaction_id = ?`)
 	if err != nil {
@@ -266,8 +311,13 @@ func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction, scDBI
 		if exist {
 			continue
 		}
-		if err := addArbitraryData(tx, txnID, txn); err != nil {
+
+		if err := addMinerFees(tx, txnID, txn); err != nil {
+			return nil, fmt.Errorf("failed to add miner fees: %w", err)
+		} else if err := addArbitraryData(tx, txnID, txn); err != nil {
 			return nil, fmt.Errorf("failed to add arbitrary data: %w", err)
+		} else if err := addSignatures(tx, txnID, txn); err != nil {
+			return nil, fmt.Errorf("failed to add signatures: %w", err)
 		} else if err := addSiacoinInputs(tx, txnID, txn); err != nil {
 			return nil, fmt.Errorf("failed to add siacoin inputs: %w", err)
 		} else if err := addSiacoinOutputs(tx, txnID, txn, scDBIds); err != nil {
@@ -280,6 +330,8 @@ func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction, scDBI
 			return nil, fmt.Errorf("failed to add file contract: %w", err)
 		} else if err := addFileContractRevisions(tx, txnID, txn, fcDBIds); err != nil {
 			return nil, fmt.Errorf("failed to add file contract revisions: %w", err)
+		} else if err := addStorageProofs(tx, txnID, txn); err != nil {
+			return nil, fmt.Errorf("failed to add storage proofs: %w", err)
 		}
 	}
 	return txnDBIds, nil

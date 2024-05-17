@@ -7,6 +7,30 @@ import (
 	"go.sia.tech/explored/explorer"
 )
 
+// transactionMinerFee returns the miner fees for each transaction.
+func transactionMinerFee(tx *txn, txnIDs []int64) (map[int64][]types.Currency, error) {
+	query := `SELECT transaction_id, fee
+FROM transaction_miner_fees
+WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
+ORDER BY transaction_order ASC`
+	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64][]types.Currency)
+	for rows.Next() {
+		var txnID int64
+		var fee types.Currency
+		if err := rows.Scan(&txnID, decode(&fee)); err != nil {
+			return nil, fmt.Errorf("failed to scan arbitrary data: %w", err)
+		}
+		result[txnID] = append(result[txnID], fee)
+	}
+	return result, nil
+}
+
 // transactionArbitraryData returns the arbitrary data for each transaction.
 func transactionArbitraryData(tx *txn, txnIDs []int64) (map[int64][][]byte, error) {
 	query := `SELECT transaction_id, data
@@ -27,6 +51,30 @@ ORDER BY transaction_order ASC`
 			return nil, fmt.Errorf("failed to scan arbitrary data: %w", err)
 		}
 		result[txnID] = append(result[txnID], data)
+	}
+	return result, nil
+}
+
+// transactionSignatures returns the signatures for each transaction.
+func transactionSignatures(tx *txn, txnIDs []int64) (map[int64][]types.TransactionSignature, error) {
+	query := `SELECT transaction_id, parent_id, public_key_index, timelock, covered_fields, signature
+FROM transaction_signatures
+WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
+ORDER BY transaction_order ASC`
+	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64][]types.TransactionSignature)
+	for rows.Next() {
+		var txnID int64
+		var sig types.TransactionSignature
+		if err := rows.Scan(&txnID, decode(&sig.ParentID), &sig.PublicKeyIndex, decode(&sig.Timelock), decode(&sig.CoveredFields), &sig.Signature); err != nil {
+			return nil, fmt.Errorf("failed to scan signature: %w", err)
+		}
+		result[txnID] = append(result[txnID], sig)
 	}
 	return result, nil
 }
@@ -277,6 +325,30 @@ ORDER BY ts.transaction_order ASC`
 	return result, nil
 }
 
+// transactionStorageProofs returns the storage proofs for each transaction.
+func transactionStorageProofs(tx *txn, txnIDs []int64) (map[int64][]types.StorageProof, error) {
+	query := `SELECT transaction_id, parent_id, leaf, proof
+FROM transaction_storage_proofs
+WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
+ORDER BY transaction_order ASC`
+	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64][]types.StorageProof)
+	for rows.Next() {
+		var txnID int64
+		var proof types.StorageProof
+		if err := rows.Scan(&txnID, decode(&proof.ParentID), &proof.Leaf, decode(&proof.Proof)); err != nil {
+			return nil, fmt.Errorf("failed to scan arbitrary data: %w", err)
+		}
+		result[txnID] = append(result[txnID], proof)
+	}
+	return result, nil
+}
+
 // blockTransactionIDs returns the database ID for each transaction in the
 // block.
 func blockTransactionIDs(tx *txn, blockID types.BlockID) (dbIDs []int64, err error) {
@@ -353,6 +425,16 @@ func getTransactions(tx *txn, dbIDs []int64) ([]explorer.Transaction, error) {
 		return nil, fmt.Errorf("getTransactions: failed to get arbitrary data: %w", err)
 	}
 
+	txnMinerFees, err := transactionMinerFee(tx, dbIDs)
+	if err != nil {
+		return nil, fmt.Errorf("getTransactions: failed to get miner fees: %w", err)
+	}
+
+	txnSignatures, err := transactionSignatures(tx, dbIDs)
+	if err != nil {
+		return nil, fmt.Errorf("getTransactions: failed to get signatures: %w", err)
+	}
+
 	txnSiacoinInputs, err := transactionSiacoinInputs(tx, dbIDs)
 	if err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get siacoin inputs: %w", err)
@@ -383,19 +465,24 @@ func getTransactions(tx *txn, dbIDs []int64) ([]explorer.Transaction, error) {
 		return nil, fmt.Errorf("getTransactions: failed to get file contract revisions: %w", err)
 	}
 
-	// TODO: storage proofs
-	// TODO: signatures
+	txnStorageProofs, err := transactionStorageProofs(tx, dbIDs)
+	if err != nil {
+		return nil, fmt.Errorf("getTransactions: failed to get storage proofs: %w", err)
+	}
 
 	var results []explorer.Transaction
 	for _, dbID := range dbIDs {
 		txn := explorer.Transaction{
-			ArbitraryData:         txnArbitraryData[dbID],
 			SiacoinInputs:         txnSiacoinInputs[dbID],
 			SiacoinOutputs:        txnSiacoinOutputs[dbID],
 			SiafundInputs:         txnSiafundInputs[dbID],
 			SiafundOutputs:        txnSiafundOutputs[dbID],
 			FileContracts:         txnFileContracts[dbID],
 			FileContractRevisions: txnFileContractRevisions[dbID],
+			StorageProofs:         txnStorageProofs[dbID],
+			MinerFees:             txnMinerFees[dbID],
+			ArbitraryData:         txnArbitraryData[dbID],
+			Signatures:            txnSignatures[dbID],
 		}
 		results = append(results, txn)
 	}
