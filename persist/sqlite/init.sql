@@ -72,7 +72,7 @@ CREATE TABLE file_contract_elements (
         window_end INTEGER NOT NULL,
         payout BLOB NOT NULL,
         unlock_hash BLOB NOT NULL,
-        revision_number INTEGER NOT NULL,
+        revision_number BLOB NOT NULL,
         UNIQUE(contract_id, revision_number)
 );
 

@@ -50,7 +50,7 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 FROM contract_payout_events ev
 JOIN siacoin_elements sce ON ev.output_id = sce.id
 JOIN file_contract_elements fce ON ev.contract_id = fce.id
-WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.StateElement.ID), decode(&m.SiacoinOutput.StateElement.LeafIndex), &m.SiacoinOutput.MaturityHeight, decode(&m.SiacoinOutput.SiacoinOutput.Address), decode(&m.SiacoinOutput.SiacoinOutput.Value), decode(&m.FileContract.StateElement.ID), decode(&m.FileContract.StateElement.LeafIndex), &m.FileContract.FileContract.Filesize, decode(&m.FileContract.FileContract.FileMerkleRoot), &m.FileContract.FileContract.WindowStart, &m.FileContract.FileContract.WindowEnd, decode(&m.FileContract.FileContract.Payout), decode(&m.FileContract.FileContract.UnlockHash), &m.FileContract.FileContract.RevisionNumber, &m.Missed)
+WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.StateElement.ID), decode(&m.SiacoinOutput.StateElement.LeafIndex), &m.SiacoinOutput.MaturityHeight, decode(&m.SiacoinOutput.SiacoinOutput.Address), decode(&m.SiacoinOutput.SiacoinOutput.Value), decode(&m.FileContract.StateElement.ID), decode(&m.FileContract.StateElement.LeafIndex), &m.FileContract.FileContract.Filesize, decode(&m.FileContract.FileContract.FileMerkleRoot), &m.FileContract.FileContract.WindowStart, &m.FileContract.FileContract.WindowEnd, decode(&m.FileContract.FileContract.Payout), decode(&m.FileContract.FileContract.UnlockHash), decode(&m.FileContract.FileContract.RevisionNumber), &m.Missed)
 		ev.Data = &m
 	case explorer.EventTypeMinerPayout:
 		var m explorer.EventMinerPayout

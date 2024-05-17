@@ -750,7 +750,7 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 	fcDBIds := make(map[explorer.DBFileContract]int64)
 	addFC := func(fcID types.FileContractID, leafIndex uint64, fc types.FileContract, resolved, valid, lastRevision bool) error {
 		var dbID int64
-		err := stmt.QueryRow(encode(b.ID()), encode(fcID), encode(leafIndex), fc.Filesize, encode(fc.FileMerkleRoot), fc.WindowStart, fc.WindowEnd, encode(fc.Payout), encode(fc.UnlockHash), fc.RevisionNumber, resolved, valid, encode(leafIndex)).Scan(&dbID)
+		err := stmt.QueryRow(encode(b.ID()), encode(fcID), encode(leafIndex), fc.Filesize, encode(fc.FileMerkleRoot), fc.WindowStart, fc.WindowEnd, encode(fc.Payout), encode(fc.UnlockHash), encode(fc.RevisionNumber), resolved, valid, encode(leafIndex)).Scan(&dbID)
 		if err != nil {
 			return fmt.Errorf("failed to execute file_contract_elements statement: %w", err)
 		}
