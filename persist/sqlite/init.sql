@@ -146,6 +146,18 @@ CREATE TABLE transaction_miner_fees (
 
 CREATE INDEX transaction_miner_fees_transaction_id_index ON transaction_miner_fees(transaction_id);
 
+CREATE TABLE transaction_signatures (
+        transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
+        transaction_order INTEGER NOT NULL,
+        parent_id BLOB NOT NULL,
+        public_key_index INTEGER NOT NULL,
+        timelock INTEGER NOT NULL,
+        covered_fields BLOB NOT NULL,
+        signature BLOB NOT NULL,
+        UNIQUE(transaction_id, transaction_order)
+);
+
+CREATE INDEX transaction_signatures_transaction_id_index ON transaction_signatures(transaction_id);
 
 CREATE TABLE transaction_siacoin_inputs (
         transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,

@@ -55,6 +55,30 @@ ORDER BY transaction_order ASC`
 	return result, nil
 }
 
+// transactionSignatures returns the signatures for each transaction.
+func transactionSignatures(tx *txn, txnIDs []int64) (map[int64][]types.TransactionSignature, error) {
+	query := `SELECT transaction_id, parent_id, public_key_index, timelock, covered_fields, signature
+FROM transaction_signatures
+WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
+ORDER BY transaction_order ASC`
+	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64][]types.TransactionSignature)
+	for rows.Next() {
+		var txnID int64
+		var sig types.TransactionSignature
+		if err := rows.Scan(&txnID, decode(&sig.ParentID), &sig.PublicKeyIndex, &sig.Timelock, decode(&sig.CoveredFields), &sig.Signature); err != nil {
+			return nil, fmt.Errorf("failed to scan signature: %w", err)
+		}
+		result[txnID] = append(result[txnID], sig)
+	}
+	return result, nil
+}
+
 // transactionSiacoinOutputs returns the siacoin outputs for each transaction.
 func transactionSiacoinOutputs(tx *txn, txnIDs []int64) (map[int64][]explorer.SiacoinOutput, error) {
 	query := `SELECT ts.transaction_id, sc.output_id, sc.leaf_index, sc.source, sc.maturity_height, sc.address, sc.value
@@ -382,6 +406,11 @@ func getTransactions(tx *txn, dbIDs []int64) ([]explorer.Transaction, error) {
 		return nil, fmt.Errorf("getTransactions: failed to get miner fees: %w", err)
 	}
 
+	txnSignatures, err := transactionSignatures(tx, dbIDs)
+	if err != nil {
+		return nil, fmt.Errorf("getTransactions: failed to get signatures: %w", err)
+	}
+
 	txnSiacoinInputs, err := transactionSiacoinInputs(tx, dbIDs)
 	if err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get siacoin inputs: %w", err)
@@ -426,6 +455,7 @@ func getTransactions(tx *txn, dbIDs []int64) ([]explorer.Transaction, error) {
 			FileContractRevisions: txnFileContractRevisions[dbID],
 			MinerFees:             txnMinerFees[dbID],
 			ArbitraryData:         txnArbitraryData[dbID],
+			Signatures:            txnSignatures[dbID],
 		}
 		results = append(results, txn)
 	}
