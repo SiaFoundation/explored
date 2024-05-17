@@ -325,6 +325,30 @@ ORDER BY ts.transaction_order ASC`
 	return result, nil
 }
 
+// transactionStorageProofs returns the storage proofs for each transaction.
+func transactionStorageProofs(tx *txn, txnIDs []int64) (map[int64][]types.StorageProof, error) {
+	query := `SELECT transaction_id, parent_id, leaf, proof
+FROM transaction_storage_proofs
+WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
+ORDER BY transaction_order ASC`
+	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64][]types.StorageProof)
+	for rows.Next() {
+		var txnID int64
+		var proof types.StorageProof
+		if err := rows.Scan(&txnID, decode(&proof.ParentID), &proof.Leaf, decode(&proof.Proof)); err != nil {
+			return nil, fmt.Errorf("failed to scan arbitrary data: %w", err)
+		}
+		result[txnID] = append(result[txnID], proof)
+	}
+	return result, nil
+}
+
 // blockTransactionIDs returns the database ID for each transaction in the
 // block.
 func blockTransactionIDs(tx *txn, blockID types.BlockID) (dbIDs []int64, err error) {
@@ -441,8 +465,10 @@ func getTransactions(tx *txn, dbIDs []int64) ([]explorer.Transaction, error) {
 		return nil, fmt.Errorf("getTransactions: failed to get file contract revisions: %w", err)
 	}
 
-	// TODO: storage proofs
-	// TODO: signatures
+	txnStorageProofs, err := transactionStorageProofs(tx, dbIDs)
+	if err != nil {
+		return nil, fmt.Errorf("getTransactions: failed to get storage proofs: %w", err)
+	}
 
 	var results []explorer.Transaction
 	for _, dbID := range dbIDs {
@@ -453,6 +479,7 @@ func getTransactions(tx *txn, dbIDs []int64) ([]explorer.Transaction, error) {
 			SiafundOutputs:        txnSiafundOutputs[dbID],
 			FileContracts:         txnFileContracts[dbID],
 			FileContractRevisions: txnFileContractRevisions[dbID],
+			StorageProofs:         txnStorageProofs[dbID],
 			MinerFees:             txnMinerFees[dbID],
 			ArbitraryData:         txnArbitraryData[dbID],
 			Signatures:            txnSignatures[dbID],

@@ -159,6 +159,17 @@ CREATE TABLE transaction_signatures (
 
 CREATE INDEX transaction_signatures_transaction_id_index ON transaction_signatures(transaction_id);
 
+CREATE TABLE transaction_storage_proofs (
+        transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
+        transaction_order INTEGER NOT NULL,
+        parent_id BLOB REFERENCES last_contract_revision(contract_id) ON DELETE CASCADE NOT NULL,
+        leaf BLOB NOT NULL,
+        proof BLOB NOT NULL,
+        UNIQUE(transaction_id, transaction_order)
+);
+
+CREATE INDEX transaction_storage_proofs_transaction_id_index ON transaction_storage_proofs(transaction_id);
+
 CREATE TABLE transaction_siacoin_inputs (
         transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
         transaction_order INTEGER NOT NULL,

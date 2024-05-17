@@ -248,6 +248,21 @@ func addFileContractRevisions(tx *txn, id int64, txn types.Transaction, dbIDs ma
 	return nil
 }
 
+func addStorageProofs(tx *txn, id int64, txn types.Transaction) error {
+	stmt, err := tx.Prepare(`INSERT INTO transaction_storage_proofs(transaction_id, transaction_order, parent_id, leaf, proof) VALUES (?, ?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addStorageProofs: failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for i, proof := range txn.StorageProofs {
+		if _, err := stmt.Exec(id, i, encode(proof.ParentID), proof.Leaf[:], encode(proof.Proof)); err != nil {
+			return fmt.Errorf("addStorageProofs: failed to execute statement: %w", err)
+		}
+	}
+	return nil
+}
+
 func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction, scDBIds map[types.SiacoinOutputID]int64, sfDBIds map[types.SiafundOutputID]int64, fcDBIds map[explorer.DBFileContract]int64) (map[types.TransactionID]int64, error) {
 	checkTransactionStmt, err := tx.Prepare(`SELECT id FROM transactions WHERE transaction_id = ?`)
 	if err != nil {
@@ -315,7 +330,10 @@ func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction, scDBI
 			return nil, fmt.Errorf("failed to add file contract: %w", err)
 		} else if err := addFileContractRevisions(tx, txnID, txn, fcDBIds); err != nil {
 			return nil, fmt.Errorf("failed to add file contract revisions: %w", err)
+		} else if err := addStorageProofs(tx, txnID, txn); err != nil {
+			return nil, fmt.Errorf("failed to add storage proofs: %w", err)
 		}
+
 	}
 	return txnDBIds, nil
 }
