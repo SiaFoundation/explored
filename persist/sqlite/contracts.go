@@ -33,7 +33,7 @@ func (s *Store) Contracts(ids []types.FileContractID) (result []explorer.FileCon
 		for rows.Next() {
 			var contractID int64
 			var fc explorer.FileContract
-			if err := rows.Scan(&contractID, decode(&fc.StateElement.ID), decode(&fc.StateElement.LeafIndex), &fc.Resolved, &fc.Valid, &fc.Filesize, decode(&fc.FileMerkleRoot), &fc.WindowStart, &fc.WindowEnd, decode(&fc.Payout), decode(&fc.UnlockHash), &fc.RevisionNumber); err != nil {
+			if err := rows.Scan(&contractID, decode(&fc.StateElement.ID), decode(&fc.StateElement.LeafIndex), &fc.Resolved, &fc.Valid, &fc.Filesize, decode(&fc.FileMerkleRoot), &fc.WindowStart, &fc.WindowEnd, decode(&fc.Payout), decode(&fc.UnlockHash), decode(&fc.RevisionNumber)); err != nil {
 				return fmt.Errorf("failed to scan transaction: %w", err)
 			}
 
