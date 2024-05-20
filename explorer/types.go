@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 )
 
@@ -101,6 +102,7 @@ type Block struct {
 
 	ParentID     types.BlockID   `json:"parentID"`
 	Nonce        uint64          `json:"nonce"`
+	Difficulty   consensus.Work  `json:"difficulty"`
 	Timestamp    time.Time       `json:"timestamp"`
 	MinerPayouts []SiacoinOutput `json:"minerPayouts"`
 	Transactions []Transaction   `json:"transactions"`
@@ -109,19 +111,13 @@ type Block struct {
 // Metrics contains various statistics relevant to the health of the Sia network.
 type Metrics struct {
 	// Current chain height
-	Height uint64
-	// Current storage utilization, in bytes
-	StorageUtilization uint64
+	Height uint64 `json:"height"`
+	// Current difficulty
+	Difficulty consensus.Work `json:"difficulty"`
 	// Total announced hosts
-	TotalHosts uint64
-
-	// Not possible until host scanning is implemented.
-	// Active hosts
-	// ActiveHosts uint64
-	// // Average storage price (per TB)
-	// AverageStoragePrice types.Currency
-	// // Average download price (per TB)
-	// AverageDownloadPrice types.Currency
-	// // Average upload price (per TB)
-	// AverageUploadPrice types.Currency
+	TotalHosts uint64 `json:"totalHosts"`
+	// Active contracts (TODO)
+	ActivateContracts uint64 `json:"activeContracts"`
+	// Current storage utilization, in bytes
+	StorageUtilization uint64 `json:"storageUtilization"`
 }

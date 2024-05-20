@@ -9,35 +9,26 @@ import (
 // Metrics implements explorer.Store
 func (s *Store) Metrics() (result explorer.Metrics, err error) {
 	err = s.transaction(func(tx *txn) error {
-		totalHosts := func() (count uint64, err error) {
-			err = tx.QueryRow(`SELECT COUNT(*) FROM (SELECT DISTINCT public_key FROM host_announcements);`).Scan(&count)
-			return
+		heightDifficulty := func() error {
+			return tx.QueryRow(`SELECT height, difficulty FROM blocks ORDER BY height DESC LIMIT 1`).Scan(&result.Height, decode(&result.Difficulty))
 		}
-		storageUtilization := func() (count uint64, err error) {
-			err = tx.QueryRow(`SELECT SUM(fce.filesize)
+		totalHosts := func() error {
+			return tx.QueryRow(`SELECT COUNT(*) FROM (SELECT DISTINCT public_key FROM host_announcements);`).Scan(&result.TotalHosts)
+		}
+		storageUtilization := func() error {
+			return tx.QueryRow(`SELECT SUM(fce.filesize)
 FROM file_contract_elements fce
 LEFT JOIN last_contract_revision rev ON (rev.contract_element_id = fce.id)
-WHERE fce.valid = TRUE AND fce.resolved = FALSE`).Scan(&count)
-			return
+WHERE fce.valid = TRUE AND fce.resolved = FALSE`).Scan(&result.StorageUtilization)
 		}
 
-		tip, err := s.Tip()
-		if err != nil {
-			return fmt.Errorf("failed to get tip: %w", err)
-		}
-		result.Height = tip.Height
-
-		hosts, err := totalHosts()
-		if err != nil {
+		if err := heightDifficulty(); err != nil {
+			return fmt.Errorf("failed to get height and difficulty: %w", err)
+		} else if err := totalHosts(); err != nil {
 			return fmt.Errorf("failed to get total hosts: %w", err)
-		}
-		result.TotalHosts = hosts
-
-		bytes, err := storageUtilization()
-		if err != nil {
+		} else if err := storageUtilization(); err != nil {
 			return fmt.Errorf("failed to get storage utilization: %w", err)
 		}
-		result.StorageUtilization = bytes
 		return nil
 	})
 	return

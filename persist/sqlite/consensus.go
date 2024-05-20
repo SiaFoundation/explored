@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
@@ -16,9 +17,9 @@ type updateTx struct {
 	tx *txn
 }
 
-func addBlock(tx *txn, b types.Block, height uint64) error {
+func addBlock(tx *txn, b types.Block, height uint64, difficulty consensus.Work) error {
 	// nonce is encoded because database/sql doesn't support uint64 with high bit set
-	_, err := tx.Exec("INSERT INTO blocks(id, height, parent_id, nonce, timestamp) VALUES (?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encode(b.Nonce), encode(b.Timestamp))
+	_, err := tx.Exec("INSERT INTO blocks(id, height, parent_id, nonce, difficulty, timestamp) VALUES (?, ?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encode(b.Nonce), encode(difficulty), encode(b.Timestamp))
 	return err
 }
 
@@ -721,7 +722,7 @@ func addFileContractElements(tx *txn, bid types.BlockID, fces []explorer.FileCon
 }
 
 func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
-	if err := addBlock(ut.tx, state.Block, state.Index.Height); err != nil {
+	if err := addBlock(ut.tx, state.Block, state.Index.Height, state.Difficulty); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add block: %w", err)
 	} else if err := updateMaturedBalances(ut.tx, false, state.Index.Height); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update matured balances: %w", err)
