@@ -14,7 +14,7 @@ func (s *Store) Metrics() (result explorer.Metrics, err error) {
 			return fmt.Errorf("failed to get height and difficulty: %w", err)
 		}
 
-		err = tx.QueryRow(`SELECT COUNT(*), SUM(fce.filesize)
+		err = tx.QueryRow(`SELECT COUNT(*), COALESCE(SUM(COALESCE(fce.filesize, 0)), 0)
 FROM file_contract_elements fce
 INNER JOIN last_contract_revision rev ON (rev.contract_element_id = fce.id)
 WHERE fce.resolved = FALSE`).Scan(&result.ActiveContracts, &result.StorageUtilization)

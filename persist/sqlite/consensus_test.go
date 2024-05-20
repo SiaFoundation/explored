@@ -16,6 +16,8 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
+const contractFilesize = 10
+
 func testV1Network(giftAddr types.Address, sc types.Currency, sf uint64) (*consensus.Network, types.Block) {
 	// use a modified version of Zen
 	n, genesisBlock := chain.TestnetZen()
@@ -675,7 +677,7 @@ func prepareContractFormation(renterPubKey types.PublicKey, hostKey types.Public
 	hostPayout := hostCollateral
 	payout := taxAdjustedPayout(renterPayout.Add(hostPayout))
 	return types.FileContract{
-		Filesize:       10,
+		Filesize:       contractFilesize,
 		FileMerkleRoot: types.Hash256{},
 		WindowStart:    endHeight,
 		WindowEnd:      endHeight + windowSize,
@@ -775,6 +777,14 @@ func TestFileContract(t *testing.T) {
 		}
 	}
 
+	checkMetrics := func(expected, got explorer.Metrics) {
+		check(t, "height", expected.Height, got.Height)
+		check(t, "difficulty", expected.Difficulty, got.Difficulty)
+		check(t, "total hosts", expected.TotalHosts, got.TotalHosts)
+		check(t, "active contracts", expected.ActiveContracts, got.ActiveContracts)
+		check(t, "storage utilization", expected.StorageUtilization, got.StorageUtilization)
+	}
+
 	windowStart := cm.Tip().Height + 10
 	windowEnd := windowStart + 10
 	fc := prepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), windowStart, windowEnd, types.VoidAddress)
@@ -838,6 +848,18 @@ func TestFileContract(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
+	metrics, err := db.Metrics()
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkMetrics(explorer.Metrics{
+		Height:             2,
+		Difficulty:         cm.TipState().Difficulty,
+		TotalHosts:         0,
+		ActiveContracts:    1,
+		StorageUtilization: contractFilesize,
+	}, metrics)
+
 	// Explorer.Contracts should return latest revision
 	{
 		dbFCs, err := db.Contracts([]types.FileContractID{fcID})
@@ -878,6 +900,25 @@ func TestFileContract(t *testing.T) {
 		check(t, "fcs", 1, len(dbFCs))
 		checkFC(true, false, fc, dbFCs[0])
 	}
+
+	for i := 0; i < 100; i++ {
+		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
+			t.Fatal(err)
+		}
+		syncDB(t, db, cm)
+	}
+
+	metrics, err = db.Metrics()
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkMetrics(explorer.Metrics{
+		Height:             cm.Tip().Height,
+		Difficulty:         cm.TipState().Difficulty,
+		TotalHosts:         0,
+		ActiveContracts:    0,
+		StorageUtilization: 0,
+	}, metrics)
 }
 
 func TestEphemeralFileContract(t *testing.T) {
