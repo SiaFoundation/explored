@@ -3,6 +3,7 @@ package explorer
 import (
 	"fmt"
 
+	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 )
@@ -31,8 +32,9 @@ type (
 	// An UpdateState contains information relevant to the block being applied
 	// or reverted.
 	UpdateState struct {
-		Block types.Block
-		Index types.ChainIndex
+		Block      types.Block
+		Difficulty consensus.Work
+		Index      types.ChainIndex
 
 		Events      []Event
 		TreeUpdates []TreeNodeUpdate
@@ -156,8 +158,9 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 
 	events := AppliedEvents(cau.State, cau.Block, cau)
 	state := UpdateState{
-		Block: cau.Block,
-		Index: cau.State.Index,
+		Block:      cau.Block,
+		Difficulty: cau.State.Difficulty,
+		Index:      cau.State.Index,
 
 		Events:      events,
 		TreeUpdates: treeUpdates,
@@ -252,6 +255,7 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 
 	state := UpdateState{
 		Block:       cru.Block,
+		Difficulty:  cru.State.Difficulty,
 		Index:       revertedIndex,
 		TreeUpdates: treeUpdates,
 

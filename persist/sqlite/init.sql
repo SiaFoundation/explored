@@ -8,6 +8,7 @@ CREATE TABLE blocks (
         height INTEGER NOT NULL,
         parent_id BLOB NOT NULL,
         nonce BLOB NOT NULL,
+        difficulty BLOB NOT NULL,
         timestamp INTEGER NOT NULL
 );
 
