@@ -16,8 +16,8 @@ func (s *Store) Metrics() (result explorer.Metrics, err error) {
 
 		err = tx.QueryRow(`SELECT COUNT(*), SUM(fce.filesize)
 FROM file_contract_elements fce
-LEFT JOIN last_contract_revision rev ON (rev.contract_element_id = fce.id)
-WHERE fce.valid = TRUE AND fce.resolved = FALSE`).Scan(&result.ActiveContracts, &result.StorageUtilization)
+INNER JOIN last_contract_revision rev ON (rev.contract_element_id = fce.id)
+WHERE fce.resolved = FALSE`).Scan(&result.ActiveContracts, &result.StorageUtilization)
 		if err != nil {
 			return fmt.Errorf("failed to get active contracts and storage utilization: %w", err)
 		}

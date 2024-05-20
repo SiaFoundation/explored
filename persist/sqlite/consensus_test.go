@@ -656,7 +656,7 @@ func prepareContractFormation(renterPubKey types.PublicKey, hostKey types.Public
 	hostPayout := hostCollateral
 	payout := taxAdjustedPayout(renterPayout.Add(hostPayout))
 	return types.FileContract{
-		Filesize:       0,
+		Filesize:       10,
 		FileMerkleRoot: types.Hash256{},
 		WindowStart:    endHeight,
 		WindowEnd:      endHeight + windowSize,
