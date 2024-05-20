@@ -120,7 +120,7 @@ type Metrics struct {
 	// Total announced hosts
 	TotalHosts uint64 `json:"totalHosts"`
 	// Active contracts (TODO)
-	ActivateContracts uint64 `json:"activeContracts"`
+	ActiveContracts uint64 `json:"activeContracts"`
 	// Current storage utilization, in bytes
 	StorageUtilization uint64 `json:"storageUtilization"`
 }
