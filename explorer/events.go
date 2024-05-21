@@ -16,6 +16,11 @@ const (
 	EventTypeFoundationSubsidy = "foundation subsidy"
 )
 
+// Arbitrary data specifiers
+var (
+	SpecifierAnnouncement = types.NewSpecifier("HostAnnouncement")
+)
+
 type eventData interface {
 	EventType() string
 }
@@ -166,6 +171,18 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 		for _, sfo := range txn.SiafundOutputs {
 			addrs = append(addrs, sfo.Address)
 		}
+		for _, arb := range txn.ArbitraryData {
+			var prefix types.Specifier
+			var uk types.UnlockKey
+			d := types.NewBufDecoder(arb)
+			prefix.DecodeFrom(d)
+			d.ReadString()
+			uk.DecodeFrom(d)
+			if d.Err() == nil && prefix == SpecifierAnnouncement && uk.Algorithm == types.SpecifierEd25519 && len(uk.Key) == len(types.PublicKey{}) {
+				pk := *(*types.PublicKey)(uk.Key)
+				addrs = append(addrs, types.StandardUnlockConditions(pk).UnlockHash())
+			}
+		}
 		return
 	}
 
@@ -181,6 +198,11 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 		}
 		for _, sfo := range txn.SiafundOutputs {
 			addrs = append(addrs, sfo.Address)
+		}
+		for _, a := range txn.Attestations {
+			if a.Key == "HostAnnouncement" {
+				addrs = append(addrs, types.StandardUnlockConditions(a.PublicKey).UnlockHash())
+			}
 		}
 		return
 	}
@@ -200,7 +222,7 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 			prefix.DecodeFrom(d)
 			netAddress := d.ReadString()
 			uk.DecodeFrom(d)
-			if d.Err() == nil && prefix == types.NewSpecifier("HostAnnouncement") &&
+			if d.Err() == nil && prefix == SpecifierAnnouncement &&
 				uk.Algorithm == types.SpecifierEd25519 && len(uk.Key) == len(types.PublicKey{}) {
 				e.HostAnnouncements = append(e.HostAnnouncements, HostAnnouncement{
 					PublicKey:  *(*types.PublicKey)(uk.Key),

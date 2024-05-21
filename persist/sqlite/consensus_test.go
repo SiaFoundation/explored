@@ -1,6 +1,7 @@
 package sqlite_test
 
 import (
+	"bytes"
 	"errors"
 	"math/bits"
 	"path/filepath"
@@ -1589,4 +1590,83 @@ func TestRevertSendTransactions(t *testing.T) {
 			StorageUtilization: 0,
 		})
 	}
+}
+
+// from hostd
+func createAnnouncement(priv types.PrivateKey, netaddress string) []byte {
+	// encode the announcement
+	var buf bytes.Buffer
+	pub := priv.PublicKey()
+	enc := types.NewEncoder(&buf)
+	explorer.SpecifierAnnouncement.EncodeTo(enc)
+	enc.WriteString(netaddress)
+	pub.UnlockKey().EncodeTo(enc)
+	if err := enc.Flush(); err != nil {
+		panic(err)
+	}
+	// hash without the signature
+	sigHash := types.HashBytes(buf.Bytes())
+	// sign
+	sig := priv.SignHash(sigHash)
+	sig.EncodeTo(enc)
+	if err := enc.Flush(); err != nil {
+		panic(err)
+	}
+	return buf.Bytes()
+}
+
+func TestHostAnnouncement(t *testing.T) {
+	log := zaptest.NewLogger(t)
+	dir := t.TempDir()
+	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bdb.Close()
+
+	// Generate three addresses: addr1, addr2, addr3
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+
+	// pk2 := types.GeneratePrivateKey()
+	// addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
+	// pk3 := types.GeneratePrivateKey()
+	// addr3 := types.StandardUnlockHash(pk3.PublicKey())
+
+	network, genesisBlock := testV1Network(addr1, types.ZeroCurrency, 0)
+
+	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cm := chain.NewManager(store, genesisState)
+
+	txn1 := types.Transaction{
+		ArbitraryData: [][]byte{
+			createAnnouncement(pk1, "127.0.0.1:1234"),
+		},
+	}
+	signTxn(cm.TipState(), pk1, &txn1)
+
+	// Mine a block containing host announcement
+	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn1}, addr1)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	checkMetrics(t, db, explorer.Metrics{
+		Height:             cm.Tip().Height,
+		Difficulty:         cm.TipState().Difficulty,
+		TotalHosts:         1,
+		ActiveContracts:    0,
+		StorageUtilization: 0,
+	})
 }
