@@ -16,6 +16,11 @@ const (
 	EventTypeFoundationSubsidy = "foundation subsidy"
 )
 
+// Arbitrary data specifiers
+var (
+	SpecifierAnnouncement = types.NewSpecifier("HostAnnouncement")
+)
+
 type eventData interface {
 	EventType() string
 }
@@ -186,9 +191,6 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 	// handle v1 transactions
 	for _, txn := range b.Transactions {
 		relevant := relevantTxn(txn)
-		if len(relevant) == 0 {
-			continue
-		}
 
 		var e EventTransaction
 		for _, arb := range txn.ArbitraryData {
@@ -198,7 +200,7 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 			prefix.DecodeFrom(d)
 			netAddress := d.ReadString()
 			uk.DecodeFrom(d)
-			if d.Err() == nil && prefix == types.NewSpecifier("HostAnnouncement") &&
+			if d.Err() == nil && prefix == SpecifierAnnouncement &&
 				uk.Algorithm == types.SpecifierEd25519 && len(uk.Key) == len(types.PublicKey{}) {
 				e.HostAnnouncements = append(e.HostAnnouncements, HostAnnouncement{
 					PublicKey:  *(*types.PublicKey)(uk.Key),
@@ -216,9 +218,6 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 	// handle v2 transactions
 	for _, txn := range b.V2Transactions() {
 		relevant := relevantV2Txn(txn)
-		if len(relevant) == 0 {
-			continue
-		}
 
 		var e EventTransaction
 		for _, a := range txn.Attestations {
