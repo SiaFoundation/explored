@@ -116,6 +116,19 @@ func check(t *testing.T, desc string, expect, got any) {
 	}
 }
 
+func checkMetrics(t *testing.T, db explorer.Store, expected explorer.Metrics) {
+	got, err := db.Metrics()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	check(t, "height", expected.Height, got.Height)
+	check(t, "difficulty", expected.Difficulty, got.Difficulty)
+	check(t, "total hosts", expected.TotalHosts, got.TotalHosts)
+	check(t, "active contracts", expected.ActiveContracts, got.ActiveContracts)
+	check(t, "storage utilization", expected.StorageUtilization, got.StorageUtilization)
+}
+
 func syncDB(t *testing.T, db *sqlite.Store, cm *chain.Manager) {
 	index, err := db.Tip()
 	if err != nil && !errors.Is(err, explorer.ErrNoTip) {
@@ -627,7 +640,7 @@ func TestTip(t *testing.T) {
 }
 
 // copied from rhp/v2 to avoid import cycle
-func prepareContractFormation(renterPubKey types.PublicKey, hostKey types.PublicKey, renterPayout, hostCollateral types.Currency, endHeight uint64, windowSize uint64, refundAddr types.Address) types.FileContract {
+func prepareContractFormation(renterPubKey types.PublicKey, hostKey types.PublicKey, renterPayout, hostCollateral types.Currency, startHeight uint64, endHeight uint64, refundAddr types.Address) types.FileContract {
 	taxAdjustedPayout := func(target types.Currency) types.Currency {
 		guess := target.Mul64(1000).Div64(961)
 		mod64 := func(c types.Currency, v uint64) types.Currency {
@@ -660,8 +673,8 @@ func prepareContractFormation(renterPubKey types.PublicKey, hostKey types.Public
 	return types.FileContract{
 		Filesize:       contractFilesize,
 		FileMerkleRoot: types.Hash256{},
-		WindowStart:    endHeight,
-		WindowEnd:      endHeight + windowSize,
+		WindowStart:    startHeight,
+		WindowEnd:      endHeight,
 		Payout:         payout,
 		UnlockHash:     types.Hash256(uc.UnlockHash()),
 		RevisionNumber: 0,
@@ -758,14 +771,6 @@ func TestFileContract(t *testing.T) {
 		}
 	}
 
-	checkMetrics := func(expected, got explorer.Metrics) {
-		check(t, "height", expected.Height, got.Height)
-		check(t, "difficulty", expected.Difficulty, got.Difficulty)
-		check(t, "total hosts", expected.TotalHosts, got.TotalHosts)
-		check(t, "active contracts", expected.ActiveContracts, got.ActiveContracts)
-		check(t, "storage utilization", expected.StorageUtilization, got.StorageUtilization)
-	}
-
 	windowStart := cm.Tip().Height + 10
 	windowEnd := windowStart + 10
 	fc := prepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), windowStart, windowEnd, types.VoidAddress)
@@ -829,17 +834,13 @@ func TestFileContract(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	metrics, err := db.Metrics()
-	if err != nil {
-		t.Fatal(err)
-	}
-	checkMetrics(explorer.Metrics{
+	checkMetrics(t, db, explorer.Metrics{
 		Height:             2,
 		Difficulty:         cm.TipState().Difficulty,
 		TotalHosts:         0,
 		ActiveContracts:    1,
 		StorageUtilization: contractFilesize,
-	}, metrics)
+	})
 
 	// Explorer.Contracts should return latest revision
 	{
@@ -866,12 +867,28 @@ func TestFileContract(t *testing.T) {
 		checkFC(false, true, fc, fcr.FileContract)
 	}
 
-	for i := cm.Tip().Height; i < windowEnd+10; i++ {
+	for i := cm.Tip().Height; i < windowEnd; i++ {
+		checkMetrics(t, db, explorer.Metrics{
+			Height:             i,
+			Difficulty:         cm.TipState().Difficulty,
+			TotalHosts:         0,
+			ActiveContracts:    1,
+			StorageUtilization: 1 * contractFilesize,
+		})
+
 		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
 			t.Fatal(err)
 		}
 		syncDB(t, db, cm)
 	}
+
+	checkMetrics(t, db, explorer.Metrics{
+		Height:             windowEnd,
+		Difficulty:         cm.TipState().Difficulty,
+		TotalHosts:         0,
+		ActiveContracts:    0,
+		StorageUtilization: 0,
+	})
 
 	{
 		dbFCs, err := db.Contracts([]types.FileContractID{fcID})
@@ -889,17 +906,13 @@ func TestFileContract(t *testing.T) {
 		syncDB(t, db, cm)
 	}
 
-	metrics, err = db.Metrics()
-	if err != nil {
-		t.Fatal(err)
-	}
-	checkMetrics(explorer.Metrics{
+	checkMetrics(t, db, explorer.Metrics{
 		Height:             cm.Tip().Height,
 		Difficulty:         cm.TipState().Difficulty,
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
-	}, metrics)
+	})
 }
 
 func TestRevertTip(t *testing.T) {
@@ -946,6 +959,14 @@ func TestRevertTip(t *testing.T) {
 		check(t, "tip", cm.Tip(), tip)
 	}
 
+	checkMetrics(t, db, explorer.Metrics{
+		Height:             cm.Tip().Height,
+		Difficulty:         cm.TipState().Difficulty,
+		TotalHosts:         0,
+		ActiveContracts:    0,
+		StorageUtilization: 0,
+	})
+
 	{
 		// mine to trigger a reorg
 		var blocks []types.Block
@@ -966,6 +987,14 @@ func TestRevertTip(t *testing.T) {
 		}
 		check(t, "tip", cm.Tip(), tip)
 	}
+
+	checkMetrics(t, db, explorer.Metrics{
+		Height:             cm.Tip().Height,
+		Difficulty:         cm.TipState().Difficulty,
+		TotalHosts:         0,
+		ActiveContracts:    0,
+		StorageUtilization: 0,
+	})
 
 	for i := 0; i < n; i++ {
 		best, err := db.BestTip(uint64(i))
@@ -1059,6 +1088,14 @@ func TestRevertBalance(t *testing.T) {
 			t.Fatal(err)
 		}
 		syncDB(t, db, cm)
+
+		checkMetrics(t, db, explorer.Metrics{
+			Height:             cm.Tip().Height,
+			Difficulty:         cm.TipState().Difficulty,
+			TotalHosts:         0,
+			ActiveContracts:    0,
+			StorageUtilization: 0,
+		})
 	}
 
 	// Mine until the payout matures
@@ -1069,6 +1106,14 @@ func TestRevertBalance(t *testing.T) {
 			t.Fatal(err)
 		}
 		syncDB(t, db, cm)
+
+		checkMetrics(t, db, explorer.Metrics{
+			Height:             cm.Tip().Height,
+			Difficulty:         cm.TipState().Difficulty,
+			TotalHosts:         0,
+			ActiveContracts:    0,
+			StorageUtilization: 0,
+		})
 	}
 	checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
 	checkBalance(addr2, expectedPayout.Mul64(1), expectedPayout.Mul64(1), 0)
@@ -1126,6 +1171,14 @@ func TestRevertBalance(t *testing.T) {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
+
+	checkMetrics(t, db, explorer.Metrics{
+		Height:             cm.Tip().Height,
+		Difficulty:         cm.TipState().Difficulty,
+		TotalHosts:         0,
+		ActiveContracts:    0,
+		StorageUtilization: 0,
+	})
 
 	checkBalance(addr1, hundredSC, types.ZeroCurrency, 0)
 	// second block added in reorg has now matured
@@ -1357,6 +1410,14 @@ func TestRevertSendTransactions(t *testing.T) {
 		blocks = append(blocks, b)
 		syncDB(t, db, cm)
 
+		checkMetrics(t, db, explorer.Metrics{
+			Height:             cm.Tip().Height,
+			Difficulty:         cm.TipState().Difficulty,
+			TotalHosts:         0,
+			ActiveContracts:    0,
+			StorageUtilization: 0,
+		})
+
 		checkBalance(addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
 		checkBalance(addr2, types.Siacoins(1).Mul64(uint64(i+1)), types.ZeroCurrency, 1*uint64(i+1))
 		checkBalance(addr3, types.Siacoins(2).Mul64(uint64(i+1)), types.ZeroCurrency, 2*uint64(i+1))
@@ -1519,5 +1580,13 @@ func TestRevertSendTransactions(t *testing.T) {
 			check(t, "address", addr3, sfe.SiafundOutput.Address)
 			check(t, "value", uint64(2), sfe.SiafundOutput.Value)
 		}
+
+		checkMetrics(t, db, explorer.Metrics{
+			Height:             cm.Tip().Height,
+			Difficulty:         cm.TipState().Difficulty,
+			TotalHosts:         0,
+			ActiveContracts:    0,
+			StorageUtilization: 0,
+		})
 	}
 }

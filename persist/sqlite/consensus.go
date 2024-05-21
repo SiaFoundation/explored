@@ -706,7 +706,7 @@ func addFileContractElements(tx *txn, bid types.BlockID, fces []explorer.FileCon
 			fc = &update.Revision.FileContract
 		}
 
-		// log.Printf("%v (%d) - resolved: %v, valid: %v", fce.StateElement.ID, fc.RevisionNumber, update.Resolved, update.Valid)
+		// log.Printf("%v: %v (%d) - resolved: %v, valid: %v", bid, fce.StateElement.ID, fc.RevisionNumber, update.Resolved, update.Valid)
 		var dbID int64
 		err := stmt.QueryRow(encode(bid), encode(fce.StateElement.ID), encode(fce.StateElement.LeafIndex), fc.Filesize, encode(fc.FileMerkleRoot), fc.WindowStart, fc.WindowEnd, encode(fc.Payout), encode(fc.UnlockHash), fc.RevisionNumber, update.Resolved, update.Valid, encode(fce.StateElement.LeafIndex)).Scan(&dbID)
 		if err != nil {
