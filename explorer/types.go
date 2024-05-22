@@ -119,7 +119,7 @@ type Metrics struct {
 	Difficulty consensus.Work `json:"difficulty"`
 	// Total announced hosts
 	TotalHosts uint64 `json:"totalHosts"`
-	// Active contracts (TODO)
+	// Active contracts
 	ActiveContracts uint64 `json:"activeContracts"`
 	// Current storage utilization, in bytes
 	StorageUtilization uint64 `json:"storageUtilization"`
