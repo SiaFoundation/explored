@@ -755,6 +755,7 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 		if err != nil {
 			return fmt.Errorf("failed to execute file_contract_elements statement: %w", err)
 		}
+		// log.Printf("%v (%d) - resolved: %v, valid: %v", fcID, fc.RevisionNumber, resolved, valid)
 
 		// only update if it's the most recent revision which will come from
 		// running ForEachFileContractElement on the update
