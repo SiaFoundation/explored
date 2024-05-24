@@ -858,7 +858,7 @@ func updateMetrics(tx *txn, b types.Block, fces []explorer.FileContractUpdate, e
 			fc = fce.Revision.FileContract
 		}
 
-		if fce.Resolved == true {
+		if fce.Resolved {
 			activeContractsDelta--
 			storageUtilizationDelta -= int64(fc.Filesize)
 		} else if fce.Revision == nil {
