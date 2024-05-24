@@ -8,8 +8,12 @@ CREATE TABLE blocks (
         height INTEGER NOT NULL,
         parent_id BLOB NOT NULL,
         nonce BLOB NOT NULL,
+        timestamp INTEGER NOT NULL,
+
         difficulty BLOB NOT NULL,
-        timestamp INTEGER NOT NULL
+        total_hosts INTEGER NOT NULL,
+        active_contracts INTEGER NOT NULL,
+        storage_utilization INTEGER NOT NULL
 );
 
 CREATE INDEX blocks_height_index ON blocks(height);

@@ -3,30 +3,17 @@ package sqlite
 import (
 	"fmt"
 
+	"go.sia.tech/core/types"
 	"go.sia.tech/explored/explorer"
 )
 
 // Metrics implements explorer.Store
-func (s *Store) Metrics() (result explorer.Metrics, err error) {
+func (s *Store) Metrics(id types.BlockID) (result explorer.Metrics, err error) {
 	err = s.transaction(func(tx *txn) error {
-		err = tx.QueryRow(`SELECT height, difficulty FROM blocks ORDER BY height DESC LIMIT 1`).Scan(&result.Height, decode(&result.Difficulty))
+		err = tx.QueryRow(`SELECT height, difficulty, total_hosts, active_contracts, storage_utilization FROM blocks WHERE id = ?`, encode(id)).Scan(&result.Height, decode(&result.Difficulty), &result.TotalHosts, &result.ActiveContracts, &result.StorageUtilization)
 		if err != nil {
 			return fmt.Errorf("failed to get height and difficulty: %w", err)
 		}
-
-		err = tx.QueryRow(`SELECT COUNT(*), COALESCE(SUM(COALESCE(fce.filesize, 0)), 0)
-FROM file_contract_elements fce
-INNER JOIN last_contract_revision rev ON (rev.contract_element_id = fce.id)
-WHERE fce.resolved = FALSE`).Scan(&result.ActiveContracts, &result.StorageUtilization)
-		if err != nil {
-			return fmt.Errorf("failed to get active contracts and storage utilization: %w", err)
-		}
-
-		err = tx.QueryRow(`SELECT COUNT(*) FROM (SELECT DISTINCT public_key FROM host_announcements);`).Scan(&result.TotalHosts)
-		if err != nil {
-			return fmt.Errorf("failed to get total hosts: %w", err)
-		}
-
 		return nil
 	})
 	return

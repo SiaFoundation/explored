@@ -118,7 +118,11 @@ func check(t *testing.T, desc string, expect, got any) {
 }
 
 func checkMetrics(t *testing.T, db explorer.Store, expected explorer.Metrics) {
-	got, err := db.Metrics()
+	tip, err := db.Tip()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := db.Metrics(tip.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

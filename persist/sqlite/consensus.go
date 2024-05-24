@@ -18,8 +18,16 @@ type updateTx struct {
 }
 
 func addBlock(tx *txn, b types.Block, height uint64, difficulty consensus.Work) error {
+	var totalHosts, activeContracts, storageUtilization uint64
+	if height > 0 {
+		err := tx.QueryRow("SELECT total_hosts, active_contracts, storage_utilization from blocks WHERE height = ?", height-1).Scan(&totalHosts, &activeContracts, &storageUtilization)
+		if err != nil {
+			return fmt.Errorf("addBlock: failed to get previous metrics: %w", err)
+		}
+	}
+
 	// nonce is encoded because database/sql doesn't support uint64 with high bit set
-	_, err := tx.Exec("INSERT INTO blocks(id, height, parent_id, nonce, difficulty, timestamp) VALUES (?, ?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encode(b.Nonce), encode(difficulty), encode(b.Timestamp))
+	_, err := tx.Exec("INSERT INTO blocks(id, height, parent_id, nonce, timestamp, difficulty, total_hosts, active_contracts, storage_utilization) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encode(b.Nonce), encode(b.Timestamp), encode(difficulty), totalHosts, activeContracts, storageUtilization)
 	return err
 }
 
@@ -815,6 +823,61 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 	return fcDBIds, updateErr
 }
 
+func updateMetrics(tx *txn, b types.Block, fces []explorer.FileContractUpdate, events []explorer.Event) error {
+	hostExistsQuery, err := tx.Prepare(`SELECT NULL from host_announcements WHERE public_key = ?`)
+	if err != nil {
+		return fmt.Errorf("updateMetrics: failed to prepare host announcement query: %w", err)
+	}
+	updateQuery, err := tx.Prepare(`UPDATE blocks SET total_hosts = total_hosts + ?, active_contracts = active_contracts + ?, storage_utilization = storage_utilization + ? WHERE id = ?`)
+	if err != nil {
+		return fmt.Errorf("updateMetrics: failed to prepare metrics update query: %w", err)
+	}
+
+	var totalHostsDelta int64
+	for _, event := range events {
+		if event.Data.EventType() == explorer.EventTypeTransaction {
+			txn := event.Data.(*explorer.EventTransaction)
+			for _, host := range txn.HostAnnouncements {
+				// Technically, query.QueryRow().Err() should work here instead
+				// of doing an empty scan.  Unfortunately it appears to just
+				// returns nil, at least for the sqlite driver.
+				if err := hostExistsQuery.QueryRow(encode(host.PublicKey)).Scan(); errors.Is(err, sql.ErrNoRows) {
+					// we haven't seen this host yet
+					totalHostsDelta++
+				} else if err != nil {
+					return fmt.Errorf("updateMetrics: failed to find host announcement: %w", err)
+				}
+			}
+		}
+	}
+
+	var activeContractsDelta, storageUtilizationDelta int64
+	for _, fce := range fces {
+		fc := fce.FileContractElement.FileContract
+		if fce.Revision != nil {
+			fc = fce.Revision.FileContract
+		}
+
+		if fce.Resolved == true {
+			activeContractsDelta--
+			storageUtilizationDelta -= int64(fc.Filesize)
+		} else if fce.Revision == nil {
+			// don't count revision as a new contract
+			activeContractsDelta++
+			storageUtilizationDelta += int64(fc.Filesize)
+		} else {
+			// filesize changed
+			storageUtilizationDelta += int64(fc.Filesize - fce.FileContractElement.FileContract.Filesize)
+		}
+	}
+
+	_, err = updateQuery.Exec(totalHostsDelta, activeContractsDelta, storageUtilizationDelta, encode(b.ID()))
+	if err != nil {
+		return fmt.Errorf("updateMetrics: failed to execute metrics update query: %w", err)
+	}
+	return nil
+}
+
 func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 	if err := addBlock(ut.tx, state.Block, state.Index.Height, state.Difficulty); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add block: %w", err)
@@ -855,6 +918,8 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to add transactions: addTransactions: %w", err)
 	} else if err := updateStateTree(ut.tx, state.TreeUpdates); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update state tree: %w", err)
+	} else if err := updateMetrics(ut.tx, state.Block, state.FileContractElements, state.Events); err != nil {
+		return fmt.Errorf("ApplyIndex: failed to update metrics: %w", err)
 	} else if err := addEvents(ut.tx, scDBIds, fcDBIds, txnDBIds, state.Events); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add events: %w", err)
 	}
