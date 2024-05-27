@@ -18,16 +18,16 @@ type updateTx struct {
 }
 
 func addBlock(tx *txn, b types.Block, height uint64, difficulty consensus.Work) error {
-	var totalHosts, activeContracts, storageUtilization uint64
+	var totalHosts, activeContracts, failedContracts, storageUtilization uint64
 	if height > 0 {
-		err := tx.QueryRow("SELECT total_hosts, active_contracts, storage_utilization from blocks WHERE height = ?", height-1).Scan(&totalHosts, &activeContracts, &storageUtilization)
+		err := tx.QueryRow("SELECT total_hosts, active_contracts, failed_contracts, storage_utilization from blocks WHERE height = ?", height-1).Scan(&totalHosts, &activeContracts, &failedContracts, &storageUtilization)
 		if err != nil {
 			return fmt.Errorf("addBlock: failed to get previous metrics: %w", err)
 		}
 	}
 
 	// nonce is encoded because database/sql doesn't support uint64 with high bit set
-	_, err := tx.Exec("INSERT INTO blocks(id, height, parent_id, nonce, timestamp, difficulty, total_hosts, active_contracts, storage_utilization) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encode(b.Nonce), encode(b.Timestamp), encode(difficulty), totalHosts, activeContracts, storageUtilization)
+	_, err := tx.Exec("INSERT INTO blocks(id, height, parent_id, nonce, timestamp, difficulty, total_hosts, active_contracts, failed_contracts, storage_utilization) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encode(b.Nonce), encode(b.Timestamp), encode(difficulty), totalHosts, activeContracts, failedContracts, storageUtilization)
 	return err
 }
 
@@ -828,7 +828,7 @@ func updateMetrics(tx *txn, b types.Block, fces []explorer.FileContractUpdate, e
 	if err != nil {
 		return fmt.Errorf("updateMetrics: failed to prepare host announcement query: %w", err)
 	}
-	updateQuery, err := tx.Prepare(`UPDATE blocks SET total_hosts = total_hosts + ?, active_contracts = active_contracts + ?, storage_utilization = storage_utilization + ? WHERE id = ?`)
+	updateQuery, err := tx.Prepare(`UPDATE blocks SET total_hosts = total_hosts + ?, active_contracts = active_contracts + ?, failed_contracts = failed_contracts + ?, storage_utilization = storage_utilization + ? WHERE id = ?`)
 	if err != nil {
 		return fmt.Errorf("updateMetrics: failed to prepare metrics update query: %w", err)
 	}
@@ -851,7 +851,7 @@ func updateMetrics(tx *txn, b types.Block, fces []explorer.FileContractUpdate, e
 		}
 	}
 
-	var activeContractsDelta, storageUtilizationDelta int64
+	var activeContractsDelta, failedContractsDelta, storageUtilizationDelta int64
 	for _, fce := range fces {
 		fc := fce.FileContractElement.FileContract
 		if fce.Revision != nil {
@@ -869,9 +869,13 @@ func updateMetrics(tx *txn, b types.Block, fces []explorer.FileContractUpdate, e
 			// filesize changed
 			storageUtilizationDelta += int64(fc.Filesize - fce.FileContractElement.FileContract.Filesize)
 		}
+
+		if !fce.Valid {
+			failedContractsDelta++
+		}
 	}
 
-	_, err = updateQuery.Exec(totalHostsDelta, activeContractsDelta, storageUtilizationDelta, encode(b.ID()))
+	_, err = updateQuery.Exec(totalHostsDelta, activeContractsDelta, failedContractsDelta, storageUtilizationDelta, encode(b.ID()))
 	if err != nil {
 		return fmt.Errorf("updateMetrics: failed to execute metrics update query: %w", err)
 	}

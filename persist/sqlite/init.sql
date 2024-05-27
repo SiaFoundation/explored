@@ -13,6 +13,7 @@ CREATE TABLE blocks (
         difficulty BLOB NOT NULL,
         total_hosts INTEGER NOT NULL,
         active_contracts INTEGER NOT NULL,
+        failed_contracts INTEGER NOT NULL,
         storage_utilization INTEGER NOT NULL
 );
 
