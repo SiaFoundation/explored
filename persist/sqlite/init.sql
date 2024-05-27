@@ -14,6 +14,7 @@ CREATE TABLE blocks (
         total_hosts INTEGER NOT NULL,
         active_contracts INTEGER NOT NULL,
         failed_contracts INTEGER NOT NULL,
+        successful_contracts INTEGER NOT NULL,
         storage_utilization INTEGER NOT NULL
 );
 
