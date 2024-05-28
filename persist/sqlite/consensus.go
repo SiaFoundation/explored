@@ -824,7 +824,7 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 }
 
 func updateMetrics(tx *txn, b types.Block, fces []explorer.FileContractUpdate, events []explorer.Event) error {
-	hostExistsQuery, err := tx.Prepare(`SELECT NULL from host_announcements WHERE public_key = ?`)
+	hostExistsQuery, err := tx.Prepare(`SELECT EXISTS(SELECT public_key FROM host_announcements WHERE public_key = ?)`)
 	if err != nil {
 		return fmt.Errorf("updateMetrics: failed to prepare host announcement query: %w", err)
 	}
@@ -838,14 +838,12 @@ func updateMetrics(tx *txn, b types.Block, fces []explorer.FileContractUpdate, e
 		if event.Data.EventType() == explorer.EventTypeTransaction {
 			txn := event.Data.(*explorer.EventTransaction)
 			for _, host := range txn.HostAnnouncements {
-				// Technically, query.QueryRow().Err() should work here instead
-				// of doing an empty scan.  Unfortunately it appears to just
-				// returns nil, at least for the sqlite driver.
-				if err := hostExistsQuery.QueryRow(encode(host.PublicKey)).Scan(); errors.Is(err, sql.ErrNoRows) {
+				var exists bool
+				if err := hostExistsQuery.QueryRow(encode(host.PublicKey)).Scan(&exists); err != nil {
+					return fmt.Errorf("failed to check host announcement: %w", err)
+				} else if !exists {
 					// we haven't seen this host yet
 					totalHostsDelta++
-				} else if err != nil {
-					return fmt.Errorf("updateMetrics: failed to find host announcement: %w", err)
 				}
 			}
 		}
