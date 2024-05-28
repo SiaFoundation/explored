@@ -129,4 +129,6 @@ type Metrics struct {
 	StorageUtilization uint64 `json:"storageUtilization"`
 	// Current circulating supply
 	CirculatingSupply types.Currency `json:"circulatingSupply"`
+	// Total contract revenue
+	ContractRevenue types.Currency `json:"contractRevenue"`
 }

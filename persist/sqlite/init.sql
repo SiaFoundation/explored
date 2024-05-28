@@ -16,7 +16,8 @@ CREATE TABLE blocks (
         failed_contracts INTEGER NOT NULL,
         successful_contracts INTEGER NOT NULL,
         storage_utilization INTEGER NOT NULL,
-        circulating_supply BLOB NOT NULL
+        circulating_supply BLOB NOT NULL,
+        contract_revenue BLOB NOT NULL
 );
 
 CREATE INDEX blocks_height_index ON blocks(height);

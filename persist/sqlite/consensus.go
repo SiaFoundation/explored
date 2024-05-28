@@ -19,9 +19,9 @@ type updateTx struct {
 
 func addBlock(tx *txn, b types.Block, height uint64, difficulty consensus.Work) (explorer.Metrics, error) {
 	var totalHosts, activeContracts, failedContracts, successfulContracts, storageUtilization uint64
-	var circulatingSupply types.Currency
+	var circulatingSupply, contractRevenue types.Currency
 	if height > 0 {
-		err := tx.QueryRow("SELECT total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply from blocks WHERE height = ?", height-1).Scan(&totalHosts, &activeContracts, &failedContracts, &successfulContracts, &storageUtilization, decode(&circulatingSupply))
+		err := tx.QueryRow("SELECT total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue from blocks WHERE height = ?", height-1).Scan(&totalHosts, &activeContracts, &failedContracts, &successfulContracts, &storageUtilization, decode(&circulatingSupply), decode(&contractRevenue))
 		if err != nil {
 			return explorer.Metrics{}, fmt.Errorf("addBlock: failed to get previous metrics: %w", err)
 		}
@@ -35,7 +35,7 @@ func addBlock(tx *txn, b types.Block, height uint64, difficulty consensus.Work) 
 	}
 
 	// nonce is encoded because database/sql doesn't support uint64 with high bit set
-	_, err := tx.Exec("INSERT INTO blocks(id, height, parent_id, nonce, timestamp, difficulty, total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encode(b.Nonce), encode(b.Timestamp), encode(difficulty), totalHosts, activeContracts, failedContracts, successfulContracts, storageUtilization, encode(circulatingSupply))
+	_, err := tx.Exec("INSERT INTO blocks(id, height, parent_id, nonce, timestamp, difficulty, total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encode(b.Nonce), encode(b.Timestamp), encode(difficulty), totalHosts, activeContracts, failedContracts, successfulContracts, storageUtilization, encode(circulatingSupply), encode(contractRevenue))
 	return explorer.Metrics{
 		Height:              height,
 		Difficulty:          difficulty,
@@ -45,6 +45,7 @@ func addBlock(tx *txn, b types.Block, height uint64, difficulty consensus.Work) 
 		SuccessfulContracts: successfulContracts,
 		StorageUtilization:  storageUtilization,
 		CirculatingSupply:   circulatingSupply,
+		ContractRevenue:     contractRevenue,
 	}, err
 }
 
@@ -845,7 +846,7 @@ func updateMetrics(tx *txn, b types.Block, fces []explorer.FileContractUpdate, e
 	if err != nil {
 		return fmt.Errorf("updateMetrics: failed to prepare host announcement query: %w", err)
 	}
-	updateQuery, err := tx.Prepare(`UPDATE blocks SET total_hosts = ?, active_contracts = ?, failed_contracts = ?, successful_contracts = ?, storage_utilization = ?, circulating_supply = ? WHERE id = ?`)
+	updateQuery, err := tx.Prepare(`UPDATE blocks SET total_hosts = ?, active_contracts = ?, failed_contracts = ?, successful_contracts = ?, storage_utilization = ?, circulating_supply = ?, contract_revenue = ? WHERE id = ?`)
 	if err != nil {
 		return fmt.Errorf("updateMetrics: failed to prepare metrics update query: %w", err)
 	}
@@ -866,6 +867,7 @@ func updateMetrics(tx *txn, b types.Block, fces []explorer.FileContractUpdate, e
 		}
 	}
 
+	var contractRevenueDelta types.Currency
 	var activeContractsDelta, failedContractsDelta, successfulContractsDelta, storageUtilizationDelta int64
 	for _, fce := range fces {
 		fc := fce.FileContractElement.FileContract
@@ -890,6 +892,9 @@ func updateMetrics(tx *txn, b types.Block, fces []explorer.FileContractUpdate, e
 				failedContractsDelta++
 			} else {
 				successfulContractsDelta++
+				for _, vpo := range fc.ValidProofOutputs {
+					contractRevenueDelta = contractRevenueDelta.Add(vpo.Value)
+				}
 			}
 		}
 	}
@@ -906,6 +911,7 @@ func updateMetrics(tx *txn, b types.Block, fces []explorer.FileContractUpdate, e
 		int64(existingMetrics.SuccessfulContracts)+successfulContractsDelta,
 		int64(existingMetrics.StorageUtilization)+storageUtilizationDelta,
 		encode(existingMetrics.CirculatingSupply.Add(circulatingSupplyDelta)),
+		encode(existingMetrics.ContractRevenue.Add(contractRevenueDelta)),
 		encode(b.ID()),
 	)
 	if err != nil {

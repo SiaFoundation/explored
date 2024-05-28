@@ -10,7 +10,7 @@ import (
 // Metrics implements explorer.Store
 func (s *Store) Metrics(id types.BlockID) (result explorer.Metrics, err error) {
 	err = s.transaction(func(tx *txn) error {
-		err = tx.QueryRow(`SELECT height, difficulty, total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply FROM blocks WHERE id = ?`, encode(id)).Scan(&result.Height, decode(&result.Difficulty), &result.TotalHosts, &result.ActiveContracts, &result.FailedContracts, &result.SuccessfulContracts, &result.StorageUtilization, decode(&result.CirculatingSupply))
+		err = tx.QueryRow(`SELECT height, difficulty, total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue FROM blocks WHERE id = ?`, encode(id)).Scan(&result.Height, decode(&result.Difficulty), &result.TotalHosts, &result.ActiveContracts, &result.FailedContracts, &result.SuccessfulContracts, &result.StorageUtilization, decode(&result.CirculatingSupply), decode(&result.ContractRevenue))
 		if err != nil {
 			return fmt.Errorf("failed to get height and difficulty: %w", err)
 		}
