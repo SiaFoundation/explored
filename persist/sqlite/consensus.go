@@ -845,10 +845,7 @@ func updateMetrics(tx *txn, b types.Block, fces []explorer.FileContractUpdate, e
 	if err != nil {
 		return fmt.Errorf("updateMetrics: failed to prepare host announcement query: %w", err)
 	}
-	updateQuery, err := tx.Prepare(`UPDATE blocks SET total_hosts = ?, active_contracts = ?, failed_contracts = ?, successful_contracts = ?, storage_utilization = ?, circulating_supply = ?, contract_revenue = ? WHERE id = ?`)
-	if err != nil {
-		return fmt.Errorf("updateMetrics: failed to prepare metrics update query: %w", err)
-	}
+	defer hostExistsQuery.Close()
 
 	var totalHostsDelta int64
 	for _, event := range events {
@@ -903,7 +900,7 @@ func updateMetrics(tx *txn, b types.Block, fces []explorer.FileContractUpdate, e
 		circulatingSupplyDelta = circulatingSupplyDelta.Add(mp.Value)
 	}
 
-	_, err = updateQuery.Exec(
+	_, err = tx.Exec(`UPDATE blocks SET total_hosts = ?, active_contracts = ?, failed_contracts = ?, successful_contracts = ?, storage_utilization = ?, circulating_supply = ?, contract_revenue = ? WHERE id = ?`,
 		int64(existingMetrics.TotalHosts)+totalHostsDelta,
 		int64(existingMetrics.ActiveContracts)+activeContractsDelta,
 		int64(existingMetrics.FailedContracts)+failedContractsDelta,
