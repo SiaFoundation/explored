@@ -105,7 +105,6 @@ type Block struct {
 
 	ParentID     types.BlockID   `json:"parentID"`
 	Nonce        uint64          `json:"nonce"`
-	Difficulty   consensus.Work  `json:"difficulty"`
 	Timestamp    time.Time       `json:"timestamp"`
 	MinerPayouts []SiacoinOutput `json:"minerPayouts"`
 	Transactions []Transaction   `json:"transactions"`

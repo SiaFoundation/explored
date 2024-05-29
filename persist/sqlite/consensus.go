@@ -17,36 +17,10 @@ type updateTx struct {
 	tx *txn
 }
 
-func addBlock(tx *txn, b types.Block, height uint64, difficulty consensus.Work) (explorer.Metrics, error) {
-	var totalHosts, activeContracts, failedContracts, successfulContracts, storageUtilization uint64
-	var circulatingSupply, contractRevenue types.Currency
-	if height > 0 {
-		err := tx.QueryRow("SELECT total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue from blocks WHERE height = ?", height-1).Scan(&totalHosts, &activeContracts, &failedContracts, &successfulContracts, &storageUtilization, decode(&circulatingSupply), decode(&contractRevenue))
-		if err != nil {
-			return explorer.Metrics{}, fmt.Errorf("addBlock: failed to get previous metrics: %w", err)
-		}
-	} else {
-		// add genesis outputs
-		for _, txn := range b.Transactions {
-			for _, sco := range txn.SiacoinOutputs {
-				circulatingSupply = circulatingSupply.Add(sco.Value)
-			}
-		}
-	}
-
+func addBlock(tx *txn, b types.Block, height uint64) error {
 	// nonce is encoded because database/sql doesn't support uint64 with high bit set
-	_, err := tx.Exec("INSERT INTO blocks(id, height, parent_id, nonce, timestamp, difficulty, total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encode(b.Nonce), encode(b.Timestamp), encode(difficulty), totalHosts, activeContracts, failedContracts, successfulContracts, storageUtilization, encode(circulatingSupply), encode(contractRevenue))
-	return explorer.Metrics{
-		Height:              height,
-		Difficulty:          difficulty,
-		TotalHosts:          totalHosts,
-		ActiveContracts:     activeContracts,
-		FailedContracts:     failedContracts,
-		SuccessfulContracts: successfulContracts,
-		StorageUtilization:  storageUtilization,
-		CirculatingSupply:   circulatingSupply,
-		ContractRevenue:     contractRevenue,
-	}, err
+	_, err := tx.Exec("INSERT INTO blocks(id, height, parent_id, nonce, timestamp) VALUES (?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encode(b.Nonce), encode(b.Timestamp))
+	return err
 }
 
 func addMinerPayouts(tx *txn, bid types.BlockID, scos []types.SiacoinOutput, dbIDs map[types.SiacoinOutputID]int64) error {
@@ -840,10 +814,25 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 	return fcDBIds, updateErr
 }
 
-func updateMetrics(tx *txn, b types.Block, fces []explorer.FileContractUpdate, events []explorer.Event, existingMetrics explorer.Metrics) error {
+func addMetrics(tx *txn, height uint64, difficulty consensus.Work, b types.Block, fces []explorer.FileContractUpdate, events []explorer.Event) error {
+	var existingMetrics explorer.Metrics
+	if height > 0 {
+		err := tx.QueryRow("SELECT total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue from network_metrics WHERE height = ?", height-1).Scan(&existingMetrics.TotalHosts, &existingMetrics.ActiveContracts, &existingMetrics.FailedContracts, &existingMetrics.SuccessfulContracts, &existingMetrics.StorageUtilization, decode(&existingMetrics.CirculatingSupply), decode(&existingMetrics.ContractRevenue))
+		if err != nil {
+			return fmt.Errorf("addMetrics: failed to get previous metrics: %w", err)
+		}
+	} else {
+		// add genesis outputs
+		for _, txn := range b.Transactions {
+			for _, sco := range txn.SiacoinOutputs {
+				existingMetrics.CirculatingSupply = existingMetrics.CirculatingSupply.Add(sco.Value)
+			}
+		}
+	}
+
 	hostExistsQuery, err := tx.Prepare(`SELECT EXISTS(SELECT public_key FROM host_announcements WHERE public_key = ?)`)
 	if err != nil {
-		return fmt.Errorf("updateMetrics: failed to prepare host announcement query: %w", err)
+		return fmt.Errorf("addMetrics: failed to prepare host announcement query: %w", err)
 	}
 	defer hostExistsQuery.Close()
 
@@ -900,7 +889,10 @@ func updateMetrics(tx *txn, b types.Block, fces []explorer.FileContractUpdate, e
 		circulatingSupplyDelta = circulatingSupplyDelta.Add(mp.Value)
 	}
 
-	_, err = tx.Exec(`UPDATE blocks SET total_hosts = ?, active_contracts = ?, failed_contracts = ?, successful_contracts = ?, storage_utilization = ?, circulating_supply = ?, contract_revenue = ? WHERE id = ?`,
+	_, err = tx.Exec(`INSERT INTO network_metrics(block_id, height, difficulty, total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		encode(b.ID()),
+		height,
+		encode(difficulty),
 		int64(existingMetrics.TotalHosts)+totalHostsDelta,
 		int64(existingMetrics.ActiveContracts)+activeContractsDelta,
 		int64(existingMetrics.FailedContracts)+failedContractsDelta,
@@ -908,17 +900,15 @@ func updateMetrics(tx *txn, b types.Block, fces []explorer.FileContractUpdate, e
 		int64(existingMetrics.StorageUtilization)+storageUtilizationDelta,
 		encode(existingMetrics.CirculatingSupply.Add(circulatingSupplyDelta)),
 		encode(existingMetrics.ContractRevenue.Add(contractRevenueDelta)),
-		encode(b.ID()),
 	)
 	if err != nil {
-		return fmt.Errorf("updateMetrics: failed to execute metrics update query: %w", err)
+		return fmt.Errorf("addMetrics: failed to execute metrics update query: %w", err)
 	}
 	return nil
 }
 
 func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
-	existingMetrics, err := addBlock(ut.tx, state.Block, state.Index.Height, state.Difficulty)
-	if err != nil {
+	if err := addBlock(ut.tx, state.Block, state.Index.Height); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add block: %w", err)
 	} else if err := updateMaturedBalances(ut.tx, false, state.Index.Height); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update matured balances: %w", err)
@@ -957,7 +947,7 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to add transactions: addTransactions: %w", err)
 	} else if err := updateStateTree(ut.tx, state.TreeUpdates); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update state tree: %w", err)
-	} else if err := updateMetrics(ut.tx, state.Block, state.FileContractElements, state.Events, existingMetrics); err != nil {
+	} else if err := addMetrics(ut.tx, state.Index.Height, state.Difficulty, state.Block, state.FileContractElements, state.Events); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update metrics: %w", err)
 	} else if err := addEvents(ut.tx, scDBIds, fcDBIds, txnDBIds, state.Events); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add events: %w", err)

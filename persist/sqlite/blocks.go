@@ -10,7 +10,7 @@ import (
 // Block implements explorer.Store.
 func (s *Store) Block(id types.BlockID) (result explorer.Block, err error) {
 	err = s.transaction(func(tx *txn) error {
-		err = tx.QueryRow(`SELECT parent_id, nonce, difficulty, timestamp, height FROM blocks WHERE id=?`, encode(id)).Scan(decode(&result.ParentID), decode(&result.Nonce), decode(&result.Difficulty), decode(&result.Timestamp), &result.Height)
+		err = tx.QueryRow(`SELECT parent_id, nonce, timestamp, height FROM blocks WHERE id=?`, encode(id)).Scan(decode(&result.ParentID), decode(&result.Nonce), decode(&result.Timestamp), &result.Height)
 		if err != nil {
 			return err
 		}
