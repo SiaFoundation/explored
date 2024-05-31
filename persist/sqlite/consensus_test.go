@@ -1,6 +1,7 @@
 package sqlite_test
 
 import (
+	"bytes"
 	"errors"
 	"math/bits"
 	"path/filepath"
@@ -15,6 +16,8 @@ import (
 	"go.sia.tech/explored/persist/sqlite"
 	"go.uber.org/zap/zaptest"
 )
+
+const contractFilesize = 10
 
 func testV1Network(giftAddr types.Address, sc types.Currency, sf uint64) (*consensus.Network, types.Block) {
 	// use a modified version of Zen
@@ -112,6 +115,23 @@ func check(t *testing.T, desc string, expect, got any) {
 	if !reflect.DeepEqual(expect, got) {
 		t.Fatalf("expected %v %s, got %v", expect, desc, got)
 	}
+}
+
+func checkMetrics(t *testing.T, db explorer.Store, expected explorer.Metrics) {
+	tip, err := db.Tip()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := db.Metrics(tip.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	check(t, "height", expected.Height, got.Height)
+	check(t, "difficulty", expected.Difficulty, got.Difficulty)
+	check(t, "total hosts", expected.TotalHosts, got.TotalHosts)
+	check(t, "active contracts", expected.ActiveContracts, got.ActiveContracts)
+	check(t, "storage utilization", expected.StorageUtilization, got.StorageUtilization)
 }
 
 func syncDB(t *testing.T, db *sqlite.Store, cm *chain.Manager) {
@@ -644,7 +664,7 @@ func TestTip(t *testing.T) {
 }
 
 // copied from rhp/v2 to avoid import cycle
-func prepareContractFormation(renterPubKey types.PublicKey, hostKey types.PublicKey, renterPayout, hostCollateral types.Currency, endHeight uint64, windowSize uint64, refundAddr types.Address) types.FileContract {
+func prepareContractFormation(renterPubKey types.PublicKey, hostKey types.PublicKey, renterPayout, hostCollateral types.Currency, startHeight uint64, endHeight uint64, refundAddr types.Address) types.FileContract {
 	taxAdjustedPayout := func(target types.Currency) types.Currency {
 		guess := target.Mul64(1000).Div64(961)
 		mod64 := func(c types.Currency, v uint64) types.Currency {
@@ -675,10 +695,10 @@ func prepareContractFormation(renterPubKey types.PublicKey, hostKey types.Public
 	hostPayout := hostCollateral
 	payout := taxAdjustedPayout(renterPayout.Add(hostPayout))
 	return types.FileContract{
-		Filesize:       0,
+		Filesize:       contractFilesize,
 		FileMerkleRoot: types.Hash256{},
-		WindowStart:    endHeight,
-		WindowEnd:      endHeight + windowSize,
+		WindowStart:    startHeight,
+		WindowEnd:      endHeight,
 		Payout:         payout,
 		UnlockHash:     types.Hash256(uc.UnlockHash()),
 		RevisionNumber: 0,
@@ -838,6 +858,14 @@ func TestFileContract(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
+	checkMetrics(t, db, explorer.Metrics{
+		Height:             2,
+		Difficulty:         cm.TipState().Difficulty,
+		TotalHosts:         0,
+		ActiveContracts:    1,
+		StorageUtilization: contractFilesize,
+	})
+
 	// Explorer.Contracts should return latest revision
 	{
 		dbFCs, err := db.Contracts([]types.FileContractID{fcID})
@@ -863,12 +891,28 @@ func TestFileContract(t *testing.T) {
 		checkFC(false, true, fc, fcr.FileContract)
 	}
 
-	for i := cm.Tip().Height; i < windowEnd+10; i++ {
+	for i := cm.Tip().Height; i < windowEnd; i++ {
+		checkMetrics(t, db, explorer.Metrics{
+			Height:             i,
+			Difficulty:         cm.TipState().Difficulty,
+			TotalHosts:         0,
+			ActiveContracts:    1,
+			StorageUtilization: 1 * contractFilesize,
+		})
+
 		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
 			t.Fatal(err)
 		}
 		syncDB(t, db, cm)
 	}
+
+	checkMetrics(t, db, explorer.Metrics{
+		Height:             windowEnd,
+		Difficulty:         cm.TipState().Difficulty,
+		TotalHosts:         0,
+		ActiveContracts:    0,
+		StorageUtilization: 0,
+	})
 
 	{
 		dbFCs, err := db.Contracts([]types.FileContractID{fcID})
@@ -878,6 +922,21 @@ func TestFileContract(t *testing.T) {
 		check(t, "fcs", 1, len(dbFCs))
 		checkFC(true, false, fc, dbFCs[0])
 	}
+
+	for i := 0; i < 100; i++ {
+		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
+			t.Fatal(err)
+		}
+		syncDB(t, db, cm)
+	}
+
+	checkMetrics(t, db, explorer.Metrics{
+		Height:             cm.Tip().Height,
+		Difficulty:         cm.TipState().Difficulty,
+		TotalHosts:         0,
+		ActiveContracts:    0,
+		StorageUtilization: 0,
+	})
 }
 
 func TestEphemeralFileContract(t *testing.T) {
@@ -1156,6 +1215,14 @@ func TestRevertTip(t *testing.T) {
 		check(t, "tip", cm.Tip(), tip)
 	}
 
+	checkMetrics(t, db, explorer.Metrics{
+		Height:             cm.Tip().Height,
+		Difficulty:         cm.TipState().Difficulty,
+		TotalHosts:         0,
+		ActiveContracts:    0,
+		StorageUtilization: 0,
+	})
+
 	{
 		// mine to trigger a reorg
 		var blocks []types.Block
@@ -1176,6 +1243,14 @@ func TestRevertTip(t *testing.T) {
 		}
 		check(t, "tip", cm.Tip(), tip)
 	}
+
+	checkMetrics(t, db, explorer.Metrics{
+		Height:             cm.Tip().Height,
+		Difficulty:         cm.TipState().Difficulty,
+		TotalHosts:         0,
+		ActiveContracts:    0,
+		StorageUtilization: 0,
+	})
 
 	for i := 0; i < n; i++ {
 		best, err := db.BestTip(uint64(i))
@@ -1279,6 +1354,14 @@ func TestRevertBalance(t *testing.T) {
 			t.Fatal(err)
 		}
 		syncDB(t, db, cm)
+
+		checkMetrics(t, db, explorer.Metrics{
+			Height:             cm.Tip().Height,
+			Difficulty:         cm.TipState().Difficulty,
+			TotalHosts:         0,
+			ActiveContracts:    0,
+			StorageUtilization: 0,
+		})
 	}
 	checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
 	checkBalance(addr2, expectedPayout.Mul64(1), expectedPayout.Mul64(1), 0)
@@ -1336,6 +1419,14 @@ func TestRevertBalance(t *testing.T) {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
+
+	checkMetrics(t, db, explorer.Metrics{
+		Height:             cm.Tip().Height,
+		Difficulty:         cm.TipState().Difficulty,
+		TotalHosts:         0,
+		ActiveContracts:    0,
+		StorageUtilization: 0,
+	})
 
 	checkBalance(addr1, hundredSC, types.ZeroCurrency, 0)
 	// second block added in reorg has now matured
@@ -1567,6 +1658,14 @@ func TestRevertSendTransactions(t *testing.T) {
 		blocks = append(blocks, b)
 		syncDB(t, db, cm)
 
+		checkMetrics(t, db, explorer.Metrics{
+			Height:             cm.Tip().Height,
+			Difficulty:         cm.TipState().Difficulty,
+			TotalHosts:         0,
+			ActiveContracts:    0,
+			StorageUtilization: 0,
+		})
+
 		checkBalance(addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
 		checkBalance(addr2, types.Siacoins(1).Mul64(uint64(i+1)), types.ZeroCurrency, 1*uint64(i+1))
 		checkBalance(addr3, types.Siacoins(2).Mul64(uint64(i+1)), types.ZeroCurrency, 2*uint64(i+1))
@@ -1730,4 +1829,110 @@ func TestRevertSendTransactions(t *testing.T) {
 			check(t, "value", uint64(2), sfe.SiafundOutput.Value)
 		}
 	}
+
+	checkMetrics(t, db, explorer.Metrics{
+		Height:             cm.Tip().Height,
+		Difficulty:         cm.TipState().Difficulty,
+		TotalHosts:         0,
+		ActiveContracts:    0,
+		StorageUtilization: 0,
+	})
+}
+
+// from hostd
+func createAnnouncement(priv types.PrivateKey, netaddress string) []byte {
+	// encode the announcement
+	var buf bytes.Buffer
+	pub := priv.PublicKey()
+	enc := types.NewEncoder(&buf)
+	explorer.SpecifierAnnouncement.EncodeTo(enc)
+	enc.WriteString(netaddress)
+	pub.UnlockKey().EncodeTo(enc)
+	if err := enc.Flush(); err != nil {
+		panic(err)
+	}
+	// hash without the signature
+	sigHash := types.HashBytes(buf.Bytes())
+	// sign
+	sig := priv.SignHash(sigHash)
+	sig.EncodeTo(enc)
+	if err := enc.Flush(); err != nil {
+		panic(err)
+	}
+	return buf.Bytes()
+}
+
+func TestHostAnnouncement(t *testing.T) {
+	log := zaptest.NewLogger(t)
+	dir := t.TempDir()
+	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bdb.Close()
+
+	network, genesisBlock := testV1Network(types.VoidAddress, types.ZeroCurrency, 0)
+
+	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cm := chain.NewManager(store, genesisState)
+
+	pk1 := types.GeneratePrivateKey()
+	pk2 := types.GeneratePrivateKey()
+	pk3 := types.GeneratePrivateKey()
+
+	txn1 := types.Transaction{
+		ArbitraryData: [][]byte{
+			createAnnouncement(pk1, "127.0.0.1:1234"),
+		},
+	}
+	signTxn(cm.TipState(), pk1, &txn1)
+
+	// Mine a block containing host announcement
+	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn1}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	checkMetrics(t, db, explorer.Metrics{
+		Height:             cm.Tip().Height,
+		Difficulty:         cm.TipState().Difficulty,
+		TotalHosts:         1,
+		ActiveContracts:    0,
+		StorageUtilization: 0,
+	})
+
+	txn2 := types.Transaction{
+		ArbitraryData: [][]byte{
+			createAnnouncement(pk2, "127.0.0.1:5678"),
+		},
+	}
+	txn3 := types.Transaction{
+		ArbitraryData: [][]byte{
+			createAnnouncement(pk3, "127.0.0.1:9999"),
+		},
+	}
+
+	// Mine a block containing host announcement
+	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn2, txn3}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	checkMetrics(t, db, explorer.Metrics{
+		Height:             cm.Tip().Height,
+		Difficulty:         cm.TipState().Difficulty,
+		TotalHosts:         3,
+		ActiveContracts:    0,
+		StorageUtilization: 0,
+	})
 }

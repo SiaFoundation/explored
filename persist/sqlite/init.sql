@@ -13,6 +13,22 @@ CREATE TABLE blocks (
 
 CREATE INDEX blocks_height_index ON blocks(height);
 
+CREATE TABLE network_metrics (
+        block_id BLOB PRIMARY KEY REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
+
+        height INTEGER NOT NULL,
+        difficulty BLOB NOT NULL,
+        total_hosts INTEGER NOT NULL,
+        active_contracts INTEGER NOT NULL,
+        failed_contracts INTEGER NOT NULL,
+        successful_contracts INTEGER NOT NULL,
+        storage_utilization INTEGER NOT NULL,
+        circulating_supply BLOB NOT NULL,
+        contract_revenue BLOB NOT NULL
+);
+
+CREATE INDEX network_metrics_height_index ON network_metrics(height);
+
 CREATE TABLE address_balance (
         id INTEGER PRIMARY KEY,
         address BLOB UNIQUE NOT NULL,

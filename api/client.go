@@ -115,3 +115,15 @@ func (c *Client) Contracts(ids []types.FileContractID) (resp []explorer.FileCont
 	err = c.c.POST("/explorer/contracts", ids, &resp)
 	return
 }
+
+// Metrics returns the most recent metrics about Sia.
+func (c *Client) Metrics() (resp explorer.Metrics, err error) {
+	err = c.c.GET("/explorer/metrics", &resp)
+	return
+}
+
+// MetricsID returns various metrics about Sia at the time of the given block ID.
+func (c *Client) MetricsID(id types.BlockID) (resp explorer.Metrics, err error) {
+	err = c.c.GET(fmt.Sprintf("/explorer/metrics/%s", id), &resp)
+	return
+}

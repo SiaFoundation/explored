@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 )
 
@@ -107,4 +108,26 @@ type Block struct {
 	Timestamp    time.Time       `json:"timestamp"`
 	MinerPayouts []SiacoinOutput `json:"minerPayouts"`
 	Transactions []Transaction   `json:"transactions"`
+}
+
+// Metrics contains various statistics relevant to the health of the Sia network.
+type Metrics struct {
+	// Current chain height
+	Height uint64 `json:"height"`
+	// Current difficulty
+	Difficulty consensus.Work `json:"difficulty"`
+	// Total announced hosts
+	TotalHosts uint64 `json:"totalHosts"`
+	// Number of active contracts
+	ActiveContracts uint64 `json:"activeContracts"`
+	// Number of failed contracts
+	FailedContracts uint64 `json:"failedContracts"`
+	// Number of successful contracts
+	SuccessfulContracts uint64 `json:"successfulContracts"`
+	// Current storage utilization, in bytes
+	StorageUtilization uint64 `json:"storageUtilization"`
+	// Current circulating supply
+	CirculatingSupply types.Currency `json:"circulatingSupply"`
+	// Total contract revenue
+	ContractRevenue types.Currency `json:"contractRevenue"`
 }
