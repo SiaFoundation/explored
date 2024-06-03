@@ -755,8 +755,26 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 	for _, txn := range b.Transactions {
 		for _, fcr := range txn.FileContractRevisions {
 			fc := fcr.FileContract
+			uc := fcr.UnlockConditions
 			dbFC := explorer.DBFileContract{ID: fcr.ParentID, RevisionNumber: fc.RevisionNumber}
-			fcKeys[dbFC] = fcr.UnlockConditions.PublicKeys
+
+			// check for 2 ed25519 keys
+			ok := true
+			for i := 0; i < 2; i++ {
+				// fewer than 2 keys
+				if i >= len(uc.PublicKeys) {
+					ok = false
+					break
+				}
+
+				// not an ed25519 key
+				if uc.PublicKeys[i].Algorithm != types.SpecifierEd25519 {
+					ok = false
+				}
+			}
+			if ok {
+				fcKeys[dbFC] = fcr.UnlockConditions.PublicKeys
+			}
 		}
 	}
 
@@ -773,7 +791,7 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 		// running ForEachFileContractElement on the update
 		if lastRevision {
 			var renterKey, hostKey []byte
-			if keys, ok := fcKeys[dbFC]; ok && len(keys) == 2 {
+			if keys, ok := fcKeys[dbFC]; ok {
 				renterKey = keys[0].Key
 				hostKey = keys[1].Key
 			}

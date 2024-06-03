@@ -7,16 +7,16 @@ import (
 	"go.sia.tech/explored/explorer"
 )
 
+func encodedIDs(ids []types.FileContractID) []any {
+	result := make([]any, len(ids))
+	for i, id := range ids {
+		result[i] = encode(id)
+	}
+	return result
+}
+
 // Contracts implements explorer.Store.
 func (s *Store) Contracts(ids []types.FileContractID) (result []explorer.FileContract, err error) {
-	encodedIDs := func(ids []types.FileContractID) []any {
-		result := make([]any, len(ids))
-		for i, id := range ids {
-			result[i] = encode(id)
-		}
-		return result
-	}
-
 	err = s.transaction(func(tx *txn) error {
 		query := `SELECT fc1.id, fc1.contract_id, fc1.leaf_index, fc1.resolved, fc1.valid, fc1.filesize, fc1.file_merkle_root, fc1.window_start, fc1.window_end, fc1.payout, fc1.unlock_hash, fc1.revision_number
 			FROM file_contract_elements fc1
