@@ -269,6 +269,7 @@ func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction, scDBI
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare check transaction statement: %v", err)
 	}
+	defer checkTransactionStmt.Close()
 
 	insertTransactionStmt, err := tx.Prepare(`INSERT INTO transactions (transaction_id) VALUES (?)`)
 	if err != nil {
@@ -747,6 +748,7 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 	if err != nil {
 		return nil, fmt.Errorf("addFileContractElements: failed to prepare last_contract_revision statement: %w", err)
 	}
+	defer revisionStmt.Close()
 
 	fcDBIds := make(map[explorer.DBFileContract]int64)
 	addFC := func(fcID types.FileContractID, leafIndex uint64, fc types.FileContract, resolved, valid, lastRevision bool) error {
