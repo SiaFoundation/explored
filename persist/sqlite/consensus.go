@@ -741,8 +741,8 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 	}
 	defer stmt.Close()
 
-	revisionStmt, err := tx.Prepare(`INSERT INTO last_contract_revision(contract_id, contract_element_id)
-	VALUES (?, ?)
+	revisionStmt, err := tx.Prepare(`INSERT INTO last_contract_revision(contract_id, contract_element_id, ed25519_host_key, ed25519_renter_key)
+	VALUES (?, ?, ?, ?)
 	ON CONFLICT (contract_id)
 	DO UPDATE SET contract_element_id = ?`)
 	if err != nil {
@@ -750,9 +750,20 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 	}
 	defer revisionStmt.Close()
 
+	fcKeys := make(map[explorer.DBFileContract][]types.UnlockKey)
+	// populate fcKeys using revision UnlockConditions fields
+	for _, txn := range b.Transactions {
+		for _, fcr := range txn.FileContractRevisions {
+			fc := fcr.FileContract
+			dbFC := explorer.DBFileContract{ID: fcr.ParentID, RevisionNumber: fc.RevisionNumber}
+			fcKeys[dbFC] = fcr.UnlockConditions.PublicKeys
+		}
+	}
+
 	fcDBIds := make(map[explorer.DBFileContract]int64)
 	addFC := func(fcID types.FileContractID, leafIndex uint64, fc types.FileContract, resolved, valid, lastRevision bool) error {
 		var dbID int64
+		dbFC := explorer.DBFileContract{ID: fcID, RevisionNumber: fc.RevisionNumber}
 		err := stmt.QueryRow(encode(b.ID()), encode(fcID), encode(leafIndex), fc.Filesize, encode(fc.FileMerkleRoot), fc.WindowStart, fc.WindowEnd, encode(fc.Payout), encode(fc.UnlockHash), encode(fc.RevisionNumber), resolved, valid, encode(leafIndex)).Scan(&dbID)
 		if err != nil {
 			return fmt.Errorf("failed to execute file_contract_elements statement: %w", err)
@@ -761,12 +772,18 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 		// only update if it's the most recent revision which will come from
 		// running ForEachFileContractElement on the update
 		if lastRevision {
-			if _, err := revisionStmt.Exec(encode(fcID), dbID, dbID); err != nil {
+			var renterKey, hostKey []byte
+			if keys, ok := fcKeys[dbFC]; ok && len(keys) == 2 {
+				renterKey = keys[0].Key
+				hostKey = keys[1].Key
+			}
+
+			if _, err := revisionStmt.Exec(encode(fcID), dbID, renterKey, hostKey, dbID); err != nil {
 				return fmt.Errorf("failed to update last revision number: %w", err)
 			}
 		}
 
-		fcDBIds[explorer.DBFileContract{ID: fcID, RevisionNumber: fc.RevisionNumber}] = dbID
+		fcDBIds[dbFC] = dbID
 		return nil
 	}
 
