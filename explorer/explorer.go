@@ -42,7 +42,7 @@ type Store interface {
 	AddressEvents(address types.Address, offset, limit uint64) (events []Event, err error)
 	Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 	Contracts(ids []types.FileContractID) (result []FileContract, err error)
-	ContractsKey(key []byte) (result []FileContract, err error)
+	ContractsKey(key types.UnlockKey) (result []FileContract, err error)
 }
 
 // Explorer implements a Sia explorer.
@@ -171,6 +171,6 @@ func (e *Explorer) Contracts(ids []types.FileContractID) (result []FileContract,
 }
 
 // ContractsKey returns the contracts for a particular ed25519 key.
-func (e *Explorer) ContractsKey(key []byte) (result []FileContract, err error) {
+func (e *Explorer) ContractsKey(key types.UnlockKey) (result []FileContract, err error) {
 	return e.s.ContractsKey(key)
 }

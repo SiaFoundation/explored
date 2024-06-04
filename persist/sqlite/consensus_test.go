@@ -859,11 +859,11 @@ func TestFileContract(t *testing.T) {
 	syncDB(t, db, cm)
 
 	{
-		renterContracts, err := db.ContractsKey(renterPublicKey.UnlockKey().Key)
+		renterContracts, err := db.ContractsKey(renterPublicKey.UnlockKey())
 		if err != nil {
 			t.Fatal(err)
 		}
-		hostContracts, err := db.ContractsKey(hostPublicKey.UnlockKey().Key)
+		hostContracts, err := db.ContractsKey(hostPublicKey.UnlockKey())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -946,11 +946,11 @@ func TestFileContract(t *testing.T) {
 	}
 
 	{
-		renterContracts, err := db.ContractsKey(renterPublicKey.UnlockKey().Key)
+		renterContracts, err := db.ContractsKey(renterPublicKey.UnlockKey())
 		if err != nil {
 			t.Fatal(err)
 		}
-		hostContracts, err := db.ContractsKey(hostPublicKey.UnlockKey().Key)
+		hostContracts, err := db.ContractsKey(hostPublicKey.UnlockKey())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1100,11 +1100,11 @@ func TestEphemeralFileContract(t *testing.T) {
 	syncDB(t, db, cm)
 
 	{
-		renterContracts, err := db.ContractsKey(renterPublicKey.UnlockKey().Key)
+		renterContracts, err := db.ContractsKey(renterPublicKey.UnlockKey())
 		if err != nil {
 			t.Fatal(err)
 		}
-		hostContracts, err := db.ContractsKey(hostPublicKey.UnlockKey().Key)
+		hostContracts, err := db.ContractsKey(hostPublicKey.UnlockKey())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1188,11 +1188,11 @@ func TestEphemeralFileContract(t *testing.T) {
 	}
 
 	{
-		renterContracts, err := db.ContractsKey(renterPublicKey.UnlockKey().Key)
+		renterContracts, err := db.ContractsKey(renterPublicKey.UnlockKey())
 		if err != nil {
 			t.Fatal(err)
 		}
-		hostContracts, err := db.ContractsKey(hostPublicKey.UnlockKey().Key)
+		hostContracts, err := db.ContractsKey(hostPublicKey.UnlockKey())
 		if err != nil {
 			t.Fatal(err)
 		}
