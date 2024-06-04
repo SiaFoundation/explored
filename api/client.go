@@ -106,13 +106,19 @@ func (c *Client) AddressBalance(address types.Address) (resp AddressBalanceRespo
 
 // Contract returns the file contract with the specified ID.
 func (c *Client) Contract(id types.FileContractID) (resp explorer.FileContract, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/contracts/%s", id), &resp)
+	err = c.c.GET(fmt.Sprintf("/explorer/contracts/id/%s", id), &resp)
 	return
 }
 
 // Contracts returns the transactions with the specified IDs.
 func (c *Client) Contracts(ids []types.FileContractID) (resp []explorer.FileContract, err error) {
 	err = c.c.POST("/explorer/contracts", ids, &resp)
+	return
+}
+
+// ContractsKey returns the contracts for a particular ed25519 key.
+func (c *Client) ContractsKey(key types.UnlockKey) (resp []explorer.FileContract, err error) {
+	err = c.c.GET(fmt.Sprintf("/explorer/contracts/key/%s", key), &resp)
 	return
 }
 
