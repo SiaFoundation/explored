@@ -744,7 +744,7 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 	revisionStmt, err := tx.Prepare(`INSERT INTO last_contract_revision(contract_id, contract_element_id, ed25519_renter_key, ed25519_host_key)
 	VALUES (?, ?, ?, ?)
 	ON CONFLICT (contract_id)
-	DO UPDATE SET contract_element_id = ?, ed25519_renter_key = ?, ed25519_host_key = ?`)
+	DO UPDATE SET contract_element_id = ?, ed25519_renter_key = COALESCE(?, ed25519_renter_key), ed25519_host_key = COALESCE(?, ed25519_host_key)`)
 	if err != nil {
 		return nil, fmt.Errorf("addFileContractElements: failed to prepare last_contract_revision statement: %w", err)
 	}

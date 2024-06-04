@@ -858,6 +858,21 @@ func TestFileContract(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
+	{
+		renterContracts, err := db.ContractsKey(renterPublicKey.UnlockKey().Key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		hostContracts, err := db.ContractsKey(hostPublicKey.UnlockKey().Key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
+		check(t, "len(contracts)", 1, len(renterContracts))
+		checkFC(false, true, fc, renterContracts[0])
+		checkFC(false, true, fc, hostContracts[0])
+	}
+
 	checkMetrics(t, db, explorer.Metrics{
 		Height:             2,
 		Difficulty:         cm.TipState().Difficulty,
@@ -928,6 +943,21 @@ func TestFileContract(t *testing.T) {
 			t.Fatal(err)
 		}
 		syncDB(t, db, cm)
+	}
+
+	{
+		renterContracts, err := db.ContractsKey(renterPublicKey.UnlockKey().Key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		hostContracts, err := db.ContractsKey(hostPublicKey.UnlockKey().Key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
+		check(t, "len(contracts)", 1, len(renterContracts))
+		checkFC(true, false, fc, renterContracts[0])
+		checkFC(true, false, fc, hostContracts[0])
 	}
 
 	checkMetrics(t, db, explorer.Metrics{
@@ -1069,6 +1099,21 @@ func TestEphemeralFileContract(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
+	{
+		renterContracts, err := db.ContractsKey(renterPublicKey.UnlockKey().Key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		hostContracts, err := db.ContractsKey(hostPublicKey.UnlockKey().Key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
+		check(t, "len(contracts)", 1, len(renterContracts))
+		checkFC(true, false, true, revisedFC1, renterContracts[0])
+		checkFC(true, false, true, revisedFC1, hostContracts[0])
+	}
+
 	// Explorer.Contracts should return latest revision
 	{
 		dbFCs, err := db.Contracts([]types.FileContractID{fcID})
@@ -1140,6 +1185,21 @@ func TestEphemeralFileContract(t *testing.T) {
 		}
 		check(t, "fcs", 1, len(dbFCs))
 		checkFC(true, false, true, revisedFC3, dbFCs[0])
+	}
+
+	{
+		renterContracts, err := db.ContractsKey(renterPublicKey.UnlockKey().Key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		hostContracts, err := db.ContractsKey(hostPublicKey.UnlockKey().Key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
+		check(t, "len(contracts)", 1, len(renterContracts))
+		checkFC(true, false, true, revisedFC3, renterContracts[0])
+		checkFC(true, false, true, revisedFC3, hostContracts[0])
 	}
 
 	{
