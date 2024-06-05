@@ -117,7 +117,7 @@ func (c *Client) Contracts(ids []types.FileContractID) (resp []explorer.FileCont
 }
 
 // ContractsKey returns the contracts for a particular ed25519 key.
-func (c *Client) ContractsKey(key types.UnlockKey) (resp []explorer.FileContract, err error) {
+func (c *Client) ContractsKey(key types.PublicKey) (resp []explorer.FileContract, err error) {
 	err = c.c.GET(fmt.Sprintf("/explorer/contracts/key/%s", key), &resp)
 	return
 }
