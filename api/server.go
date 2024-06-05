@@ -51,7 +51,7 @@ type (
 		UnspentSiafundOutputs(address types.Address, offset, limit uint64) ([]explorer.SiafundOutput, error)
 		AddressEvents(address types.Address, offset, limit uint64) (events []explorer.Event, err error)
 		Contracts(ids []types.FileContractID) (result []explorer.FileContract, err error)
-		ContractsKey(key types.UnlockKey) (result []explorer.FileContract, err error)
+		ContractsKey(key types.PublicKey) (result []explorer.FileContract, err error)
 	}
 )
 
@@ -309,7 +309,7 @@ func (s *server) explorerContractIDHandler(jc jape.Context) {
 func (s *server) explorerContractKeyHandler(jc jape.Context) {
 	errNotFound := errors.New("no contract found")
 
-	var key types.UnlockKey
+	var key types.PublicKey
 	if jc.DecodeParam("key", &key) != nil {
 		return
 	}

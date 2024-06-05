@@ -750,7 +750,7 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 	}
 	defer revisionStmt.Close()
 
-	fcKeys := make(map[explorer.DBFileContract][]types.UnlockKey)
+	fcKeys := make(map[explorer.DBFileContract][2]types.PublicKey)
 	// populate fcKeys using revision UnlockConditions fields
 	for _, txn := range b.Transactions {
 		for _, fcr := range txn.FileContractRevisions {
@@ -760,6 +760,7 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 
 			// check for 2 ed25519 keys
 			ok := true
+			var result [2]types.PublicKey
 			for i := 0; i < 2; i++ {
 				// fewer than 2 keys
 				if i >= len(uc.PublicKeys) {
@@ -767,13 +768,15 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 					break
 				}
 
-				// not an ed25519 key
-				if uc.PublicKeys[i].Algorithm != types.SpecifierEd25519 {
+				if uc.PublicKeys[i].Algorithm == types.SpecifierEd25519 {
+					result[i] = types.PublicKey(uc.PublicKeys[i].Key)
+				} else {
+					// not an ed25519 key
 					ok = false
 				}
 			}
 			if ok {
-				fcKeys[dbFC] = fcr.UnlockConditions.PublicKeys
+				fcKeys[dbFC] = result
 			}
 		}
 	}
@@ -792,8 +795,8 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 		if lastRevision {
 			var renterKey, hostKey []byte
 			if keys, ok := fcKeys[dbFC]; ok {
-				renterKey = keys[0].Key
-				hostKey = keys[1].Key
+				renterKey = encode(keys[0]).([]byte)
+				hostKey = encode(keys[1]).([]byte)
 			}
 
 			if _, err := revisionStmt.Exec(encode(fcID), dbID, renterKey, hostKey, dbID, renterKey, hostKey); err != nil {
