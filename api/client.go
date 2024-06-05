@@ -88,19 +88,19 @@ func (c *Client) Transactions(ids []types.TransactionID) (resp []explorer.Transa
 
 // AddressUTXOs returns the specified address' unspent outputs.
 func (c *Client) AddressUTXOs(address types.Address, offset, limit uint64) (resp AddressUTXOsResponse, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/addresses/%s/utxos?offset=%d&limit=%d", address, offset, limit), &resp)
+	err = c.c.GET(fmt.Sprintf("/explorer/addresses/utxos/%s?offset=%d&limit=%d", address, offset, limit), &resp)
 	return
 }
 
 // AddressEvents returns the specified address' events.
 func (c *Client) AddressEvents(address types.Address, offset, limit uint64) (resp []explorer.Event, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/addresses/%s/events?offset=%d&limit=%d", address, offset, limit), &resp)
+	err = c.c.GET(fmt.Sprintf("/explorer/addresses/events/%s?offset=%d&limit=%d", address, offset, limit), &resp)
 	return
 }
 
 // AddressBalance returns the specified address' balance.
 func (c *Client) AddressBalance(address types.Address) (resp AddressBalanceResponse, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/addresses/%s/balance", address), &resp)
+	err = c.c.GET(fmt.Sprintf("/explorer/addresses/balance/%s", address), &resp)
 	return
 }
 
