@@ -361,11 +361,11 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET    /explorer/metrics/:id":                srv.explorerMetricsIDHandler,
 		"GET    /explorer/transactions/:id":           srv.explorerTransactionsIDHandler,
 		"POST   /explorer/transactions":               srv.explorerTransactionsHandler,
-		"GET    /explorer/addresses/utxos/:address":   srv.explorerAddressessAddressUtxosHandler,
-		"GET    /explorer/addresses/events/:address":  srv.explorerAddressessAddressEventsHandler,
-		"GET    /explorer/addresses/balance/:address": srv.explorerAddressessAddressBalanceHandler,
-		"GET    /explorer/contracts/id/:id":           srv.explorerContractIDHandler,
-		"GET    /explorer/contracts/key/:key":         srv.explorerContractKeyHandler,
+		"GET    /explorer/addresses/:address/utxos":   srv.explorerAddressessAddressUtxosHandler,
+		"GET    /explorer/addresses/:address/events":  srv.explorerAddressessAddressEventsHandler,
+		"GET    /explorer/addresses/:address/balance": srv.explorerAddressessAddressBalanceHandler,
+		"GET    /explorer/contracts/:id":              srv.explorerContractIDHandler,
+		"GET    /explorer/pubkey/:key/contracts":      srv.explorerContractKeyHandler,
 		"POST   /explorer/contracts":                  srv.explorerContractsHandler,
 	})
 }

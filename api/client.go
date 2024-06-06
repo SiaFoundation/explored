@@ -88,25 +88,25 @@ func (c *Client) Transactions(ids []types.TransactionID) (resp []explorer.Transa
 
 // AddressUTXOs returns the specified address' unspent outputs.
 func (c *Client) AddressUTXOs(address types.Address, offset, limit uint64) (resp AddressUTXOsResponse, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/addresses/utxos/%s?offset=%d&limit=%d", address, offset, limit), &resp)
+	err = c.c.GET(fmt.Sprintf("/explorer/addresses/%s/utxos?offset=%d&limit=%d", address, offset, limit), &resp)
 	return
 }
 
 // AddressEvents returns the specified address' events.
 func (c *Client) AddressEvents(address types.Address, offset, limit uint64) (resp []explorer.Event, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/addresses/events/%s?offset=%d&limit=%d", address, offset, limit), &resp)
+	err = c.c.GET(fmt.Sprintf("/explorer/addresses/%s/events?offset=%d&limit=%d", address, offset, limit), &resp)
 	return
 }
 
 // AddressBalance returns the specified address' balance.
 func (c *Client) AddressBalance(address types.Address) (resp AddressBalanceResponse, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/addresses/balance/%s", address), &resp)
+	err = c.c.GET(fmt.Sprintf("/explorer/addresses/%s/balance", address), &resp)
 	return
 }
 
 // Contract returns the file contract with the specified ID.
 func (c *Client) Contract(id types.FileContractID) (resp explorer.FileContract, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/contracts/id/%s", id), &resp)
+	err = c.c.GET(fmt.Sprintf("/explorer/contracts/%s", id), &resp)
 	return
 }
 
@@ -118,7 +118,7 @@ func (c *Client) Contracts(ids []types.FileContractID) (resp []explorer.FileCont
 
 // ContractsKey returns the contracts for a particular ed25519 key.
 func (c *Client) ContractsKey(key types.PublicKey) (resp []explorer.FileContract, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/contracts/key/%s", key), &resp)
+	err = c.c.GET(fmt.Sprintf("/explorer/pubkey/%s/contracts", key), &resp)
 	return
 }
 
