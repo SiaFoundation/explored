@@ -1937,7 +1937,7 @@ func TestHostAnnouncement(t *testing.T) {
 	})
 }
 
-func TestDoubleReorgSC(t *testing.T) {
+func TestMultipleReorgSC(t *testing.T) {
 	log := zaptest.NewLogger(t)
 	dir := t.TempDir()
 	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
@@ -1962,12 +1962,9 @@ func TestDoubleReorgSC(t *testing.T) {
 	pk3 := types.GeneratePrivateKey()
 	addr3 := types.StandardUnlockHash(pk3.PublicKey())
 
-	pk4 := types.GeneratePrivateKey()
-	addr4 := types.StandardUnlockHash(pk4.PublicKey())
-
-	// t.Log("addr1:", addr1)
-	// t.Log("addr2:", addr2)
-	// t.Log("addr3:", addr3)
+	t.Log("addr1:", addr1)
+	t.Log("addr2:", addr2)
+	t.Log("addr3:", addr3)
 
 	giftSC := types.Siacoins(500)
 	network, genesisBlock := testV1Network(addr1, giftSC, 0)
@@ -1990,6 +1987,9 @@ func TestDoubleReorgSC(t *testing.T) {
 		check(t, "siafunds", expectSF, sf)
 	}
 
+	t.Log("Before transfer addr1 -> addr2")
+	db.AllOutputs()
+
 	// Send all of the payout except 100 SC to addr3
 	// hundredSC := types.Siacoins(100)
 	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
@@ -2011,6 +2011,9 @@ func TestDoubleReorgSC(t *testing.T) {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
+
+	t.Log("After transfer addr1 -> addr2")
+	db.AllOutputs()
 
 	checkMetrics(t, db, explorer.Metrics{
 		Height:             cm.Tip().Height,
@@ -2051,6 +2054,9 @@ func TestDoubleReorgSC(t *testing.T) {
 		syncDB(t, db, cm)
 	}
 
+	t.Log("Before transfer addr2 -> addr3")
+	db.AllOutputs()
+
 	uc2 := types.StandardUnlockConditions(pk2.PublicKey())
 	// element gets spent at height 12
 	txn2 := types.Transaction{
@@ -2071,6 +2077,9 @@ func TestDoubleReorgSC(t *testing.T) {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
+
+	t.Log("After transfer addr2 -> addr3")
+	db.AllOutputs()
 
 	{
 		checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
@@ -2096,89 +2105,59 @@ func TestDoubleReorgSC(t *testing.T) {
 		check(t, "addr3 sc utxos", 1, len(scUtxos3))
 	}
 
-	// revert block 12, unspending the element
-	t.Log("Before 1:", cm.Tip())
-	{
-		var blocks []types.Block
-		state := prevState
-		for i := 0; i < 2; i++ {
-			blocks = append(blocks, mineBlock(state, nil, types.VoidAddress))
-			state.Index.ID = blocks[len(blocks)-1].ID()
-			state.Index.Height++
-		}
-		if err := cm.AddBlocks(blocks); err != nil {
-			t.Fatal(err)
-		}
-		syncDB(t, db, cm)
-	}
-	t.Log("After 1:", cm.Tip())
+	// revert block 12 with increasingly large reorgs and sanity check results
+	for reorg := 0; reorg < 10; reorg++ {
+		// revert block 12, unspending the element
+		t.Logf("Before %d: %v", reorg, cm.Tip())
+		{
+			var blocks []types.Block
+			state := prevState
+			for i := 0; i < reorg+2; i++ {
+				pk := types.GeneratePrivateKey()
+				addr := types.StandardUnlockHash(pk.PublicKey())
 
-	// we should be back in state before block 12 (addr2 has all the SC
-	// instead of addr3)
-	{
-		checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
-		checkBalance(addr2, giftSC, types.ZeroCurrency, 0)
-		checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
-
-		scUtxos1, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
-		if err != nil {
-			t.Fatal(err)
+				blocks = append(blocks, mineBlock(state, nil, addr))
+				state.Index.ID = blocks[len(blocks)-1].ID()
+				state.Index.Height++
+			}
+			if err := cm.AddBlocks(blocks); err != nil {
+				t.Fatal(err)
+			}
+			syncDB(t, db, cm)
 		}
-		check(t, "addr1 sc utxos", 0, len(scUtxos1))
+		t.Logf("After %d: %v", reorg, cm.Tip())
 
-		scUtxos2, err := db.UnspentSiacoinOutputs(addr2, 0, 100)
-		if err != nil {
-			t.Fatal(err)
-		}
-		check(t, "addr2 sc utxos", 1, len(scUtxos2))
+		t.Logf("Should be unspent: %v", txn1.SiacoinOutputID(0))
+		t.Logf("Should be spent: %v", genesisBlock.Transactions[0].SiacoinOutputID(0))
+		t.Logf("Should not be listed: %v", txn2.SiacoinOutputID(0))
 
-		scUtxos3, err := db.UnspentSiacoinOutputs(addr3, 0, 100)
-		if err != nil {
-			t.Fatal(err)
-		}
-		check(t, "addr3 sc utxos", 0, len(scUtxos3))
-	}
+		t.Log("After revert transfer addr2 -> addr3")
+		db.AllOutputs()
 
-	// revert block 12 again
-	t.Log("Before 2:", cm.Tip())
-	{
-		var blocks []types.Block
-		state := prevState
-		for i := 0; i < 3; i++ {
-			blocks = append(blocks, mineBlock(state, nil, addr4))
-			state.Index.ID = blocks[len(blocks)-1].ID()
-			state.Index.Height++
-		}
-		if err := cm.AddBlocks(blocks); err != nil {
-			t.Fatal(err)
-		}
-		syncDB(t, db, cm)
-	}
-	t.Log("After 2:", cm.Tip())
+		// we should be back in state before block 12 (addr2 has all the SC
+		// instead of addr3)
+		{
+			checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+			checkBalance(addr2, giftSC, types.ZeroCurrency, 0)
+			checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
 
-	// we should still be back in state before block 12 (addr2 has all the SC
-	// instead of addr3)
-	{
-		checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
-		checkBalance(addr2, giftSC, types.ZeroCurrency, 0)
-		checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
+			scUtxos1, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr1 sc utxos", 0, len(scUtxos1))
 
-		scUtxos1, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
-		if err != nil {
-			t.Fatal(err)
-		}
-		check(t, "addr1 sc utxos", 0, len(scUtxos1))
+			scUtxos2, err := db.UnspentSiacoinOutputs(addr2, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr2 sc utxos", 1, len(scUtxos2))
 
-		scUtxos2, err := db.UnspentSiacoinOutputs(addr2, 0, 100)
-		if err != nil {
-			t.Fatal(err)
+			scUtxos3, err := db.UnspentSiacoinOutputs(addr3, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr3 sc utxos", 0, len(scUtxos3))
 		}
-		check(t, "addr2 sc utxos", 1, len(scUtxos2))
-
-		scUtxos3, err := db.UnspentSiacoinOutputs(addr3, 0, 100)
-		if err != nil {
-			t.Fatal(err)
-		}
-		check(t, "addr3 sc utxos", 0, len(scUtxos3))
 	}
 }
