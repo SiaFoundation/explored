@@ -1936,3 +1936,350 @@ func TestHostAnnouncement(t *testing.T) {
 		StorageUtilization: 0,
 	})
 }
+
+func TestMultipleReorg(t *testing.T) {
+	log := zaptest.NewLogger(t)
+	dir := t.TempDir()
+	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bdb.Close()
+
+	// Generate three addresses: addr1, addr2, addr3
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
+	pk3 := types.GeneratePrivateKey()
+	addr3 := types.StandardUnlockHash(pk3.PublicKey())
+
+	// t.Log("addr1:", addr1)
+	// t.Log("addr2:", addr2)
+	// t.Log("addr3:", addr3)
+
+	const giftSF = 500
+	giftSC := types.Siacoins(500)
+	network, genesisBlock := testV1Network(addr1, giftSC, giftSF)
+
+	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cm := chain.NewManager(store, genesisState)
+
+	// checkBalance checks that an address has the balances we expect
+	checkBalance := func(addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
+		sc, immatureSC, sf, err := db.Balance(addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "siacoins", expectSC, sc)
+		check(t, "immature siacoins", expectImmatureSC, immatureSC)
+		check(t, "siafunds", expectSF, sf)
+	}
+
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	// transfer gift from addr1 to addr2
+	// element gets added at height 1
+	txn1 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{
+			{
+				ParentID:         genesisBlock.Transactions[0].SiacoinOutputID(0),
+				UnlockConditions: uc1,
+			},
+		},
+		SiacoinOutputs: []types.SiacoinOutput{
+			{Address: addr2, Value: giftSC},
+		},
+		SiafundInputs: []types.SiafundInput{
+			{
+				ParentID:         genesisBlock.Transactions[0].SiafundOutputID(0),
+				UnlockConditions: uc1,
+			},
+		},
+		SiafundOutputs: []types.SiafundOutput{
+			{Address: addr2, Value: giftSF},
+		},
+	}
+	signTxn(cm.TipState(), pk1, &txn1)
+
+	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn1}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	checkMetrics(t, db, explorer.Metrics{
+		Height:             cm.Tip().Height,
+		Difficulty:         cm.TipState().Difficulty,
+		TotalHosts:         0,
+		ActiveContracts:    0,
+		StorageUtilization: 0,
+	})
+
+	{
+		// addr2 should have all the SC
+		checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+		checkBalance(addr2, giftSC, types.ZeroCurrency, giftSF)
+		checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
+
+		scUtxos1, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr1 sc utxos", 0, len(scUtxos1))
+
+		scUtxos2, err := db.UnspentSiacoinOutputs(addr2, 0, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr2 sc utxos", 1, len(scUtxos2))
+
+		scUtxos3, err := db.UnspentSiacoinOutputs(addr3, 0, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr3 sc utxos", 0, len(scUtxos3))
+
+		sfUtxos1, err := db.UnspentSiafundOutputs(addr1, 0, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr1 sf utxos", 0, len(sfUtxos1))
+
+		sfUtxos2, err := db.UnspentSiafundOutputs(addr2, 0, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr2 sf utxos", 1, len(sfUtxos2))
+
+		sfUtxos3, err := db.UnspentSiafundOutputs(addr3, 0, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr3 sf utxos", 0, len(sfUtxos3))
+	}
+
+	for i := 0; i < 10; i++ {
+		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
+			t.Fatal(err)
+		}
+		syncDB(t, db, cm)
+	}
+
+	uc2 := types.StandardUnlockConditions(pk2.PublicKey())
+	// element gets spent at height 12
+	// transfer gift from addr2 to addr3
+	txn2 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{
+			{
+				ParentID:         txn1.SiacoinOutputID(0),
+				UnlockConditions: uc2,
+			},
+		},
+		SiacoinOutputs: []types.SiacoinOutput{
+			{Address: addr3, Value: giftSC},
+		},
+		SiafundInputs: []types.SiafundInput{
+			{
+				ParentID:         txn1.SiafundOutputID(0),
+				UnlockConditions: uc2,
+			},
+		},
+		SiafundOutputs: []types.SiafundOutput{
+			{Address: addr3, Value: giftSF},
+		},
+	}
+	signTxn(cm.TipState(), pk2, &txn2)
+
+	prevState1 := cm.TipState()
+	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn2}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+	prevState2 := cm.TipState()
+
+	{
+		// addr3 should have all the SC
+		checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+		checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
+		checkBalance(addr3, giftSC, types.ZeroCurrency, giftSF)
+
+		scUtxos1, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr1 sc utxos", 0, len(scUtxos1))
+
+		scUtxos2, err := db.UnspentSiacoinOutputs(addr2, 0, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr2 sc utxos", 0, len(scUtxos2))
+
+		scUtxos3, err := db.UnspentSiacoinOutputs(addr3, 0, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr3 sc utxos", 1, len(scUtxos3))
+
+		sfUtxos1, err := db.UnspentSiafundOutputs(addr1, 0, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr1 sf utxos", 0, len(sfUtxos1))
+
+		sfUtxos2, err := db.UnspentSiafundOutputs(addr2, 0, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr2 sf utxos", 0, len(sfUtxos2))
+
+		sfUtxos3, err := db.UnspentSiafundOutputs(addr3, 0, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr3 sf utxos", 1, len(sfUtxos3))
+	}
+
+	// revert block 12 with increasingly large reorgs and sanity check results
+	for reorg := 0; reorg < 2; reorg++ {
+		// revert block 12 (the addr2 -> addr3 transfer), unspending the
+		// element
+		{
+			var blocks []types.Block
+			state := prevState1
+			for i := 0; i < reorg+2; i++ {
+				pk := types.GeneratePrivateKey()
+				addr := types.StandardUnlockHash(pk.PublicKey())
+
+				blocks = append(blocks, mineBlock(state, nil, addr))
+				state.Index.ID = blocks[len(blocks)-1].ID()
+				state.Index.Height++
+			}
+			if err := cm.AddBlocks(blocks); err != nil {
+				t.Fatal(err)
+			}
+			syncDB(t, db, cm)
+		}
+
+		// we should be back in state before block 12 (addr2 has all the SC
+		// instead of addr3)
+		{
+			checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+			checkBalance(addr2, giftSC, types.ZeroCurrency, giftSF)
+			checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
+
+			scUtxos1, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr1 sc utxos", 0, len(scUtxos1))
+
+			scUtxos2, err := db.UnspentSiacoinOutputs(addr2, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr2 sc utxos", 1, len(scUtxos2))
+
+			scUtxos3, err := db.UnspentSiacoinOutputs(addr3, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr3 sc utxos", 0, len(scUtxos3))
+
+			sfUtxos1, err := db.UnspentSiafundOutputs(addr1, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr1 sf utxos", 0, len(sfUtxos1))
+
+			sfUtxos2, err := db.UnspentSiafundOutputs(addr2, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr2 sf utxos", 1, len(sfUtxos2))
+
+			sfUtxos3, err := db.UnspentSiafundOutputs(addr3, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr3 sf utxos", 0, len(sfUtxos3))
+		}
+	}
+
+	// now make the original chain where addr3 got the coins the longest
+	// and make sure addr3 ends up with the coins
+	extra := cm.Tip().Height - prevState2.Index.Height + 1
+	for reorg := 0; reorg < 2; reorg++ {
+		{
+			var blocks []types.Block
+			state := prevState2
+			for i := uint64(0); i < uint64(reorg)+extra; i++ {
+				pk := types.GeneratePrivateKey()
+				addr := types.StandardUnlockHash(pk.PublicKey())
+
+				blocks = append(blocks, mineBlock(state, nil, addr))
+				state.Index.ID = blocks[len(blocks)-1].ID()
+				state.Index.Height++
+			}
+			if err := cm.AddBlocks(blocks); err != nil {
+				t.Fatal(err)
+			}
+			syncDB(t, db, cm)
+		}
+
+		// we should be back in state before the reverts (addr3 has all the SC
+		// instead of addr2)
+		{
+			checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+			checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
+			checkBalance(addr3, giftSC, types.ZeroCurrency, giftSF)
+
+			scUtxos1, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr1 sc utxos", 0, len(scUtxos1))
+
+			scUtxos2, err := db.UnspentSiacoinOutputs(addr2, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr2 sc utxos", 0, len(scUtxos2))
+
+			scUtxos3, err := db.UnspentSiacoinOutputs(addr3, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr3 sc utxos", 1, len(scUtxos3))
+
+			sfUtxos1, err := db.UnspentSiafundOutputs(addr1, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr1 sf utxos", 0, len(sfUtxos1))
+
+			sfUtxos2, err := db.UnspentSiafundOutputs(addr2, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr2 sf utxos", 0, len(sfUtxos2))
+
+			sfUtxos3, err := db.UnspentSiafundOutputs(addr3, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr3 sf utxos", 1, len(sfUtxos3))
+		}
+	}
+}
