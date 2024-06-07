@@ -116,6 +116,12 @@ func (c *Client) Contracts(ids []types.FileContractID) (resp []explorer.FileCont
 	return
 }
 
+// ContractsKey returns the contracts for a particular ed25519 key.
+func (c *Client) ContractsKey(key types.PublicKey) (resp []explorer.FileContract, err error) {
+	err = c.c.GET(fmt.Sprintf("/explorer/pubkey/%s/contracts", key), &resp)
+	return
+}
+
 // Metrics returns the most recent metrics about Sia.
 func (c *Client) Metrics() (resp explorer.Metrics, err error) {
 	err = c.c.GET("/explorer/metrics", &resp)

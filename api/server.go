@@ -51,6 +51,7 @@ type (
 		UnspentSiafundOutputs(address types.Address, offset, limit uint64) ([]explorer.SiafundOutput, error)
 		AddressEvents(address types.Address, offset, limit uint64) (events []explorer.Event, err error)
 		Contracts(ids []types.FileContractID) (result []explorer.FileContract, err error)
+		ContractsKey(key types.PublicKey) (result []explorer.FileContract, err error)
 	}
 )
 
@@ -305,6 +306,23 @@ func (s *server) explorerContractIDHandler(jc jape.Context) {
 	jc.Encode(fcs[0])
 }
 
+func (s *server) explorerContractKeyHandler(jc jape.Context) {
+	errNotFound := errors.New("no contract found")
+
+	var key types.PublicKey
+	if jc.DecodeParam("key", &key) != nil {
+		return
+	}
+	fcs, err := s.e.ContractsKey(key)
+	if jc.Check("failed to get contracts", err) != nil {
+		return
+	} else if len(fcs) == 0 {
+		jc.Error(errNotFound, http.StatusNotFound)
+		return
+	}
+	jc.Encode(fcs)
+}
+
 func (s *server) explorerContractsHandler(jc jape.Context) {
 	var ids []types.FileContractID
 	if jc.Decode(&ids) != nil {
@@ -347,6 +365,7 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET    /explorer/addresses/:address/events":  srv.explorerAddressessAddressEventsHandler,
 		"GET    /explorer/addresses/:address/balance": srv.explorerAddressessAddressBalanceHandler,
 		"GET    /explorer/contracts/:id":              srv.explorerContractIDHandler,
+		"GET    /explorer/pubkey/:key/contracts":      srv.explorerContractKeyHandler,
 		"POST   /explorer/contracts":                  srv.explorerContractsHandler,
 	})
 }

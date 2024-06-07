@@ -741,18 +741,50 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 	}
 	defer stmt.Close()
 
-	revisionStmt, err := tx.Prepare(`INSERT INTO last_contract_revision(contract_id, contract_element_id)
-	VALUES (?, ?)
+	revisionStmt, err := tx.Prepare(`INSERT INTO last_contract_revision(contract_id, contract_element_id, ed25519_renter_key, ed25519_host_key)
+	VALUES (?, ?, ?, ?)
 	ON CONFLICT (contract_id)
-	DO UPDATE SET contract_element_id = ?`)
+	DO UPDATE SET contract_element_id = ?, ed25519_renter_key = COALESCE(?, ed25519_renter_key), ed25519_host_key = COALESCE(?, ed25519_host_key)`)
 	if err != nil {
 		return nil, fmt.Errorf("addFileContractElements: failed to prepare last_contract_revision statement: %w", err)
 	}
 	defer revisionStmt.Close()
 
+	fcKeys := make(map[explorer.DBFileContract][2]types.PublicKey)
+	// populate fcKeys using revision UnlockConditions fields
+	for _, txn := range b.Transactions {
+		for _, fcr := range txn.FileContractRevisions {
+			fc := fcr.FileContract
+			uc := fcr.UnlockConditions
+			dbFC := explorer.DBFileContract{ID: fcr.ParentID, RevisionNumber: fc.RevisionNumber}
+
+			// check for 2 ed25519 keys
+			ok := true
+			var result [2]types.PublicKey
+			for i := 0; i < 2; i++ {
+				// fewer than 2 keys
+				if i >= len(uc.PublicKeys) {
+					ok = false
+					break
+				}
+
+				if uc.PublicKeys[i].Algorithm == types.SpecifierEd25519 {
+					result[i] = types.PublicKey(uc.PublicKeys[i].Key)
+				} else {
+					// not an ed25519 key
+					ok = false
+				}
+			}
+			if ok {
+				fcKeys[dbFC] = result
+			}
+		}
+	}
+
 	fcDBIds := make(map[explorer.DBFileContract]int64)
 	addFC := func(fcID types.FileContractID, leafIndex uint64, fc types.FileContract, resolved, valid, lastRevision bool) error {
 		var dbID int64
+		dbFC := explorer.DBFileContract{ID: fcID, RevisionNumber: fc.RevisionNumber}
 		err := stmt.QueryRow(encode(b.ID()), encode(fcID), encode(leafIndex), fc.Filesize, encode(fc.FileMerkleRoot), fc.WindowStart, fc.WindowEnd, encode(fc.Payout), encode(fc.UnlockHash), encode(fc.RevisionNumber), resolved, valid, encode(leafIndex)).Scan(&dbID)
 		if err != nil {
 			return fmt.Errorf("failed to execute file_contract_elements statement: %w", err)
@@ -761,12 +793,18 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 		// only update if it's the most recent revision which will come from
 		// running ForEachFileContractElement on the update
 		if lastRevision {
-			if _, err := revisionStmt.Exec(encode(fcID), dbID, dbID); err != nil {
+			var renterKey, hostKey []byte
+			if keys, ok := fcKeys[dbFC]; ok {
+				renterKey = encode(keys[0]).([]byte)
+				hostKey = encode(keys[1]).([]byte)
+			}
+
+			if _, err := revisionStmt.Exec(encode(fcID), dbID, renterKey, hostKey, dbID, renterKey, hostKey); err != nil {
 				return fmt.Errorf("failed to update last revision number: %w", err)
 			}
 		}
 
-		fcDBIds[explorer.DBFileContract{ID: fcID, RevisionNumber: fc.RevisionNumber}] = dbID
+		fcDBIds[dbFC] = dbID
 		return nil
 	}
 
