@@ -2072,11 +2072,12 @@ func TestMultipleReorgSC(t *testing.T) {
 	}
 	signTxn(cm.TipState(), pk2, &txn2)
 
-	prevState := cm.TipState()
+	prevState1 := cm.TipState()
 	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn2}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
+	prevState2 := cm.TipState()
 
 	t.Log("After transfer addr2 -> addr3")
 	db.AllOutputs()
@@ -2111,7 +2112,7 @@ func TestMultipleReorgSC(t *testing.T) {
 		t.Logf("Before %d: %v", reorg, cm.Tip())
 		{
 			var blocks []types.Block
-			state := prevState
+			state := prevState1
 			for i := 0; i < reorg+2; i++ {
 				pk := types.GeneratePrivateKey()
 				addr := types.StandardUnlockHash(pk.PublicKey())
@@ -2158,6 +2159,61 @@ func TestMultipleReorgSC(t *testing.T) {
 				t.Fatal(err)
 			}
 			check(t, "addr3 sc utxos", 0, len(scUtxos3))
+		}
+	}
+
+	// now make the original chain where addr3 got the coins the longest
+	// and make sure addr3 ends up with the coins
+	for reorg := 0; reorg < 2; reorg++ {
+		t.Logf("2 Before %d: %v", reorg, cm.Tip())
+		{
+			var blocks []types.Block
+			state := prevState2
+			for i := 0; i < reorg+10; i++ {
+				pk := types.GeneratePrivateKey()
+				addr := types.StandardUnlockHash(pk.PublicKey())
+
+				blocks = append(blocks, mineBlock(state, nil, addr))
+				state.Index.ID = blocks[len(blocks)-1].ID()
+				state.Index.Height++
+			}
+			if err := cm.AddBlocks(blocks); err != nil {
+				t.Fatal(err)
+			}
+			syncDB(t, db, cm)
+		}
+		t.Logf("2 After %d: %v", reorg, cm.Tip())
+
+		t.Logf("2 Should be unspent: %v", txn2.SiacoinOutputID(0))
+		t.Logf("2 Should be spent: %v", txn1.SiacoinOutputID(0))
+
+		t.Log("2 After revert transfer addr2 -> addr3")
+		db.AllOutputs()
+
+		// we should be back in state before block 12 (addr2 has all the SC
+		// instead of addr3)
+		{
+			checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+			checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
+			checkBalance(addr3, giftSC, types.ZeroCurrency, 0)
+
+			scUtxos1, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr1 sc utxos", 0, len(scUtxos1))
+
+			scUtxos2, err := db.UnspentSiacoinOutputs(addr2, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr2 sc utxos", 0, len(scUtxos2))
+
+			scUtxos3, err := db.UnspentSiacoinOutputs(addr3, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr3 sc utxos", 1, len(scUtxos3))
 		}
 	}
 }
