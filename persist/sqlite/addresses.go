@@ -3,7 +3,6 @@ package sqlite
 import (
 	"database/sql"
 	"fmt"
-	"log"
 
 	"go.sia.tech/core/types"
 	"go.sia.tech/explored/explorer"
@@ -162,33 +161,6 @@ func (s *Store) Balance(address types.Address) (sc types.Currency, immatureSC ty
 		} else if err != nil {
 			return fmt.Errorf("failed to query balances: %w", err)
 		}
-		return nil
-	})
-	return
-}
-
-func (s *Store) AllOutputs() (result []explorer.SiacoinOutput, err error) {
-	err = s.transaction(func(tx *txn) error {
-		rows, err := tx.Query(`SELECT spent, output_id, leaf_index, source, maturity_height, address, value FROM siacoin_elements`)
-		if err != nil {
-			return fmt.Errorf("failed to query siacoin outputs: %w", err)
-		}
-		defer rows.Close()
-		log.Println("---------")
-		for rows.Next() {
-			var spent bool
-			var sco explorer.SiacoinOutput
-			if err := rows.Scan(&spent, decode(&sco.StateElement.ID), decode(&sco.StateElement.LeafIndex), &sco.Source, &sco.MaturityHeight, decode(&sco.SiacoinOutput.Address), decode(&sco.SiacoinOutput.Value)); err != nil {
-				return fmt.Errorf("failed to scan siacoin output: %w", err)
-			}
-			result = append(result, sco)
-
-			// ignore miner payouts
-			if sco.Source != explorer.SourceMinerPayout {
-				log.Printf("%v (%v - %v, spent: %v)", sco.StateElement.ID, sco.SiacoinOutput.Address, sco.SiacoinOutput.Value, spent)
-			}
-		}
-		log.Println("---------")
 		return nil
 	})
 	return

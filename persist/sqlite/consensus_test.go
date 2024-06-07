@@ -1962,12 +1962,13 @@ func TestMultipleReorgSC(t *testing.T) {
 	pk3 := types.GeneratePrivateKey()
 	addr3 := types.StandardUnlockHash(pk3.PublicKey())
 
-	t.Log("addr1:", addr1)
-	t.Log("addr2:", addr2)
-	t.Log("addr3:", addr3)
+	// t.Log("addr1:", addr1)
+	// t.Log("addr2:", addr2)
+	// t.Log("addr3:", addr3)
 
+	const giftSF = 500
 	giftSC := types.Siacoins(500)
-	network, genesisBlock := testV1Network(addr1, giftSC, 0)
+	network, genesisBlock := testV1Network(addr1, giftSC, giftSF)
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -1987,12 +1988,8 @@ func TestMultipleReorgSC(t *testing.T) {
 		check(t, "siafunds", expectSF, sf)
 	}
 
-	t.Log("Before transfer addr1 -> addr2")
-	db.AllOutputs()
-
-	// Send all of the payout except 100 SC to addr3
-	// hundredSC := types.Siacoins(100)
 	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	// transfer gift from addr1 to addr2
 	// element gets added at height 1
 	txn1 := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{
@@ -2004,6 +2001,15 @@ func TestMultipleReorgSC(t *testing.T) {
 		SiacoinOutputs: []types.SiacoinOutput{
 			{Address: addr2, Value: giftSC},
 		},
+		SiafundInputs: []types.SiafundInput{
+			{
+				ParentID:         genesisBlock.Transactions[0].SiafundOutputID(0),
+				UnlockConditions: uc1,
+			},
+		},
+		SiafundOutputs: []types.SiafundOutput{
+			{Address: addr2, Value: giftSF},
+		},
 	}
 	signTxn(cm.TipState(), pk1, &txn1)
 
@@ -2011,9 +2017,6 @@ func TestMultipleReorgSC(t *testing.T) {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
-
-	t.Log("After transfer addr1 -> addr2")
-	db.AllOutputs()
 
 	checkMetrics(t, db, explorer.Metrics{
 		Height:             cm.Tip().Height,
@@ -2024,8 +2027,9 @@ func TestMultipleReorgSC(t *testing.T) {
 	})
 
 	{
+		// addr2 should have all the SC
 		checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
-		checkBalance(addr2, giftSC, types.ZeroCurrency, 0)
+		checkBalance(addr2, giftSC, types.ZeroCurrency, giftSF)
 		checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
 
 		scUtxos1, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
@@ -2045,6 +2049,24 @@ func TestMultipleReorgSC(t *testing.T) {
 			t.Fatal(err)
 		}
 		check(t, "addr3 sc utxos", 0, len(scUtxos3))
+
+		sfUtxos1, err := db.UnspentSiafundOutputs(addr1, 0, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr1 sf utxos", 0, len(sfUtxos1))
+
+		sfUtxos2, err := db.UnspentSiafundOutputs(addr2, 0, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr2 sf utxos", 1, len(sfUtxos2))
+
+		sfUtxos3, err := db.UnspentSiafundOutputs(addr3, 0, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr3 sf utxos", 0, len(sfUtxos3))
 	}
 
 	for i := 0; i < 10; i++ {
@@ -2054,11 +2076,9 @@ func TestMultipleReorgSC(t *testing.T) {
 		syncDB(t, db, cm)
 	}
 
-	t.Log("Before transfer addr2 -> addr3")
-	db.AllOutputs()
-
 	uc2 := types.StandardUnlockConditions(pk2.PublicKey())
 	// element gets spent at height 12
+	// transfer gift from addr2 to addr3
 	txn2 := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{
 			{
@@ -2068,6 +2088,15 @@ func TestMultipleReorgSC(t *testing.T) {
 		},
 		SiacoinOutputs: []types.SiacoinOutput{
 			{Address: addr3, Value: giftSC},
+		},
+		SiafundInputs: []types.SiafundInput{
+			{
+				ParentID:         txn1.SiafundOutputID(0),
+				UnlockConditions: uc2,
+			},
+		},
+		SiafundOutputs: []types.SiafundOutput{
+			{Address: addr3, Value: giftSF},
 		},
 	}
 	signTxn(cm.TipState(), pk2, &txn2)
@@ -2079,13 +2108,11 @@ func TestMultipleReorgSC(t *testing.T) {
 	syncDB(t, db, cm)
 	prevState2 := cm.TipState()
 
-	t.Log("After transfer addr2 -> addr3")
-	db.AllOutputs()
-
 	{
+		// addr3 should have all the SC
 		checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
 		checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
-		checkBalance(addr3, giftSC, types.ZeroCurrency, 0)
+		checkBalance(addr3, giftSC, types.ZeroCurrency, giftSF)
 
 		scUtxos1, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
 		if err != nil {
@@ -2104,12 +2131,30 @@ func TestMultipleReorgSC(t *testing.T) {
 			t.Fatal(err)
 		}
 		check(t, "addr3 sc utxos", 1, len(scUtxos3))
+
+		sfUtxos1, err := db.UnspentSiafundOutputs(addr1, 0, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr1 sf utxos", 0, len(sfUtxos1))
+
+		sfUtxos2, err := db.UnspentSiafundOutputs(addr2, 0, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr2 sf utxos", 0, len(sfUtxos2))
+
+		sfUtxos3, err := db.UnspentSiafundOutputs(addr3, 0, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "addr3 sf utxos", 1, len(sfUtxos3))
 	}
 
 	// revert block 12 with increasingly large reorgs and sanity check results
 	for reorg := 0; reorg < 2; reorg++ {
-		// revert block 12, unspending the element
-		t.Logf("Before %d: %v", reorg, cm.Tip())
+		// revert block 12 (the addr2 -> addr3 transfer), unspending the
+		// element
 		{
 			var blocks []types.Block
 			state := prevState1
@@ -2126,20 +2171,12 @@ func TestMultipleReorgSC(t *testing.T) {
 			}
 			syncDB(t, db, cm)
 		}
-		t.Logf("After %d: %v", reorg, cm.Tip())
-
-		t.Logf("Should be unspent: %v", txn1.SiacoinOutputID(0))
-		t.Logf("Should be spent: %v", genesisBlock.Transactions[0].SiacoinOutputID(0))
-		t.Logf("Should not be listed: %v", txn2.SiacoinOutputID(0))
-
-		t.Log("After revert transfer addr2 -> addr3")
-		db.AllOutputs()
 
 		// we should be back in state before block 12 (addr2 has all the SC
 		// instead of addr3)
 		{
 			checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
-			checkBalance(addr2, giftSC, types.ZeroCurrency, 0)
+			checkBalance(addr2, giftSC, types.ZeroCurrency, giftSF)
 			checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
 
 			scUtxos1, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
@@ -2159,17 +2196,35 @@ func TestMultipleReorgSC(t *testing.T) {
 				t.Fatal(err)
 			}
 			check(t, "addr3 sc utxos", 0, len(scUtxos3))
+
+			sfUtxos1, err := db.UnspentSiafundOutputs(addr1, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr1 sf utxos", 0, len(sfUtxos1))
+
+			sfUtxos2, err := db.UnspentSiafundOutputs(addr2, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr2 sf utxos", 1, len(sfUtxos2))
+
+			sfUtxos3, err := db.UnspentSiafundOutputs(addr3, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr3 sf utxos", 0, len(sfUtxos3))
 		}
 	}
 
 	// now make the original chain where addr3 got the coins the longest
 	// and make sure addr3 ends up with the coins
+	extra := cm.Tip().Height - prevState2.Index.Height + 1
 	for reorg := 0; reorg < 2; reorg++ {
-		t.Logf("2 Before %d: %v", reorg, cm.Tip())
 		{
 			var blocks []types.Block
 			state := prevState2
-			for i := 0; i < reorg+10; i++ {
+			for i := uint64(0); i < uint64(reorg)+extra; i++ {
 				pk := types.GeneratePrivateKey()
 				addr := types.StandardUnlockHash(pk.PublicKey())
 
@@ -2182,20 +2237,13 @@ func TestMultipleReorgSC(t *testing.T) {
 			}
 			syncDB(t, db, cm)
 		}
-		t.Logf("2 After %d: %v", reorg, cm.Tip())
-
-		t.Logf("2 Should be unspent: %v", txn2.SiacoinOutputID(0))
-		t.Logf("2 Should be spent: %v", txn1.SiacoinOutputID(0))
-
-		t.Log("2 After revert transfer addr2 -> addr3")
-		db.AllOutputs()
 
 		// we should be back in state before block 12 (addr2 has all the SC
 		// instead of addr3)
 		{
 			checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
 			checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
-			checkBalance(addr3, giftSC, types.ZeroCurrency, 0)
+			checkBalance(addr3, giftSC, types.ZeroCurrency, giftSF)
 
 			scUtxos1, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
 			if err != nil {
@@ -2214,6 +2262,24 @@ func TestMultipleReorgSC(t *testing.T) {
 				t.Fatal(err)
 			}
 			check(t, "addr3 sc utxos", 1, len(scUtxos3))
+
+			sfUtxos1, err := db.UnspentSiafundOutputs(addr1, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr1 sf utxos", 0, len(sfUtxos1))
+
+			sfUtxos2, err := db.UnspentSiafundOutputs(addr2, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr2 sf utxos", 0, len(sfUtxos2))
+
+			sfUtxos3, err := db.UnspentSiafundOutputs(addr3, 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "addr3 sf utxos", 1, len(sfUtxos3))
 		}
 	}
 }
