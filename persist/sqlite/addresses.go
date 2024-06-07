@@ -174,6 +174,7 @@ func (s *Store) AllOutputs() (result []explorer.SiacoinOutput, err error) {
 			return fmt.Errorf("failed to query siacoin outputs: %w", err)
 		}
 		defer rows.Close()
+		log.Println("---------")
 		for rows.Next() {
 			var spent bool
 			var sco explorer.SiacoinOutput
@@ -187,7 +188,7 @@ func (s *Store) AllOutputs() (result []explorer.SiacoinOutput, err error) {
 				log.Printf("%v (%v - %v, spent: %v)", sco.StateElement.ID, sco.SiacoinOutput.Address, sco.SiacoinOutput.Value, spent)
 			}
 		}
-		log.Println("-------")
+		log.Println("---------")
 		return nil
 	})
 	return

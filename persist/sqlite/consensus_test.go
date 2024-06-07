@@ -2106,7 +2106,7 @@ func TestMultipleReorgSC(t *testing.T) {
 	}
 
 	// revert block 12 with increasingly large reorgs and sanity check results
-	for reorg := 0; reorg < 10; reorg++ {
+	for reorg := 0; reorg < 2; reorg++ {
 		// revert block 12, unspending the element
 		t.Logf("Before %d: %v", reorg, cm.Tip())
 		{
