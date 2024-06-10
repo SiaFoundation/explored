@@ -6,12 +6,10 @@ import (
 	"strings"
 
 	"go.sia.tech/explored/api"
-	"go.sia.tech/jape"
 )
 
-func startWeb(l net.Listener, node *node, password string) error {
-	renter := api.NewServer(node.e, node.cm, node.s)
-	api := jape.BasicAuth(password)(renter)
+func startWeb(l net.Listener, node *node) error {
+	api := api.NewServer(node.e, node.cm, node.s)
 	return http.Serve(l, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api") {
 			r.URL.Path = strings.TrimPrefix(r.URL.Path, "/api")

@@ -2,8 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -11,7 +9,6 @@ import (
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"golang.org/x/term"
 )
 
 var commit = "?"
@@ -36,29 +33,6 @@ func init() {
 	if modified {
 		commit += " (modified)"
 	}
-}
-
-func check(context string, err error, logger *zap.Logger) {
-	if err != nil {
-		log.Fatalf("%v: %v", context, err)
-	}
-}
-
-func getAPIPassword(logger *zap.Logger) string {
-	apiPassword := os.Getenv("EXPLORED_API_PASSWORD")
-	if apiPassword != "" {
-		logger.Info("env: Using EXPLORED_API_PASSWORD environment variable")
-	} else {
-		fmt.Print("Enter API password: ")
-		pw, err := term.ReadPassword(int(os.Stdin.Fd()))
-		fmt.Println()
-		check("Could not read API password:", err, logger)
-		if err != nil {
-			log.Fatal(err)
-		}
-		apiPassword = string(pw)
-	}
-	return apiPassword
 }
 
 func main() {
@@ -95,7 +69,6 @@ func main() {
 		return
 	}
 
-	apiPassword := getAPIPassword(log)
 	l, err := net.Listen("tcp", *apiAddr)
 	if err != nil {
 		log.Fatal("Failed to create listener", zap.Error(err))
@@ -108,7 +81,7 @@ func main() {
 	log.Info("p2p: Listening on", zap.String("addr", n.s.Addr()))
 	stop := n.Start()
 	log.Info("api: Listening on", zap.String("addr", l.Addr().String()))
-	go startWeb(l, n, apiPassword)
+	go startWeb(l, n)
 
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, os.Interrupt)
