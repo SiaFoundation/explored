@@ -88,9 +88,9 @@ func doTransaction(db *sql.DB, log *zap.Logger, fn func(tx *txn) error) error {
 		Tx:  tx,
 		log: log,
 	}
-	if err = fn(ltx); err != nil {
+	if err := fn(ltx); err != nil {
 		return err
-	} else if err = tx.Commit(); err != nil {
+	} else if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 	return nil

@@ -23,7 +23,7 @@ type EphemeralPeerStore struct {
 	mu    sync.Mutex
 }
 
-func (eps *EphemeralPeerStore) banned(peer string) bool {
+func (eps *EphemeralPeerStore) isBanned(peer string) bool {
 	host, _, err := net.SplitHostPort(peer)
 	if err != nil {
 		return false // shouldn't happen
@@ -62,7 +62,7 @@ func (eps *EphemeralPeerStore) Peers() ([]syncer.PeerInfo, error) {
 	defer eps.mu.Unlock()
 	var peers []syncer.PeerInfo
 	for addr, p := range eps.peers {
-		if !eps.banned(addr) {
+		if !eps.isBanned(addr) {
 			peers = append(peers, p)
 		}
 	}
@@ -109,7 +109,7 @@ func (eps *EphemeralPeerStore) Ban(peer string, duration time.Duration, reason s
 func (eps *EphemeralPeerStore) Banned(peer string) (bool, error) {
 	eps.mu.Lock()
 	defer eps.mu.Unlock()
-	return eps.banned(peer), nil
+	return eps.isBanned(peer), nil
 }
 
 // NewEphemeralPeerStore initializes an EphemeralPeerStore.
@@ -205,5 +205,8 @@ func NewJSONPeerStore(path string) (*JSONPeerStore, error) {
 		EphemeralPeerStore: NewEphemeralPeerStore(),
 		path:               path,
 	}
-	return jps, jps.load()
+	if err := jps.load(); err != nil {
+		return nil, err
+	}
+	return jps, nil
 }
