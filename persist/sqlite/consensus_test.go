@@ -2280,11 +2280,11 @@ func TestMultipleReorg(t *testing.T) {
 	// now make the original chain where addr3 got the coins the longest
 	// and make sure addr3 ends up with the coins
 	extra := cm.Tip().Height - prevState2.Index.Height + 1
-	for reorg := 0; reorg < 2; reorg++ {
+	for reorg := uint64(0); reorg < 2; reorg++ {
 		{
 			var blocks []types.Block
 			state := prevState2
-			for i := uint64(0); i < uint64(reorg)+extra; i++ {
+			for i := uint64(0); i < reorg+extra; i++ {
 				pk := types.GeneratePrivateKey()
 				addr := types.StandardUnlockHash(pk.PublicKey())
 
@@ -2340,6 +2340,215 @@ func TestMultipleReorg(t *testing.T) {
 				t.Fatal(err)
 			}
 			check(t, "addr3 sf utxos", 1, len(sfUtxos3))
+		}
+	}
+}
+
+func TestMultipleReorgFileContract(t *testing.T) {
+	log := zaptest.NewLogger(t)
+	dir := t.TempDir()
+
+	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bdb.Close()
+
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+
+	renterPrivateKey := types.GeneratePrivateKey()
+	renterPublicKey := renterPrivateKey.PublicKey()
+
+	hostPrivateKey := types.GeneratePrivateKey()
+	hostPublicKey := hostPrivateKey.PublicKey()
+
+	giftSC := types.Siacoins(1000)
+	network, genesisBlock := testV1Network(addr1, giftSC, 0)
+	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cm := chain.NewManager(store, genesisState)
+
+	scOutputID := genesisBlock.Transactions[0].SiacoinOutputID(0)
+	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
+
+	signTxn := func(txn *types.Transaction) {
+		appendSig := func(key types.PrivateKey, pubkeyIndex uint64, parentID types.Hash256) {
+			sig := key.SignHash(cm.TipState().WholeSigHash(*txn, parentID, pubkeyIndex, 0, nil))
+			txn.Signatures = append(txn.Signatures, types.TransactionSignature{
+				ParentID:       parentID,
+				CoveredFields:  types.CoveredFields{WholeTransaction: true},
+				PublicKeyIndex: pubkeyIndex,
+				Signature:      sig[:],
+			})
+		}
+		for i := range txn.SiacoinInputs {
+			appendSig(pk1, 0, types.Hash256(txn.SiacoinInputs[i].ParentID))
+		}
+		for i := range txn.SiafundInputs {
+			appendSig(pk1, 0, types.Hash256(txn.SiafundInputs[i].ParentID))
+		}
+		for i := range txn.FileContractRevisions {
+			appendSig(renterPrivateKey, 0, types.Hash256(txn.FileContractRevisions[i].ParentID))
+			appendSig(hostPrivateKey, 1, types.Hash256(txn.FileContractRevisions[i].ParentID))
+		}
+	}
+
+	checkFC := func(resolved, valid bool, expected types.FileContract, got explorer.FileContract) {
+		check(t, "resolved state", resolved, got.Resolved)
+		check(t, "valid state", valid, got.Valid)
+		check(t, "filesize", expected.Filesize, got.Filesize)
+		check(t, "file merkle root", expected.FileMerkleRoot, got.FileMerkleRoot)
+		check(t, "window start", expected.WindowStart, got.WindowStart)
+		check(t, "window end", expected.WindowEnd, got.WindowEnd)
+		check(t, "payout", expected.Payout, got.Payout)
+		check(t, "unlock hash", expected.UnlockHash, got.UnlockHash)
+		check(t, "revision number", expected.RevisionNumber, got.RevisionNumber)
+		check(t, "valid proof outputs", len(expected.ValidProofOutputs), len(got.ValidProofOutputs))
+		for i := range expected.ValidProofOutputs {
+			check(t, "valid proof output address", expected.ValidProofOutputs[i].Address, got.ValidProofOutputs[i].Address)
+			check(t, "valid proof output value", expected.ValidProofOutputs[i].Value, got.ValidProofOutputs[i].Value)
+		}
+		check(t, "missed proof outputs", len(expected.MissedProofOutputs), len(got.MissedProofOutputs))
+		for i := range expected.MissedProofOutputs {
+			check(t, "missed proof output address", expected.MissedProofOutputs[i].Address, got.MissedProofOutputs[i].Address)
+			check(t, "missed proof output value", expected.MissedProofOutputs[i].Value, got.MissedProofOutputs[i].Value)
+		}
+	}
+
+	windowStart := cm.Tip().Height + 10
+	windowEnd := windowStart + 10
+	fc := prepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), windowStart, windowEnd, types.VoidAddress)
+	txn := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         scOutputID,
+			UnlockConditions: unlockConditions,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   giftSC.Sub(fc.Payout),
+		}},
+		FileContracts: []types.FileContract{fc},
+	}
+	fcID := txn.FileContractID(0)
+	signTxn(&txn)
+
+	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	{
+		dbFCs, err := db.Contracts([]types.FileContractID{fcID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "fcs", 1, len(dbFCs))
+		checkFC(false, true, fc, dbFCs[0])
+	}
+
+	{
+		txns, err := db.Transactions([]types.TransactionID{txn.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "transactions", 1, len(txns))
+		check(t, "file contracts", 1, len(txns[0].FileContracts))
+		checkFC(false, true, fc, txns[0].FileContracts[0])
+	}
+
+	uc := types.UnlockConditions{
+		PublicKeys: []types.UnlockKey{
+			renterPublicKey.UnlockKey(),
+			hostPublicKey.UnlockKey(),
+		},
+		SignaturesRequired: 2,
+	}
+	fc.RevisionNumber++
+	reviseTxn := types.Transaction{
+		FileContractRevisions: []types.FileContractRevision{{
+			ParentID:         fcID,
+			UnlockConditions: uc,
+			FileContract:     fc,
+		}},
+	}
+	signTxn(&reviseTxn)
+
+	// state before revision
+	prevState1 := cm.TipState()
+	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{reviseTxn}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	// Explorer.Contracts should return latest revision
+	{
+		dbFCs, err := db.Contracts([]types.FileContractID{fcID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "fcs", 1, len(dbFCs))
+		checkFC(false, true, fc, dbFCs[0])
+	}
+
+	{
+		txns, err := db.Transactions([]types.TransactionID{reviseTxn.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "transactions", 1, len(txns))
+		check(t, "file contracts", 1, len(txns[0].FileContractRevisions))
+
+		fcr := txns[0].FileContractRevisions[0]
+		check(t, "parent id", txn.FileContractID(0), fcr.ParentID)
+		check(t, "unlock conditions", uc, fcr.UnlockConditions)
+
+		checkFC(false, true, fc, fcr.FileContract)
+	}
+
+	extra := cm.Tip().Height - prevState1.Index.Height + 1
+	for reorg := uint64(0); reorg < 2; reorg++ {
+		// revert the revision
+		{
+			var blocks []types.Block
+			state := prevState1
+			for i := uint64(0); i < reorg+extra; i++ {
+				pk := types.GeneratePrivateKey()
+				addr := types.StandardUnlockHash(pk.PublicKey())
+
+				blocks = append(blocks, mineBlock(state, nil, addr))
+				state.Index.ID = blocks[len(blocks)-1].ID()
+				state.Index.Height++
+			}
+			if err := cm.AddBlocks(blocks); err != nil {
+				t.Fatal(err)
+			}
+			syncDB(t, db, cm)
+		}
+
+		// we should be back in state before the revision
+		{
+			txns, err := db.Transactions([]types.TransactionID{txn.ID()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Log(txns[0].FileContracts)
+
+			dbFCs, err := db.Contracts([]types.FileContractID{fcID})
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "fcs", 1, len(dbFCs))
+			checkFC(false, true, fc, dbFCs[0])
 		}
 	}
 }

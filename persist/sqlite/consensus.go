@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
