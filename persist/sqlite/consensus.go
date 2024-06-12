@@ -732,8 +732,8 @@ func deleteBlock(tx *txn, bid types.BlockID) error {
 }
 
 func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContractUpdate) (map[explorer.DBFileContract]int64, error) {
-	stmt, err := tx.Prepare(`INSERT INTO file_contract_elements(block_id, contract_id, leaf_index, resolved, valid, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number)
-		VALUES (?, ?, ?, FALSE, TRUE, ?, ?, ?, ?, ?, ?, ?)
+	stmt, err := tx.Prepare(`INSERT INTO file_contract_elements(contract_id, leaf_index, resolved, valid, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number)
+		VALUES (?, ?, FALSE, FALSE, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (contract_id, revision_number)
 		DO UPDATE SET resolved = ?, valid = ?, leaf_index = ?
 		RETURNING id;`)
@@ -742,8 +742,8 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 	}
 	defer stmt.Close()
 
-	revisionStmt, err := tx.Prepare(`INSERT INTO last_contract_revision(contract_id, contract_element_id, ed25519_renter_key, ed25519_host_key)
-	VALUES (?, ?, ?, ?)
+	revisionStmt, err := tx.Prepare(`INSERT INTO last_contract_revision(contract_id, block_id, contract_element_id, ed25519_renter_key, ed25519_host_key)
+	VALUES (?, ?, ?, ?, ?)
 	ON CONFLICT (contract_id)
 	DO UPDATE SET contract_element_id = ?, ed25519_renter_key = COALESCE(?, ed25519_renter_key), ed25519_host_key = COALESCE(?, ed25519_host_key)`)
 	if err != nil {
@@ -786,10 +786,11 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 	addFC := func(fcID types.FileContractID, leafIndex uint64, fc types.FileContract, resolved, valid, lastRevision bool) error {
 		var dbID int64
 		dbFC := explorer.DBFileContract{ID: fcID, RevisionNumber: fc.RevisionNumber}
-		err := stmt.QueryRow(encode(b.ID()), encode(fcID), encode(leafIndex), fc.Filesize, encode(fc.FileMerkleRoot), fc.WindowStart, fc.WindowEnd, encode(fc.Payout), encode(fc.UnlockHash), encode(fc.RevisionNumber), resolved, valid, encode(leafIndex)).Scan(&dbID)
+		err := stmt.QueryRow(encode(fcID), encode(leafIndex), fc.Filesize, encode(fc.FileMerkleRoot), fc.WindowStart, fc.WindowEnd, encode(fc.Payout), encode(fc.UnlockHash), encode(fc.RevisionNumber), resolved, valid, encode(leafIndex)).Scan(&dbID)
 		if err != nil {
 			return fmt.Errorf("failed to execute file_contract_elements statement: %w", err)
 		}
+		log.Printf("(%v) %v: (valid: %v, resolved: %v, rev: %d)", b.ID(), fcID, valid, resolved, fc.RevisionNumber)
 
 		// only update if it's the most recent revision which will come from
 		// running ForEachFileContractElement on the update
@@ -800,7 +801,7 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 				hostKey = encode(keys[1]).([]byte)
 			}
 
-			if _, err := revisionStmt.Exec(encode(fcID), dbID, renterKey, hostKey, dbID, renterKey, hostKey); err != nil {
+			if _, err := revisionStmt.Exec(encode(fcID), encode(b.ID()), dbID, renterKey, hostKey, dbID, renterKey, hostKey); err != nil {
 				return fmt.Errorf("failed to update last revision number: %w", err)
 			}
 		}
@@ -835,7 +836,7 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 				continue
 			}
 
-			if err := addFC(fcID, 0, fc, false, true, false); err != nil {
+			if err := addFC(fcID, 0, fc, false, false, false); err != nil {
 				return nil, fmt.Errorf("addFileContractElements: %w", err)
 			}
 		}
@@ -846,7 +847,7 @@ func addFileContractElements(tx *txn, b types.Block, fces []explorer.FileContrac
 				continue
 			}
 
-			if err := addFC(fcr.ParentID, 0, fc, false, true, false); err != nil {
+			if err := addFC(fcr.ParentID, 0, fc, false, false, false); err != nil {
 				return nil, fmt.Errorf("addFileContractElements: %w", err)
 			}
 		}

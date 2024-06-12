@@ -823,7 +823,7 @@ func TestFileContract(t *testing.T) {
 			t.Fatal(err)
 		}
 		check(t, "fcs", 1, len(dbFCs))
-		checkFC(false, true, fc, dbFCs[0])
+		checkFC(false, false, fc, dbFCs[0])
 	}
 
 	{
@@ -833,7 +833,7 @@ func TestFileContract(t *testing.T) {
 		}
 		check(t, "transactions", 1, len(txns))
 		check(t, "file contracts", 1, len(txns[0].FileContracts))
-		checkFC(false, true, fc, txns[0].FileContracts[0])
+		checkFC(false, false, fc, txns[0].FileContracts[0])
 	}
 
 	uc := types.UnlockConditions{
@@ -869,8 +869,8 @@ func TestFileContract(t *testing.T) {
 		}
 		check(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
 		check(t, "len(contracts)", 1, len(renterContracts))
-		checkFC(false, true, fc, renterContracts[0])
-		checkFC(false, true, fc, hostContracts[0])
+		checkFC(false, false, fc, renterContracts[0])
+		checkFC(false, false, fc, hostContracts[0])
 	}
 
 	checkMetrics(t, db, explorer.Metrics{
@@ -888,7 +888,7 @@ func TestFileContract(t *testing.T) {
 			t.Fatal(err)
 		}
 		check(t, "fcs", 1, len(dbFCs))
-		checkFC(false, true, fc, dbFCs[0])
+		checkFC(false, false, fc, dbFCs[0])
 	}
 
 	{
@@ -903,7 +903,7 @@ func TestFileContract(t *testing.T) {
 		check(t, "parent id", txn.FileContractID(0), fcr.ParentID)
 		check(t, "unlock conditions", uc, fcr.UnlockConditions)
 
-		checkFC(false, true, fc, fcr.FileContract)
+		checkFC(false, false, fc, fcr.FileContract)
 	}
 
 	for i := cm.Tip().Height; i < windowEnd; i++ {
@@ -1110,8 +1110,8 @@ func TestEphemeralFileContract(t *testing.T) {
 		}
 		check(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
 		check(t, "len(contracts)", 1, len(renterContracts))
-		checkFC(true, false, true, revisedFC1, renterContracts[0])
-		checkFC(true, false, true, revisedFC1, hostContracts[0])
+		checkFC(true, false, false, revisedFC1, renterContracts[0])
+		checkFC(true, false, false, revisedFC1, hostContracts[0])
 	}
 
 	// Explorer.Contracts should return latest revision
@@ -1121,7 +1121,7 @@ func TestEphemeralFileContract(t *testing.T) {
 			t.Fatal(err)
 		}
 		check(t, "fcs", 1, len(dbFCs))
-		checkFC(true, false, true, revisedFC1, dbFCs[0])
+		checkFC(true, false, false, revisedFC1, dbFCs[0])
 	}
 
 	{
@@ -1131,7 +1131,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		}
 		check(t, "transactions", 1, len(txns))
 		check(t, "file contracts", 1, len(txns[0].FileContracts))
-		checkFC(true, false, true, fc, txns[0].FileContracts[0])
+		checkFC(true, false, false, fc, txns[0].FileContracts[0])
 	}
 
 	{
@@ -1146,7 +1146,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		check(t, "parent id", txn.FileContractID(0), fcr.ParentID)
 		check(t, "unlock conditions", uc, fcr.UnlockConditions)
 
-		checkFC(true, false, true, revisedFC1, fcr.FileContract)
+		checkFC(true, false, false, revisedFC1, fcr.FileContract)
 	}
 
 	revisedFC2 := revisedFC1
@@ -1184,7 +1184,7 @@ func TestEphemeralFileContract(t *testing.T) {
 			t.Fatal(err)
 		}
 		check(t, "fcs", 1, len(dbFCs))
-		checkFC(true, false, true, revisedFC3, dbFCs[0])
+		checkFC(true, false, false, revisedFC3, dbFCs[0])
 	}
 
 	{
@@ -1198,8 +1198,8 @@ func TestEphemeralFileContract(t *testing.T) {
 		}
 		check(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
 		check(t, "len(contracts)", 1, len(renterContracts))
-		checkFC(true, false, true, revisedFC3, renterContracts[0])
-		checkFC(true, false, true, revisedFC3, hostContracts[0])
+		checkFC(true, false, false, revisedFC3, renterContracts[0])
+		checkFC(true, false, false, revisedFC3, hostContracts[0])
 	}
 
 	{
@@ -1213,7 +1213,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		fcr := txns[0].FileContractRevisions[0]
 		check(t, "parent id", txn.FileContractID(0), fcr.ParentID)
 		check(t, "unlock conditions", uc, fcr.UnlockConditions)
-		checkFC(true, false, true, revisedFC2, fcr.FileContract)
+		checkFC(true, false, false, revisedFC2, fcr.FileContract)
 	}
 
 	{
@@ -1227,7 +1227,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		fcr := txns[0].FileContractRevisions[0]
 		check(t, "parent id", txn.FileContractID(0), fcr.ParentID)
 		check(t, "unlock conditions", uc, fcr.UnlockConditions)
-		checkFC(true, false, true, revisedFC3, fcr.FileContract)
+		checkFC(true, false, false, revisedFC3, fcr.FileContract)
 	}
 }
 
@@ -2453,7 +2453,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			t.Fatal(err)
 		}
 		check(t, "fcs", 1, len(dbFCs))
-		checkFC(false, true, fc, dbFCs[0])
+		checkFC(false, false, fc, dbFCs[0])
 	}
 
 	{
@@ -2463,7 +2463,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		}
 		check(t, "transactions", 1, len(txns))
 		check(t, "file contracts", 1, len(txns[0].FileContracts))
-		checkFC(false, true, fc, txns[0].FileContracts[0])
+		checkFC(false, false, fc, txns[0].FileContracts[0])
 	}
 
 	uc := types.UnlockConditions{
@@ -2473,12 +2473,13 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		},
 		SignaturesRequired: 2,
 	}
-	fc.RevisionNumber++
+	revFC := fc
+	revFC.RevisionNumber++
 	reviseTxn := types.Transaction{
 		FileContractRevisions: []types.FileContractRevision{{
 			ParentID:         fcID,
 			UnlockConditions: uc,
-			FileContract:     fc,
+			FileContract:     revFC,
 		}},
 	}
 	signTxn(&reviseTxn)
@@ -2497,7 +2498,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			t.Fatal(err)
 		}
 		check(t, "fcs", 1, len(dbFCs))
-		checkFC(false, true, fc, dbFCs[0])
+		checkFC(false, false, revFC, dbFCs[0])
 	}
 
 	{
@@ -2512,7 +2513,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		check(t, "parent id", txn.FileContractID(0), fcr.ParentID)
 		check(t, "unlock conditions", uc, fcr.UnlockConditions)
 
-		checkFC(false, true, fc, fcr.FileContract)
+		checkFC(false, false, revFC, fcr.FileContract)
 	}
 
 	extra := cm.Tip().Height - prevState1.Index.Height + 1
@@ -2537,18 +2538,12 @@ func TestMultipleReorgFileContract(t *testing.T) {
 
 		// we should be back in state before the revision
 		{
-			txns, err := db.Transactions([]types.TransactionID{txn.ID()})
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Log(txns[0].FileContracts)
-
 			dbFCs, err := db.Contracts([]types.FileContractID{fcID})
 			if err != nil {
 				t.Fatal(err)
 			}
 			check(t, "fcs", 1, len(dbFCs))
-			checkFC(false, true, fc, dbFCs[0])
+			checkFC(false, false, fc, dbFCs[0])
 		}
 	}
 }
