@@ -2578,4 +2578,33 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			checkFC(false, false, revFC, dbFCs[0])
 		}
 	}
+
+	extra = cm.Tip().Height - genesisState.Index.Height + 1
+	for reorg := uint64(0); reorg < 2; reorg++ {
+		{
+			var blocks []types.Block
+			state := genesisState
+			for i := uint64(0); i < reorg+extra; i++ {
+				pk := types.GeneratePrivateKey()
+				addr := types.StandardUnlockHash(pk.PublicKey())
+
+				blocks = append(blocks, mineBlock(state, nil, addr))
+				state.Index.ID = blocks[len(blocks)-1].ID()
+				state.Index.Height++
+			}
+			if err := cm.AddBlocks(blocks); err != nil {
+				t.Fatal(err)
+			}
+			syncDB(t, db, cm)
+		}
+
+		// contract should no longer exist
+		{
+			dbFCs, err := db.Contracts([]types.FileContractID{fcID})
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "fcs", 0, len(dbFCs))
+		}
+	}
 }

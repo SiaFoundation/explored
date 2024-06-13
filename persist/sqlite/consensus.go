@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
@@ -790,7 +789,6 @@ func addFileContractElements(tx *txn, revert bool, b types.Block, fces []explore
 		if err != nil {
 			return fmt.Errorf("failed to execute file_contract_elements statement: %w", err)
 		}
-		log.Printf("(%v) %v: (valid: %v, resolved: %v, rev: %d, lastRevision: %v)", b.ID(), fcID, valid, resolved, fc.RevisionNumber, lastRevision)
 
 		// only update if it's the most recent revision which will come from
 		// running ForEachFileContractElement on the update
@@ -1011,7 +1009,6 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 }
 
 func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
-	log.Println("Revert:", state.Index)
 	if err := updateMaturedBalances(ut.tx, true, state.Index.Height); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update matured balances: %w", err)
 	} else if _, err := addSiacoinElements(
