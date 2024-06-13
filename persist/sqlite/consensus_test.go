@@ -2490,6 +2490,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
+	prevState2 := cm.TipState()
 
 	// Explorer.Contracts should return latest revision
 	{
@@ -2544,6 +2545,37 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			}
 			check(t, "fcs", 1, len(dbFCs))
 			checkFC(false, false, fc, dbFCs[0])
+		}
+	}
+
+	extra = cm.Tip().Height - prevState2.Index.Height + 1
+	for reorg := uint64(0); reorg < 2; reorg++ {
+		// bring the revision back
+		{
+			var blocks []types.Block
+			state := prevState2
+			for i := uint64(0); i < reorg+extra; i++ {
+				pk := types.GeneratePrivateKey()
+				addr := types.StandardUnlockHash(pk.PublicKey())
+
+				blocks = append(blocks, mineBlock(state, nil, addr))
+				state.Index.ID = blocks[len(blocks)-1].ID()
+				state.Index.Height++
+			}
+			if err := cm.AddBlocks(blocks); err != nil {
+				t.Fatal(err)
+			}
+			syncDB(t, db, cm)
+		}
+
+		// revision should be applied
+		{
+			dbFCs, err := db.Contracts([]types.FileContractID{fcID})
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "fcs", 1, len(dbFCs))
+			checkFC(false, false, revFC, dbFCs[0])
 		}
 	}
 }
