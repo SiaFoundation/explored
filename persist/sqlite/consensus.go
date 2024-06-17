@@ -812,14 +812,25 @@ func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []expl
 		var fce *types.FileContractElement
 
 		if revert {
+			// Reverting
 			if update.Revision != nil {
+				// Contract revision reverted.
+				// We are reverting the revision, so get the contract before
+				// the revision.
 				fce = &update.FileContractElement
 			} else {
+				// Contract formation reverted.
+				// The contract update has no revision, therefore it refers
+				// to the original contract formation.
 				continue
 			}
 		} else {
+			// Applying
 			fce = &update.FileContractElement
 			if update.Revision != nil {
+				// Contract is revised.
+				// We want last_contract_revision to refer to the latest
+				// revision, so use the revision FCE if there is one.
 				fce = update.Revision
 			}
 		}
