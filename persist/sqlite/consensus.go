@@ -808,7 +808,6 @@ func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []expl
 		return nil
 	}
 
-	var updateErr error
 	for _, update := range fces {
 		var fce *types.FileContractElement
 
@@ -863,7 +862,7 @@ func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []expl
 		}
 	}
 
-	return fcDBIds, updateErr
+	return fcDBIds, nil
 }
 
 func addMetrics(tx *txn, height uint64, difficulty consensus.Work, b types.Block, fces []explorer.FileContractUpdate, events []explorer.Event) error {
