@@ -730,14 +730,14 @@ func deleteBlock(tx *txn, bid types.BlockID) error {
 	return err
 }
 
-func addFileContractElements(tx *txn, revert bool, b types.Block, fces []explorer.FileContractUpdate) (map[explorer.DBFileContract]int64, error) {
+func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []explorer.FileContractUpdate) (map[explorer.DBFileContract]int64, error) {
 	stmt, err := tx.Prepare(`INSERT INTO file_contract_elements(contract_id, leaf_index, resolved, valid, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number)
 		VALUES (?, ?, FALSE, FALSE, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (contract_id, revision_number)
 		DO UPDATE SET resolved = ?, valid = ?, leaf_index = ?
 		RETURNING id;`)
 	if err != nil {
-		return nil, fmt.Errorf("addFileContractElements: failed to prepare file_contract_elements statement: %w", err)
+		return nil, fmt.Errorf("updateFileContractElements: failed to prepare file_contract_elements statement: %w", err)
 	}
 	defer stmt.Close()
 
@@ -746,7 +746,7 @@ func addFileContractElements(tx *txn, revert bool, b types.Block, fces []explore
 	ON CONFLICT (contract_id)
 	DO UPDATE SET contract_element_id = ?, ed25519_renter_key = COALESCE(?, ed25519_renter_key), ed25519_host_key = COALESCE(?, ed25519_host_key)`)
 	if err != nil {
-		return nil, fmt.Errorf("addFileContractElements: failed to prepare last_contract_revision statement: %w", err)
+		return nil, fmt.Errorf("updateFileContractElements: failed to prepare last_contract_revision statement: %w", err)
 	}
 	defer revisionStmt.Close()
 
@@ -833,7 +833,7 @@ func addFileContractElements(tx *txn, revert bool, b types.Block, fces []explore
 			update.Valid,
 			true,
 		); err != nil {
-			return nil, fmt.Errorf("addFileContractElements: %w", err)
+			return nil, fmt.Errorf("updateFileContractElements: %w", err)
 		}
 	}
 	if !revert {
@@ -846,7 +846,7 @@ func addFileContractElements(tx *txn, revert bool, b types.Block, fces []explore
 				}
 
 				if err := addFC(fcID, 0, fc, false, false, false); err != nil {
-					return nil, fmt.Errorf("addFileContractElements: %w", err)
+					return nil, fmt.Errorf("updateFileContractElements: %w", err)
 				}
 			}
 			for _, fcr := range txn.FileContractRevisions {
@@ -857,7 +857,7 @@ func addFileContractElements(tx *txn, revert bool, b types.Block, fces []explore
 				}
 
 				if err := addFC(fcr.ParentID, 0, fc, false, false, false); err != nil {
-					return nil, fmt.Errorf("addFileContractElements: %w", err)
+					return nil, fmt.Errorf("updateFileContractElements: %w", err)
 				}
 			}
 		}
@@ -988,7 +988,7 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to update balances: %w", err)
 	}
 
-	fcDBIds, err := addFileContractElements(ut.tx, false, state.Block, state.FileContractElements)
+	fcDBIds, err := updateFileContractElements(ut.tx, false, state.Block, state.FileContractElements)
 	if err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add file contracts: %w", err)
 	}
@@ -1027,7 +1027,7 @@ func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("RevertIndex: failed to update siafund output state: %w", err)
 	} else if err := updateBalances(ut.tx, state.Index.Height, state.SpentSiacoinElements, state.NewSiacoinElements, state.SpentSiafundElements, state.NewSiafundElements); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update balances: %w", err)
-	} else if _, err := addFileContractElements(ut.tx, true, state.Block, state.FileContractElements); err != nil {
+	} else if _, err := updateFileContractElements(ut.tx, true, state.Block, state.FileContractElements); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update file contract state: %w", err)
 	} else if err := deleteBlock(ut.tx, state.Block.ID()); err != nil {
 		return fmt.Errorf("RevertIndex: failed to delete block: %w", err)
