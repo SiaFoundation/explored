@@ -53,6 +53,7 @@ CREATE TABLE siacoin_elements (
         value BLOB NOT NULL
 );
 
+CREATE INDEX siacoin_elements_maturity_height_index ON siacoin_elements(maturity_height);
 CREATE INDEX siacoin_elements_output_id_index ON siacoin_elements(output_id);
 CREATE INDEX siacoin_elements_address_spent_index ON siacoin_elements(address, spent);
 
