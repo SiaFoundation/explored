@@ -835,29 +835,32 @@ func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []expl
 			return nil, fmt.Errorf("updateFileContractElements: %w", err)
 		}
 	}
-	if !revert {
-		for _, txn := range b.Transactions {
-			for j, fc := range txn.FileContracts {
-				fcID := txn.FileContractID(j)
-				dbFC := explorer.DBFileContract{ID: txn.FileContractID(j), RevisionNumber: fc.RevisionNumber}
-				if _, exists := fcDBIds[dbFC]; exists {
-					continue
-				}
 
-				if err := addFC(fcID, 0, fc, false, false, false); err != nil {
-					return nil, fmt.Errorf("updateFileContractElements: %w", err)
-				}
+	if revert {
+		return fcDBIds, nil
+	}
+
+	for _, txn := range b.Transactions {
+		for j, fc := range txn.FileContracts {
+			fcID := txn.FileContractID(j)
+			dbFC := explorer.DBFileContract{ID: txn.FileContractID(j), RevisionNumber: fc.RevisionNumber}
+			if _, exists := fcDBIds[dbFC]; exists {
+				continue
 			}
-			for _, fcr := range txn.FileContractRevisions {
-				fc := fcr.FileContract
-				dbFC := explorer.DBFileContract{ID: fcr.ParentID, RevisionNumber: fc.RevisionNumber}
-				if _, exists := fcDBIds[dbFC]; exists {
-					continue
-				}
 
-				if err := addFC(fcr.ParentID, 0, fc, false, false, false); err != nil {
-					return nil, fmt.Errorf("updateFileContractElements: %w", err)
-				}
+			if err := addFC(fcID, 0, fc, false, false, false); err != nil {
+				return nil, fmt.Errorf("updateFileContractElements: %w", err)
+			}
+		}
+		for _, fcr := range txn.FileContractRevisions {
+			fc := fcr.FileContract
+			dbFC := explorer.DBFileContract{ID: fcr.ParentID, RevisionNumber: fc.RevisionNumber}
+			if _, exists := fcDBIds[dbFC]; exists {
+				continue
+			}
+
+			if err := addFC(fcr.ParentID, 0, fc, false, false, false); err != nil {
+				return nil, fmt.Errorf("updateFileContractElements: %w", err)
 			}
 		}
 	}
