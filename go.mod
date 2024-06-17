@@ -1,6 +1,7 @@
 module go.sia.tech/explored
 
-go 1.21.6
+go 1.21.8
+
 toolchain go1.22.4
 
 require (
