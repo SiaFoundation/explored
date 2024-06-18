@@ -82,10 +82,10 @@ CREATE TABLE file_contract_elements (
         resolved INTEGER NOT NULL,
         valid INTEGER NOT NULL,
 
-        filesize INTEGER NOT NULL,
+        filesize BLOB NOT NULL,
         file_merkle_root BLOB NOT NULL,
-        window_start INTEGER NOT NULL,
-        window_end INTEGER NOT NULL,
+        window_start BLOB NOT NULL,
+        window_end BLOB NOT NULL,
         payout BLOB NOT NULL,
         unlock_hash BLOB NOT NULL,
         revision_number BLOB NOT NULL,
