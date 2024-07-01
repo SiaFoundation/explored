@@ -104,10 +104,10 @@ type EventContractPayout struct {
 
 // A ChainUpdate is a set of changes to the consensus state.
 type ChainUpdate interface {
-	ForEachSiacoinElement(func(sce types.SiacoinElement, spent bool))
-	ForEachSiafundElement(func(sfe types.SiafundElement, spent bool))
-	ForEachFileContractElement(func(fce types.FileContractElement, rev *types.FileContractElement, resolved, valid bool))
-	ForEachV2FileContractElement(func(fce types.V2FileContractElement, rev *types.V2FileContractElement, res types.V2FileContractResolutionType))
+	ForEachSiacoinElement(func(sce types.SiacoinElement, created, spent bool))
+	ForEachSiafundElement(func(sfe types.SiafundElement, created, spent bool))
+	ForEachFileContractElement(func(fce types.FileContractElement, created bool, rev *types.FileContractElement, resolved, valid bool))
+	ForEachV2FileContractElement(func(fce types.V2FileContractElement, created bool, rev *types.V2FileContractElement, res types.V2FileContractResolutionType))
 }
 
 // AppliedEvents extracts a list of relevant events from a chain update.
@@ -139,19 +139,19 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 	sfes := make(map[types.SiafundOutputID]types.SiafundElement)
 	fces := make(map[types.FileContractID]types.FileContractElement)
 	v2fces := make(map[types.FileContractID]types.V2FileContractElement)
-	cu.ForEachSiacoinElement(func(sce types.SiacoinElement, spent bool) {
+	cu.ForEachSiacoinElement(func(sce types.SiacoinElement, created, spent bool) {
 		sce.MerkleProof = nil
 		sces[types.SiacoinOutputID(sce.ID)] = sce
 	})
-	cu.ForEachSiafundElement(func(sfe types.SiafundElement, spent bool) {
+	cu.ForEachSiafundElement(func(sfe types.SiafundElement, created, spent bool) {
 		sfe.MerkleProof = nil
 		sfes[types.SiafundOutputID(sfe.ID)] = sfe
 	})
-	cu.ForEachFileContractElement(func(fce types.FileContractElement, rev *types.FileContractElement, resolved, valid bool) {
+	cu.ForEachFileContractElement(func(fce types.FileContractElement, created bool, rev *types.FileContractElement, resolved, valid bool) {
 		fce.MerkleProof = nil
 		fces[types.FileContractID(fce.ID)] = fce
 	})
-	cu.ForEachV2FileContractElement(func(fce types.V2FileContractElement, rev *types.V2FileContractElement, res types.V2FileContractResolutionType) {
+	cu.ForEachV2FileContractElement(func(fce types.V2FileContractElement, created bool, rev *types.V2FileContractElement, res types.V2FileContractResolutionType) {
 		fce.MerkleProof = nil
 		v2fces[types.FileContractID(fce.ID)] = fce
 	})
@@ -232,7 +232,7 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 	}
 
 	// handle missed contracts
-	cu.ForEachFileContractElement(func(fce types.FileContractElement, rev *types.FileContractElement, resolved, valid bool) {
+	cu.ForEachFileContractElement(func(fce types.FileContractElement, created bool, rev *types.FileContractElement, resolved, valid bool) {
 		if !resolved {
 			return
 		}

@@ -80,28 +80,11 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 		}
 	}
 
-	created := make(map[types.Hash256]bool)
-	ephemeral := make(map[types.Hash256]bool)
-	for _, txn := range cau.Block.Transactions {
-		for i := range txn.SiacoinOutputs {
-			created[types.Hash256(txn.SiacoinOutputID(i))] = true
-		}
-		for _, input := range txn.SiacoinInputs {
-			ephemeral[types.Hash256(input.ParentID)] = created[types.Hash256(input.ParentID)]
-		}
-		for i := range txn.SiafundOutputs {
-			created[types.Hash256(txn.SiafundOutputID(i))] = true
-		}
-		for _, input := range txn.SiafundInputs {
-			ephemeral[types.Hash256(input.ParentID)] = created[types.Hash256(input.ParentID)]
-		}
-	}
-
 	// add new siacoin elements to the store
 	var newSiacoinElements, spentSiacoinElements []SiacoinOutput
 	var ephemeralSiacoinElements []SiacoinOutput
-	cau.ForEachSiacoinElement(func(se types.SiacoinElement, spent bool) {
-		if ephemeral[se.ID] {
+	cau.ForEachSiacoinElement(func(se types.SiacoinElement, created, spent bool) {
+		if created && spent {
 			ephemeralSiacoinElements = append(ephemeralSiacoinElements, SiacoinOutput{
 				SiacoinElement: se,
 				Source:         sources[types.SiacoinOutputID(se.StateElement.ID)],
@@ -124,8 +107,8 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 
 	var newSiafundElements, spentSiafundElements []types.SiafundElement
 	var ephemeralSiafundElements []types.SiafundElement
-	cau.ForEachSiafundElement(func(se types.SiafundElement, spent bool) {
-		if ephemeral[se.ID] {
+	cau.ForEachSiafundElement(func(se types.SiafundElement, created, spent bool) {
+		if created && spent {
 			ephemeralSiafundElements = append(ephemeralSiafundElements, se)
 			return
 		}
@@ -138,7 +121,7 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 	})
 
 	var fces []FileContractUpdate
-	cau.ForEachFileContractElement(func(fce types.FileContractElement, rev *types.FileContractElement, resolved, valid bool) {
+	cau.ForEachFileContractElement(func(fce types.FileContractElement, created bool, rev *types.FileContractElement, resolved, valid bool) {
 		fces = append(fces, FileContractUpdate{
 			FileContractElement: fce,
 			Revision:            rev,
@@ -180,28 +163,11 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 
 // revertChainUpdate atomically reverts a chain update from a store
 func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.ChainIndex) error {
-	created := make(map[types.Hash256]bool)
-	ephemeral := make(map[types.Hash256]bool)
-	for _, txn := range cru.Block.Transactions {
-		for i := range txn.SiacoinOutputs {
-			created[types.Hash256(txn.SiacoinOutputID(i))] = true
-		}
-		for _, input := range txn.SiacoinInputs {
-			ephemeral[types.Hash256(input.ParentID)] = created[types.Hash256(input.ParentID)]
-		}
-		for i := range txn.SiafundOutputs {
-			created[types.Hash256(txn.SiafundOutputID(i))] = true
-		}
-		for _, input := range txn.SiafundInputs {
-			ephemeral[types.Hash256(input.ParentID)] = created[types.Hash256(input.ParentID)]
-		}
-	}
-
 	// add new siacoin elements to the store
 	var newSiacoinElements, spentSiacoinElements []SiacoinOutput
 	var ephemeralSiacoinElements []SiacoinOutput
-	cru.ForEachSiacoinElement(func(se types.SiacoinElement, spent bool) {
-		if ephemeral[se.ID] {
+	cru.ForEachSiacoinElement(func(se types.SiacoinElement, created, spent bool) {
+		if created && spent {
 			ephemeralSiacoinElements = append(ephemeralSiacoinElements, SiacoinOutput{
 				SiacoinElement: se,
 			})
@@ -221,8 +187,8 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 
 	var newSiafundElements, spentSiafundElements []types.SiafundElement
 	var ephemeralSiafundElements []types.SiafundElement
-	cru.ForEachSiafundElement(func(se types.SiafundElement, spent bool) {
-		if ephemeral[se.ID] {
+	cru.ForEachSiafundElement(func(se types.SiafundElement, created, spent bool) {
+		if created && spent {
 			ephemeralSiafundElements = append(ephemeralSiafundElements, se)
 			return
 		}
@@ -235,7 +201,7 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 	})
 
 	var fces []FileContractUpdate
-	cru.ForEachFileContractElement(func(fce types.FileContractElement, rev *types.FileContractElement, resolved, valid bool) {
+	cru.ForEachFileContractElement(func(fce types.FileContractElement, created bool, rev *types.FileContractElement, resolved, valid bool) {
 		fces = append(fces, FileContractUpdate{
 			FileContractElement: fce,
 			Revision:            rev,
