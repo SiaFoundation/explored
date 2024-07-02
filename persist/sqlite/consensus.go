@@ -449,33 +449,32 @@ func updateMaturedBalances(tx *txn, revert bool, height uint64) error {
 	}
 	defer rows.Close()
 
-	var addressList []any
 	var scos []types.SiacoinOutput
+	addressList := make(map[types.Address]struct{})
 	for rows.Next() {
 		var sco types.SiacoinOutput
 		if err := rows.Scan(decode(&sco.Address), decode(&sco.Value)); err != nil {
 			return fmt.Errorf("updateMaturedBalances: failed to scan maturing outputs: %w", err)
 		}
 		scos = append(scos, sco)
-		addressList = append(addressList, encode(sco.Address))
+		addressList[sco.Address] = struct{}{}
 	}
 
-	balanceRows, err := tx.Query(`SELECT address, siacoin_balance, immature_siacoin_balance
+	balanceRowsStmt, err := tx.Prepare(`SELECT siacoin_balance, immature_siacoin_balance
 		FROM address_balance
-		WHERE address IN (`+queryPlaceHolders(len(addressList))+`)`, addressList...)
+		WHERE address = ?`)
 	if err != nil {
-		return fmt.Errorf("updateMaturedBalances: failed to query address_balance: %w", err)
+		return fmt.Errorf("updateMaturedBalances: failed to prepare address_balance statement: %w", err)
 	}
-	defer balanceRows.Close()
+	defer balanceRowsStmt.Close()
 
 	addresses := make(map[types.Address]balance)
-	for balanceRows.Next() {
-		var address types.Address
+	for addr := range addressList {
 		var bal balance
-		if err := balanceRows.Scan(decode(&address), decode(&bal.sc), decode(&bal.immatureSC)); err != nil {
+		if err := balanceRowsStmt.QueryRow(encode(addr)).Scan(decode(&bal.sc), decode(&bal.immatureSC)); err != nil {
 			return fmt.Errorf("updateMaturedBalances: failed to scan balance: %w", err)
 		}
-		addresses[address] = bal
+		addresses[addr] = bal
 	}
 
 	// If the update is an apply update then we add the amounts.
