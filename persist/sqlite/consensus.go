@@ -360,26 +360,20 @@ func updateBalances(tx *txn, height uint64, spentSiacoinElements, newSiacoinElem
 		addresses[sfe.SiafundOutput.Address] = balance{}
 	}
 
-	var addressList []any
-	for address := range addresses {
-		addressList = append(addressList, encode(address))
-	}
-
-	rows, err := tx.Query(`SELECT address, siacoin_balance, immature_siacoin_balance, siafund_balance
-               FROM address_balance
-               WHERE address IN (`+queryPlaceHolders(len(addressList))+`)`, addressList...)
+	balanceRowsStmt, err := tx.Prepare(`SELECT siacoin_balance, immature_siacoin_balance, siafund_balance
+        FROM address_balance
+        WHERE address = ?`)
 	if err != nil {
-		return fmt.Errorf("updateBalances: failed to query address_balance: %w", err)
+		return fmt.Errorf("updateBalances: failed to prepare address_balance statement: %w", err)
 	}
-	defer rows.Close()
+	defer balanceRowsStmt.Close()
 
-	for rows.Next() {
+	for addr := range addresses {
 		var bal balance
-		var address types.Address
-		if err := rows.Scan(decode(&address), decode(&bal.sc), decode(&bal.immatureSC), decode(&bal.sf)); err != nil {
-			return err
+		if err := balanceRowsStmt.QueryRow(encode(addr)).Scan(decode(&bal.sc), decode(&bal.immatureSC), decode(&bal.sf)); err != sql.ErrNoRows && err != nil {
+			return fmt.Errorf("updateBalances: failed to scan balance: %w", err)
 		}
-		addresses[address] = bal
+		addresses[addr] = bal
 	}
 
 	for _, sce := range newSiacoinElements {
