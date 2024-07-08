@@ -341,9 +341,13 @@ ORDER BY transaction_order ASC`
 	for rows.Next() {
 		var txnID int64
 		var proof types.StorageProof
-		if err := rows.Scan(&txnID, decode(&proof.ParentID), &proof.Leaf, decode(&proof.Proof)); err != nil {
+
+		leaf := make([]byte, 64)
+		if err := rows.Scan(&txnID, decode(&proof.ParentID), &leaf, decode(&proof.Proof)); err != nil {
 			return nil, fmt.Errorf("failed to scan arbitrary data: %w", err)
 		}
+		proof.Leaf = [64]byte(leaf)
+
 		result[txnID] = append(result[txnID], proof)
 	}
 	return result, nil
