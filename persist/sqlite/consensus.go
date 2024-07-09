@@ -895,7 +895,7 @@ func addMetrics(tx *txn, height uint64, difficulty consensus.Work, foundationSub
 	defer hostExistsQuery.Close()
 
 	var totalHostsDelta int64
-	var seenHosts map[types.PublicKey]struct{}
+	seenHosts := make(map[types.PublicKey]struct{})
 	for _, event := range events {
 		if event.Data.EventType() == explorer.EventTypeTransaction {
 			txn := event.Data.(*explorer.EventTransaction)
