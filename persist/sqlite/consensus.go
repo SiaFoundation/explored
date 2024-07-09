@@ -872,7 +872,7 @@ func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []expl
 	return fcDBIds, nil
 }
 
-func addMetrics(tx *txn, height uint64, difficulty consensus.Work, b types.Block, fces []explorer.FileContractUpdate, events []explorer.Event) error {
+func addMetrics(tx *txn, height uint64, difficulty consensus.Work, foundationSubsidy types.SiacoinOutput, b types.Block, fces []explorer.FileContractUpdate, events []explorer.Event) error {
 	var existingMetrics explorer.Metrics
 	if height > 0 {
 		err := tx.QueryRow("SELECT total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue from network_metrics WHERE height = ?", height-1).Scan(&existingMetrics.TotalHosts, &existingMetrics.ActiveContracts, &existingMetrics.FailedContracts, &existingMetrics.SuccessfulContracts, &existingMetrics.StorageUtilization, decode(&existingMetrics.CirculatingSupply), decode(&existingMetrics.ContractRevenue))
@@ -946,6 +946,7 @@ func addMetrics(tx *txn, height uint64, difficulty consensus.Work, b types.Block
 	for _, mp := range b.MinerPayouts {
 		circulatingSupplyDelta = circulatingSupplyDelta.Add(mp.Value)
 	}
+	circulatingSupplyDelta = circulatingSupplyDelta.Add(foundationSubsidy.Value)
 
 	_, err = tx.Exec(`INSERT INTO network_metrics(block_id, height, difficulty, total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		encode(b.ID()),
@@ -1005,7 +1006,7 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to add transactions: addTransactions: %w", err)
 	} else if err := updateStateTree(ut.tx, state.TreeUpdates); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update state tree: %w", err)
-	} else if err := addMetrics(ut.tx, state.Index.Height, state.Difficulty, state.Block, state.FileContractElements, state.Events); err != nil {
+	} else if err := addMetrics(ut.tx, state.Index.Height, state.Difficulty, state.FoundationSubsidy, state.Block, state.FileContractElements, state.Events); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update metrics: %w", err)
 	} else if err := addEvents(ut.tx, scDBIds, fcDBIds, txnDBIds, state.Events); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add events: %w", err)

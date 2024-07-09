@@ -32,9 +32,10 @@ type (
 	// An UpdateState contains information relevant to the block being applied
 	// or reverted.
 	UpdateState struct {
-		Block      types.Block
-		Difficulty consensus.Work
-		Index      types.ChainIndex
+		Block             types.Block
+		Difficulty        consensus.Work
+		Index             types.ChainIndex
+		FoundationSubsidy types.SiacoinOutput
 
 		Events      []Event
 		TreeUpdates []TreeNodeUpdate
@@ -141,9 +142,10 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 
 	events := AppliedEvents(cau.State, cau.Block, cau)
 	state := UpdateState{
-		Block:      cau.Block,
-		Difficulty: cau.State.Difficulty,
-		Index:      cau.State.Index,
+		Block:             cau.Block,
+		Difficulty:        cau.State.Difficulty,
+		Index:             cau.State.Index,
+		FoundationSubsidy: cau.State.FoundationSubsidy(),
 
 		Events:      events,
 		TreeUpdates: treeUpdates,
