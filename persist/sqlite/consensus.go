@@ -895,16 +895,22 @@ func addMetrics(tx *txn, height uint64, difficulty consensus.Work, foundationSub
 	defer hostExistsQuery.Close()
 
 	var totalHostsDelta int64
+	var seenHosts map[types.PublicKey]struct{}
 	for _, event := range events {
 		if event.Data.EventType() == explorer.EventTypeTransaction {
 			txn := event.Data.(*explorer.EventTransaction)
 			for _, host := range txn.HostAnnouncements {
+				if _, ok := seenHosts[host.PublicKey]; ok {
+					continue
+				}
+
 				var exists bool
 				if err := hostExistsQuery.QueryRow(encode(host.PublicKey)).Scan(&exists); err != nil {
 					return fmt.Errorf("failed to check host announcement: %w", err)
 				} else if !exists {
 					// we haven't seen this host yet
 					totalHostsDelta++
+					seenHosts[host.PublicKey] = struct{}{}
 				}
 			}
 		}
