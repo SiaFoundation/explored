@@ -2617,62 +2617,96 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	}
 }
 
-// func TestMetrics(t *testing.T) {
-// 	log := zaptest.NewLogger(t)
-// 	dir := t.TempDir()
+func TestMetricCirculatingSupply(t *testing.T) {
+	log := zaptest.NewLogger(t)
+	dir := t.TempDir()
 
-// 	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	defer db.Close()
+	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
 
-// 	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	defer bdb.Close()
+	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bdb.Close()
 
-// 	pk1 := types.GeneratePrivateKey()
-// 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
 
-// 	renterPrivateKey := types.GeneratePrivateKey()
-// 	renterPublicKey := renterPrivateKey.PublicKey()
+	giftSC := types.Siacoins(1000)
+	network, genesisBlock := testV1Network(addr1, giftSC, 0)
+	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-// 	hostPrivateKey := types.GeneratePrivateKey()
-// 	hostPublicKey := hostPrivateKey.PublicKey()
+	cm := chain.NewManager(store, genesisState)
 
-// 	giftSC := types.Siacoins(1000)
-// 	network, genesisBlock := testV1Network(addr1, giftSC, 0)
-// 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
+	circulatingSupply := genesisState.FoundationSubsidy().Value
+	for _, txn := range genesisBlock.Transactions {
+		for _, sco := range txn.SiacoinOutputs {
+			circulatingSupply = circulatingSupply.Add(sco.Value)
+		}
+	}
 
-// 	cm := chain.NewManager(store, genesisState)
+	var rewards []types.Currency
+	prev := cm.TipState()
+	for i := 0; i < 10; i++ {
+		state := cm.TipState()
+		rewards = append(rewards, state.BlockReward())
+		circulatingSupply = circulatingSupply.Add(state.BlockReward())
+		if err := cm.AddBlocks([]types.Block{mineBlock(state, nil, addr1)}); err != nil {
+			t.Fatal(err)
+		}
+		syncDB(t, db, cm)
 
-// 	scOutputID := genesisBlock.Transactions[0].SiacoinOutputID(0)
-// 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
+		{
+			metrics, err := db.Metrics(cm.Tip().ID)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-// 	signTxn := func(txn *types.Transaction) {
-// 		appendSig := func(key types.PrivateKey, pubkeyIndex uint64, parentID types.Hash256) {
-// 			sig := key.SignHash(cm.TipState().WholeSigHash(*txn, parentID, pubkeyIndex, 0, nil))
-// 			txn.Signatures = append(txn.Signatures, types.TransactionSignature{
-// 				ParentID:       parentID,
-// 				CoveredFields:  types.CoveredFields{WholeTransaction: true},
-// 				PublicKeyIndex: pubkeyIndex,
-// 				Signature:      sig[:],
-// 			})
-// 		}
-// 		for i := range txn.SiacoinInputs {
-// 			appendSig(pk1, 0, types.Hash256(txn.SiacoinInputs[i].ParentID))
-// 		}
-// 		for i := range txn.SiafundInputs {
-// 			appendSig(pk1, 0, types.Hash256(txn.SiafundInputs[i].ParentID))
-// 		}
-// 		for i := range txn.FileContractRevisions {
-// 			appendSig(renterPrivateKey, 0, types.Hash256(txn.FileContractRevisions[i].ParentID))
-// 			appendSig(hostPrivateKey, 1, types.Hash256(txn.FileContractRevisions[i].ParentID))
-// 		}
-// 	}
-// }
+			check(t, "circulating supply", circulatingSupply, metrics.CirculatingSupply)
+		}
+	}
+
+	{
+		var blocks []types.Block
+		state := prev
+
+		// remove reverted rewards
+		for _, reward := range rewards {
+			circulatingSupply = circulatingSupply.Sub(reward)
+		}
+		rewards = rewards[:0]
+
+		for i := uint64(0); i < 15; i++ {
+			pk := types.GeneratePrivateKey()
+			addr := types.StandardUnlockHash(pk.PublicKey())
+
+			blocks = append(blocks, mineBlock(state, nil, addr))
+			state.Index.ID = blocks[len(blocks)-1].ID()
+			state.Index.Height++
+
+			rewards = append(rewards, state.BlockReward())
+			circulatingSupply = circulatingSupply.Add(state.BlockReward())
+		}
+
+		if err := cm.AddBlocks(blocks); err != nil {
+			t.Fatal(err)
+		}
+		syncDB(t, db, cm)
+	}
+
+	{
+		metrics, err := db.Metrics(cm.Tip().ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		check(t, "circulating supply", circulatingSupply, metrics.CirculatingSupply)
+	}
+}
