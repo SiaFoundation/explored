@@ -131,7 +131,11 @@ func checkMetrics(t *testing.T, db explorer.Store, expected explorer.Metrics) {
 	check(t, "difficulty", expected.Difficulty, got.Difficulty)
 	check(t, "total hosts", expected.TotalHosts, got.TotalHosts)
 	check(t, "active contracts", expected.ActiveContracts, got.ActiveContracts)
+	check(t, "failed contracts", expected.FailedContracts, got.FailedContracts)
+	check(t, "succesful contracts", expected.SuccessfulContracts, got.SuccessfulContracts)
+	check(t, "contract revenue", expected.ContractRevenue, got.ContractRevenue)
 	check(t, "storage utilization", expected.StorageUtilization, got.StorageUtilization)
+	// don't check circulating supply here because it requires a lot of accounting
 }
 
 func syncDB(t *testing.T, db *sqlite.Store, cm *chain.Manager) {
@@ -922,11 +926,13 @@ func TestFileContract(t *testing.T) {
 	}
 
 	checkMetrics(t, db, explorer.Metrics{
-		Height:             windowEnd,
-		Difficulty:         cm.TipState().Difficulty,
-		TotalHosts:         0,
-		ActiveContracts:    0,
-		StorageUtilization: 0,
+		Height:              windowEnd,
+		Difficulty:          cm.TipState().Difficulty,
+		TotalHosts:          0,
+		ActiveContracts:     0,
+		FailedContracts:     1,
+		SuccessfulContracts: 0,
+		StorageUtilization:  0,
 	})
 
 	{
@@ -961,11 +967,13 @@ func TestFileContract(t *testing.T) {
 	}
 
 	checkMetrics(t, db, explorer.Metrics{
-		Height:             cm.Tip().Height,
-		Difficulty:         cm.TipState().Difficulty,
-		TotalHosts:         0,
-		ActiveContracts:    0,
-		StorageUtilization: 0,
+		Height:              cm.Tip().Height,
+		Difficulty:          cm.TipState().Difficulty,
+		TotalHosts:          0,
+		ActiveContracts:     0,
+		FailedContracts:     1,
+		SuccessfulContracts: 0,
+		StorageUtilization:  0,
 	})
 }
 
@@ -2608,3 +2616,63 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		}
 	}
 }
+
+// func TestMetrics(t *testing.T) {
+// 	log := zaptest.NewLogger(t)
+// 	dir := t.TempDir()
+
+// 	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	defer db.Close()
+
+// 	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	defer bdb.Close()
+
+// 	pk1 := types.GeneratePrivateKey()
+// 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+
+// 	renterPrivateKey := types.GeneratePrivateKey()
+// 	renterPublicKey := renterPrivateKey.PublicKey()
+
+// 	hostPrivateKey := types.GeneratePrivateKey()
+// 	hostPublicKey := hostPrivateKey.PublicKey()
+
+// 	giftSC := types.Siacoins(1000)
+// 	network, genesisBlock := testV1Network(addr1, giftSC, 0)
+// 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+
+// 	cm := chain.NewManager(store, genesisState)
+
+// 	scOutputID := genesisBlock.Transactions[0].SiacoinOutputID(0)
+// 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
+
+// 	signTxn := func(txn *types.Transaction) {
+// 		appendSig := func(key types.PrivateKey, pubkeyIndex uint64, parentID types.Hash256) {
+// 			sig := key.SignHash(cm.TipState().WholeSigHash(*txn, parentID, pubkeyIndex, 0, nil))
+// 			txn.Signatures = append(txn.Signatures, types.TransactionSignature{
+// 				ParentID:       parentID,
+// 				CoveredFields:  types.CoveredFields{WholeTransaction: true},
+// 				PublicKeyIndex: pubkeyIndex,
+// 				Signature:      sig[:],
+// 			})
+// 		}
+// 		for i := range txn.SiacoinInputs {
+// 			appendSig(pk1, 0, types.Hash256(txn.SiacoinInputs[i].ParentID))
+// 		}
+// 		for i := range txn.SiafundInputs {
+// 			appendSig(pk1, 0, types.Hash256(txn.SiafundInputs[i].ParentID))
+// 		}
+// 		for i := range txn.FileContractRevisions {
+// 			appendSig(renterPrivateKey, 0, types.Hash256(txn.FileContractRevisions[i].ParentID))
+// 			appendSig(hostPrivateKey, 1, types.Hash256(txn.FileContractRevisions[i].ParentID))
+// 		}
+// 	}
+// }
