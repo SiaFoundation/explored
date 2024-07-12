@@ -544,6 +544,11 @@ func TestSendTransactions(t *testing.T) {
 		}
 		syncDB(t, db, cm)
 
+		checkMetrics(t, db, explorer.Metrics{
+			Height:     maturityHeight + uint64(i) + 1,
+			Difficulty: cm.TipState().Difficulty,
+		})
+
 		checkBalance(addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
 		checkBalance(addr2, types.Siacoins(1).Mul64(uint64(i+1)), types.ZeroCurrency, 1*uint64(i+1))
 		checkBalance(addr3, types.Siacoins(2).Mul64(uint64(i+1)), types.ZeroCurrency, 2*uint64(i+1))
@@ -1107,6 +1112,14 @@ func TestEphemeralFileContract(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
+	checkMetrics(t, db, explorer.Metrics{
+		Height:             1,
+		Difficulty:         cm.TipState().Difficulty,
+		TotalHosts:         0,
+		ActiveContracts:    1,
+		StorageUtilization: contractFilesize,
+	})
+
 	{
 		renterContracts, err := db.ContractsKey(renterPublicKey)
 		if err != nil {
@@ -1184,6 +1197,14 @@ func TestEphemeralFileContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
+
+	checkMetrics(t, db, explorer.Metrics{
+		Height:             2,
+		Difficulty:         cm.TipState().Difficulty,
+		TotalHosts:         0,
+		ActiveContracts:    1,
+		StorageUtilization: contractFilesize,
+	})
 
 	// Explorer.Contracts should return latest revision
 	{
@@ -2455,6 +2476,14 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
+	checkMetrics(t, db, explorer.Metrics{
+		Height:             1,
+		Difficulty:         cm.TipState().Difficulty,
+		TotalHosts:         0,
+		ActiveContracts:    1,
+		StorageUtilization: contractFilesize,
+	})
+
 	{
 		dbFCs, err := db.Contracts([]types.FileContractID{fcID})
 		if err != nil {
@@ -2482,6 +2511,8 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		SignaturesRequired: 2,
 	}
 	revFC := fc
+	// add 10 bytes to filesize and increment revision number
+	revFC.Filesize += 10
 	revFC.RevisionNumber++
 	reviseTxn := types.Transaction{
 		FileContractRevisions: []types.FileContractRevision{{
@@ -2499,6 +2530,14 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 	prevState2 := cm.TipState()
+
+	checkMetrics(t, db, explorer.Metrics{
+		Height:             2,
+		Difficulty:         cm.TipState().Difficulty,
+		TotalHosts:         0,
+		ActiveContracts:    1,
+		StorageUtilization: contractFilesize + 10,
+	})
 
 	// Explorer.Contracts should return latest revision
 	{
@@ -2554,6 +2593,16 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			check(t, "fcs", 1, len(dbFCs))
 			checkFC(false, false, fc, dbFCs[0])
 		}
+
+		// storage utilization should be back to contractFilesize instead of
+		// contractFilesize + 10
+		checkMetrics(t, db, explorer.Metrics{
+			Height:             cm.Tip().Height,
+			Difficulty:         cm.TipState().Difficulty,
+			TotalHosts:         0,
+			ActiveContracts:    1,
+			StorageUtilization: contractFilesize,
+		})
 	}
 
 	extra = cm.Tip().Height - prevState2.Index.Height + 1
@@ -2585,6 +2634,15 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			check(t, "fcs", 1, len(dbFCs))
 			checkFC(false, false, revFC, dbFCs[0])
 		}
+
+		// should have revision filesize
+		checkMetrics(t, db, explorer.Metrics{
+			Height:             cm.Tip().Height,
+			Difficulty:         cm.TipState().Difficulty,
+			TotalHosts:         0,
+			ActiveContracts:    1,
+			StorageUtilization: contractFilesize + 10,
+		})
 	}
 
 	extra = cm.Tip().Height - genesisState.Index.Height + 1
@@ -2614,6 +2672,13 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			}
 			check(t, "fcs", 0, len(dbFCs))
 		}
+
+		// no more contracts or storage utilization
+		checkMetrics(t, db, explorer.Metrics{
+			Height:     cm.Tip().Height,
+			Difficulty: cm.TipState().Difficulty,
+			TotalHosts: 0,
+		})
 	}
 }
 
