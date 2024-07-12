@@ -132,7 +132,7 @@ func checkMetrics(t *testing.T, db explorer.Store, expected explorer.Metrics) {
 	check(t, "total hosts", expected.TotalHosts, got.TotalHosts)
 	check(t, "active contracts", expected.ActiveContracts, got.ActiveContracts)
 	check(t, "failed contracts", expected.FailedContracts, got.FailedContracts)
-	check(t, "succesful contracts", expected.SuccessfulContracts, got.SuccessfulContracts)
+	check(t, "successful contracts", expected.SuccessfulContracts, got.SuccessfulContracts)
 	check(t, "contract revenue", expected.ContractRevenue, got.ContractRevenue)
 	check(t, "storage utilization", expected.StorageUtilization, got.StorageUtilization)
 	// don't check circulating supply here because it requires a lot of accounting
