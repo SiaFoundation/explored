@@ -37,4 +37,4 @@ EXPOSE 9981/tcp
 USER ${PUID}:${PGID}
 
 ENV EXPLORED_CONFIG_FILE=/data/explored.yml
-ENTRYPOINT [ "explored", "--dir", "/data", "--http", ":9980" ]
+ENTRYPOINT [ "explored", "--dir", "/data" ]
