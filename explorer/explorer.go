@@ -53,9 +53,9 @@ type Explorer struct {
 	unsubscribe func()
 }
 
-func syncStore(store Store, cm ChainManager, index types.ChainIndex) error {
+func syncStore(store Store, cm ChainManager, index types.ChainIndex, batchSize int) error {
 	for index != cm.Tip() {
-		crus, caus, err := cm.UpdatesSince(index, 1000)
+		crus, caus, err := cm.UpdatesSince(index, batchSize)
 		if err != nil {
 			return fmt.Errorf("failed to subscribe to chain manager: %w", err)
 		}
@@ -74,7 +74,7 @@ func syncStore(store Store, cm ChainManager, index types.ChainIndex) error {
 }
 
 // NewExplorer returns a Sia explorer.
-func NewExplorer(cm ChainManager, store Store, log *zap.Logger) (*Explorer, error) {
+func NewExplorer(cm ChainManager, store Store, batchSize int, log *zap.Logger) (*Explorer, error) {
 	e := &Explorer{s: store}
 
 	tip, err := store.Tip()
@@ -83,7 +83,7 @@ func NewExplorer(cm ChainManager, store Store, log *zap.Logger) (*Explorer, erro
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to get tip: %w", err)
 	}
-	if err := syncStore(store, cm, tip); err != nil {
+	if err := syncStore(store, cm, tip, batchSize); err != nil {
 		return nil, fmt.Errorf("failed to subscribe to chain manager: %w", err)
 	}
 
@@ -97,7 +97,7 @@ func NewExplorer(cm ChainManager, store Store, log *zap.Logger) (*Explorer, erro
 			} else if err != nil {
 				log.Error("failed to get tip", zap.Error(err))
 			}
-			if err := syncStore(store, cm, lastTip); err != nil {
+			if err := syncStore(store, cm, lastTip, batchSize); err != nil {
 				log.Error("failed to sync store", zap.Error(err))
 			}
 			e.mu.Unlock()

@@ -342,7 +342,7 @@ func main() {
 	s := syncer.New(syncerListener, cm, ps, header, syncer.WithLogger(log.Named("syncer")))
 	go s.Run()
 
-	e, err := explorer.NewExplorer(cm, store, log.Named("explorer"))
+	e, err := explorer.NewExplorer(cm, store, cfg.Index.BatchSize, log.Named("explorer"))
 	if err != nil {
 		log.Error("failed to create explorer", zap.Error(err))
 		return
