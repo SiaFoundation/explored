@@ -6,6 +6,7 @@ type (
 		Address string `yaml:"address,omitempty"`
 	}
 
+	// Syncer contains the configuration for the syncer.
 	Syncer struct {
 		Address    string   `yaml:"address,omitempty"`
 		Bootstrap  bool     `yaml:"bootstrap,omitempty"`
