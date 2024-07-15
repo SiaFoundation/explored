@@ -878,13 +878,6 @@ func addMetrics(tx *txn, s explorer.UpdateState) error {
 		if err != nil {
 			return fmt.Errorf("addMetrics: failed to get previous metrics: %w", err)
 		}
-	} else {
-		// add genesis outputs
-		for _, txn := range s.Block.Transactions {
-			for _, sco := range txn.SiacoinOutputs {
-				metrics.CirculatingSupply = metrics.CirculatingSupply.Add(sco.Value)
-			}
-		}
 	}
 
 	hostExistsQuery, err := tx.Prepare(`SELECT EXISTS(SELECT public_key FROM host_announcements WHERE public_key = ?)`)
@@ -944,10 +937,20 @@ func addMetrics(tx *txn, s explorer.UpdateState) error {
 		}
 	}
 
-	for _, mp := range s.Block.MinerPayouts {
-		metrics.CirculatingSupply = metrics.CirculatingSupply.Add(mp.Value)
+	for _, sce := range s.NewSiacoinElements {
+		sco := sce.SiacoinOutput
+		if sco.Address == types.VoidAddress {
+			continue
+		}
+		metrics.CirculatingSupply = metrics.CirculatingSupply.Add(sco.Value)
 	}
-	metrics.CirculatingSupply = metrics.CirculatingSupply.Add(s.FoundationSubsidy.Value)
+	for _, sce := range s.SpentSiacoinElements {
+		sco := sce.SiacoinOutput
+		if sco.Address == types.VoidAddress {
+			continue
+		}
+		metrics.CirculatingSupply = metrics.CirculatingSupply.Sub(sco.Value)
+	}
 
 	_, err = tx.Exec(`INSERT INTO network_metrics(block_id, height, difficulty, total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		encode(s.Block.ID()),
