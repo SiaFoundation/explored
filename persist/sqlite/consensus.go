@@ -369,7 +369,7 @@ func updateBalances(tx *txn, height uint64, spentSiacoinElements, newSiacoinElem
 
 	for addr := range addresses {
 		var bal balance
-		if err := balanceRowsStmt.QueryRow(encode(addr)).Scan(decode(&bal.sc), decode(&bal.immatureSC), decode(&bal.sf)); err != sql.ErrNoRows && err != nil {
+		if err := balanceRowsStmt.QueryRow(encode(addr)).Scan(decode(&bal.sc), decode(&bal.immatureSC), decode(&bal.sf)); err != nil && err != sql.ErrNoRows {
 			return fmt.Errorf("updateBalances: failed to scan balance: %w", err)
 		}
 		addresses[addr] = bal
@@ -872,102 +872,32 @@ func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []expl
 }
 
 func addMetrics(tx *txn, s explorer.UpdateState) error {
-	var metrics explorer.Metrics
-	if s.Index.Height > 0 {
-		err := tx.QueryRow("SELECT total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue from network_metrics WHERE height = ?", s.Index.Height-1).Scan(&metrics.TotalHosts, &metrics.ActiveContracts, &metrics.FailedContracts, &metrics.SuccessfulContracts, &metrics.StorageUtilization, decode(&metrics.CirculatingSupply), decode(&metrics.ContractRevenue))
-		if err != nil {
-			return fmt.Errorf("addMetrics: failed to get previous metrics: %w", err)
-		}
-	}
-
-	hostExistsQuery, err := tx.Prepare(`SELECT EXISTS(SELECT public_key FROM host_announcements WHERE public_key = ?)`)
-	if err != nil {
-		return fmt.Errorf("addMetrics: failed to prepare host announcement query: %w", err)
-	}
-	defer hostExistsQuery.Close()
-
-	seenHosts := make(map[types.PublicKey]struct{})
-	for _, event := range s.Events {
-		if event.Data.EventType() == explorer.EventTypeTransaction {
-			txn := event.Data.(*explorer.EventTransaction)
-			for _, host := range txn.HostAnnouncements {
-				if _, ok := seenHosts[host.PublicKey]; ok {
-					continue
-				}
-
-				var exists bool
-				if err := hostExistsQuery.QueryRow(encode(host.PublicKey)).Scan(&exists); err != nil {
-					return fmt.Errorf("failed to check host announcement: %w", err)
-				} else if !exists {
-					// we haven't seen this host yet
-					metrics.TotalHosts++
-					seenHosts[host.PublicKey] = struct{}{}
-				}
-			}
-		}
-	}
-
-	for _, fce := range s.FileContractElements {
-		fc := fce.FileContractElement.FileContract
-		if fce.Revision != nil {
-			fc = fce.Revision.FileContract
-		}
-
-		if fce.Resolved {
-			metrics.ActiveContracts--
-			metrics.StorageUtilization -= fc.Filesize
-		} else if fce.Revision == nil {
-			// don't count revision as a new contract
-			metrics.ActiveContracts++
-			metrics.StorageUtilization += fc.Filesize
-		} else {
-			// filesize changed
-			metrics.StorageUtilization += (fc.Filesize - fce.FileContractElement.FileContract.Filesize)
-		}
-
-		if fce.Resolved {
-			if !fce.Valid {
-				metrics.FailedContracts++
-			} else {
-				metrics.SuccessfulContracts++
-				for _, vpo := range fc.ValidProofOutputs {
-					metrics.ContractRevenue = metrics.ContractRevenue.Add(vpo.Value)
-				}
-			}
-		}
-	}
-
-	for _, sce := range s.NewSiacoinElements {
-		sco := sce.SiacoinOutput
-		if sco.Address == types.VoidAddress {
-			continue
-		}
-		metrics.CirculatingSupply = metrics.CirculatingSupply.Add(sco.Value)
-	}
-	for _, sce := range s.SpentSiacoinElements {
-		sco := sce.SiacoinOutput
-		if sco.Address == types.VoidAddress {
-			continue
-		}
-		metrics.CirculatingSupply = metrics.CirculatingSupply.Sub(sco.Value)
-	}
-
-	_, err = tx.Exec(`INSERT INTO network_metrics(block_id, height, difficulty, total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	_, err := tx.Exec(`INSERT INTO network_metrics(block_id, height, difficulty, total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		encode(s.Block.ID()),
 		s.Index.Height,
 		encode(s.Difficulty),
-		metrics.TotalHosts,
-		metrics.ActiveContracts,
-		metrics.FailedContracts,
-		metrics.SuccessfulContracts,
-		metrics.StorageUtilization,
-		encode(metrics.CirculatingSupply),
-		encode(metrics.ContractRevenue),
+		s.Metrics.TotalHosts,
+		s.Metrics.ActiveContracts,
+		s.Metrics.FailedContracts,
+		s.Metrics.SuccessfulContracts,
+		s.Metrics.StorageUtilization,
+		encode(s.Metrics.CirculatingSupply),
+		encode(s.Metrics.ContractRevenue),
 	)
-	if err != nil {
-		return fmt.Errorf("addMetrics: failed to execute metrics update query: %w", err)
+	return err
+}
+
+func (ut *updateTx) HostExists(pubkey types.PublicKey) (exists bool, err error) {
+	err = ut.tx.QueryRow(`SELECT EXISTS(SELECT public_key FROM host_announcements WHERE public_key = ?)`, encode(pubkey)).Scan(&exists)
+	return
+}
+
+func (ut *updateTx) Metrics(height uint64) (explorer.Metrics, error) {
+	var metrics explorer.Metrics
+	if err := ut.tx.QueryRow("SELECT total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue from network_metrics WHERE height = ?", height).Scan(&metrics.TotalHosts, &metrics.ActiveContracts, &metrics.FailedContracts, &metrics.SuccessfulContracts, &metrics.StorageUtilization, decode(&metrics.CirculatingSupply), decode(&metrics.ContractRevenue)); err != nil && err != sql.ErrNoRows {
+		return explorer.Metrics{}, err
 	}
-	return nil
+	return metrics, nil
 }
 
 func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
