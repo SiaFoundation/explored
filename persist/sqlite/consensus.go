@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 
-	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
@@ -872,18 +871,18 @@ func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []expl
 	return fcDBIds, nil
 }
 
-func addMetrics(tx *txn, height uint64, difficulty consensus.Work, foundationSubsidy types.SiacoinOutput, b types.Block, fces []explorer.FileContractUpdate, events []explorer.Event) error {
-	var existingMetrics explorer.Metrics
-	if height > 0 {
-		err := tx.QueryRow("SELECT total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue from network_metrics WHERE height = ?", height-1).Scan(&existingMetrics.TotalHosts, &existingMetrics.ActiveContracts, &existingMetrics.FailedContracts, &existingMetrics.SuccessfulContracts, &existingMetrics.StorageUtilization, decode(&existingMetrics.CirculatingSupply), decode(&existingMetrics.ContractRevenue))
+func addMetrics(tx *txn, s explorer.UpdateState) error {
+	var metrics explorer.Metrics
+	if s.Index.Height > 0 {
+		err := tx.QueryRow("SELECT total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue from network_metrics WHERE height = ?", s.Index.Height-1).Scan(&metrics.TotalHosts, &metrics.ActiveContracts, &metrics.FailedContracts, &metrics.SuccessfulContracts, &metrics.StorageUtilization, decode(&metrics.CirculatingSupply), decode(&metrics.ContractRevenue))
 		if err != nil {
 			return fmt.Errorf("addMetrics: failed to get previous metrics: %w", err)
 		}
 	} else {
 		// add genesis outputs
-		for _, txn := range b.Transactions {
+		for _, txn := range s.Block.Transactions {
 			for _, sco := range txn.SiacoinOutputs {
-				existingMetrics.CirculatingSupply = existingMetrics.CirculatingSupply.Add(sco.Value)
+				metrics.CirculatingSupply = metrics.CirculatingSupply.Add(sco.Value)
 			}
 		}
 	}
@@ -894,9 +893,8 @@ func addMetrics(tx *txn, height uint64, difficulty consensus.Work, foundationSub
 	}
 	defer hostExistsQuery.Close()
 
-	var totalHostsDelta int64
 	seenHosts := make(map[types.PublicKey]struct{})
-	for _, event := range events {
+	for _, event := range s.Events {
 		if event.Data.EventType() == explorer.EventTypeTransaction {
 			txn := event.Data.(*explorer.EventTransaction)
 			for _, host := range txn.HostAnnouncements {
@@ -909,62 +907,59 @@ func addMetrics(tx *txn, height uint64, difficulty consensus.Work, foundationSub
 					return fmt.Errorf("failed to check host announcement: %w", err)
 				} else if !exists {
 					// we haven't seen this host yet
-					totalHostsDelta++
+					metrics.TotalHosts++
 					seenHosts[host.PublicKey] = struct{}{}
 				}
 			}
 		}
 	}
 
-	var contractRevenueDelta types.Currency
-	var activeContractsDelta, failedContractsDelta, successfulContractsDelta, storageUtilizationDelta int64
-	for _, fce := range fces {
+	for _, fce := range s.FileContractElements {
 		fc := fce.FileContractElement.FileContract
 		if fce.Revision != nil {
 			fc = fce.Revision.FileContract
 		}
 
 		if fce.Resolved {
-			activeContractsDelta--
-			storageUtilizationDelta -= int64(fc.Filesize)
+			metrics.ActiveContracts--
+			metrics.StorageUtilization -= fc.Filesize
 		} else if fce.Revision == nil {
 			// don't count revision as a new contract
-			activeContractsDelta++
-			storageUtilizationDelta += int64(fc.Filesize)
+			metrics.ActiveContracts++
+			metrics.StorageUtilization += fc.Filesize
 		} else {
 			// filesize changed
-			storageUtilizationDelta += int64(fc.Filesize - fce.FileContractElement.FileContract.Filesize)
+			metrics.StorageUtilization += (fc.Filesize - fce.FileContractElement.FileContract.Filesize)
 		}
 
 		if fce.Resolved {
 			if !fce.Valid {
-				failedContractsDelta++
+				metrics.FailedContracts++
 			} else {
-				successfulContractsDelta++
+				metrics.SuccessfulContracts++
 				for _, vpo := range fc.ValidProofOutputs {
-					contractRevenueDelta = contractRevenueDelta.Add(vpo.Value)
+					metrics.ContractRevenue = metrics.ContractRevenue.Add(vpo.Value)
 				}
 			}
 		}
 	}
 
-	var circulatingSupplyDelta types.Currency
-	for _, mp := range b.MinerPayouts {
-		circulatingSupplyDelta = circulatingSupplyDelta.Add(mp.Value)
+	for _, mp := range s.Block.MinerPayouts {
+		metrics.CirculatingSupply = metrics.CirculatingSupply.Add(mp.Value)
 	}
-	circulatingSupplyDelta = circulatingSupplyDelta.Add(foundationSubsidy.Value)
+	metrics.CirculatingSupply = metrics.CirculatingSupply.Add(s.FoundationSubsidy.Value)
 
 	_, err = tx.Exec(`INSERT INTO network_metrics(block_id, height, difficulty, total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		encode(b.ID()),
-		height,
-		encode(difficulty),
-		int64(existingMetrics.TotalHosts)+totalHostsDelta,
-		int64(existingMetrics.ActiveContracts)+activeContractsDelta,
-		int64(existingMetrics.FailedContracts)+failedContractsDelta,
-		int64(existingMetrics.SuccessfulContracts)+successfulContractsDelta,
-		int64(existingMetrics.StorageUtilization)+storageUtilizationDelta,
-		encode(existingMetrics.CirculatingSupply.Add(circulatingSupplyDelta)),
-		encode(existingMetrics.ContractRevenue.Add(contractRevenueDelta)),
+		encode(s.Block.ID()),
+		s.Index.Height,
+		encode(s.Difficulty),
+		metrics.TotalHosts,
+		metrics.ActiveContracts,
+		metrics.FailedContracts,
+		metrics.SuccessfulContracts,
+		metrics.StorageUtilization,
+		encode(metrics.CirculatingSupply),
+		encode(metrics.ContractRevenue),
 	)
 	if err != nil {
 		return fmt.Errorf("addMetrics: failed to execute metrics update query: %w", err)
@@ -1012,7 +1007,7 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to add transactions: addTransactions: %w", err)
 	} else if err := updateStateTree(ut.tx, state.TreeUpdates); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update state tree: %w", err)
-	} else if err := addMetrics(ut.tx, state.Index.Height, state.Difficulty, state.FoundationSubsidy, state.Block, state.FileContractElements, state.Events); err != nil {
+	} else if err := addMetrics(ut.tx, state); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update metrics: %w", err)
 	} else if err := addEvents(ut.tx, scDBIds, fcDBIds, txnDBIds, state.Events); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add events: %w", err)
