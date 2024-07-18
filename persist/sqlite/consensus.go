@@ -873,9 +873,9 @@ func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []expl
 
 func addMetrics(tx *txn, s explorer.UpdateState) error {
 	_, err := tx.Exec(`INSERT INTO network_metrics(block_id, height, difficulty, total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		encode(s.Block.ID()),
-		s.Index.Height,
-		encode(s.Difficulty),
+		encode(s.Metrics.Index.ID),
+		s.Metrics.Index.Height,
+		encode(s.Metrics.Difficulty),
 		s.Metrics.TotalHosts,
 		s.Metrics.ActiveContracts,
 		s.Metrics.FailedContracts,
@@ -901,9 +901,9 @@ func (ut *updateTx) Metrics(height uint64) (explorer.Metrics, error) {
 }
 
 func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
-	if err := addBlock(ut.tx, state.Block, state.Index.Height); err != nil {
+	if err := addBlock(ut.tx, state.Block, state.Metrics.Index.Height); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add block: %w", err)
-	} else if err := updateMaturedBalances(ut.tx, false, state.Index.Height); err != nil {
+	} else if err := updateMaturedBalances(ut.tx, false, state.Metrics.Index.Height); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update matured balances: %w", err)
 	}
 
@@ -925,7 +925,7 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 	if err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add siafund outputs: %w", err)
 	}
-	if err := updateBalances(ut.tx, state.Index.Height, state.SpentSiacoinElements, state.NewSiacoinElements, state.SpentSiafundElements, state.NewSiafundElements); err != nil {
+	if err := updateBalances(ut.tx, state.Metrics.Index.Height, state.SpentSiacoinElements, state.NewSiacoinElements, state.SpentSiafundElements, state.NewSiafundElements); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update balances: %w", err)
 	}
 
@@ -950,7 +950,7 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 }
 
 func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
-	if err := updateMaturedBalances(ut.tx, true, state.Index.Height); err != nil {
+	if err := updateMaturedBalances(ut.tx, true, state.Metrics.Index.Height); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update matured balances: %w", err)
 	} else if _, err := addSiacoinElements(
 		ut.tx,
@@ -966,7 +966,7 @@ func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
 		append(state.NewSiafundElements, state.EphemeralSiafundElements...),
 	); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update siafund output state: %w", err)
-	} else if err := updateBalances(ut.tx, state.Index.Height, state.SpentSiacoinElements, state.NewSiacoinElements, state.SpentSiafundElements, state.NewSiafundElements); err != nil {
+	} else if err := updateBalances(ut.tx, state.Metrics.Index.Height, state.SpentSiacoinElements, state.NewSiacoinElements, state.SpentSiafundElements, state.NewSiafundElements); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update balances: %w", err)
 	} else if _, err := updateFileContractElements(ut.tx, true, state.Block, state.FileContractElements); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update file contract state: %w", err)

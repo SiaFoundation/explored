@@ -3,7 +3,6 @@ package explorer
 import (
 	"fmt"
 
-	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 )
@@ -32,10 +31,7 @@ type (
 	// An UpdateState contains information relevant to the block being applied
 	// or reverted.
 	UpdateState struct {
-		Block             types.Block
-		Difficulty        consensus.Work
-		Index             types.ChainIndex
-		FoundationSubsidy types.SiacoinOutput
+		Block types.Block
 
 		Events      []Event
 		Metrics     Metrics
@@ -147,10 +143,7 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 	events := AppliedEvents(cau.State, cau.Block, cau)
 
 	state := UpdateState{
-		Block:             cau.Block,
-		Difficulty:        cau.State.Difficulty,
-		Index:             cau.State.Index,
-		FoundationSubsidy: cau.State.FoundationSubsidy(),
+		Block: cau.Block,
 
 		Events:      events,
 		TreeUpdates: treeUpdates,
@@ -168,8 +161,8 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 
 	var err error
 	var prevMetrics Metrics
-	if state.Index.Height > 0 {
-		prevMetrics, err = tx.Metrics(state.Index.Height - 1)
+	if cau.State.Index.Height > 0 {
+		prevMetrics, err = tx.Metrics(cau.State.Index.Height - 1)
 		if err != nil {
 			return err
 		}
@@ -178,6 +171,8 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 	if err != nil {
 		return err
 	}
+	state.Metrics.Difficulty = cau.State.Difficulty
+	state.Metrics.Index = cau.State.Index
 
 	return tx.ApplyIndex(state)
 }
@@ -241,9 +236,8 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 	})
 
 	state := UpdateState{
-		Block:       cru.Block,
-		Difficulty:  cru.State.Difficulty,
-		Index:       revertedIndex,
+		Block: cru.Block,
+
 		TreeUpdates: treeUpdates,
 
 		NewSiacoinElements:       newSiacoinElements,
@@ -256,6 +250,8 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 
 		FileContractElements: fces,
 	}
+	state.Metrics.Index = revertedIndex
+
 	return tx.RevertIndex(state)
 }
 

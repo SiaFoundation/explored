@@ -117,7 +117,7 @@ func check(t *testing.T, desc string, expect, got any) {
 	}
 }
 
-func checkMetrics(t *testing.T, db explorer.Store, expected explorer.Metrics) {
+func checkMetrics(t *testing.T, db explorer.Store, cm *chain.Manager, expected explorer.Metrics) {
 	tip, err := db.Tip()
 	if err != nil {
 		t.Fatal(err)
@@ -127,8 +127,8 @@ func checkMetrics(t *testing.T, db explorer.Store, expected explorer.Metrics) {
 		t.Fatal(err)
 	}
 
-	check(t, "height", expected.Height, got.Height)
-	check(t, "difficulty", expected.Difficulty, got.Difficulty)
+	check(t, "index", cm.Tip(), got.Index)
+	check(t, "difficulty", cm.TipState().Difficulty, got.Difficulty)
 	check(t, "total hosts", expected.TotalHosts, got.TotalHosts)
 	check(t, "active contracts", expected.ActiveContracts, got.ActiveContracts)
 	check(t, "failed contracts", expected.FailedContracts, got.FailedContracts)
@@ -544,10 +544,7 @@ func TestSendTransactions(t *testing.T) {
 		}
 		syncDB(t, db, cm)
 
-		checkMetrics(t, db, explorer.Metrics{
-			Height:     maturityHeight + uint64(i) + 1,
-			Difficulty: cm.TipState().Difficulty,
-		})
+		checkMetrics(t, db, cm, explorer.Metrics{})
 
 		checkBalance(addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
 		checkBalance(addr2, types.Siacoins(1).Mul64(uint64(i+1)), types.ZeroCurrency, 1*uint64(i+1))
@@ -882,9 +879,7 @@ func TestFileContract(t *testing.T) {
 		checkFC(false, false, fc, hostContracts[0])
 	}
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:             2,
-		Difficulty:         cm.TipState().Difficulty,
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
 		StorageUtilization: contractFilesize,
@@ -916,9 +911,7 @@ func TestFileContract(t *testing.T) {
 	}
 
 	for i := cm.Tip().Height; i < windowEnd; i++ {
-		checkMetrics(t, db, explorer.Metrics{
-			Height:             i,
-			Difficulty:         cm.TipState().Difficulty,
+		checkMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    1,
 			StorageUtilization: 1 * contractFilesize,
@@ -930,9 +923,7 @@ func TestFileContract(t *testing.T) {
 		syncDB(t, db, cm)
 	}
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:              windowEnd,
-		Difficulty:          cm.TipState().Difficulty,
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:          0,
 		ActiveContracts:     0,
 		FailedContracts:     1,
@@ -971,9 +962,7 @@ func TestFileContract(t *testing.T) {
 		checkFC(true, false, fc, hostContracts[0])
 	}
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:              cm.Tip().Height,
-		Difficulty:          cm.TipState().Difficulty,
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:          0,
 		ActiveContracts:     0,
 		FailedContracts:     1,
@@ -1112,9 +1101,7 @@ func TestEphemeralFileContract(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:             1,
-		Difficulty:         cm.TipState().Difficulty,
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
 		StorageUtilization: contractFilesize,
@@ -1198,9 +1185,7 @@ func TestEphemeralFileContract(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:             2,
-		Difficulty:         cm.TipState().Difficulty,
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
 		StorageUtilization: contractFilesize,
@@ -1304,9 +1289,7 @@ func TestRevertTip(t *testing.T) {
 		check(t, "tip", cm.Tip(), tip)
 	}
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:             cm.Tip().Height,
-		Difficulty:         cm.TipState().Difficulty,
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -1333,9 +1316,7 @@ func TestRevertTip(t *testing.T) {
 		check(t, "tip", cm.Tip(), tip)
 	}
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:             cm.Tip().Height,
-		Difficulty:         cm.TipState().Difficulty,
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -1444,9 +1425,7 @@ func TestRevertBalance(t *testing.T) {
 		}
 		syncDB(t, db, cm)
 
-		checkMetrics(t, db, explorer.Metrics{
-			Height:             cm.Tip().Height,
-			Difficulty:         cm.TipState().Difficulty,
+		checkMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    0,
 			StorageUtilization: 0,
@@ -1509,9 +1488,7 @@ func TestRevertBalance(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:             cm.Tip().Height,
-		Difficulty:         cm.TipState().Difficulty,
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -1747,9 +1724,7 @@ func TestRevertSendTransactions(t *testing.T) {
 		blocks = append(blocks, b)
 		syncDB(t, db, cm)
 
-		checkMetrics(t, db, explorer.Metrics{
-			Height:             cm.Tip().Height,
-			Difficulty:         cm.TipState().Difficulty,
+		checkMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    0,
 			StorageUtilization: 0,
@@ -1919,9 +1894,7 @@ func TestRevertSendTransactions(t *testing.T) {
 		}
 	}
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:             cm.Tip().Height,
-		Difficulty:         cm.TipState().Difficulty,
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -1992,9 +1965,7 @@ func TestHostAnnouncement(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:             cm.Tip().Height,
-		Difficulty:         cm.TipState().Difficulty,
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         1,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -2017,9 +1988,7 @@ func TestHostAnnouncement(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:             cm.Tip().Height,
-		Difficulty:         cm.TipState().Difficulty,
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         3,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -2107,9 +2076,7 @@ func TestMultipleReorg(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:             cm.Tip().Height,
-		Difficulty:         cm.TipState().Difficulty,
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -2476,9 +2443,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:             1,
-		Difficulty:         cm.TipState().Difficulty,
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
 		StorageUtilization: contractFilesize,
@@ -2531,9 +2496,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	syncDB(t, db, cm)
 	prevState2 := cm.TipState()
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:             2,
-		Difficulty:         cm.TipState().Difficulty,
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
 		StorageUtilization: contractFilesize + 10,
@@ -2596,9 +2559,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 
 		// storage utilization should be back to contractFilesize instead of
 		// contractFilesize + 10
-		checkMetrics(t, db, explorer.Metrics{
-			Height:             cm.Tip().Height,
-			Difficulty:         cm.TipState().Difficulty,
+		checkMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    1,
 			StorageUtilization: contractFilesize,
@@ -2636,9 +2597,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		}
 
 		// should have revision filesize
-		checkMetrics(t, db, explorer.Metrics{
-			Height:             cm.Tip().Height,
-			Difficulty:         cm.TipState().Difficulty,
+		checkMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    1,
 			StorageUtilization: contractFilesize + 10,
@@ -2674,9 +2633,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		}
 
 		// no more contracts or storage utilization
-		checkMetrics(t, db, explorer.Metrics{
-			Height:     cm.Tip().Height,
-			Difficulty: cm.TipState().Difficulty,
+		checkMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts: 0,
 		})
 	}
