@@ -117,7 +117,7 @@ func check(t *testing.T, desc string, expect, got any) {
 	}
 }
 
-func checkMetrics(t *testing.T, db explorer.Store, expected explorer.Metrics) {
+func checkMetrics(t *testing.T, db explorer.Store, cm *chain.Manager, expected explorer.Metrics) {
 	tip, err := db.Tip()
 	if err != nil {
 		t.Fatal(err)
@@ -127,11 +127,15 @@ func checkMetrics(t *testing.T, db explorer.Store, expected explorer.Metrics) {
 		t.Fatal(err)
 	}
 
-	check(t, "height", expected.Height, got.Height)
-	check(t, "difficulty", expected.Difficulty, got.Difficulty)
+	check(t, "index", cm.Tip(), got.Index)
+	check(t, "difficulty", cm.TipState().Difficulty, got.Difficulty)
 	check(t, "total hosts", expected.TotalHosts, got.TotalHosts)
 	check(t, "active contracts", expected.ActiveContracts, got.ActiveContracts)
+	check(t, "failed contracts", expected.FailedContracts, got.FailedContracts)
+	check(t, "successful contracts", expected.SuccessfulContracts, got.SuccessfulContracts)
+	check(t, "contract revenue", expected.ContractRevenue, got.ContractRevenue)
 	check(t, "storage utilization", expected.StorageUtilization, got.StorageUtilization)
+	// don't check circulating supply here because it requires a lot of accounting
 }
 
 func syncDB(t *testing.T, db *sqlite.Store, cm *chain.Manager) {
@@ -540,6 +544,8 @@ func TestSendTransactions(t *testing.T) {
 		}
 		syncDB(t, db, cm)
 
+		checkMetrics(t, db, cm, explorer.Metrics{})
+
 		checkBalance(addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
 		checkBalance(addr2, types.Siacoins(1).Mul64(uint64(i+1)), types.ZeroCurrency, 1*uint64(i+1))
 		checkBalance(addr3, types.Siacoins(2).Mul64(uint64(i+1)), types.ZeroCurrency, 2*uint64(i+1))
@@ -873,9 +879,7 @@ func TestFileContract(t *testing.T) {
 		checkFC(false, false, fc, hostContracts[0])
 	}
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:             2,
-		Difficulty:         cm.TipState().Difficulty,
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
 		StorageUtilization: contractFilesize,
@@ -907,9 +911,7 @@ func TestFileContract(t *testing.T) {
 	}
 
 	for i := cm.Tip().Height; i < windowEnd; i++ {
-		checkMetrics(t, db, explorer.Metrics{
-			Height:             i,
-			Difficulty:         cm.TipState().Difficulty,
+		checkMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    1,
 			StorageUtilization: 1 * contractFilesize,
@@ -921,12 +923,12 @@ func TestFileContract(t *testing.T) {
 		syncDB(t, db, cm)
 	}
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:             windowEnd,
-		Difficulty:         cm.TipState().Difficulty,
-		TotalHosts:         0,
-		ActiveContracts:    0,
-		StorageUtilization: 0,
+	checkMetrics(t, db, cm, explorer.Metrics{
+		TotalHosts:          0,
+		ActiveContracts:     0,
+		FailedContracts:     1,
+		SuccessfulContracts: 0,
+		StorageUtilization:  0,
 	})
 
 	{
@@ -960,12 +962,12 @@ func TestFileContract(t *testing.T) {
 		checkFC(true, false, fc, hostContracts[0])
 	}
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:             cm.Tip().Height,
-		Difficulty:         cm.TipState().Difficulty,
-		TotalHosts:         0,
-		ActiveContracts:    0,
-		StorageUtilization: 0,
+	checkMetrics(t, db, cm, explorer.Metrics{
+		TotalHosts:          0,
+		ActiveContracts:     0,
+		FailedContracts:     1,
+		SuccessfulContracts: 0,
+		StorageUtilization:  0,
 	})
 }
 
@@ -1099,6 +1101,12 @@ func TestEphemeralFileContract(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
+	checkMetrics(t, db, cm, explorer.Metrics{
+		TotalHosts:         0,
+		ActiveContracts:    1,
+		StorageUtilization: contractFilesize,
+	})
+
 	{
 		renterContracts, err := db.ContractsKey(renterPublicKey)
 		if err != nil {
@@ -1176,6 +1184,12 @@ func TestEphemeralFileContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
+
+	checkMetrics(t, db, cm, explorer.Metrics{
+		TotalHosts:         0,
+		ActiveContracts:    1,
+		StorageUtilization: contractFilesize,
+	})
 
 	// Explorer.Contracts should return latest revision
 	{
@@ -1275,9 +1289,7 @@ func TestRevertTip(t *testing.T) {
 		check(t, "tip", cm.Tip(), tip)
 	}
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:             cm.Tip().Height,
-		Difficulty:         cm.TipState().Difficulty,
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -1304,9 +1316,7 @@ func TestRevertTip(t *testing.T) {
 		check(t, "tip", cm.Tip(), tip)
 	}
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:             cm.Tip().Height,
-		Difficulty:         cm.TipState().Difficulty,
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -1415,9 +1425,7 @@ func TestRevertBalance(t *testing.T) {
 		}
 		syncDB(t, db, cm)
 
-		checkMetrics(t, db, explorer.Metrics{
-			Height:             cm.Tip().Height,
-			Difficulty:         cm.TipState().Difficulty,
+		checkMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    0,
 			StorageUtilization: 0,
@@ -1480,9 +1488,7 @@ func TestRevertBalance(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:             cm.Tip().Height,
-		Difficulty:         cm.TipState().Difficulty,
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -1718,9 +1724,7 @@ func TestRevertSendTransactions(t *testing.T) {
 		blocks = append(blocks, b)
 		syncDB(t, db, cm)
 
-		checkMetrics(t, db, explorer.Metrics{
-			Height:             cm.Tip().Height,
-			Difficulty:         cm.TipState().Difficulty,
+		checkMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    0,
 			StorageUtilization: 0,
@@ -1890,9 +1894,7 @@ func TestRevertSendTransactions(t *testing.T) {
 		}
 	}
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:             cm.Tip().Height,
-		Difficulty:         cm.TipState().Difficulty,
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -1963,9 +1965,7 @@ func TestHostAnnouncement(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:             cm.Tip().Height,
-		Difficulty:         cm.TipState().Difficulty,
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         1,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -1988,9 +1988,7 @@ func TestHostAnnouncement(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:             cm.Tip().Height,
-		Difficulty:         cm.TipState().Difficulty,
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         3,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -2078,9 +2076,7 @@ func TestMultipleReorg(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	checkMetrics(t, db, explorer.Metrics{
-		Height:             cm.Tip().Height,
-		Difficulty:         cm.TipState().Difficulty,
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -2447,6 +2443,12 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
+	checkMetrics(t, db, cm, explorer.Metrics{
+		TotalHosts:         0,
+		ActiveContracts:    1,
+		StorageUtilization: contractFilesize,
+	})
+
 	{
 		dbFCs, err := db.Contracts([]types.FileContractID{fcID})
 		if err != nil {
@@ -2474,6 +2476,8 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		SignaturesRequired: 2,
 	}
 	revFC := fc
+	// add 10 bytes to filesize and increment revision number
+	revFC.Filesize += 10
 	revFC.RevisionNumber++
 	reviseTxn := types.Transaction{
 		FileContractRevisions: []types.FileContractRevision{{
@@ -2491,6 +2495,12 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 	prevState2 := cm.TipState()
+
+	checkMetrics(t, db, cm, explorer.Metrics{
+		TotalHosts:         0,
+		ActiveContracts:    1,
+		StorageUtilization: contractFilesize + 10,
+	})
 
 	// Explorer.Contracts should return latest revision
 	{
@@ -2546,6 +2556,14 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			check(t, "fcs", 1, len(dbFCs))
 			checkFC(false, false, fc, dbFCs[0])
 		}
+
+		// storage utilization should be back to contractFilesize instead of
+		// contractFilesize + 10
+		checkMetrics(t, db, cm, explorer.Metrics{
+			TotalHosts:         0,
+			ActiveContracts:    1,
+			StorageUtilization: contractFilesize,
+		})
 	}
 
 	extra = cm.Tip().Height - prevState2.Index.Height + 1
@@ -2577,6 +2595,13 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			check(t, "fcs", 1, len(dbFCs))
 			checkFC(false, false, revFC, dbFCs[0])
 		}
+
+		// should have revision filesize
+		checkMetrics(t, db, cm, explorer.Metrics{
+			TotalHosts:         0,
+			ActiveContracts:    1,
+			StorageUtilization: contractFilesize + 10,
+		})
 	}
 
 	extra = cm.Tip().Height - genesisState.Index.Height + 1
@@ -2606,5 +2631,104 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			}
 			check(t, "fcs", 0, len(dbFCs))
 		}
+
+		// no more contracts or storage utilization
+		checkMetrics(t, db, cm, explorer.Metrics{
+			TotalHosts: 0,
+		})
+	}
+}
+
+func TestMetricCirculatingSupply(t *testing.T) {
+	log := zaptest.NewLogger(t)
+	dir := t.TempDir()
+
+	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bdb.Close()
+
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+
+	giftSC := types.Siacoins(1000)
+	network, genesisBlock := testV1Network(addr1, giftSC, 0)
+	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cm := chain.NewManager(store, genesisState)
+
+	circulatingSupply := genesisState.FoundationSubsidy().Value
+	for _, txn := range genesisBlock.Transactions {
+		for _, sco := range txn.SiacoinOutputs {
+			circulatingSupply = circulatingSupply.Add(sco.Value)
+		}
+	}
+
+	var rewards []types.Currency
+	prev := cm.TipState()
+	for i := 0; i < 10; i++ {
+		state := cm.TipState()
+		rewards = append(rewards, state.BlockReward())
+		circulatingSupply = circulatingSupply.Add(state.BlockReward())
+		if err := cm.AddBlocks([]types.Block{mineBlock(state, nil, addr1)}); err != nil {
+			t.Fatal(err)
+		}
+		syncDB(t, db, cm)
+
+		{
+			metrics, err := db.Metrics(cm.Tip().ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			check(t, "circulating supply", circulatingSupply, metrics.CirculatingSupply)
+		}
+	}
+
+	{
+		var blocks []types.Block
+		state := prev
+
+		// remove reverted rewards
+		for _, reward := range rewards {
+			circulatingSupply = circulatingSupply.Sub(reward)
+		}
+		rewards = rewards[:0]
+
+		for i := uint64(0); i < 15; i++ {
+			pk := types.GeneratePrivateKey()
+			addr := types.StandardUnlockHash(pk.PublicKey())
+
+			blocks = append(blocks, mineBlock(state, nil, addr))
+			state.Index.ID = blocks[len(blocks)-1].ID()
+			state.Index.Height++
+
+			rewards = append(rewards, state.BlockReward())
+			circulatingSupply = circulatingSupply.Add(state.BlockReward())
+		}
+
+		if err := cm.AddBlocks(blocks); err != nil {
+			t.Fatal(err)
+		}
+		syncDB(t, db, cm)
+	}
+
+	{
+		metrics, err := db.Metrics(cm.Tip().ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		check(t, "circulating supply", circulatingSupply, metrics.CirculatingSupply)
 	}
 }

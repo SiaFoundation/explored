@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 
-	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
@@ -370,7 +369,7 @@ func updateBalances(tx *txn, height uint64, spentSiacoinElements, newSiacoinElem
 
 	for addr := range addresses {
 		var bal balance
-		if err := balanceRowsStmt.QueryRow(encode(addr)).Scan(decode(&bal.sc), decode(&bal.immatureSC), decode(&bal.sf)); err != sql.ErrNoRows && err != nil {
+		if err := balanceRowsStmt.QueryRow(encode(addr)).Scan(decode(&bal.sc), decode(&bal.immatureSC), decode(&bal.sf)); err != nil && err != sql.ErrNoRows {
 			return fmt.Errorf("updateBalances: failed to scan balance: %w", err)
 		}
 		addresses[addr] = bal
@@ -872,103 +871,39 @@ func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []expl
 	return fcDBIds, nil
 }
 
-func addMetrics(tx *txn, height uint64, difficulty consensus.Work, b types.Block, fces []explorer.FileContractUpdate, events []explorer.Event) error {
-	var existingMetrics explorer.Metrics
-	if height > 0 {
-		err := tx.QueryRow("SELECT total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue from network_metrics WHERE height = ?", height-1).Scan(&existingMetrics.TotalHosts, &existingMetrics.ActiveContracts, &existingMetrics.FailedContracts, &existingMetrics.SuccessfulContracts, &existingMetrics.StorageUtilization, decode(&existingMetrics.CirculatingSupply), decode(&existingMetrics.ContractRevenue))
-		if err != nil {
-			return fmt.Errorf("addMetrics: failed to get previous metrics: %w", err)
-		}
-	} else {
-		// add genesis outputs
-		for _, txn := range b.Transactions {
-			for _, sco := range txn.SiacoinOutputs {
-				existingMetrics.CirculatingSupply = existingMetrics.CirculatingSupply.Add(sco.Value)
-			}
-		}
-	}
-
-	hostExistsQuery, err := tx.Prepare(`SELECT EXISTS(SELECT public_key FROM host_announcements WHERE public_key = ?)`)
-	if err != nil {
-		return fmt.Errorf("addMetrics: failed to prepare host announcement query: %w", err)
-	}
-	defer hostExistsQuery.Close()
-
-	var totalHostsDelta int64
-	for _, event := range events {
-		if event.Data.EventType() == explorer.EventTypeTransaction {
-			txn := event.Data.(*explorer.EventTransaction)
-			for _, host := range txn.HostAnnouncements {
-				var exists bool
-				if err := hostExistsQuery.QueryRow(encode(host.PublicKey)).Scan(&exists); err != nil {
-					return fmt.Errorf("failed to check host announcement: %w", err)
-				} else if !exists {
-					// we haven't seen this host yet
-					totalHostsDelta++
-				}
-			}
-		}
-	}
-
-	var contractRevenueDelta types.Currency
-	var activeContractsDelta, failedContractsDelta, successfulContractsDelta, storageUtilizationDelta int64
-	for _, fce := range fces {
-		fc := fce.FileContractElement.FileContract
-		if fce.Revision != nil {
-			fc = fce.Revision.FileContract
-		}
-
-		if fce.Resolved {
-			activeContractsDelta--
-			storageUtilizationDelta -= int64(fc.Filesize)
-		} else if fce.Revision == nil {
-			// don't count revision as a new contract
-			activeContractsDelta++
-			storageUtilizationDelta += int64(fc.Filesize)
-		} else {
-			// filesize changed
-			storageUtilizationDelta += int64(fc.Filesize - fce.FileContractElement.FileContract.Filesize)
-		}
-
-		if fce.Resolved {
-			if !fce.Valid {
-				failedContractsDelta++
-			} else {
-				successfulContractsDelta++
-				for _, vpo := range fc.ValidProofOutputs {
-					contractRevenueDelta = contractRevenueDelta.Add(vpo.Value)
-				}
-			}
-		}
-	}
-
-	var circulatingSupplyDelta types.Currency
-	for _, mp := range b.MinerPayouts {
-		circulatingSupplyDelta = circulatingSupplyDelta.Add(mp.Value)
-	}
-
-	_, err = tx.Exec(`INSERT INTO network_metrics(block_id, height, difficulty, total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		encode(b.ID()),
-		height,
-		encode(difficulty),
-		int64(existingMetrics.TotalHosts)+totalHostsDelta,
-		int64(existingMetrics.ActiveContracts)+activeContractsDelta,
-		int64(existingMetrics.FailedContracts)+failedContractsDelta,
-		int64(existingMetrics.SuccessfulContracts)+successfulContractsDelta,
-		int64(existingMetrics.StorageUtilization)+storageUtilizationDelta,
-		encode(existingMetrics.CirculatingSupply.Add(circulatingSupplyDelta)),
-		encode(existingMetrics.ContractRevenue.Add(contractRevenueDelta)),
+func addMetrics(tx *txn, s explorer.UpdateState) error {
+	_, err := tx.Exec(`INSERT INTO network_metrics(block_id, height, difficulty, total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		encode(s.Metrics.Index.ID),
+		s.Metrics.Index.Height,
+		encode(s.Metrics.Difficulty),
+		s.Metrics.TotalHosts,
+		s.Metrics.ActiveContracts,
+		s.Metrics.FailedContracts,
+		s.Metrics.SuccessfulContracts,
+		s.Metrics.StorageUtilization,
+		encode(s.Metrics.CirculatingSupply),
+		encode(s.Metrics.ContractRevenue),
 	)
-	if err != nil {
-		return fmt.Errorf("addMetrics: failed to execute metrics update query: %w", err)
+	return err
+}
+
+func (ut *updateTx) HostExists(pubkey types.PublicKey) (exists bool, err error) {
+	err = ut.tx.QueryRow(`SELECT EXISTS(SELECT public_key FROM host_announcements WHERE public_key = ?)`, encode(pubkey)).Scan(&exists)
+	return
+}
+
+func (ut *updateTx) Metrics(height uint64) (explorer.Metrics, error) {
+	var metrics explorer.Metrics
+	if err := ut.tx.QueryRow("SELECT total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue from network_metrics WHERE height = ?", height).Scan(&metrics.TotalHosts, &metrics.ActiveContracts, &metrics.FailedContracts, &metrics.SuccessfulContracts, &metrics.StorageUtilization, decode(&metrics.CirculatingSupply), decode(&metrics.ContractRevenue)); err != nil && err != sql.ErrNoRows {
+		return explorer.Metrics{}, err
 	}
-	return nil
+	return metrics, nil
 }
 
 func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
-	if err := addBlock(ut.tx, state.Block, state.Index.Height); err != nil {
+	if err := addBlock(ut.tx, state.Block, state.Metrics.Index.Height); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add block: %w", err)
-	} else if err := updateMaturedBalances(ut.tx, false, state.Index.Height); err != nil {
+	} else if err := updateMaturedBalances(ut.tx, false, state.Metrics.Index.Height); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update matured balances: %w", err)
 	}
 
@@ -990,7 +925,7 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 	if err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add siafund outputs: %w", err)
 	}
-	if err := updateBalances(ut.tx, state.Index.Height, state.SpentSiacoinElements, state.NewSiacoinElements, state.SpentSiafundElements, state.NewSiafundElements); err != nil {
+	if err := updateBalances(ut.tx, state.Metrics.Index.Height, state.SpentSiacoinElements, state.NewSiacoinElements, state.SpentSiafundElements, state.NewSiafundElements); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update balances: %w", err)
 	}
 
@@ -1005,7 +940,7 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to add transactions: addTransactions: %w", err)
 	} else if err := updateStateTree(ut.tx, state.TreeUpdates); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update state tree: %w", err)
-	} else if err := addMetrics(ut.tx, state.Index.Height, state.Difficulty, state.Block, state.FileContractElements, state.Events); err != nil {
+	} else if err := addMetrics(ut.tx, state); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update metrics: %w", err)
 	} else if err := addEvents(ut.tx, scDBIds, fcDBIds, txnDBIds, state.Events); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add events: %w", err)
@@ -1015,7 +950,7 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 }
 
 func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
-	if err := updateMaturedBalances(ut.tx, true, state.Index.Height); err != nil {
+	if err := updateMaturedBalances(ut.tx, true, state.Metrics.Index.Height); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update matured balances: %w", err)
 	} else if _, err := addSiacoinElements(
 		ut.tx,
@@ -1031,7 +966,7 @@ func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
 		append(state.NewSiafundElements, state.EphemeralSiafundElements...),
 	); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update siafund output state: %w", err)
-	} else if err := updateBalances(ut.tx, state.Index.Height, state.SpentSiacoinElements, state.NewSiacoinElements, state.SpentSiafundElements, state.NewSiafundElements); err != nil {
+	} else if err := updateBalances(ut.tx, state.Metrics.Index.Height, state.SpentSiacoinElements, state.NewSiacoinElements, state.SpentSiafundElements, state.NewSiafundElements); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update balances: %w", err)
 	} else if _, err := updateFileContractElements(ut.tx, true, state.Block, state.FileContractElements); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update file contract state: %w", err)

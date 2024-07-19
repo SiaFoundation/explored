@@ -112,8 +112,8 @@ type Block struct {
 
 // Metrics contains various statistics relevant to the health of the Sia network.
 type Metrics struct {
-	// Current chain height
-	Height uint64 `json:"height"`
+	// Current chain index
+	Index types.ChainIndex `json:"index"`
 	// Current difficulty
 	Difficulty consensus.Work `json:"difficulty"`
 	// Total announced hosts

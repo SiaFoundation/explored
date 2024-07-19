@@ -3,7 +3,6 @@ package explorer
 import (
 	"fmt"
 
-	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 )
@@ -32,11 +31,10 @@ type (
 	// An UpdateState contains information relevant to the block being applied
 	// or reverted.
 	UpdateState struct {
-		Block      types.Block
-		Difficulty consensus.Work
-		Index      types.ChainIndex
+		Block types.Block
 
 		Events      []Event
+		Metrics     Metrics
 		TreeUpdates []TreeNodeUpdate
 
 		NewSiacoinElements       []SiacoinOutput
@@ -52,6 +50,9 @@ type (
 
 	// An UpdateTx atomically updates the state of a store.
 	UpdateTx interface {
+		Metrics(height uint64) (Metrics, error)
+		HostExists(pubkey types.PublicKey) (bool, error)
+
 		ApplyIndex(state UpdateState) error
 		RevertIndex(state UpdateState) error
 	}
@@ -140,10 +141,9 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 	})
 
 	events := AppliedEvents(cau.State, cau.Block, cau)
+
 	state := UpdateState{
-		Block:      cau.Block,
-		Difficulty: cau.State.Difficulty,
-		Index:      cau.State.Index,
+		Block: cau.Block,
 
 		Events:      events,
 		TreeUpdates: treeUpdates,
@@ -158,6 +158,22 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 
 		FileContractElements: fces,
 	}
+
+	var err error
+	var prevMetrics Metrics
+	if cau.State.Index.Height > 0 {
+		prevMetrics, err = tx.Metrics(cau.State.Index.Height - 1)
+		if err != nil {
+			return err
+		}
+	}
+	state.Metrics, err = updateMetrics(tx, state, prevMetrics)
+	if err != nil {
+		return err
+	}
+	state.Metrics.Difficulty = cau.State.Difficulty
+	state.Metrics.Index = cau.State.Index
+
 	return tx.ApplyIndex(state)
 }
 
@@ -220,9 +236,8 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 	})
 
 	state := UpdateState{
-		Block:       cru.Block,
-		Difficulty:  cru.State.Difficulty,
-		Index:       revertedIndex,
+		Block: cru.Block,
+
 		TreeUpdates: treeUpdates,
 
 		NewSiacoinElements:       newSiacoinElements,
@@ -235,7 +250,80 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 
 		FileContractElements: fces,
 	}
+	state.Metrics.Index = revertedIndex
+
 	return tx.RevertIndex(state)
+}
+
+func updateMetrics(tx UpdateTx, s UpdateState, metrics Metrics) (Metrics, error) {
+	seenHosts := make(map[types.PublicKey]struct{})
+	for _, event := range s.Events {
+		if event.Data.EventType() == EventTypeTransaction {
+			txn := event.Data.(*EventTransaction)
+			for _, host := range txn.HostAnnouncements {
+				if _, ok := seenHosts[host.PublicKey]; ok {
+					continue
+				}
+
+				exists, err := tx.HostExists(host.PublicKey)
+				if err != nil {
+					return Metrics{}, err
+				}
+				if !exists {
+					// we haven't seen this host yet, increment count
+					metrics.TotalHosts++
+					seenHosts[host.PublicKey] = struct{}{}
+				}
+			}
+		}
+	}
+
+	for _, fce := range s.FileContractElements {
+		fc := fce.FileContractElement.FileContract
+		if fce.Revision != nil {
+			fc = fce.Revision.FileContract
+		}
+
+		if fce.Resolved {
+			metrics.ActiveContracts--
+			metrics.StorageUtilization -= fc.Filesize
+		} else if fce.Revision == nil {
+			// don't count revision as a new contract
+			metrics.ActiveContracts++
+			metrics.StorageUtilization += fc.Filesize
+		} else {
+			// filesize changed
+			metrics.StorageUtilization += (fc.Filesize - fce.FileContractElement.FileContract.Filesize)
+		}
+
+		if fce.Resolved {
+			if !fce.Valid {
+				metrics.FailedContracts++
+			} else {
+				metrics.SuccessfulContracts++
+				for _, vpo := range fc.ValidProofOutputs {
+					metrics.ContractRevenue = metrics.ContractRevenue.Add(vpo.Value)
+				}
+			}
+		}
+	}
+
+	for _, sce := range s.NewSiacoinElements {
+		sco := sce.SiacoinOutput
+		if sco.Address == types.VoidAddress {
+			continue
+		}
+		metrics.CirculatingSupply = metrics.CirculatingSupply.Add(sco.Value)
+	}
+	for _, sce := range s.SpentSiacoinElements {
+		sco := sce.SiacoinOutput
+		if sco.Address == types.VoidAddress {
+			continue
+		}
+		metrics.CirculatingSupply = metrics.CirculatingSupply.Sub(sco.Value)
+	}
+
+	return metrics, nil
 }
 
 // UpdateChainState applies the reverts and updates.
