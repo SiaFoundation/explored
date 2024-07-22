@@ -80,6 +80,27 @@ WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.StateElement.ID), 
 	return
 }
 
+// Hosts returns hosts ordered by the transaction they were created in.
+func (s *Store) Hosts(offset, limit uint64) (result []explorer.HostAnnouncement, err error) {
+	err = s.transaction(func(tx *txn) error {
+		rows, err := tx.Query(`SELECT public_key, net_address FROM host_announcements ORDER BY transaction_id, transaction_order ASC LIMIT ? OFFSET ?`, limit, offset)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var host explorer.HostAnnouncement
+			if err := rows.Scan(decode(&host.PublicKey), &host.NetAddress); err != nil {
+				return err
+			}
+			result = append(result, host)
+		}
+		return nil
+	})
+	return
+}
+
 // AddressEvents returns the events of a single address.
 func (s *Store) AddressEvents(address types.Address, offset, limit uint64) (events []explorer.Event, err error) {
 	err = s.transaction(func(tx *txn) error {

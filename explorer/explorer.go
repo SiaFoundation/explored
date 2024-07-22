@@ -46,6 +46,8 @@ type Store interface {
 	ContractsKey(key types.PublicKey) (result []FileContract, err error)
 	SiacoinElements(ids []types.SiacoinOutputID) (result []SiacoinOutput, err error)
 	SiafundElements(ids []types.SiafundOutputID) (result []SiafundOutput, err error)
+
+	Hosts(offset, limit uint64) ([]HostAnnouncement, error)
 }
 
 // Explorer implements a Sia explorer.

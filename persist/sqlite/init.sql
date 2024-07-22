@@ -306,5 +306,35 @@ CREATE TABLE foundation_subsidy_events (
     output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL
 );
 
+CREATE TABLE host_info (
+    key BLOB PRIMARY KEY,
+    -- settings
+    accepting_contracts INTEGER,
+    max_download_batch_size BLOB,
+    max_duration BLOB,
+    max_revise_batch_size BLOB,
+    net_address TEXT,
+    remaining_storage BLOB,
+    sector_size BLOB,
+    total_storage BLOB,
+    address BLOB,
+    window_size BLOB,
+    collateral BLOB,
+    max_collateral BLOB,
+    base_rpc_price BLOB,
+    contract_price BLOB,
+    download_bandwidth_price BLOB,
+    sector_access_price BLOB,
+    storage_price BLOB,
+    upload_bandwidth_price BLOB,
+    ephemeral_account_expiry INTEGER,
+    max_ephemeral_account_balance BLOB,
+    revision_number BLOB,
+    version TEXT,
+    release TEXT,
+    sia_mux_port TEXT
+);
+
+
 -- initialize the global settings table
 INSERT INTO global_settings (id, db_version) VALUES (0, 0); -- should not be changed

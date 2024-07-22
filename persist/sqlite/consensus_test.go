@@ -1997,6 +1997,8 @@ func TestHostAnnouncement(t *testing.T) {
 		ActiveContracts:    0,
 		StorageUtilization: 0,
 	})
+
+	t.Log(db.Hosts(0, 100))
 }
 
 func TestMultipleReorg(t *testing.T) {
