@@ -152,7 +152,7 @@ func (s *Store) UnspentSiafundOutputs(address types.Address, offset, limit uint6
 	return
 }
 
-// SiacoinElement implements explorer.Store.
+// SiacoinElements implements explorer.Store.
 func (s *Store) SiacoinElements(ids []types.SiacoinOutputID) (result []explorer.SiacoinOutput, err error) {
 	err = s.transaction(func(tx *txn) error {
 		var encoded []any
@@ -178,7 +178,7 @@ func (s *Store) SiacoinElements(ids []types.SiacoinOutputID) (result []explorer.
 	return
 }
 
-// SiafundElement implements explorer.Store.
+// SiafundElements implements explorer.Store.
 func (s *Store) SiafundElements(ids []types.SiafundOutputID) (result []types.SiafundElement, err error) {
 	err = s.transaction(func(tx *txn) error {
 		var encoded []any
