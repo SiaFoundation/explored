@@ -2,9 +2,11 @@ package api
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"go.sia.tech/jape"
 
@@ -342,13 +344,17 @@ func (s *server) explorerContractsHandler(jc jape.Context) {
 
 func (s *server) explorerSearchIDHandler(jc jape.Context) {
 	errNotFound := errors.New("no contract found")
+	const maxLen = len(types.Hash256{})
 
-	var id types.Hash256
-	if jc.DecodeParam("id", &id) != nil {
+	// get everything after separator if there is one
+	split := strings.Split(jc.PathParam("id"), ":")
+	id, err := hex.DecodeString(split[len(split)-1])
+	if jc.Check("failed to decode hex", err) != nil {
 		return
 	}
 
-	result, err := s.e.Search(id)
+	trunc := id[:maxLen]
+	result, err := s.e.Search(types.Hash256(trunc))
 	if jc.Check("failed to search ID", err) != nil {
 		return
 	} else if result == explorer.SearchTypeInvalid {
