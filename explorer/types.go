@@ -27,7 +27,7 @@ const (
 	SourceMissedProofOutput
 )
 
-// A search type represents the type of element found during a search.
+// A SearchType represents the type of element found during a search.
 type SearchType string
 
 const (
@@ -40,7 +40,7 @@ const (
 	SearchTypeBlock SearchType = "block"
 	// SearchTypeTransaction means we found a transaction with the given ID.
 	SearchTypeTransaction SearchType = "transaction"
-	// SearchTypeAddress means we found a contract with the given ID.
+	// SearchTypeContract means we found a contract with the given ID.
 	SearchTypeContract SearchType = "contract"
 )
 
