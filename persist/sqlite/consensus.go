@@ -10,6 +10,7 @@ import (
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
+	"go.sia.tech/renterd/api"
 )
 
 type updateTx struct {
@@ -1002,6 +1003,24 @@ func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
 	}
 
 	return nil
+}
+
+// AddHostScans implements explorer.Store
+func (s *Store) AddHostScans(scans []api.Host) error {
+	return s.transaction(func(tx *txn) error {
+		stmt, err := tx.Prepare("INSERT INTO host_info(public_key, last_scanned, accepting_contracts, max_download_batch_size, max_duration, max_revise_batch_size, net_address, remaining_storage, sector_size, total_storage, address, window_size, collateral, max_collateral, base_rpc_price, contract_price, download_bandwidth_price, sector_access_price, storage_price, upload_bandwidth_price, ephemeral_account_expiry, max_ephemeral_account_balance, revision_number, version, release, sia_mux_port) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26) ON CONFLICT (public_key) DO UPDATE SET public_key = $1, last_scanned = $2, accepting_contracts = $3, max_download_batch_size = $4, max_duration = $5, max_revise_batch_size = $6, net_address = $7, remaining_storage = $8, sector_size = $9, total_storage = $10, address = $11, window_size = $12, collateral = $13, max_collateral = $14, base_rpc_price = $15, contract_price = $16, download_bandwidth_price = $17, sector_access_price = $18, storage_price = $19, upload_bandwidth_price = $20, ephemeral_account_expiry = $21, max_ephemeral_account_balance = $22, revision_number = $23, version = $24, release = $25, sia_mux_port = $26")
+		if err != nil {
+			return err
+		}
+
+		for _, scan := range scans {
+			s := scan.Settings
+			if _, err := stmt.Exec(encode(scan.PublicKey), encode(scan.Interactions.LastScan), s.AcceptingContracts, encode(s.MaxDownloadBatchSize), encode(s.MaxDuration), encode(s.MaxReviseBatchSize), s.NetAddress, encode(s.RemainingStorage), encode(s.SectorSize), encode(s.TotalStorage), encode(s.Address), encode(s.WindowSize), encode(s.Collateral), encode(s.MaxCollateral), encode(s.BaseRPCPrice), encode(s.ContractPrice), encode(s.DownloadBandwidthPrice), encode(s.SectorAccessPrice), encode(s.StoragePrice), encode(s.UploadBandwidthPrice), s.EphemeralAccountExpiry, encode(s.MaxEphemeralAccountBalance), encode(s.RevisionNumber), s.Version, s.Release, s.SiaMuxPort); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // UpdateChainState implements explorer.Store
