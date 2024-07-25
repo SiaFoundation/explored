@@ -40,6 +40,10 @@ const (
 	SearchTypeBlock SearchType = "block"
 	// SearchTypeTransaction means we found a transaction with the given ID.
 	SearchTypeTransaction SearchType = "transaction"
+	// SearchTypeSiacoinElement means we found a contract with the given ID.
+	SearchTypeSiacoinElement SearchType = "siacoin_element"
+	// SearchTypeSiafundElement means we found a contract with the given ID.
+	SearchTypeSiafundElement SearchType = "siafund_element"
 	// SearchTypeContract means we found a contract with the given ID.
 	SearchTypeContract SearchType = "contract"
 )

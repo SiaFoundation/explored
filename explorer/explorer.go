@@ -44,6 +44,8 @@ type Store interface {
 	Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 	Contracts(ids []types.FileContractID) (result []FileContract, err error)
 	ContractsKey(key types.PublicKey) (result []FileContract, err error)
+	SiacoinElements(ids []types.SiacoinOutputID) (result []SiacoinOutput, err error)
+	SiafundElements(ids []types.SiafundOutputID) (result []types.SiafundElement, err error)
 }
 
 // Explorer implements a Sia explorer.
@@ -176,6 +178,16 @@ func (e *Explorer) ContractsKey(key types.PublicKey) (result []FileContract, err
 	return e.s.ContractsKey(key)
 }
 
+// SiacoinElements returns the siacoin elements with the specified IDs.
+func (e *Explorer) SiacoinElements(ids []types.SiacoinOutputID) (result []SiacoinOutput, err error) {
+	return e.s.SiacoinElements(ids)
+}
+
+// SiafundElements returns the siafund elements with the specified IDs.
+func (e *Explorer) SiafundElements(ids []types.SiafundOutputID) (result []types.SiafundElement, err error) {
+	return e.s.SiafundElements(ids)
+}
+
 // Search returns the element type (address, block, transaction, contract ID)
 // for a given ID.
 func (e *Explorer) Search(id types.Hash256) (SearchType, error) {
@@ -198,6 +210,20 @@ func (e *Explorer) Search(id types.Hash256) (SearchType, error) {
 		return SearchTypeInvalid, err
 	} else if len(txns) > 0 {
 		return SearchTypeTransaction, nil
+	}
+
+	scos, err := e.SiacoinElements([]types.SiacoinOutputID{types.SiacoinOutputID(id)})
+	if err != nil {
+		return SearchTypeInvalid, err
+	} else if len(scos) > 0 {
+		return SearchTypeSiacoinElement, nil
+	}
+
+	sfos, err := e.SiafundElements([]types.SiafundOutputID{types.SiafundOutputID(id)})
+	if err != nil {
+		return SearchTypeInvalid, err
+	} else if len(sfos) > 0 {
+		return SearchTypeSiafundElement, nil
 	}
 
 	contracts, err := e.Contracts([]types.FileContractID{types.FileContractID(id)})
