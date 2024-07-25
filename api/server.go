@@ -52,6 +52,7 @@ type (
 		AddressEvents(address types.Address, offset, limit uint64) (events []explorer.Event, err error)
 		Contracts(ids []types.FileContractID) (result []explorer.FileContract, err error)
 		ContractsKey(key types.PublicKey) (result []explorer.FileContract, err error)
+		Search(id types.Hash256) (explorer.SearchType, error)
 	}
 )
 
@@ -339,6 +340,24 @@ func (s *server) explorerContractsHandler(jc jape.Context) {
 	jc.Encode(fcs)
 }
 
+func (s *server) explorerSearchIDHandler(jc jape.Context) {
+	errNotFound := errors.New("no contract found")
+
+	var id types.Hash256
+	if jc.DecodeParam("id", &id) != nil {
+		return
+	}
+
+	result, err := s.e.Search(id)
+	if jc.Check("failed to search ID", err) != nil {
+		return
+	} else if result == explorer.SearchTypeInvalid {
+		jc.Error(errNotFound, http.StatusNotFound)
+		return
+	}
+	jc.Encode(result)
+}
+
 // NewServer returns an HTTP handler that serves the explored API.
 func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 	srv := server{
@@ -367,5 +386,6 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET    /explorer/contracts/:id":              srv.explorerContractIDHandler,
 		"GET    /explorer/pubkey/:key/contracts":      srv.explorerContractKeyHandler,
 		"POST   /explorer/contracts":                  srv.explorerContractsHandler,
+		"GET    /explorer/search/:id":                 srv.explorerSearchIDHandler,
 	})
 }

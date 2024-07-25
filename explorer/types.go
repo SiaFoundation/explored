@@ -28,20 +28,20 @@ const (
 )
 
 // A search type represents the type of element found during a search.
-type SearchType int
+type SearchType string
 
 const (
 	// SearchTypeInvalid means we were unable to find any element with the
 	// given identifier.
-	SearchTypeInvalid SearchType = iota
+	SearchTypeInvalid SearchType = "invalid"
 	// SearchTypeAddress means we found an address with the given ID.
-	SearchTypeAddress
+	SearchTypeAddress SearchType = "address"
 	// SearchTypeBlock means we found a block with the given ID.
-	SearchTypeBlock
+	SearchTypeBlock SearchType = "block"
 	// SearchTypeTransaction means we found a transaction with the given ID.
-	SearchTypeTransaction
+	SearchTypeTransaction SearchType = "transaction"
 	// SearchTypeAddress means we found a contract with the given ID.
-	SearchTypeContract
+	SearchTypeContract SearchType = "contract"
 )
 
 // MarshalJSON implements json.Marshaler.
