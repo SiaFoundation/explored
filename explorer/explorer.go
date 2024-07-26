@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
+	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	"go.uber.org/zap"
@@ -21,6 +23,7 @@ var (
 // A ChainManager manages the consensus state
 type ChainManager interface {
 	Tip() types.ChainIndex
+	TipState() consensus.State
 	BestIndex(height uint64) (types.ChainIndex, bool)
 
 	OnReorg(fn func(types.ChainIndex)) (cancel func())
@@ -31,6 +34,7 @@ type ChainManager interface {
 // and blocks.
 type Store interface {
 	UpdateChainState(reverted []chain.RevertUpdate, applied []chain.ApplyUpdate) error
+	AddHostScans(scans []Host) error
 
 	Tip() (types.ChainIndex, error)
 	Block(id types.BlockID) (Block, error)
@@ -47,25 +51,28 @@ type Store interface {
 	SiacoinElements(ids []types.SiacoinOutputID) (result []SiacoinOutput, err error)
 	SiafundElements(ids []types.SiafundOutputID) (result []SiafundOutput, err error)
 
-	Hosts(offset, limit uint64) ([]HostAnnouncement, error)
+	HostsForScanning(maxLastScan time.Time, offset, limit uint64) ([]HostAnnouncement, error)
 }
 
 // Explorer implements a Sia explorer.
 type Explorer struct {
 	s  Store
-	mu sync.Mutex
+	cm ChainManager
+
+	mu  sync.Mutex
+	log *zap.Logger
 
 	unsubscribe func()
 }
 
-func syncStore(store Store, cm ChainManager, index types.ChainIndex, batchSize int) error {
-	for index != cm.Tip() {
-		crus, caus, err := cm.UpdatesSince(index, batchSize)
+func (e *Explorer) syncStore(index types.ChainIndex, batchSize int) error {
+	for index != e.cm.Tip() {
+		crus, caus, err := e.cm.UpdatesSince(index, batchSize)
 		if err != nil {
 			return fmt.Errorf("failed to subscribe to chain manager: %w", err)
 		}
 
-		if err := store.UpdateChainState(crus, caus); err != nil {
+		if err := e.s.UpdateChainState(crus, caus); err != nil {
 			return fmt.Errorf("failed to process updates: %w", err)
 		}
 		if len(crus) > 0 {
@@ -80,15 +87,15 @@ func syncStore(store Store, cm ChainManager, index types.ChainIndex, batchSize i
 
 // NewExplorer returns a Sia explorer.
 func NewExplorer(cm ChainManager, store Store, batchSize int, log *zap.Logger) (*Explorer, error) {
-	e := &Explorer{s: store}
+	e := &Explorer{s: store, cm: cm, log: log}
 
-	tip, err := store.Tip()
+	tip, err := e.s.Tip()
 	if errors.Is(err, ErrNoTip) {
 		tip = types.ChainIndex{}
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to get tip: %w", err)
 	}
-	if err := syncStore(store, cm, tip, batchSize); err != nil {
+	if err := e.syncStore(tip, batchSize); err != nil {
 		return nil, fmt.Errorf("failed to subscribe to chain manager: %w", err)
 	}
 
@@ -96,20 +103,22 @@ func NewExplorer(cm ChainManager, store Store, batchSize int, log *zap.Logger) (
 	go func() {
 		for range reorgChan {
 			e.mu.Lock()
-			lastTip, err := store.Tip()
+			lastTip, err := e.s.Tip()
 			if errors.Is(err, ErrNoTip) {
 				lastTip = types.ChainIndex{}
 			} else if err != nil {
-				log.Error("failed to get tip", zap.Error(err))
+				e.log.Error("failed to get tip", zap.Error(err))
 			}
-			if err := syncStore(store, cm, lastTip, batchSize); err != nil {
-				log.Error("failed to sync store", zap.Error(err))
+			if err := e.syncStore(lastTip, batchSize); err != nil {
+				e.log.Error("failed to sync store", zap.Error(err))
 			}
 			e.mu.Unlock()
 		}
 	}()
 
-	e.unsubscribe = cm.OnReorg(func(index types.ChainIndex) {
+	go e.scanHosts()
+
+	e.unsubscribe = e.cm.OnReorg(func(index types.ChainIndex) {
 		select {
 		case reorgChan <- index:
 		default:

@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"go.sia.tech/core/consensus"
+	rhpv2 "go.sia.tech/core/rhp/v2"
+	rhpv3 "go.sia.tech/core/rhp/v3"
 	"go.sia.tech/core/types"
 )
 
@@ -139,4 +141,21 @@ type Metrics struct {
 	CirculatingSupply types.Currency `json:"circulatingSupply"`
 	// Total contract revenue
 	ContractRevenue types.Currency `json:"contractRevenue"`
+}
+
+// Host represents a host and the information gathered from scanning it.
+type Host struct {
+	KnownSince       time.Time       `json:"knownSince"`
+	LastAnnouncement time.Time       `json:"lastAnnouncement"`
+	PublicKey        types.PublicKey `json:"publicKey"`
+	NetAddress       string          `json:"netAddress"`
+
+	Settings   rhpv2.HostSettings   `json:"settings"`
+	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
+
+	Scanned                bool      `json:"scanned"`
+	LastScan               time.Time `json:"lastScan"`
+	TotalScans             uint64    `json:"totalScans"`
+	SuccessfulInteractions uint64    `json:"successfulInteractions"`
+	FailedInteractions     uint64    `json:"failedInteractions"`
 }

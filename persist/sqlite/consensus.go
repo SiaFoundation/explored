@@ -10,7 +10,6 @@ import (
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
-	"go.sia.tech/renterd/api"
 )
 
 type updateTx struct {
@@ -662,6 +661,12 @@ func addEvents(tx *txn, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[exp
 	}
 	defer hostAnnouncementStmt.Close()
 
+	hostInfoStmt, err := tx.Prepare(`INSERT INTO host_info (public_key, net_address, last_scanned) VALUES (?, ?, 0)`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare host info statement: %w", err)
+	}
+	defer hostInfoStmt.Close()
+
 	minerPayoutEventStmt, err := tx.Prepare(`INSERT INTO miner_payout_events (event_id, output_id) VALUES (?, ?)`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare miner payout event statement: %w", err)
@@ -705,6 +710,9 @@ func addEvents(tx *txn, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[exp
 			for i, announcement := range v.HostAnnouncements {
 				if _, err = hostAnnouncementStmt.Exec(dbID, i, encode(announcement.PublicKey), announcement.NetAddress); err != nil {
 					return fmt.Errorf("failed to insert host announcement: %w", err)
+				}
+				if _, err = hostInfoStmt.Exec(encode(announcement.PublicKey), announcement.NetAddress); err != nil {
+					return fmt.Errorf("failed to insert host info: %w", err)
 				}
 			}
 		case *explorer.EventMinerPayout:
@@ -1006,16 +1014,16 @@ func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
 }
 
 // AddHostScans implements explorer.Store
-func (s *Store) AddHostScans(scans []api.Host) error {
+func (s *Store) AddHostScans(scans []explorer.Host) error {
 	return s.transaction(func(tx *txn) error {
-		stmt, err := tx.Prepare("INSERT INTO host_info(public_key, last_scanned, accepting_contracts, max_download_batch_size, max_duration, max_revise_batch_size, net_address, remaining_storage, sector_size, total_storage, address, window_size, collateral, max_collateral, base_rpc_price, contract_price, download_bandwidth_price, sector_access_price, storage_price, upload_bandwidth_price, ephemeral_account_expiry, max_ephemeral_account_balance, revision_number, version, release, sia_mux_port) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26) ON CONFLICT (public_key) DO UPDATE SET public_key = $1, last_scanned = $2, accepting_contracts = $3, max_download_batch_size = $4, max_duration = $5, max_revise_batch_size = $6, net_address = $7, remaining_storage = $8, sector_size = $9, total_storage = $10, address = $11, window_size = $12, collateral = $13, max_collateral = $14, base_rpc_price = $15, contract_price = $16, download_bandwidth_price = $17, sector_access_price = $18, storage_price = $19, upload_bandwidth_price = $20, ephemeral_account_expiry = $21, max_ephemeral_account_balance = $22, revision_number = $23, version = $24, release = $25, sia_mux_port = $26")
+		stmt, err := tx.Prepare("INSERT INTO host_info(public_key, last_scanned, settings_accepting_contracts, settings_max_download_batch_size, settings_max_duration, settings_max_revise_batch_size, settings_net_address, settings_remaining_storage, settings_sector_size, settings_total_storage, settings_address, settings_window_size, settings_collateral, settings_max_collateral, settings_base_rpc_price, settings_contract_price, settings_download_bandwidth_price, settings_sector_access_price, settings_storage_price, settings_upload_bandwidth_price, settings_ephemeral_account_expiry, settings_max_ephemeral_account_balance, settings_revision_number, settings_version, settings_release, settings_sia_mux_port, price_table_uid, price_table_validity, price_table_host_block_height, price_table_update_price_table_cost, price_table_account_balance_cost, price_table_fund_account_cost, price_table_latest_revision_cost, price_table_subscription_memory_cost, price_table_subscription_notification_cost, price_table_init_base_cost, price_table_memory_time_cost, price_table_download_bandwidth_cost, price_table_upload_bandwidth_cost, price_table_drop_sectors_base_cost, price_table_drop_sectors_unit_cost, price_table_has_sector_base_cost, price_table_read_base_cost, price_table_read_length_cost, price_table_renew_contract_cost, price_table_revision_base_cost, price_table_swap_sector_base_cost, price_table_write_base_cost, price_table_write_length_cost, price_table_write_store_cost, price_table_txn_fee_min_recommended, price_table_txn_fee_max_recommended, price_table_contract_price, price_table_collateral_cost, price_table_max_collateral, price_table_max_duration, price_table_window_size, price_table_registry_entries_left, price_table_registry_entries_total) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,$54,$55,$56,$57,$58,$59,$60) ON CONFLICT (public_key) DO UPDATE SET public_key = $1, net_address = $2, last_scanned = $3, settings_accepting_contracts = $4, settings_max_download_batch_size = $5, settings_max_duration = $6, settings_max_revise_batch_size = $7, settings_net_address = $8, settings_remaining_storage = $9, settings_sector_size = $10, settings_total_storage = $11, settings_address = $12, settings_window_size = $13, settings_collateral = $14, settings_max_collateral = $15, settings_base_rpc_price = $16, settings_contract_price = $17, settings_download_bandwidth_price = $18, settings_sector_access_price = $19, settings_storage_price = $20, settings_upload_bandwidth_price = $21, settings_ephemeral_account_expiry = $22, settings_max_ephemeral_account_balance = $23, settings_revision_number = $24, settings_version = $25, settings_release = $26, settings_sia_mux_port = $27, price_table_uid = $28, price_table_validity = $29, price_table_host_block_height = $30, price_table_update_price_table_cost = $31, price_table_account_balance_cost = $32, price_table_fund_account_cost = $33, price_table_latest_revision_cost = $34, price_table_subscription_memory_cost = $35, price_table_subscription_notification_cost = $36, price_table_init_base_cost = $37, price_table_memory_time_cost = $38, price_table_download_bandwidth_cost = $39, price_table_upload_bandwidth_cost = $40, price_table_drop_sectors_base_cost = $41, price_table_drop_sectors_unit_cost = $42, price_table_has_sector_base_cost = $43, price_table_read_base_cost = $44, price_table_read_length_cost = $45, price_table_renew_contract_cost = $46, price_table_revision_base_cost = $47, price_table_swap_sector_base_cost = $48, price_table_write_base_cost = $49, price_table_write_length_cost = $50, price_table_write_store_cost = $51, price_table_txn_fee_min_recommended = $52, price_table_txn_fee_max_recommended = $53, price_table_contract_price = $54, price_table_collateral_cost = $55, price_table_max_collateral = $56, price_table_max_duration = $57, price_table_window_size = $58, price_table_registry_entries_left = $59, price_table_registry_entries_total = $60")
 		if err != nil {
 			return err
 		}
 
 		for _, scan := range scans {
-			s := scan.Settings
-			if _, err := stmt.Exec(encode(scan.PublicKey), encode(scan.Interactions.LastScan), s.AcceptingContracts, encode(s.MaxDownloadBatchSize), encode(s.MaxDuration), encode(s.MaxReviseBatchSize), s.NetAddress, encode(s.RemainingStorage), encode(s.SectorSize), encode(s.TotalStorage), encode(s.Address), encode(s.WindowSize), encode(s.Collateral), encode(s.MaxCollateral), encode(s.BaseRPCPrice), encode(s.ContractPrice), encode(s.DownloadBandwidthPrice), encode(s.SectorAccessPrice), encode(s.StoragePrice), encode(s.UploadBandwidthPrice), s.EphemeralAccountExpiry, encode(s.MaxEphemeralAccountBalance), encode(s.RevisionNumber), s.Version, s.Release, s.SiaMuxPort); err != nil {
+			s, p := scan.Settings, scan.PriceTable
+			if _, err := stmt.Exec(encode(scan.PublicKey), scan.NetAddress, encode(scan.LastScan), s.AcceptingContracts, encode(s.MaxDownloadBatchSize), encode(s.MaxDuration), encode(s.MaxReviseBatchSize), s.NetAddress, encode(s.RemainingStorage), encode(s.SectorSize), encode(s.TotalStorage), encode(s.Address), encode(s.WindowSize), encode(s.Collateral), encode(s.MaxCollateral), encode(s.BaseRPCPrice), encode(s.ContractPrice), encode(s.DownloadBandwidthPrice), encode(s.SectorAccessPrice), encode(s.StoragePrice), encode(s.UploadBandwidthPrice), s.EphemeralAccountExpiry, encode(s.MaxEphemeralAccountBalance), encode(s.RevisionNumber), s.Version, s.Release, s.SiaMuxPort, encode(p.UID), p.Validity, encode(p.HostBlockHeight), encode(p.UpdatePriceTableCost), encode(p.AccountBalanceCost), encode(p.FundAccountCost), encode(p.LatestRevisionCost), encode(p.SubscriptionMemoryCost), encode(p.SubscriptionNotificationCost), encode(p.InitBaseCost), encode(p.MemoryTimeCost), encode(p.DownloadBandwidthCost), encode(p.UploadBandwidthCost), encode(p.DropSectorsBaseCost), encode(p.DropSectorsUnitCost), encode(p.HasSectorBaseCost), encode(p.ReadBaseCost), encode(p.ReadLengthCost), encode(p.RenewContractCost), encode(p.RevisionBaseCost), encode(p.SwapSectorBaseCost), encode(p.WriteBaseCost), encode(p.WriteLengthCost), encode(p.WriteStoreCost), encode(p.TxnFeeMinRecommended), encode(p.TxnFeeMaxRecommended), encode(p.ContractPrice), encode(p.CollateralCost), encode(p.MaxCollateral), encode(p.MaxDuration), encode(p.WindowSize), encode(p.RegistryEntriesLeft), encode(p.RegistryEntriesTotal)); err != nil {
 				return err
 			}
 		}

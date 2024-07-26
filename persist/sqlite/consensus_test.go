@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
@@ -1998,7 +1999,7 @@ func TestHostAnnouncement(t *testing.T) {
 		StorageUtilization: 0,
 	})
 
-	t.Log(db.Hosts(0, 100))
+	t.Log(db.HostsForScanning(time.Unix(0, 0), 0, 100))
 }
 
 func TestMultipleReorg(t *testing.T) {

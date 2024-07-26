@@ -3,6 +3,7 @@ package sqlite
 import (
 	"database/sql"
 	"fmt"
+	"time"
 
 	"go.sia.tech/core/types"
 	"go.sia.tech/explored/explorer"
@@ -80,10 +81,10 @@ WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.StateElement.ID), 
 	return
 }
 
-// Hosts returns hosts ordered by the transaction they were created in.
-func (s *Store) Hosts(offset, limit uint64) (result []explorer.HostAnnouncement, err error) {
+// HostsForScanning returns hosts ordered by the transaction they were created in.
+func (s *Store) HostsForScanning(maxLastScan time.Time, offset, limit uint64) (result []explorer.HostAnnouncement, err error) {
 	err = s.transaction(func(tx *txn) error {
-		rows, err := tx.Query(`SELECT public_key, net_address FROM host_announcements ORDER BY transaction_id, transaction_order ASC LIMIT ? OFFSET ?`, limit, offset)
+		rows, err := tx.Query(`SELECT public_key, net_address FROM host_info WHERE last_scanned <= ? ORDER BY last_scanned ASC LIMIT ? OFFSET ?`, encode(maxLastScan), limit, offset)
 		if err != nil {
 			return err
 		}
