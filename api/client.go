@@ -5,6 +5,7 @@ import (
 
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/syncer"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/jape"
 )
@@ -47,6 +48,12 @@ func (c *Client) TxpoolFee() (resp types.Currency, err error) {
 // SyncerConnect adds the address as a peer of the syncer.
 func (c *Client) SyncerConnect(addr string) (err error) {
 	err = c.c.POST("/syncer/connect", addr, nil)
+	return
+}
+
+// SyncerPeers returns the peers of the syncer.
+func (c *Client) SyncerPeers() (resp []*syncer.Peer, err error) {
+	err = c.c.GET("/syncer/peers", &resp)
 	return
 }
 

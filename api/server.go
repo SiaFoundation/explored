@@ -78,6 +78,16 @@ func (s *server) syncerConnectHandler(jc jape.Context) {
 	jc.Check("couldn't connect to peer", err)
 }
 
+func (s *server) syncerPeersHandler(jc jape.Context) {
+	peers := s.s.Peers()
+
+	var result []string
+	for _, peer := range peers {
+		result = append(result, peer.ConnAddr)
+	}
+	jc.Encode(result)
+}
+
 func (s *server) syncerBroadcastBlockHandler(jc jape.Context) {
 	var b types.Block
 	if jc.Decode(&b) != nil {
@@ -347,6 +357,7 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		s:  s,
 	}
 	return jape.Mux(map[string]jape.Handler{
+		"GET    /syncer/peers":           srv.syncerPeersHandler,
 		"POST   /syncer/connect":         srv.syncerConnectHandler,
 		"POST   /syncer/broadcast/block": srv.syncerBroadcastBlockHandler,
 
