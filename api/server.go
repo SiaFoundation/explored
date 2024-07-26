@@ -2,9 +2,11 @@ package api
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"go.sia.tech/jape"
 
@@ -52,6 +54,7 @@ type (
 		AddressEvents(address types.Address, offset, limit uint64) (events []explorer.Event, err error)
 		Contracts(ids []types.FileContractID) (result []explorer.FileContract, err error)
 		ContractsKey(key types.PublicKey) (result []explorer.FileContract, err error)
+		Search(id types.Hash256) (explorer.SearchType, error)
 	}
 )
 
@@ -349,6 +352,28 @@ func (s *server) explorerContractsHandler(jc jape.Context) {
 	jc.Encode(fcs)
 }
 
+func (s *server) explorerSearchIDHandler(jc jape.Context) {
+	errNotFound := errors.New("no contract found")
+	const maxLen = len(types.Hash256{})
+
+	// get everything after separator if there is one
+	split := strings.Split(jc.PathParam("id"), ":")
+	id, err := hex.DecodeString(split[len(split)-1])
+	if jc.Check("failed to decode hex", err) != nil {
+		return
+	}
+
+	trunc := id[:maxLen]
+	result, err := s.e.Search(types.Hash256(trunc))
+	if jc.Check("failed to search ID", err) != nil {
+		return
+	} else if result == explorer.SearchTypeInvalid {
+		jc.Error(errNotFound, http.StatusNotFound)
+		return
+	}
+	jc.Encode(result)
+}
+
 // NewServer returns an HTTP handler that serves the explored API.
 func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 	srv := server{
@@ -378,5 +403,6 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET    /explorer/contracts/:id":              srv.explorerContractIDHandler,
 		"GET    /explorer/pubkey/:key/contracts":      srv.explorerContractKeyHandler,
 		"POST   /explorer/contracts":                  srv.explorerContractsHandler,
+		"GET    /explorer/search/:id":                 srv.explorerSearchIDHandler,
 	})
 }

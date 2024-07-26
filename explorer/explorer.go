@@ -1,6 +1,7 @@
 package explorer
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"sync"
@@ -43,6 +44,8 @@ type Store interface {
 	Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 	Contracts(ids []types.FileContractID) (result []FileContract, err error)
 	ContractsKey(key types.PublicKey) (result []FileContract, err error)
+	SiacoinElements(ids []types.SiacoinOutputID) (result []SiacoinOutput, err error)
+	SiafundElements(ids []types.SiafundOutputID) (result []types.SiafundElement, err error)
 }
 
 // Explorer implements a Sia explorer.
@@ -173,4 +176,62 @@ func (e *Explorer) Contracts(ids []types.FileContractID) (result []FileContract,
 // ContractsKey returns the contracts for a particular ed25519 key.
 func (e *Explorer) ContractsKey(key types.PublicKey) (result []FileContract, err error) {
 	return e.s.ContractsKey(key)
+}
+
+// SiacoinElements returns the siacoin elements with the specified IDs.
+func (e *Explorer) SiacoinElements(ids []types.SiacoinOutputID) (result []SiacoinOutput, err error) {
+	return e.s.SiacoinElements(ids)
+}
+
+// SiafundElements returns the siafund elements with the specified IDs.
+func (e *Explorer) SiafundElements(ids []types.SiafundOutputID) (result []types.SiafundElement, err error) {
+	return e.s.SiafundElements(ids)
+}
+
+// Search returns the element type (address, block, transaction, contract ID)
+// for a given ID.
+func (e *Explorer) Search(id types.Hash256) (SearchType, error) {
+	events, err := e.AddressEvents(types.Address(id), 0, 1)
+	if err != nil {
+		return SearchTypeInvalid, err
+	} else if len(events) > 0 {
+		return SearchTypeAddress, nil
+	}
+
+	_, err = e.Block(types.BlockID(id))
+	if err != nil && err != sql.ErrNoRows {
+		return SearchTypeInvalid, err
+	} else if err == nil {
+		return SearchTypeBlock, nil
+	}
+
+	txns, err := e.Transactions([]types.TransactionID{types.TransactionID(id)})
+	if err != nil {
+		return SearchTypeInvalid, err
+	} else if len(txns) > 0 {
+		return SearchTypeTransaction, nil
+	}
+
+	scos, err := e.SiacoinElements([]types.SiacoinOutputID{types.SiacoinOutputID(id)})
+	if err != nil {
+		return SearchTypeInvalid, err
+	} else if len(scos) > 0 {
+		return SearchTypeSiacoinElement, nil
+	}
+
+	sfos, err := e.SiafundElements([]types.SiafundOutputID{types.SiafundOutputID(id)})
+	if err != nil {
+		return SearchTypeInvalid, err
+	} else if len(sfos) > 0 {
+		return SearchTypeSiafundElement, nil
+	}
+
+	contracts, err := e.Contracts([]types.FileContractID{types.FileContractID(id)})
+	if err != nil {
+		return SearchTypeInvalid, err
+	} else if len(contracts) > 0 {
+		return SearchTypeContract, nil
+	}
+
+	return SearchTypeInvalid, errors.New("no such element")
 }

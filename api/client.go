@@ -140,3 +140,9 @@ func (c *Client) MetricsID(id types.BlockID) (resp explorer.Metrics, err error) 
 	err = c.c.GET(fmt.Sprintf("/explorer/metrics/%s", id), &resp)
 	return
 }
+
+// Search returns what type of object an ID is.
+func (c *Client) Search(id types.Hash256) (resp explorer.SearchType, err error) {
+	err = c.c.GET(fmt.Sprintf("/explorer/search/%s", id), &resp)
+	return
+}

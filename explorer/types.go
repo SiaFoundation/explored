@@ -27,6 +27,27 @@ const (
 	SourceMissedProofOutput
 )
 
+// A SearchType represents the type of element found during a search.
+type SearchType string
+
+const (
+	// SearchTypeInvalid means we were unable to find any element with the
+	// given identifier.
+	SearchTypeInvalid SearchType = "invalid"
+	// SearchTypeAddress means we found an address with the given ID.
+	SearchTypeAddress SearchType = "address"
+	// SearchTypeBlock means we found a block with the given ID.
+	SearchTypeBlock SearchType = "block"
+	// SearchTypeTransaction means we found a transaction with the given ID.
+	SearchTypeTransaction SearchType = "transaction"
+	// SearchTypeSiacoinElement means we found a contract with the given ID.
+	SearchTypeSiacoinElement SearchType = "siacoinElement"
+	// SearchTypeSiafundElement means we found a contract with the given ID.
+	SearchTypeSiafundElement SearchType = "siafundElement"
+	// SearchTypeContract means we found a contract with the given ID.
+	SearchTypeContract SearchType = "contract"
+)
+
 // MarshalJSON implements json.Marshaler.
 func (d Source) MarshalJSON() ([]byte, error) {
 	switch d {
