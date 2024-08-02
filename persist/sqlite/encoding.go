@@ -64,12 +64,12 @@ func (d *decodable) Scan(src any) error {
 			}
 			v.Hi = binary.BigEndian.Uint64(src)
 			v.Lo = binary.BigEndian.Uint64(src[8:])
+		case *rhp.SettingsID:
+			*v = rhp.SettingsID(src)
 		case types.DecoderFrom:
 			dec := types.NewBufDecoder(src)
 			v.DecodeFrom(dec)
 			return dec.Err()
-		case *rhp.SettingsID:
-			*v = rhp.SettingsID(src)
 		case *[]types.Hash256:
 			dec := types.NewBufDecoder(src)
 			types.DecodeSlice(dec, v)
