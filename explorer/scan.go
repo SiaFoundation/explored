@@ -74,8 +74,9 @@ func (e *Explorer) scanHost(host HostAnnouncement) (Host, error) {
 		Settings:   settings,
 		PriceTable: table,
 
-		Scanned:  true,
-		LastScan: time.Now(),
+		LastScan:               time.Now(),
+		TotalScans:             1,
+		SuccessfulInteractions: 1,
 	}, nil
 }
 

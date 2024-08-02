@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"go.sia.tech/core/rhp/v3"
 	"go.sia.tech/core/types"
 )
 
@@ -25,6 +26,8 @@ func encode(obj any) any {
 		obj.EncodeTo(e)
 		e.Flush()
 		return buf.Bytes()
+	case rhp.SettingsID:
+		return obj[:]
 	case []types.Hash256:
 		var buf bytes.Buffer
 		e := types.NewEncoder(&buf)
@@ -65,6 +68,8 @@ func (d *decodable) Scan(src any) error {
 			dec := types.NewBufDecoder(src)
 			v.DecodeFrom(dec)
 			return dec.Err()
+		case *rhp.SettingsID:
+			*v = rhp.SettingsID(src)
 		case *[]types.Hash256:
 			dec := types.NewBufDecoder(src)
 			types.DecodeSlice(dec, v)

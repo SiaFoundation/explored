@@ -81,10 +81,37 @@ WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.StateElement.ID), 
 	return
 }
 
+// Hosts returns the hosts with the given public keys.
+func (s *Store) Hosts(pks []types.PublicKey) (result []explorer.Host, err error) {
+	err = s.transaction(func(tx *txn) error {
+		var encoded []any
+		for _, pk := range pks {
+			encoded = append(encoded, encode(pk))
+		}
+
+		rows, err := tx.Query(`SELECT public_key, net_address, known_since, last_scan, last_announcement, total_scans, successful_interactions, failed_interactions, settings_accepting_contracts, settings_max_download_batch_size, settings_max_duration, settings_max_revise_batch_size, settings_net_address, settings_remaining_storage, settings_sector_size, settings_total_storage, settings_address, settings_window_size, settings_collateral, settings_max_collateral, settings_base_rpc_price, settings_contract_price, settings_download_bandwidth_price, settings_sector_access_price, settings_storage_price, settings_upload_bandwidth_price, settings_ephemeral_account_expiry, settings_max_ephemeral_account_balance, settings_revision_number, settings_version, settings_release, settings_sia_mux_port, price_table_uid, price_table_validity, price_table_host_block_height, price_table_update_price_table_cost, price_table_account_balance_cost, price_table_fund_account_cost, price_table_latest_revision_cost, price_table_subscription_memory_cost, price_table_subscription_notification_cost, price_table_init_base_cost, price_table_memory_time_cost, price_table_download_bandwidth_cost, price_table_upload_bandwidth_cost, price_table_drop_sectors_base_cost, price_table_drop_sectors_unit_cost, price_table_has_sector_base_cost, price_table_read_base_cost, price_table_read_length_cost, price_table_renew_contract_cost, price_table_revision_base_cost, price_table_swap_sector_base_cost, price_table_write_base_cost, price_table_write_length_cost, price_table_write_store_cost, price_table_txn_fee_min_recommended, price_table_txn_fee_max_recommended, price_table_contract_price, price_table_collateral_cost, price_table_max_collateral, price_table_max_duration, price_table_window_size, price_table_registry_entries_left, price_table_registry_entries_total FROM host_info WHERE public_key IN (`+queryPlaceHolders(len(pks))+`)`, encoded...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var host explorer.Host
+			s, p := &host.Settings, &host.PriceTable
+			if err := rows.Scan(decode(&host.PublicKey), &host.NetAddress, decode(&host.KnownSince), decode(&host.LastScan), decode(&host.LastAnnouncement), &host.TotalScans, &host.SuccessfulInteractions, &host.FailedInteractions, &s.AcceptingContracts, decode(&s.MaxDownloadBatchSize), decode(&s.MaxDuration), decode(&s.MaxReviseBatchSize), &s.NetAddress, decode(&s.RemainingStorage), decode(&s.SectorSize), decode(&s.TotalStorage), decode(&s.Address), decode(&s.WindowSize), decode(&s.Collateral), decode(&s.MaxCollateral), decode(&s.BaseRPCPrice), decode(&s.ContractPrice), decode(&s.DownloadBandwidthPrice), decode(&s.SectorAccessPrice), decode(&s.StoragePrice), decode(&s.UploadBandwidthPrice), &s.EphemeralAccountExpiry, decode(&s.MaxEphemeralAccountBalance), decode(&s.RevisionNumber), &s.Version, &s.Release, &s.SiaMuxPort, decode(&p.UID), &p.Validity, decode(&p.HostBlockHeight), decode(&p.UpdatePriceTableCost), decode(&p.AccountBalanceCost), decode(&p.FundAccountCost), decode(&p.LatestRevisionCost), decode(&p.SubscriptionMemoryCost), decode(&p.SubscriptionNotificationCost), decode(&p.InitBaseCost), decode(&p.MemoryTimeCost), decode(&p.DownloadBandwidthCost), decode(&p.UploadBandwidthCost), decode(&p.DropSectorsBaseCost), decode(&p.DropSectorsUnitCost), decode(&p.HasSectorBaseCost), decode(&p.ReadBaseCost), decode(&p.ReadLengthCost), decode(&p.RenewContractCost), decode(&p.RevisionBaseCost), decode(&p.SwapSectorBaseCost), decode(&p.WriteBaseCost), decode(&p.WriteLengthCost), decode(&p.WriteStoreCost), decode(&p.TxnFeeMinRecommended), decode(&p.TxnFeeMaxRecommended), decode(&p.ContractPrice), decode(&p.CollateralCost), decode(&p.MaxCollateral), decode(&p.MaxDuration), decode(&p.WindowSize), decode(&p.RegistryEntriesLeft), decode(&p.RegistryEntriesTotal)); err != nil {
+				return err
+			}
+			result = append(result, host)
+		}
+		return nil
+	})
+	return
+}
+
 // HostsForScanning returns hosts ordered by the transaction they were created in.
 func (s *Store) HostsForScanning(maxLastScan time.Time, offset, limit uint64) (result []explorer.HostAnnouncement, err error) {
 	err = s.transaction(func(tx *txn) error {
-		rows, err := tx.Query(`SELECT public_key, net_address FROM host_info WHERE last_scanned <= ? ORDER BY last_scanned ASC LIMIT ? OFFSET ?`, encode(maxLastScan), limit, offset)
+		rows, err := tx.Query(`SELECT public_key, net_address FROM host_info WHERE last_scan <= ? ORDER BY last_scan ASC LIMIT ? OFFSET ?`, encode(maxLastScan), limit, offset)
 		if err != nil {
 			return err
 		}

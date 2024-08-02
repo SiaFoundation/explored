@@ -145,17 +145,16 @@ type Metrics struct {
 
 // Host represents a host and the information gathered from scanning it.
 type Host struct {
-	KnownSince       time.Time       `json:"knownSince"`
-	LastAnnouncement time.Time       `json:"lastAnnouncement"`
-	PublicKey        types.PublicKey `json:"publicKey"`
-	NetAddress       string          `json:"netAddress"`
+	PublicKey  types.PublicKey `json:"publicKey"`
+	NetAddress string          `json:"netAddress"`
 
-	Settings   rhpv2.HostSettings   `json:"settings"`
-	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
-
-	Scanned                bool      `json:"scanned"`
+	KnownSince             time.Time `json:"knownSince"`
 	LastScan               time.Time `json:"lastScan"`
+	LastAnnouncement       time.Time `json:"lastAnnouncement"`
 	TotalScans             uint64    `json:"totalScans"`
 	SuccessfulInteractions uint64    `json:"successfulInteractions"`
 	FailedInteractions     uint64    `json:"failedInteractions"`
+
+	Settings   rhpv2.HostSettings   `json:"settings"`
+	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
 }

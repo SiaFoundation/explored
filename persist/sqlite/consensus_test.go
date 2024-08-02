@@ -1978,17 +1978,22 @@ func TestHostAnnouncement(t *testing.T) {
 
 	txn2 := types.Transaction{
 		ArbitraryData: [][]byte{
-			createAnnouncement(pk2, "127.0.0.1:5678"),
+			createAnnouncement(pk1, "127.0.0.1:5678"),
 		},
 	}
 	txn3 := types.Transaction{
+		ArbitraryData: [][]byte{
+			createAnnouncement(pk2, "127.0.0.1:9999"),
+		},
+	}
+	txn4 := types.Transaction{
 		ArbitraryData: [][]byte{
 			createAnnouncement(pk3, "127.0.0.1:9999"),
 		},
 	}
 
 	// Mine a block containing host announcement
-	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn2, txn3}, types.VoidAddress)}); err != nil {
+	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn2, txn3, txn4}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
@@ -1999,7 +2004,9 @@ func TestHostAnnouncement(t *testing.T) {
 		StorageUtilization: 0,
 	})
 
-	t.Log(db.HostsForScanning(time.Unix(0, 0), 0, 100))
+	hosts, _ := (db.HostsForScanning(time.Unix(0, 0), 0, 100))
+	t.Log(len(hosts))
+	t.Log(db.Hosts([]types.PublicKey{hosts[0].PublicKey}))
 }
 
 func TestMultipleReorg(t *testing.T) {
