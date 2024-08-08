@@ -81,6 +81,7 @@ func (c *Client) ConsensusNetwork() (n *consensus.Network, err error) {
 	return
 }
 
+// ConsensusState returns the current state of the consensus set.
 func (c *Client) ConsensusState() (state consensus.State, err error) {
 	if c.n == nil {
 		c.n, err = c.ConsensusNetwork()
