@@ -107,49 +107,49 @@ func (c *Client) Transaction(id types.TransactionID) (resp explorer.Transaction,
 
 // Transactions returns the transactions with the specified IDs.
 func (c *Client) Transactions(ids []types.TransactionID) (resp []explorer.Transaction, err error) {
-	err = c.c.POST("/explorer/transactions", ids, &resp)
+	err = c.c.POST("/transactions", ids, &resp)
 	return
 }
 
 // AddressSiacoinUTXOs returns the specified address' unspent outputs.
 func (c *Client) AddressSiacoinUTXOs(address types.Address, offset, limit uint64) (resp []explorer.SiacoinOutput, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/addresses/%s/utxos/siacoin?offset=%d&limit=%d", address, offset, limit), &resp)
+	err = c.c.GET(fmt.Sprintf("/addresses/%s/utxos/siacoin?offset=%d&limit=%d", address, offset, limit), &resp)
 	return
 }
 
 // AddressSiafundUTXOs returns the specified address' unspent outputs.
 func (c *Client) AddressSiafundUTXOs(address types.Address, offset, limit uint64) (resp []explorer.SiafundOutput, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/addresses/%s/utxos/siafund?offset=%d&limit=%d", address, offset, limit), &resp)
+	err = c.c.GET(fmt.Sprintf("/addresses/%s/utxos/siafund?offset=%d&limit=%d", address, offset, limit), &resp)
 	return
 }
 
 // AddressEvents returns the specified address' events.
 func (c *Client) AddressEvents(address types.Address, offset, limit uint64) (resp []explorer.Event, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/addresses/%s/events?offset=%d&limit=%d", address, offset, limit), &resp)
+	err = c.c.GET(fmt.Sprintf("/addresses/%s/events?offset=%d&limit=%d", address, offset, limit), &resp)
 	return
 }
 
 // AddressBalance returns the specified address' balance.
 func (c *Client) AddressBalance(address types.Address) (resp AddressBalanceResponse, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/addresses/%s/balance", address), &resp)
+	err = c.c.GET(fmt.Sprintf("/addresses/%s/balance", address), &resp)
 	return
 }
 
 // Contract returns the file contract with the specified ID.
 func (c *Client) Contract(id types.FileContractID) (resp explorer.FileContract, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/contracts/%s", id), &resp)
+	err = c.c.GET(fmt.Sprintf("/contracts/%s", id), &resp)
 	return
 }
 
 // Contracts returns the transactions with the specified IDs.
 func (c *Client) Contracts(ids []types.FileContractID) (resp []explorer.FileContract, err error) {
-	err = c.c.POST("/explorer/contracts", ids, &resp)
+	err = c.c.POST("/contracts", ids, &resp)
 	return
 }
 
 // ContractsKey returns the contracts for a particular ed25519 key.
 func (c *Client) ContractsKey(key types.PublicKey) (resp []explorer.FileContract, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/pubkey/%s/contracts", key), &resp)
+	err = c.c.GET(fmt.Sprintf("/pubkey/%s/contracts", key), &resp)
 	return
 }
 
@@ -167,6 +167,6 @@ func (c *Client) BlockMetricsID(id types.BlockID) (resp explorer.Metrics, err er
 
 // Search returns what type of object an ID is.
 func (c *Client) Search(id types.Hash256) (resp explorer.SearchType, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/search/%s", id), &resp)
+	err = c.c.GET(fmt.Sprintf("/search/%s", id), &resp)
 	return
 }
