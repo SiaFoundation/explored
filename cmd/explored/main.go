@@ -340,7 +340,8 @@ func main() {
 		NetAddress: syncerAddr,
 	}
 	s := syncer.New(syncerListener, cm, ps, header, syncer.WithLogger(log.Named("syncer")))
-	go s.Run()
+	defer s.Close()
+	go s.Run(ctx)
 
 	e, err := explorer.NewExplorer(cm, store, cfg.Index.BatchSize, log.Named("explorer"))
 	if err != nil {
