@@ -122,8 +122,7 @@ type Transaction struct {
 // A Block is a block containing wrapped transactions and siacoin
 // outputs for the miner payouts.
 type Block struct {
-	Height uint64
-
+	Height       uint64          `json:"height"`
 	ParentID     types.BlockID   `json:"parentID"`
 	Nonce        uint64          `json:"nonce"`
 	Timestamp    time.Time       `json:"timestamp"`
