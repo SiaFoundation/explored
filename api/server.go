@@ -20,6 +20,7 @@ import (
 type (
 	// A ChainManager manages blockchain and txpool state.
 	ChainManager interface {
+		Tip() types.ChainIndex
 		TipState() consensus.State
 		AddBlocks([]types.Block) error
 		RecommendedFee() types.Currency
@@ -147,15 +148,11 @@ func (s *server) txpoolBroadcastHandler(jc jape.Context) {
 	}
 }
 
-func (s *server) explorerTipHandler(jc jape.Context) {
-	tip, err := s.e.Tip()
-	if jc.Check("failed to get tip", err) != nil {
-		return
-	}
-	jc.Encode(tip)
+func (s *server) consensusTipHandler(jc jape.Context) {
+	jc.Encode(s.cm.Tip())
 }
 
-func (s *server) explorerTipHeightHandler(jc jape.Context) {
+func (s *server) consensusTipHeightHandler(jc jape.Context) {
 	var height uint64
 	if jc.DecodeParam("height", &height) != nil {
 		return
@@ -167,7 +164,15 @@ func (s *server) explorerTipHeightHandler(jc jape.Context) {
 	jc.Encode(tip)
 }
 
-func (s *server) explorerMetricsHandler(jc jape.Context) {
+func (s *server) consensusNetworkHandler(jc jape.Context) {
+	jc.Encode(s.cm.TipState().Network)
+}
+
+func (s *server) consensusStateHandler(jc jape.Context) {
+	jc.Encode(s.cm.TipState())
+}
+
+func (s *server) blocksMetricsHandler(jc jape.Context) {
 	tip, err := s.e.Tip()
 	if jc.Check("failed to get tip", err) != nil {
 		return
@@ -180,7 +185,7 @@ func (s *server) explorerMetricsHandler(jc jape.Context) {
 	jc.Encode(metrics)
 }
 
-func (s *server) explorerMetricsIDHandler(jc jape.Context) {
+func (s *server) blocksMetricsIDHandler(jc jape.Context) {
 	var id types.BlockID
 	if jc.DecodeParam("id", &id) != nil {
 		return
@@ -192,7 +197,7 @@ func (s *server) explorerMetricsIDHandler(jc jape.Context) {
 	jc.Encode(metrics)
 }
 
-func (s *server) explorerBlockHandler(jc jape.Context) {
+func (s *server) blocksIDHandler(jc jape.Context) {
 	var id types.BlockID
 	if jc.DecodeParam("id", &id) != nil {
 		return
@@ -204,7 +209,7 @@ func (s *server) explorerBlockHandler(jc jape.Context) {
 	jc.Encode(block)
 }
 
-func (s *server) explorerTransactionsIDHandler(jc jape.Context) {
+func (s *server) transactionsIDHandler(jc jape.Context) {
 	errNotFound := errors.New("no transaction found")
 
 	var id types.TransactionID
@@ -221,7 +226,7 @@ func (s *server) explorerTransactionsIDHandler(jc jape.Context) {
 	jc.Encode(txns[0])
 }
 
-func (s *server) explorerTransactionsHandler(jc jape.Context) {
+func (s *server) transactionsBatchHandler(jc jape.Context) {
 	var ids []types.TransactionID
 	if jc.Decode(&ids) != nil {
 		return
@@ -237,7 +242,7 @@ func (s *server) explorerTransactionsHandler(jc jape.Context) {
 	jc.Encode(txns)
 }
 
-func (s *server) explorerAddressessAddressUtxosHandler(jc jape.Context) {
+func (s *server) addressessAddressUtxosSiacoinHandler(jc jape.Context) {
 	var address types.Address
 	if jc.DecodeParam("address", &address) != nil {
 		return
@@ -249,22 +254,33 @@ func (s *server) explorerAddressessAddressUtxosHandler(jc jape.Context) {
 		return
 	}
 
-	unspentSiacoinOutputs, err := s.e.UnspentSiacoinOutputs(address, offset, limit)
+	outputs, err := s.e.UnspentSiacoinOutputs(address, offset, limit)
 	if jc.Check("failed to get unspent siacoin outputs", err) != nil {
 		return
 	}
-	unspentSiafundOutputs, err := s.e.UnspentSiafundOutputs(address, offset, limit)
-	if jc.Check("failed to get unspent siafund outputs", err) != nil {
+	jc.Encode(outputs)
+}
+
+func (s *server) addressessAddressUtxosSiafundHandler(jc jape.Context) {
+	var address types.Address
+	if jc.DecodeParam("address", &address) != nil {
 		return
 	}
 
-	jc.Encode(AddressUTXOsResponse{
-		UnspentSiacoinOutputs: unspentSiacoinOutputs,
-		UnspentSiafundOutputs: unspentSiafundOutputs,
-	})
+	limit := uint64(100)
+	offset := uint64(0)
+	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
+		return
+	}
+
+	outputs, err := s.e.UnspentSiafundOutputs(address, offset, limit)
+	if jc.Check("failed to get unspent siacoin outputs", err) != nil {
+		return
+	}
+	jc.Encode(outputs)
 }
 
-func (s *server) explorerAddressessAddressBalanceHandler(jc jape.Context) {
+func (s *server) addressessAddressBalanceHandler(jc jape.Context) {
 	var address types.Address
 	if jc.DecodeParam("address", &address) != nil {
 		return
@@ -282,7 +298,7 @@ func (s *server) explorerAddressessAddressBalanceHandler(jc jape.Context) {
 	})
 }
 
-func (s *server) explorerAddressessAddressEventsHandler(jc jape.Context) {
+func (s *server) addressessAddressEventsHandler(jc jape.Context) {
 	var address types.Address
 	if jc.DecodeParam("address", &address) != nil {
 		return
@@ -302,7 +318,7 @@ func (s *server) explorerAddressessAddressEventsHandler(jc jape.Context) {
 	jc.Encode(events)
 }
 
-func (s *server) explorerContractIDHandler(jc jape.Context) {
+func (s *server) contractsIDHandler(jc jape.Context) {
 	errNotFound := errors.New("no contract found")
 
 	var id types.FileContractID
@@ -319,7 +335,23 @@ func (s *server) explorerContractIDHandler(jc jape.Context) {
 	jc.Encode(fcs[0])
 }
 
-func (s *server) explorerContractKeyHandler(jc jape.Context) {
+func (s *server) contractsBatchHandler(jc jape.Context) {
+	var ids []types.FileContractID
+	if jc.Decode(&ids) != nil {
+		return
+	} else if len(ids) > maxIDs {
+		jc.Error(errTooManyIDs, http.StatusBadRequest)
+		return
+	}
+
+	fcs, err := s.e.Contracts(ids)
+	if jc.Check("failed to get contracts", err) != nil {
+		return
+	}
+	jc.Encode(fcs)
+}
+
+func (s *server) pubkeyContractsHandler(jc jape.Context) {
 	errNotFound := errors.New("no contract found")
 
 	var key types.PublicKey
@@ -336,23 +368,7 @@ func (s *server) explorerContractKeyHandler(jc jape.Context) {
 	jc.Encode(fcs)
 }
 
-func (s *server) explorerContractsHandler(jc jape.Context) {
-	var ids []types.FileContractID
-	if jc.Decode(&ids) != nil {
-		return
-	} else if len(ids) > maxIDs {
-		jc.Error(errTooManyIDs, http.StatusBadRequest)
-		return
-	}
-
-	fcs, err := s.e.Contracts(ids)
-	if jc.Check("failed to get contracts", err) != nil {
-		return
-	}
-	jc.Encode(fcs)
-}
-
-func (s *server) explorerSearchIDHandler(jc jape.Context) {
+func (s *server) searchIDHandler(jc jape.Context) {
 	errNotFound := errors.New("no contract found")
 	const maxLen = len(types.Hash256{})
 
@@ -390,19 +406,29 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET    /txpool/fee":          srv.txpoolFeeHandler,
 		"POST   /txpool/broadcast":    srv.txpoolBroadcastHandler,
 
-		"GET    /explorer/tip":                        srv.explorerTipHandler,
-		"GET    /explorer/tip/:height":                srv.explorerTipHeightHandler,
-		"GET    /explorer/block/:id":                  srv.explorerBlockHandler,
-		"GET    /explorer/metrics":                    srv.explorerMetricsHandler,
-		"GET    /explorer/metrics/:id":                srv.explorerMetricsIDHandler,
-		"GET    /explorer/transactions/:id":           srv.explorerTransactionsIDHandler,
-		"POST   /explorer/transactions":               srv.explorerTransactionsHandler,
-		"GET    /explorer/addresses/:address/utxos":   srv.explorerAddressessAddressUtxosHandler,
-		"GET    /explorer/addresses/:address/events":  srv.explorerAddressessAddressEventsHandler,
-		"GET    /explorer/addresses/:address/balance": srv.explorerAddressessAddressBalanceHandler,
-		"GET    /explorer/contracts/:id":              srv.explorerContractIDHandler,
-		"GET    /explorer/pubkey/:key/contracts":      srv.explorerContractKeyHandler,
-		"POST   /explorer/contracts":                  srv.explorerContractsHandler,
-		"GET    /explorer/search/:id":                 srv.explorerSearchIDHandler,
+		"GET	/consensus/network":        srv.consensusNetworkHandler,
+		"GET 	/consensus/state":         srv.consensusStateHandler,
+		"GET    /consensus/tip":         srv.consensusTipHandler,
+		"GET    /consensus/tip/:height": srv.consensusTipHeightHandler,
+
+		"GET    /blocks/:id": srv.blocksIDHandler,
+
+		"GET    /transactions/:id": srv.transactionsIDHandler,
+		"POST   /transactions":     srv.transactionsBatchHandler,
+
+		"GET    /addresses/:address/utxos/siacoin": srv.addressessAddressUtxosSiacoinHandler,
+		"GET    /addresses/:address/utxos/siafund": srv.addressessAddressUtxosSiafundHandler,
+		"GET    /addresses/:address/events":        srv.addressessAddressEventsHandler,
+		"GET    /addresses/:address/balance":       srv.addressessAddressBalanceHandler,
+
+		"GET    /contracts/:id": srv.contractsIDHandler,
+		"POST   /contracts":     srv.contractsBatchHandler,
+
+		"GET    /pubkey/:key/contracts": srv.pubkeyContractsHandler,
+
+		"GET    /metrics/block":     srv.blocksMetricsHandler,
+		"GET    /metrics/block/:id": srv.blocksMetricsIDHandler,
+
+		"GET    /search/:id": srv.searchIDHandler,
 	})
 }

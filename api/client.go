@@ -65,25 +65,43 @@ func (c *Client) SyncerBroadcastBlock(b types.Block) (err error) {
 
 // Tip returns the current tip of the explorer.
 func (c *Client) Tip() (resp types.ChainIndex, err error) {
-	err = c.c.GET("/explorer/tip", &resp)
+	err = c.c.GET("/consensus/tip", &resp)
 	return
 }
 
-// TipByHeight returns the chain index at the specified height.
-func (c *Client) TipByHeight(height uint64) (resp types.ChainIndex, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/tip/%d", height), &resp)
+// BestIndex returns the chain index at the specified height.
+func (c *Client) BestIndex(height uint64) (resp types.ChainIndex, err error) {
+	err = c.c.GET(fmt.Sprintf("/consensus/tip/%d", height), &resp)
+	return
+}
+
+// ConsensusNetwork returns the network parameters of the consensus set.
+func (c *Client) ConsensusNetwork() (n *consensus.Network, err error) {
+	err = c.c.GET("/consensus/network", &n)
+	return
+}
+
+func (c *Client) ConsensusState() (state consensus.State, err error) {
+	if c.n == nil {
+		c.n, err = c.ConsensusNetwork()
+		if err != nil {
+			return
+		}
+	}
+	err = c.c.GET("/consensus/state", &state)
+	state.Network = c.n
 	return
 }
 
 // Block returns the block with the specified ID.
 func (c *Client) Block(id types.BlockID) (resp explorer.Block, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/block/%s", id), &resp)
+	err = c.c.GET(fmt.Sprintf("/blocks/%s", id), &resp)
 	return
 }
 
 // Transaction returns the transaction with the specified ID.
 func (c *Client) Transaction(id types.TransactionID) (resp explorer.Transaction, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/transactions/%s", id), &resp)
+	err = c.c.GET(fmt.Sprintf("/transactions/%s", id), &resp)
 	return
 }
 
@@ -93,9 +111,15 @@ func (c *Client) Transactions(ids []types.TransactionID) (resp []explorer.Transa
 	return
 }
 
-// AddressUTXOs returns the specified address' unspent outputs.
-func (c *Client) AddressUTXOs(address types.Address, offset, limit uint64) (resp AddressUTXOsResponse, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/addresses/%s/utxos?offset=%d&limit=%d", address, offset, limit), &resp)
+// AddressSiacoinUTXOs returns the specified address' unspent outputs.
+func (c *Client) AddressSiacoinUTXOs(address types.Address, offset, limit uint64) (resp []explorer.SiacoinOutput, err error) {
+	err = c.c.GET(fmt.Sprintf("/explorer/addresses/%s/utxos/siacoin?offset=%d&limit=%d", address, offset, limit), &resp)
+	return
+}
+
+// AddressSiafundUTXOs returns the specified address' unspent outputs.
+func (c *Client) AddressSiafundUTXOs(address types.Address, offset, limit uint64) (resp []explorer.SiafundOutput, err error) {
+	err = c.c.GET(fmt.Sprintf("/explorer/addresses/%s/utxos/siafund?offset=%d&limit=%d", address, offset, limit), &resp)
 	return
 }
 
@@ -129,15 +153,15 @@ func (c *Client) ContractsKey(key types.PublicKey) (resp []explorer.FileContract
 	return
 }
 
-// Metrics returns the most recent metrics about Sia.
-func (c *Client) Metrics() (resp explorer.Metrics, err error) {
-	err = c.c.GET("/explorer/metrics", &resp)
+// BlockMetrics returns the most recent metrics about the Sia blockchain.
+func (c *Client) BlockMetrics() (resp explorer.Metrics, err error) {
+	err = c.c.GET("/metrics/block", &resp)
 	return
 }
 
-// MetricsID returns various metrics about Sia at the time of the given block ID.
-func (c *Client) MetricsID(id types.BlockID) (resp explorer.Metrics, err error) {
-	err = c.c.GET(fmt.Sprintf("/explorer/metrics/%s", id), &resp)
+// BlockMetricsID returns various metrics about Sia at the given block ID.
+func (c *Client) BlockMetricsID(id types.BlockID) (resp explorer.Metrics, err error) {
+	err = c.c.GET(fmt.Sprintf("/metrics/block/%s", id), &resp)
 	return
 }
 
