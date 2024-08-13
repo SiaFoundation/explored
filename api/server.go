@@ -51,7 +51,7 @@ type (
 		Transactions(ids []types.TransactionID) ([]explorer.Transaction, error)
 		Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 		SiacoinElements(ids []types.SiacoinOutputID) (result []explorer.SiacoinOutput, err error)
-		SiafundElements(ids []types.SiafundOutputID) (result []types.SiafundElement, err error)
+		SiafundElements(ids []types.SiafundOutputID) (result []explorer.SiafundOutput, err error)
 		UnspentSiacoinOutputs(address types.Address, offset, limit uint64) ([]explorer.SiacoinOutput, error)
 		UnspentSiafundOutputs(address types.Address, offset, limit uint64) ([]explorer.SiafundOutput, error)
 		AddressEvents(address types.Address, offset, limit uint64) (events []explorer.Event, err error)

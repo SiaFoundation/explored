@@ -520,10 +520,10 @@ func updateStateTree(tx *txn, changes []explorer.TreeNodeUpdate) error {
 }
 
 func addSiacoinElements(tx *txn, bid types.BlockID, spentElements, newElements []explorer.SiacoinOutput) (map[types.SiacoinOutputID]int64, error) {
-	stmt, err := tx.Prepare(`INSERT INTO siacoin_elements(output_id, block_id, leaf_index, spent, source, maturity_height, address, value)
+	stmt, err := tx.Prepare(`INSERT INTO siacoin_elements(output_id, block_id, leaf_index, spent_index, source, maturity_height, address, value)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT (output_id)
-			DO UPDATE SET spent = ?, leaf_index = ?`)
+			DO UPDATE SET spent_index = ?, leaf_index = ?`)
 	if err != nil {
 		return nil, fmt.Errorf("addSiacoinElements: failed to prepare siacoin_elements statement: %w", err)
 	}
@@ -531,7 +531,7 @@ func addSiacoinElements(tx *txn, bid types.BlockID, spentElements, newElements [
 
 	scDBIds := make(map[types.SiacoinOutputID]int64)
 	for _, sce := range newElements {
-		result, err := stmt.Exec(encode(sce.StateElement.ID), encode(bid), encode(sce.StateElement.LeafIndex), false, int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), false, encode(sce.StateElement.LeafIndex))
+		result, err := stmt.Exec(encode(sce.StateElement.ID), encode(bid), encode(sce.StateElement.LeafIndex), nil, int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), nil, encode(sce.StateElement.LeafIndex))
 		if err != nil {
 			return nil, fmt.Errorf("addSiacoinElements: failed to execute siacoin_elements statement: %w", err)
 		}
@@ -544,7 +544,7 @@ func addSiacoinElements(tx *txn, bid types.BlockID, spentElements, newElements [
 		scDBIds[types.SiacoinOutputID(sce.StateElement.ID)] = dbID
 	}
 	for _, sce := range spentElements {
-		result, err := stmt.Exec(encode(sce.StateElement.ID), encode(bid), encode(sce.StateElement.LeafIndex), true, int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), true, encode(sce.StateElement.LeafIndex))
+		result, err := stmt.Exec(encode(sce.StateElement.ID), encode(bid), encode(sce.StateElement.LeafIndex), encode(bid), int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), encode(bid), encode(sce.StateElement.LeafIndex))
 		if err != nil {
 			return nil, fmt.Errorf("addSiacoinElements: failed to execute siacoin_elements statement: %w", err)
 		}
@@ -561,10 +561,10 @@ func addSiacoinElements(tx *txn, bid types.BlockID, spentElements, newElements [
 }
 
 func addSiafundElements(tx *txn, bid types.BlockID, spentElements, newElements []types.SiafundElement) (map[types.SiafundOutputID]int64, error) {
-	stmt, err := tx.Prepare(`INSERT INTO siafund_elements(output_id, block_id, leaf_index, spent, claim_start, address, value)
+	stmt, err := tx.Prepare(`INSERT INTO siafund_elements(output_id, block_id, leaf_index, spent_index, claim_start, address, value)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT
-		DO UPDATE SET spent = ?, leaf_index = ?`)
+		DO UPDATE SET spent_index = ?, leaf_index = ?`)
 	if err != nil {
 		return nil, fmt.Errorf("addSiafundElements: failed to prepare siafund_elements statement: %w", err)
 	}
@@ -572,7 +572,7 @@ func addSiafundElements(tx *txn, bid types.BlockID, spentElements, newElements [
 
 	sfDBIds := make(map[types.SiafundOutputID]int64)
 	for _, sfe := range newElements {
-		result, err := stmt.Exec(encode(sfe.StateElement.ID), encode(bid), encode(sfe.StateElement.LeafIndex), false, encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), false, encode(sfe.StateElement.LeafIndex))
+		result, err := stmt.Exec(encode(sfe.StateElement.ID), encode(bid), encode(sfe.StateElement.LeafIndex), nil, encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), nil, encode(sfe.StateElement.LeafIndex))
 		if err != nil {
 			return nil, fmt.Errorf("addSiafundElements: failed to execute siafund_elements statement: %w", err)
 		}
@@ -585,7 +585,7 @@ func addSiafundElements(tx *txn, bid types.BlockID, spentElements, newElements [
 		sfDBIds[types.SiafundOutputID(sfe.StateElement.ID)] = dbID
 	}
 	for _, sfe := range spentElements {
-		result, err := stmt.Exec(encode(sfe.StateElement.ID), encode(bid), encode(sfe.StateElement.LeafIndex), true, encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), true, encode(sfe.StateElement.LeafIndex))
+		result, err := stmt.Exec(encode(sfe.StateElement.ID), encode(bid), encode(sfe.StateElement.LeafIndex), encode(bid), encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), encode(bid), encode(sfe.StateElement.LeafIndex))
 		if err != nil {
 			return nil, fmt.Errorf("addSiafundElements: failed to execute siafund_elements statement: %w", err)
 		}

@@ -131,7 +131,7 @@ func (c *Client) OutputSiacoin(id types.SiacoinOutputID) (resp explorer.SiacoinO
 }
 
 // OutputSiafund returns the specified siafund output.
-func (c *Client) OutputSiafund(id types.SiafundOutputID) (resp types.SiafundElement, err error) {
+func (c *Client) OutputSiafund(id types.SiafundOutputID) (resp explorer.SiafundOutput, err error) {
 	err = c.c.GET(fmt.Sprintf("/outputs/siafund/%s", id), &resp)
 	return
 }

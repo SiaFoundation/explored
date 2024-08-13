@@ -62,15 +62,20 @@ func (d Source) MarshalJSON() ([]byte, error) {
 	}
 }
 
-// A SiacoinOutput is a types.SiacoinElement with an added field for the
-// source.
+// A SiacoinOutput is a types.SiacoinElement with added fields for the source
+// and when it was spent.
 type SiacoinOutput struct {
-	Source Source `json:"source"`
+	Source     Source         `json:"source"`
+	SpentIndex *types.BlockID `json:"spent"`
 	types.SiacoinElement
 }
 
-// A SiafundOutput is a types.SiafundElement.
-type SiafundOutput types.SiafundElement
+// A SiafundOutput is a types.SiafundElement with an added field for when it
+// was spent.
+type SiafundOutput struct {
+	SpentIndex *types.BlockID `json:"spent"`
+	types.SiafundElement
+}
 
 // A FileContract is a types.FileContractElement that uses wrapped types
 // internally.
