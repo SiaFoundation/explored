@@ -50,6 +50,8 @@ type (
 		Metrics(id types.BlockID) (explorer.Metrics, error)
 		Transactions(ids []types.TransactionID) ([]explorer.Transaction, error)
 		Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
+		SiacoinElements(ids []types.SiacoinOutputID) (result []explorer.SiacoinOutput, err error)
+		SiafundElements(ids []types.SiafundOutputID) (result []types.SiafundElement, err error)
 		UnspentSiacoinOutputs(address types.Address, offset, limit uint64) ([]explorer.SiacoinOutput, error)
 		UnspentSiafundOutputs(address types.Address, offset, limit uint64) ([]explorer.SiafundOutput, error)
 		AddressEvents(address types.Address, offset, limit uint64) (events []explorer.Event, err error)
@@ -318,6 +320,43 @@ func (s *server) addressessAddressEventsHandler(jc jape.Context) {
 	jc.Encode(events)
 }
 
+func (s *server) outputsSiacoinHandler(jc jape.Context) {
+	errNotFound := errors.New("no siacoin output found")
+
+	var id types.SiacoinOutputID
+	if jc.DecodeParam("id", &id) != nil {
+		return
+	}
+
+	outputs, err := s.e.SiacoinElements([]types.SiacoinOutputID{id})
+	if jc.Check("failed to get siacoin elements", err) != nil {
+		return
+	} else if len(outputs) == 0 {
+		jc.Error(errNotFound, http.StatusNotFound)
+		return
+	}
+
+	jc.Encode(outputs[0])
+}
+
+func (s *server) outputsSiafundHandler(jc jape.Context) {
+	errNotFound := errors.New("no siafund output found")
+
+	var id types.SiafundOutputID
+	if jc.DecodeParam("id", &id) != nil {
+		return
+	}
+
+	outputs, err := s.e.SiafundElements([]types.SiafundOutputID{id})
+	if jc.Check("failed to get siafund elements", err) != nil {
+		return
+	} else if len(outputs) == 0 {
+		jc.Error(errNotFound, http.StatusNotFound)
+		return
+	}
+
+	jc.Encode(outputs[0])
+}
 func (s *server) contractsIDHandler(jc jape.Context) {
 	errNotFound := errors.New("no contract found")
 
@@ -420,6 +459,9 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET    /addresses/:address/utxos/siafund": srv.addressessAddressUtxosSiafundHandler,
 		"GET    /addresses/:address/events":        srv.addressessAddressEventsHandler,
 		"GET    /addresses/:address/balance":       srv.addressessAddressBalanceHandler,
+
+		"GET    /outputs/siacoin/:id": srv.outputsSiacoinHandler,
+		"GET    /outputs/siafund/:id": srv.outputsSiafundHandler,
 
 		"GET    /contracts/:id": srv.contractsIDHandler,
 		"POST   /contracts":     srv.contractsBatchHandler,
