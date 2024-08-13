@@ -66,14 +66,14 @@ func (d Source) MarshalJSON() ([]byte, error) {
 // and when it was spent.
 type SiacoinOutput struct {
 	Source     Source         `json:"source"`
-	SpentIndex *types.BlockID `json:"spent"`
+	SpentIndex *types.BlockID `json:"spentIndex"`
 	types.SiacoinElement
 }
 
 // A SiafundOutput is a types.SiafundElement with an added field for when it
 // was spent.
 type SiafundOutput struct {
-	SpentIndex *types.BlockID `json:"spent"`
+	SpentIndex *types.BlockID `json:"spentIndex"`
 	types.SiafundElement
 }
 
