@@ -30,6 +30,8 @@ func (e *Explorer) waitForSync() {
 }
 
 func (e *Explorer) scanHost(host HostAnnouncement) (Host, error) {
+	e.log.Debug("Scanning host", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()))
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -86,8 +88,10 @@ func (e *Explorer) scanHosts() {
 		scanMinInterval = 3 * time.Hour
 	)
 
+	e.log.Info("Waiting for syncing to complete before scanning hosts")
 	// don't scan hosts till we're at least nearly done with syncing
 	e.waitForSync()
+	e.log.Info("Syncing complete, will begin scanning hosts")
 
 	for {
 		offset := uint64(0)
@@ -106,7 +110,15 @@ func (e *Explorer) scanHosts() {
 			var scanned []Host
 			for _, host := range hosts {
 				if scan, err := e.scanHost(host); err != nil {
-					e.log.Error("failed to scan host", zap.Error(err))
+					scanned = append(scanned, Host{
+						PublicKey:  host.PublicKey,
+						NetAddress: host.NetAddress,
+
+						LastScan:           time.Now(),
+						TotalScans:         1,
+						FailedInteractions: 1,
+					})
+					e.log.Info("failed to scan host", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()), zap.Error(err))
 				} else {
 					scanned = append(scanned, scan)
 				}
