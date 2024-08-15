@@ -166,6 +166,12 @@ func (c *Client) ContractsKey(key types.PublicKey) (resp []explorer.FileContract
 	return
 }
 
+// Host returns information about the host with a given ed25519 key.
+func (c *Client) Host(key types.PublicKey) (resp explorer.Host, err error) {
+	err = c.c.GET(fmt.Sprintf("/pubkey/%s/host", key), &resp)
+	return
+}
+
 // BlockMetrics returns the most recent metrics about the Sia blockchain.
 func (c *Client) BlockMetrics() (resp explorer.Metrics, err error) {
 	err = c.c.GET("/metrics/block", &resp)

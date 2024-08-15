@@ -113,7 +113,7 @@ func (e *Explorer) scanHosts() {
 			}
 
 			if err := e.s.AddHostScans(scanned); err != nil {
-				e.log.Error("failed to add host sacns", zap.Error(err))
+				e.log.Error("failed to add host scans", zap.Error(err))
 			}
 		}
 	}

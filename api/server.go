@@ -58,6 +58,8 @@ type (
 		Contracts(ids []types.FileContractID) (result []explorer.FileContract, err error)
 		ContractsKey(key types.PublicKey) (result []explorer.FileContract, err error)
 		Search(id types.Hash256) (explorer.SearchType, error)
+
+		Hosts(pks []types.PublicKey) ([]explorer.Host, error)
 	}
 )
 
@@ -407,6 +409,23 @@ func (s *server) pubkeyContractsHandler(jc jape.Context) {
 	jc.Encode(fcs)
 }
 
+func (s *server) pubkeyHostHandler(jc jape.Context) {
+	errNotFound := errors.New("host not found")
+
+	var key types.PublicKey
+	if jc.DecodeParam("key", &key) != nil {
+		return
+	}
+	hosts, err := s.e.Hosts([]types.PublicKey{key})
+	if jc.Check("failed to get host", err) != nil {
+		return
+	} else if len(hosts) == 0 {
+		jc.Error(errNotFound, http.StatusNotFound)
+		return
+	}
+	jc.Encode(hosts[0])
+}
+
 func (s *server) searchIDHandler(jc jape.Context) {
 	errNotFound := errors.New("no contract found")
 	const maxLen = len(types.Hash256{})
@@ -467,6 +486,7 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"POST   /contracts":     srv.contractsBatchHandler,
 
 		"GET    /pubkey/:key/contracts": srv.pubkeyContractsHandler,
+		"GET    /pubkey/:key/host":      srv.pubkeyHostHandler,
 
 		"GET    /metrics/block":     srv.blocksMetricsHandler,
 		"GET    /metrics/block/:id": srv.blocksMetricsIDHandler,
