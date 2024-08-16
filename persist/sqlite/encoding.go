@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"time"
 
@@ -47,9 +48,9 @@ type decodable struct {
 
 // Scan implements the sql.Scanner interface.
 func (d *decodable) Scan(src any) error {
-	// if src == nil {
-	// 	return errors.New("cannot scan nil into decodable")
-	// }
+	if src == nil {
+		return errors.New("cannot scan nil into decodable")
+	}
 
 	switch src := src.(type) {
 	case []byte:
@@ -63,12 +64,6 @@ func (d *decodable) Scan(src any) error {
 		case types.DecoderFrom:
 			dec := types.NewBufDecoder(src)
 			v.DecodeFrom(dec)
-			return dec.Err()
-		case **types.ChainIndex:
-			(*v) = new(types.ChainIndex)
-
-			dec := types.NewBufDecoder(src)
-			(*v).DecodeFrom(dec)
 			return dec.Err()
 		case *[]types.Hash256:
 			dec := types.NewBufDecoder(src)
