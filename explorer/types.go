@@ -72,36 +72,20 @@ type SiacoinOutput struct {
 // A SiafundOutput is a types.SiafundElement.
 type SiafundOutput types.SiafundElement
 
-// A FileContract is a types.FileContractElement that uses wrapped types
-// internally.
+// A FileContract is a types.FileContractElement with added fields for
+// resolved/valid state.
 type FileContract struct {
-	types.StateElement
-
 	Resolved bool `json:"resolved"`
 	Valid    bool `json:"valid"`
-
-	Filesize           uint64                `json:"filesize"`
-	FileMerkleRoot     types.Hash256         `json:"fileMerkleRoot"`
-	WindowStart        uint64                `json:"windowStart"`
-	WindowEnd          uint64                `json:"windowEnd"`
-	Payout             types.Currency        `json:"payout"`
-	ValidProofOutputs  []types.SiacoinOutput `json:"validProofOutputs"`
-	MissedProofOutputs []types.SiacoinOutput `json:"missedProofOutputs"`
-	UnlockHash         types.Hash256         `json:"unlockHash"`
-	RevisionNumber     uint64                `json:"revisionNumber"`
+	types.FileContractElement
 }
 
-// A FileContractRevision is a types.FileContractRevision that uses wrapped
-// types internally.
+// A FileContractRevision is a FileContract with extra fields for revision
+// information.
 type FileContractRevision struct {
 	ParentID         types.FileContractID   `json:"parentID"`
 	UnlockConditions types.UnlockConditions `json:"unlockConditions"`
-	// NOTE: the Payout field of the contract is not "really" part of a
-	// revision. A revision cannot change the total payout, so the original siad
-	// code defines FileContractRevision as an entirely separate struct without
-	// a Payout field. Here, we instead reuse the FileContract type, which means
-	// we must treat its Payout field as invalid. To guard against developer
-	// error, we set it to a sentinel value when decoding it.
+
 	FileContract
 }
 
