@@ -311,6 +311,7 @@ CREATE TABLE host_info (
     net_address TEXT NOT NULL,
     known_since INTEGER NOT NULL,
     last_scan INTEGER NOT NULL,
+    last_scan_successful INTEGER NOT NULL,
     last_announcement INTEGER NOT NULL,
     total_scans INTEGER NOT NULL,
     successful_interactions INTEGER NOT NULL,

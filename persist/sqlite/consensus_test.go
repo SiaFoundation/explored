@@ -2007,6 +2007,7 @@ func TestHostAnnouncement(t *testing.T) {
 	hosts, _ := (db.HostsForScanning(time.Unix(0, 0), 0, 100))
 	t.Log(len(hosts))
 	t.Log(db.Hosts([]types.PublicKey{hosts[0].PublicKey}))
+	t.Log(db.HostMetrics())
 }
 
 func TestMultipleReorg(t *testing.T) {
