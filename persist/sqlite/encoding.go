@@ -64,8 +64,8 @@ func (d *decodable) Scan(src any) error {
 			dec := types.NewBufDecoder(src)
 			v.DecodeFrom(dec)
 			return dec.Err()
-		case **types.BlockID:
-			(*v) = new(types.BlockID)
+		case **types.ChainIndex:
+			(*v) = new(types.ChainIndex)
 
 			dec := types.NewBufDecoder(src)
 			(*v).DecodeFrom(dec)

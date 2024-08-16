@@ -46,7 +46,7 @@ CREATE TABLE siacoin_elements (
         output_id BLOB UNIQUE NOT NULL,
         leaf_index BLOB NOT NULL,
 
-        spent_index BLOB REFERENCES blocks(id),
+        spent_index BLOB,
         source INTEGER NOT NULL,
         maturity_height INTEGER NOT NULL,
         address BLOB NOT NULL,
@@ -64,7 +64,7 @@ CREATE TABLE siafund_elements (
         output_id BLOB UNIQUE NOT NULL,
         leaf_index BLOB NOT NULL,
 
-        spent_index BLOB REFERENCES blocks(id),
+        spent_index BLOB,
         claim_start BLOB NOT NULL,
         address BLOB NOT NULL,
         value BLOB NOT NULL
