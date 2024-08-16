@@ -112,7 +112,7 @@ func (s *Store) AddressEvents(address types.Address, offset, limit uint64) (even
 
 func scanSiacoinOutput(s scanner) (sco explorer.SiacoinOutput, err error) {
 	var spentIndex types.ChainIndex
-	err = s.Scan(decode(&sco.StateElement.ID), decode(&sco.StateElement.LeafIndex), &sco.Source, decode(&spentIndex), &sco.MaturityHeight, decode(&sco.SiacoinOutput.Address), decode(&sco.SiacoinOutput.Value))
+	err = s.Scan(decode(&sco.StateElement.ID), decode(&sco.StateElement.LeafIndex), &sco.Source, decodeNull(&spentIndex), &sco.MaturityHeight, decode(&sco.SiacoinOutput.Address), decode(&sco.SiacoinOutput.Value))
 	if spentIndex != (types.ChainIndex{}) {
 		sco.SpentIndex = &spentIndex
 	}
@@ -121,7 +121,7 @@ func scanSiacoinOutput(s scanner) (sco explorer.SiacoinOutput, err error) {
 
 func scanSiafundOutput(s scanner) (sfo explorer.SiafundOutput, err error) {
 	var spentIndex types.ChainIndex
-	err = s.Scan(decode(&sfo.StateElement.ID), decode(&sfo.StateElement.LeafIndex), decode(&spentIndex), decode(&sfo.ClaimStart), decode(&sfo.SiafundOutput.Address), decode(&sfo.SiafundOutput.Value))
+	err = s.Scan(decode(&sfo.StateElement.ID), decode(&sfo.StateElement.LeafIndex), decodeNull(&spentIndex), decode(&sfo.ClaimStart), decode(&sfo.SiafundOutput.Address), decode(&sfo.SiafundOutput.Value))
 	if spentIndex != (types.ChainIndex{}) {
 		sfo.SpentIndex = &spentIndex
 	}

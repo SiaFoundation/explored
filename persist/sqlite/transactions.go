@@ -97,7 +97,7 @@ ORDER BY ts.transaction_order ASC`
 	for rows.Next() {
 		var txnID int64
 		var sco explorer.SiacoinOutput
-		if err := rows.Scan(&txnID, decode(&sco.StateElement.ID), decode(&sco.LeafIndex), decode(&sco.SpentIndex), &sco.Source, &sco.MaturityHeight, decode(&sco.SiacoinOutput.Address), decode(&sco.SiacoinOutput.Value)); err != nil {
+		if err := rows.Scan(&txnID, decode(&sco.StateElement.ID), decode(&sco.LeafIndex), decodeNull(&sco.SpentIndex), &sco.Source, &sco.MaturityHeight, decode(&sco.SiacoinOutput.Address), decode(&sco.SiacoinOutput.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan siacoin output: %w", err)
 		}
 		result[txnID] = append(result[txnID], sco)
@@ -171,7 +171,7 @@ ORDER BY ts.transaction_order ASC`
 	for rows.Next() {
 		var txnID int64
 		var sfo explorer.SiafundOutput
-		if err := rows.Scan(&txnID, decode(&sfo.StateElement.ID), decode(&sfo.StateElement.LeafIndex), decode(&sfo.SpentIndex), decode(&sfo.ClaimStart), decode(&sfo.SiafundOutput.Address), decode(&sfo.SiafundOutput.Value)); err != nil {
+		if err := rows.Scan(&txnID, decode(&sfo.StateElement.ID), decode(&sfo.StateElement.LeafIndex), decodeNull(&sfo.SpentIndex), decode(&sfo.ClaimStart), decode(&sfo.SiafundOutput.Address), decode(&sfo.SiafundOutput.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan siafund output: %w", err)
 		}
 		result[txnID] = append(result[txnID], sfo)
@@ -388,7 +388,7 @@ ORDER BY mp.block_order ASC`
 	var result []explorer.SiacoinOutput
 	for rows.Next() {
 		var output explorer.SiacoinOutput
-		if err := rows.Scan(decode(&output.StateElement.ID), decode(&output.StateElement.LeafIndex), decode(&output.SpentIndex), &output.Source, &output.MaturityHeight, decode(&output.SiacoinOutput.Address), decode(&output.SiacoinOutput.Value)); err != nil {
+		if err := rows.Scan(decode(&output.StateElement.ID), decode(&output.StateElement.LeafIndex), decodeNull(&output.SpentIndex), &output.Source, &output.MaturityHeight, decode(&output.SiacoinOutput.Address), decode(&output.SiacoinOutput.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan miner payout: %w", err)
 		}
 		result = append(result, output)
