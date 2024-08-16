@@ -110,6 +110,16 @@ func (s *Store) AddressEvents(address types.Address, offset, limit uint64) (even
 	return
 }
 
+func scanSiacoinOutput(s scanner) (sco explorer.SiacoinOutput, err error) {
+	err = s.Scan(decode(&sco.StateElement.ID), decode(&sco.StateElement.LeafIndex), &sco.Source, decode(&sco.SpentIndex), &sco.MaturityHeight, decode(&sco.SiacoinOutput.Address), decode(&sco.SiacoinOutput.Value))
+	return
+}
+
+func scanSiafundOutput(s scanner) (sfo explorer.SiafundOutput, err error) {
+	err = s.Scan(decode(&sfo.StateElement.ID), decode(&sfo.StateElement.LeafIndex), decode(&sfo.SpentIndex), decode(&sfo.ClaimStart), decode(&sfo.SiafundOutput.Address), decode(&sfo.SiafundOutput.Value))
+	return
+}
+
 // UnspentSiacoinOutputs implements explorer.Store.
 func (s *Store) UnspentSiacoinOutputs(address types.Address, offset, limit uint64) (result []explorer.SiacoinOutput, err error) {
 	err = s.transaction(func(tx *txn) error {
@@ -120,8 +130,8 @@ func (s *Store) UnspentSiacoinOutputs(address types.Address, offset, limit uint6
 		defer rows.Close()
 
 		for rows.Next() {
-			var sco explorer.SiacoinOutput
-			if err := rows.Scan(decode(&sco.StateElement.ID), decode(&sco.StateElement.LeafIndex), &sco.Source, decode(&sco.SpentIndex), &sco.MaturityHeight, decode(&sco.SiacoinOutput.Address), decode(&sco.SiacoinOutput.Value)); err != nil {
+			sco, err := scanSiacoinOutput(rows)
+			if err != nil {
 				return fmt.Errorf("failed to scan siacoin output: %w", err)
 			}
 			result = append(result, sco)
@@ -134,15 +144,15 @@ func (s *Store) UnspentSiacoinOutputs(address types.Address, offset, limit uint6
 // UnspentSiafundOutputs implements explorer.Store.
 func (s *Store) UnspentSiafundOutputs(address types.Address, offset, limit uint64) (result []explorer.SiafundOutput, err error) {
 	err = s.transaction(func(tx *txn) error {
-		rows, err := tx.Query(`SELECT output_id, leaf_index, claim_start, address, value FROM siafund_elements WHERE address = ? AND spent_index IS NULL LIMIT ? OFFSET ?`, encode(address), limit, offset)
+		rows, err := tx.Query(`SELECT output_id, leaf_index, spent_index, claim_start, address, value FROM siafund_elements WHERE address = ? AND spent_index IS NULL LIMIT ? OFFSET ?`, encode(address), limit, offset)
 		if err != nil {
 			return fmt.Errorf("failed to query siafund outputs: %w", err)
 		}
 		defer rows.Close()
 
 		for rows.Next() {
-			var sfo explorer.SiafundOutput
-			if err := rows.Scan(decode(&sfo.StateElement.ID), decode(&sfo.StateElement.LeafIndex), decode(&sfo.ClaimStart), decode(&sfo.SiafundOutput.Address), decode(&sfo.SiafundOutput.Value)); err != nil {
+			sfo, err := scanSiafundOutput(rows)
+			if err != nil {
 				return fmt.Errorf("failed to scan siafund output: %w", err)
 			}
 			result = append(result, sfo)
@@ -167,8 +177,8 @@ func (s *Store) SiacoinElements(ids []types.SiacoinOutputID) (result []explorer.
 		defer rows.Close()
 
 		for rows.Next() {
-			var sco explorer.SiacoinOutput
-			if err := rows.Scan(decode(&sco.StateElement.ID), decode(&sco.StateElement.LeafIndex), &sco.Source, decode(&sco.SpentIndex), &sco.MaturityHeight, decode(&sco.SiacoinOutput.Address), decode(&sco.SiacoinOutput.Value)); err != nil {
+			sco, err := scanSiacoinOutput(rows)
+			if err != nil {
 				return fmt.Errorf("failed to scan siacoin output: %w", err)
 			}
 			result = append(result, sco)
@@ -193,8 +203,8 @@ func (s *Store) SiafundElements(ids []types.SiafundOutputID) (result []explorer.
 		defer rows.Close()
 
 		for rows.Next() {
-			var sfo explorer.SiafundOutput
-			if err := rows.Scan(decode(&sfo.StateElement.ID), decode(&sfo.StateElement.LeafIndex), decode(&sfo.SpentIndex), decode(&sfo.ClaimStart), decode(&sfo.SiafundOutput.Address), decode(&sfo.SiafundOutput.Value)); err != nil {
+			sfo, err := scanSiafundOutput(rows)
+			if err != nil {
 				return fmt.Errorf("failed to scan siafund output: %w", err)
 			}
 			result = append(result, sfo)
