@@ -33,7 +33,7 @@ func (s *Store) Contracts(ids []types.FileContractID) (result []explorer.FileCon
 		for rows.Next() {
 			var contractID int64
 			var fc explorer.FileContract
-			if err := rows.Scan(&contractID, decode(&fc.StateElement.ID), decode(&fc.StateElement.LeafIndex), &fc.Resolved, &fc.Valid, decode(&fc.Filesize), decode(&fc.FileMerkleRoot), decode(&fc.WindowStart), decode(&fc.WindowEnd), decode(&fc.Payout), decode(&fc.UnlockHash), decode(&fc.RevisionNumber)); err != nil {
+			if err := rows.Scan(&contractID, decode(&fc.StateElement.ID), decode(&fc.StateElement.LeafIndex), &fc.Resolved, &fc.Valid, decode(&fc.FileContract.Filesize), decode(&fc.FileContract.FileMerkleRoot), decode(&fc.FileContract.WindowStart), decode(&fc.FileContract.WindowEnd), decode(&fc.FileContract.Payout), decode(&fc.FileContract.UnlockHash), decode(&fc.FileContract.RevisionNumber)); err != nil {
 				return fmt.Errorf("failed to scan transaction: %w", err)
 			}
 
@@ -47,8 +47,8 @@ func (s *Store) Contracts(ids []types.FileContractID) (result []explorer.FileCon
 		}
 		for contractID, output := range proofOutputs {
 			fc := idContract[contractID]
-			fc.ValidProofOutputs = output.valid
-			fc.MissedProofOutputs = output.missed
+			fc.FileContract.ValidProofOutputs = output.valid
+			fc.FileContract.MissedProofOutputs = output.missed
 			result = append(result, fc)
 		}
 
@@ -76,7 +76,7 @@ func (s *Store) ContractsKey(key types.PublicKey) (result []explorer.FileContrac
 		for rows.Next() {
 			var contractID int64
 			var fc explorer.FileContract
-			if err := rows.Scan(&contractID, decode(&fc.StateElement.ID), decode(&fc.StateElement.LeafIndex), &fc.Resolved, &fc.Valid, decode(&fc.Filesize), decode(&fc.FileMerkleRoot), decode(&fc.WindowStart), decode(&fc.WindowEnd), decode(&fc.Payout), decode(&fc.UnlockHash), decode(&fc.RevisionNumber)); err != nil {
+			if err := rows.Scan(&contractID, decode(&fc.StateElement.ID), decode(&fc.StateElement.LeafIndex), &fc.Resolved, &fc.Valid, decode(&fc.FileContract.Filesize), decode(&fc.FileContract.FileMerkleRoot), decode(&fc.FileContract.WindowStart), decode(&fc.FileContract.WindowEnd), decode(&fc.FileContract.Payout), decode(&fc.FileContract.UnlockHash), decode(&fc.FileContract.RevisionNumber)); err != nil {
 				return fmt.Errorf("failed to scan transaction: %w", err)
 			}
 
@@ -90,8 +90,8 @@ func (s *Store) ContractsKey(key types.PublicKey) (result []explorer.FileContrac
 		}
 		for contractID, output := range proofOutputs {
 			fc := idContract[contractID]
-			fc.ValidProofOutputs = output.valid
-			fc.MissedProofOutputs = output.missed
+			fc.FileContract.ValidProofOutputs = output.valid
+			fc.FileContract.MissedProofOutputs = output.missed
 			result = append(result, fc)
 		}
 

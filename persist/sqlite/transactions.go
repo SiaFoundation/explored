@@ -260,7 +260,7 @@ ORDER BY ts.transaction_order ASC`
 	for rows.Next() {
 		var txnID, contractID int64
 		var fc explorer.FileContract
-		if err := rows.Scan(&txnID, &contractID, decode(&fc.StateElement.ID), decode(&fc.StateElement.LeafIndex), &fc.Resolved, &fc.Valid, decode(&fc.Filesize), decode(&fc.FileMerkleRoot), decode(&fc.WindowStart), decode(&fc.WindowEnd), decode(&fc.Payout), decode(&fc.UnlockHash), decode(&fc.RevisionNumber)); err != nil {
+		if err := rows.Scan(&txnID, &contractID, decode(&fc.StateElement.ID), decode(&fc.StateElement.LeafIndex), &fc.Resolved, &fc.Valid, decode(&fc.FileContract.Filesize), decode(&fc.FileContract.FileMerkleRoot), decode(&fc.FileContract.WindowStart), decode(&fc.FileContract.WindowEnd), decode(&fc.FileContract.Payout), decode(&fc.FileContract.UnlockHash), decode(&fc.FileContract.RevisionNumber)); err != nil {
 			return nil, fmt.Errorf("failed to scan file contract: %w", err)
 		}
 
@@ -275,8 +275,8 @@ ORDER BY ts.transaction_order ASC`
 	}
 	for contractID, output := range proofOutputs {
 		index := contractTransaction[contractID]
-		result[index.txnID][index.transactionOrder].ValidProofOutputs = output.valid
-		result[index.txnID][index.transactionOrder].MissedProofOutputs = output.missed
+		result[index.txnID][index.transactionOrder].FileContract.ValidProofOutputs = output.valid
+		result[index.txnID][index.transactionOrder].FileContract.MissedProofOutputs = output.missed
 	}
 
 	return result, nil
@@ -303,7 +303,7 @@ ORDER BY ts.transaction_order ASC`
 	for rows.Next() {
 		var txnID, contractID int64
 		var fc explorer.FileContractRevision
-		if err := rows.Scan(&txnID, &contractID, decode(&fc.ParentID), decode(&fc.UnlockConditions), decode(&fc.StateElement.ID), decode(&fc.StateElement.LeafIndex), &fc.Resolved, &fc.Valid, decode(&fc.Filesize), decode(&fc.FileMerkleRoot), decode(&fc.WindowStart), decode(&fc.WindowEnd), decode(&fc.Payout), decode(&fc.UnlockHash), decode(&fc.RevisionNumber)); err != nil {
+		if err := rows.Scan(&txnID, &contractID, decode(&fc.ParentID), decode(&fc.UnlockConditions), decode(&fc.StateElement.ID), decode(&fc.StateElement.LeafIndex), &fc.Resolved, &fc.Valid, decode(&fc.FileContract.FileContract.Filesize), decode(&fc.FileContract.FileContract.FileMerkleRoot), decode(&fc.FileContract.FileContract.WindowStart), decode(&fc.FileContract.FileContract.WindowEnd), decode(&fc.FileContract.FileContract.Payout), decode(&fc.FileContract.FileContract.UnlockHash), decode(&fc.FileContract.FileContract.RevisionNumber)); err != nil {
 			return nil, fmt.Errorf("failed to scan file contract: %w", err)
 		}
 
@@ -318,8 +318,8 @@ ORDER BY ts.transaction_order ASC`
 	}
 	for contractID, output := range proofOutputs {
 		index := contractTransaction[contractID]
-		result[index.txnID][index.transactionOrder].ValidProofOutputs = output.valid
-		result[index.txnID][index.transactionOrder].MissedProofOutputs = output.missed
+		result[index.txnID][index.transactionOrder].FileContract.FileContract.ValidProofOutputs = output.valid
+		result[index.txnID][index.transactionOrder].FileContract.FileContract.MissedProofOutputs = output.missed
 	}
 
 	return result, nil
