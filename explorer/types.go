@@ -161,6 +161,7 @@ type Host struct {
 
 // HostMetrics represents averages of scanned information from hosts.
 type HostMetrics struct {
-	Settings   rhpv2.HostSettings   `json:"settings"`
-	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
+	ActiveHosts uint64               `json:"activeHosts"`
+	Settings    rhpv2.HostSettings   `json:"settings"`
+	PriceTable  rhpv3.HostPriceTable `json:"priceTable"`
 }

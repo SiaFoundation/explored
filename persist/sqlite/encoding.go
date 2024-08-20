@@ -86,6 +86,8 @@ func (d *decodable) Scan(src any) error {
 			*v = uint64(src)
 		case *time.Time:
 			*v = time.Unix(src, 0).UTC()
+		case *time.Duration:
+			*v = time.Duration(src)
 		default:
 			return fmt.Errorf("cannot scan %T to %T", src, d.v)
 		}

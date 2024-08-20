@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"fmt"
+	"time"
 
 	"go.sia.tech/core/types"
 	"go.sia.tech/explored/explorer"
@@ -22,7 +23,7 @@ func (s *Store) Metrics(id types.BlockID) (result explorer.Metrics, err error) {
 // HostMetrics implements explorer.Store
 func (s *Store) HostMetrics() (result explorer.HostMetrics, err error) {
 	err = s.transaction(func(tx *txn) error {
-		rows, err := tx.Query(`SELECT price_table_host_block_height,price_table_update_price_table_cost,price_table_account_balance_cost,price_table_fund_account_cost,price_table_latest_revision_cost,price_table_subscription_memory_cost,price_table_subscription_notification_cost,price_table_init_base_cost,price_table_memory_time_cost,price_table_download_bandwidth_cost,price_table_upload_bandwidth_cost,price_table_drop_sectors_base_cost,price_table_drop_sectors_unit_cost,price_table_has_sector_base_cost,price_table_read_base_cost,price_table_read_length_cost,price_table_renew_contract_cost,price_table_revision_base_cost,price_table_swap_sector_base_cost,price_table_write_base_cost,price_table_write_length_cost,price_table_write_store_cost,price_table_txn_fee_min_recommended,price_table_txn_fee_max_recommended,price_table_contract_price,price_table_collateral_cost,price_table_max_collateral,price_table_max_duration,price_table_window_size,price_table_registry_entries_left,price_table_registry_entries_total FROM host_info WHERE last_scan_successful = 1`)
+		rows, err := tx.Query(`SELECT settings_max_download_batch_size,settings_max_duration,settings_max_revise_batch_size,settings_remaining_storage,settings_sector_size,settings_total_storage,settings_window_size,settings_collateral,settings_max_collateral,settings_base_rpc_price,settings_contract_price,settings_download_bandwidth_price,settings_sector_access_price,settings_storage_price,settings_upload_bandwidth_price,settings_ephemeral_account_expiry,settings_max_ephemeral_account_balance,settings_revision_number,price_table_validity,price_table_host_block_height,price_table_update_price_table_cost,price_table_account_balance_cost,price_table_fund_account_cost,price_table_latest_revision_cost,price_table_subscription_memory_cost,price_table_subscription_notification_cost,price_table_init_base_cost,price_table_memory_time_cost,price_table_download_bandwidth_cost,price_table_upload_bandwidth_cost,price_table_drop_sectors_base_cost,price_table_drop_sectors_unit_cost,price_table_has_sector_base_cost,price_table_read_base_cost,price_table_read_length_cost,price_table_renew_contract_cost,price_table_revision_base_cost,price_table_swap_sector_base_cost,price_table_write_base_cost,price_table_write_length_cost,price_table_write_store_cost,price_table_txn_fee_min_recommended,price_table_txn_fee_max_recommended,price_table_contract_price,price_table_collateral_cost,price_table_max_collateral,price_table_max_duration,price_table_window_size,price_table_registry_entries_left,price_table_registry_entries_total FROM host_info WHERE last_scan_successful = 0`)
 		if err != nil {
 			return fmt.Errorf("failed to get hosts: %w", err)
 		}
@@ -30,10 +31,30 @@ func (s *Store) HostMetrics() (result explorer.HostMetrics, err error) {
 		var count uint64
 		for rows.Next() {
 			var host explorer.Host
-			if err := rows.Scan(decode(&host.PriceTable.UpdatePriceTableCost), decode(&host.PriceTable.AccountBalanceCost), decode(&host.PriceTable.FundAccountCost), decode(&host.PriceTable.LatestRevisionCost), decode(&host.PriceTable.SubscriptionMemoryCost), decode(&host.PriceTable.SubscriptionNotificationCost), decode(&host.PriceTable.InitBaseCost), decode(&host.PriceTable.MemoryTimeCost), decode(&host.PriceTable.DownloadBandwidthCost), decode(&host.PriceTable.UploadBandwidthCost), decode(&host.PriceTable.DropSectorsBaseCost), decode(&host.PriceTable.DropSectorsUnitCost), decode(&host.PriceTable.HasSectorBaseCost), decode(&host.PriceTable.ReadBaseCost), decode(&host.PriceTable.ReadLengthCost), decode(&host.PriceTable.RenewContractCost), decode(&host.PriceTable.RevisionBaseCost), decode(&host.PriceTable.SwapSectorBaseCost), decode(&host.PriceTable.WriteBaseCost), decode(&host.PriceTable.WriteLengthCost), decode(&host.PriceTable.WriteStoreCost), decode(&host.PriceTable.TxnFeeMinRecommended), decode(&host.PriceTable.TxnFeeMaxRecommended), decode(&host.PriceTable.ContractPrice), decode(&host.PriceTable.CollateralCost), decode(&host.PriceTable.MaxCollateral), decode(&host.PriceTable.MaxDuration), decode(&host.PriceTable.WindowSize), decode(&host.PriceTable.RegistryEntriesLeft), decode(&host.PriceTable.RegistryEntriesTotal)); err != nil {
+			if err := rows.Scan(decode(&host.Settings.MaxDownloadBatchSize), decode(&host.Settings.MaxDuration), decode(&host.Settings.MaxReviseBatchSize), decode(&host.Settings.RemainingStorage), decode(&host.Settings.SectorSize), decode(&host.Settings.TotalStorage), decode(&host.Settings.WindowSize), decode(&host.Settings.Collateral), decode(&host.Settings.MaxCollateral), decode(&host.Settings.BaseRPCPrice), decode(&host.Settings.ContractPrice), decode(&host.Settings.DownloadBandwidthPrice), decode(&host.Settings.SectorAccessPrice), decode(&host.Settings.StoragePrice), decode(&host.Settings.UploadBandwidthPrice), decode(&host.Settings.EphemeralAccountExpiry), decode(&host.Settings.MaxEphemeralAccountBalance), decode(&host.Settings.RevisionNumber), decode(&host.PriceTable.Validity), decode(&host.PriceTable.HostBlockHeight), decode(&host.PriceTable.UpdatePriceTableCost), decode(&host.PriceTable.AccountBalanceCost), decode(&host.PriceTable.FundAccountCost), decode(&host.PriceTable.LatestRevisionCost), decode(&host.PriceTable.SubscriptionMemoryCost), decode(&host.PriceTable.SubscriptionNotificationCost), decode(&host.PriceTable.InitBaseCost), decode(&host.PriceTable.MemoryTimeCost), decode(&host.PriceTable.DownloadBandwidthCost), decode(&host.PriceTable.UploadBandwidthCost), decode(&host.PriceTable.DropSectorsBaseCost), decode(&host.PriceTable.DropSectorsUnitCost), decode(&host.PriceTable.HasSectorBaseCost), decode(&host.PriceTable.ReadBaseCost), decode(&host.PriceTable.ReadLengthCost), decode(&host.PriceTable.RenewContractCost), decode(&host.PriceTable.RevisionBaseCost), decode(&host.PriceTable.SwapSectorBaseCost), decode(&host.PriceTable.WriteBaseCost), decode(&host.PriceTable.WriteLengthCost), decode(&host.PriceTable.WriteStoreCost), decode(&host.PriceTable.TxnFeeMinRecommended), decode(&host.PriceTable.TxnFeeMaxRecommended), decode(&host.PriceTable.ContractPrice), decode(&host.PriceTable.CollateralCost), decode(&host.PriceTable.MaxCollateral), decode(&host.PriceTable.MaxDuration), decode(&host.PriceTable.WindowSize), decode(&host.PriceTable.RegistryEntriesLeft), decode(&host.PriceTable.RegistryEntriesTotal)); err != nil {
 				return fmt.Errorf("failed to scan host: %w", err)
 			}
 
+			result.Settings.MaxDownloadBatchSize += host.Settings.MaxDownloadBatchSize
+			result.Settings.MaxDuration += host.Settings.MaxDuration
+			result.Settings.MaxReviseBatchSize += host.Settings.MaxReviseBatchSize
+			result.Settings.RemainingStorage += host.Settings.RemainingStorage
+			result.Settings.SectorSize += host.Settings.SectorSize
+			result.Settings.TotalStorage += host.Settings.TotalStorage
+			result.Settings.WindowSize += host.Settings.WindowSize
+			result.Settings.Collateral = result.Settings.Collateral.Add(host.Settings.Collateral)
+			result.Settings.MaxCollateral = result.Settings.MaxCollateral.Add(host.Settings.MaxCollateral)
+			result.Settings.BaseRPCPrice = result.Settings.BaseRPCPrice.Add(host.Settings.BaseRPCPrice)
+			result.Settings.ContractPrice = result.Settings.ContractPrice.Add(host.Settings.ContractPrice)
+			result.Settings.DownloadBandwidthPrice = result.Settings.DownloadBandwidthPrice.Add(host.Settings.DownloadBandwidthPrice)
+			result.Settings.SectorAccessPrice = result.Settings.SectorAccessPrice.Add(host.Settings.SectorAccessPrice)
+			result.Settings.StoragePrice = result.Settings.StoragePrice.Add(host.Settings.StoragePrice)
+			result.Settings.UploadBandwidthPrice = result.Settings.UploadBandwidthPrice.Add(host.Settings.UploadBandwidthPrice)
+			result.Settings.EphemeralAccountExpiry += host.Settings.EphemeralAccountExpiry
+			result.Settings.MaxEphemeralAccountBalance = result.Settings.MaxEphemeralAccountBalance.Add(host.Settings.MaxEphemeralAccountBalance)
+			result.Settings.RevisionNumber = host.Settings.RevisionNumber
+
+			result.PriceTable.Validity += host.PriceTable.Validity
 			result.PriceTable.UpdatePriceTableCost = result.PriceTable.UpdatePriceTableCost.Add(host.PriceTable.UpdatePriceTableCost)
 			result.PriceTable.AccountBalanceCost = result.PriceTable.AccountBalanceCost.Add(host.PriceTable.AccountBalanceCost)
 			result.PriceTable.FundAccountCost = result.PriceTable.FundAccountCost.Add(host.PriceTable.FundAccountCost)
@@ -69,6 +90,28 @@ func (s *Store) HostMetrics() (result explorer.HostMetrics, err error) {
 		}
 
 		if count > 0 {
+			result.ActiveHosts = count
+
+			result.Settings.MaxDownloadBatchSize /= count
+			result.Settings.MaxDuration /= count
+			result.Settings.MaxReviseBatchSize /= count
+			result.Settings.RemainingStorage /= count
+			result.Settings.SectorSize /= count
+			result.Settings.TotalStorage /= count
+			result.Settings.WindowSize /= count
+			result.Settings.Collateral = result.Settings.Collateral.Div64(count)
+			result.Settings.MaxCollateral = result.Settings.MaxCollateral.Div64(count)
+			result.Settings.BaseRPCPrice = result.Settings.BaseRPCPrice.Div64(count)
+			result.Settings.ContractPrice = result.Settings.ContractPrice.Div64(count)
+			result.Settings.DownloadBandwidthPrice = result.Settings.DownloadBandwidthPrice.Div64(count)
+			result.Settings.SectorAccessPrice = result.Settings.SectorAccessPrice.Div64(count)
+			result.Settings.StoragePrice = result.Settings.StoragePrice.Div64(count)
+			result.Settings.UploadBandwidthPrice = result.Settings.UploadBandwidthPrice.Div64(count)
+			result.Settings.EphemeralAccountExpiry /= time.Duration(count)
+			result.Settings.MaxEphemeralAccountBalance = result.Settings.MaxEphemeralAccountBalance.Div64(count)
+			result.Settings.RevisionNumber /= count
+
+			result.PriceTable.Validity /= time.Duration(count)
 			result.PriceTable.UpdatePriceTableCost = result.PriceTable.UpdatePriceTableCost.Div64(count)
 			result.PriceTable.AccountBalanceCost = result.PriceTable.AccountBalanceCost.Div64(count)
 			result.PriceTable.FundAccountCost = result.PriceTable.FundAccountCost.Div64(count)

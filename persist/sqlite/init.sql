@@ -316,7 +316,7 @@ CREATE TABLE host_info (
     total_scans INTEGER NOT NULL,
     successful_interactions INTEGER NOT NULL,
     failed_interactions INTEGER NOT NULL,
-    -- settings (only present if host has been scanned)
+    -- settings
     settings_accepting_contracts INTEGER NOT NULL,
     settings_max_download_batch_size BLOB NOT NULL,
     settings_max_duration BLOB NOT NULL,
