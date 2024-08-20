@@ -782,22 +782,24 @@ func TestFileContract(t *testing.T) {
 	checkFC := func(resolved, valid bool, expected types.FileContract, got explorer.FileContract) {
 		check(t, "resolved state", resolved, got.Resolved)
 		check(t, "valid state", valid, got.Valid)
-		check(t, "filesize", expected.Filesize, got.Filesize)
-		check(t, "file merkle root", expected.FileMerkleRoot, got.FileMerkleRoot)
-		check(t, "window start", expected.WindowStart, got.WindowStart)
-		check(t, "window end", expected.WindowEnd, got.WindowEnd)
-		check(t, "payout", expected.Payout, got.Payout)
-		check(t, "unlock hash", expected.UnlockHash, got.UnlockHash)
-		check(t, "revision number", expected.RevisionNumber, got.RevisionNumber)
-		check(t, "valid proof outputs", len(expected.ValidProofOutputs), len(got.ValidProofOutputs))
+
+		gotFC := got.FileContract
+		check(t, "filesize", expected.Filesize, gotFC.Filesize)
+		check(t, "file merkle root", expected.FileMerkleRoot, gotFC.FileMerkleRoot)
+		check(t, "window start", expected.WindowStart, gotFC.WindowStart)
+		check(t, "window end", expected.WindowEnd, gotFC.WindowEnd)
+		check(t, "payout", expected.Payout, gotFC.Payout)
+		check(t, "unlock hash", expected.UnlockHash, gotFC.UnlockHash)
+		check(t, "revision number", expected.RevisionNumber, gotFC.RevisionNumber)
+		check(t, "valid proof outputs", len(expected.ValidProofOutputs), len(gotFC.ValidProofOutputs))
 		for i := range expected.ValidProofOutputs {
-			check(t, "valid proof output address", expected.ValidProofOutputs[i].Address, got.ValidProofOutputs[i].Address)
-			check(t, "valid proof output value", expected.ValidProofOutputs[i].Value, got.ValidProofOutputs[i].Value)
+			check(t, "valid proof output address", expected.ValidProofOutputs[i].Address, gotFC.ValidProofOutputs[i].Address)
+			check(t, "valid proof output value", expected.ValidProofOutputs[i].Value, gotFC.ValidProofOutputs[i].Value)
 		}
-		check(t, "missed proof outputs", len(expected.MissedProofOutputs), len(got.MissedProofOutputs))
+		check(t, "missed proof outputs", len(expected.MissedProofOutputs), len(gotFC.MissedProofOutputs))
 		for i := range expected.MissedProofOutputs {
-			check(t, "missed proof output address", expected.MissedProofOutputs[i].Address, got.MissedProofOutputs[i].Address)
-			check(t, "missed proof output value", expected.MissedProofOutputs[i].Value, got.MissedProofOutputs[i].Value)
+			check(t, "missed proof output address", expected.MissedProofOutputs[i].Address, gotFC.MissedProofOutputs[i].Address)
+			check(t, "missed proof output value", expected.MissedProofOutputs[i].Value, gotFC.MissedProofOutputs[i].Value)
 		}
 	}
 
@@ -1033,30 +1035,32 @@ func TestEphemeralFileContract(t *testing.T) {
 	checkFC := func(revision, resolved, valid bool, expected types.FileContract, got explorer.FileContract) {
 		check(t, "resolved state", resolved, got.Resolved)
 		check(t, "valid state", valid, got.Valid)
-		check(t, "filesize", expected.Filesize, got.Filesize)
-		check(t, "file merkle root", expected.FileMerkleRoot, got.FileMerkleRoot)
-		check(t, "window start", expected.WindowStart, got.WindowStart)
-		check(t, "window end", expected.WindowEnd, got.WindowEnd)
+
+		gotFC := got.FileContract
+		check(t, "filesize", expected.Filesize, gotFC.Filesize)
+		check(t, "file merkle root", expected.FileMerkleRoot, gotFC.FileMerkleRoot)
+		check(t, "window start", expected.WindowStart, gotFC.WindowStart)
+		check(t, "window end", expected.WindowEnd, gotFC.WindowEnd)
 
 		// See core/types.FileContractRevision
 		// Essentially, a revision cannot change the total payout, so this value
 		// is replaced with a sentinel value of types.MaxCurrency in revisions
 		// if it is decoded.
 		if !revision {
-			check(t, "payout", expected.Payout, got.Payout)
+			check(t, "payout", expected.Payout, gotFC.Payout)
 		}
 
-		check(t, "unlock hash", expected.UnlockHash, got.UnlockHash)
-		check(t, "revision number", expected.RevisionNumber, got.RevisionNumber)
-		check(t, "valid proof outputs", len(expected.ValidProofOutputs), len(got.ValidProofOutputs))
+		check(t, "unlock hash", expected.UnlockHash, gotFC.UnlockHash)
+		check(t, "revision number", expected.RevisionNumber, gotFC.RevisionNumber)
+		check(t, "valid proof outputs", len(expected.ValidProofOutputs), len(gotFC.ValidProofOutputs))
 		for i := range expected.ValidProofOutputs {
-			check(t, "valid proof output address", expected.ValidProofOutputs[i].Address, got.ValidProofOutputs[i].Address)
-			check(t, "valid proof output value", expected.ValidProofOutputs[i].Value, got.ValidProofOutputs[i].Value)
+			check(t, "valid proof output address", expected.ValidProofOutputs[i].Address, gotFC.ValidProofOutputs[i].Address)
+			check(t, "valid proof output value", expected.ValidProofOutputs[i].Value, gotFC.ValidProofOutputs[i].Value)
 		}
-		check(t, "missed proof outputs", len(expected.MissedProofOutputs), len(got.MissedProofOutputs))
+		check(t, "missed proof outputs", len(expected.MissedProofOutputs), len(gotFC.MissedProofOutputs))
 		for i := range expected.MissedProofOutputs {
-			check(t, "missed proof output address", expected.MissedProofOutputs[i].Address, got.MissedProofOutputs[i].Address)
-			check(t, "missed proof output value", expected.MissedProofOutputs[i].Value, got.MissedProofOutputs[i].Value)
+			check(t, "missed proof output address", expected.MissedProofOutputs[i].Address, gotFC.MissedProofOutputs[i].Address)
+			check(t, "missed proof output value", expected.MissedProofOutputs[i].Value, gotFC.MissedProofOutputs[i].Value)
 		}
 	}
 
@@ -2402,22 +2406,24 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	checkFC := func(resolved, valid bool, expected types.FileContract, got explorer.FileContract) {
 		check(t, "resolved state", resolved, got.Resolved)
 		check(t, "valid state", valid, got.Valid)
-		check(t, "filesize", expected.Filesize, got.Filesize)
-		check(t, "file merkle root", expected.FileMerkleRoot, got.FileMerkleRoot)
-		check(t, "window start", expected.WindowStart, got.WindowStart)
-		check(t, "window end", expected.WindowEnd, got.WindowEnd)
-		check(t, "payout", expected.Payout, got.Payout)
-		check(t, "unlock hash", expected.UnlockHash, got.UnlockHash)
-		check(t, "revision number", expected.RevisionNumber, got.RevisionNumber)
-		check(t, "valid proof outputs", len(expected.ValidProofOutputs), len(got.ValidProofOutputs))
+
+		gotFC := got.FileContract
+		check(t, "filesize", expected.Filesize, gotFC.Filesize)
+		check(t, "file merkle root", expected.FileMerkleRoot, gotFC.FileMerkleRoot)
+		check(t, "window start", expected.WindowStart, gotFC.WindowStart)
+		check(t, "window end", expected.WindowEnd, gotFC.WindowEnd)
+		check(t, "payout", expected.Payout, gotFC.Payout)
+		check(t, "unlock hash", expected.UnlockHash, gotFC.UnlockHash)
+		check(t, "revision number", expected.RevisionNumber, gotFC.RevisionNumber)
+		check(t, "valid proof outputs", len(expected.ValidProofOutputs), len(gotFC.ValidProofOutputs))
 		for i := range expected.ValidProofOutputs {
-			check(t, "valid proof output address", expected.ValidProofOutputs[i].Address, got.ValidProofOutputs[i].Address)
-			check(t, "valid proof output value", expected.ValidProofOutputs[i].Value, got.ValidProofOutputs[i].Value)
+			check(t, "valid proof output address", expected.ValidProofOutputs[i].Address, gotFC.ValidProofOutputs[i].Address)
+			check(t, "valid proof output value", expected.ValidProofOutputs[i].Value, gotFC.ValidProofOutputs[i].Value)
 		}
-		check(t, "missed proof outputs", len(expected.MissedProofOutputs), len(got.MissedProofOutputs))
+		check(t, "missed proof outputs", len(expected.MissedProofOutputs), len(gotFC.MissedProofOutputs))
 		for i := range expected.MissedProofOutputs {
-			check(t, "missed proof output address", expected.MissedProofOutputs[i].Address, got.MissedProofOutputs[i].Address)
-			check(t, "missed proof output value", expected.MissedProofOutputs[i].Value, got.MissedProofOutputs[i].Value)
+			check(t, "missed proof output address", expected.MissedProofOutputs[i].Address, gotFC.MissedProofOutputs[i].Address)
+			check(t, "missed proof output value", expected.MissedProofOutputs[i].Value, gotFC.MissedProofOutputs[i].Value)
 		}
 	}
 
