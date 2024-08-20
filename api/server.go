@@ -48,6 +48,7 @@ type (
 		Block(id types.BlockID) (explorer.Block, error)
 		BestTip(height uint64) (types.ChainIndex, error)
 		Metrics(id types.BlockID) (explorer.Metrics, error)
+		HostMetrics() (HostMetrics, error)
 		Transactions(ids []types.TransactionID) ([]explorer.Transaction, error)
 		Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 		SiacoinElements(ids []types.SiacoinOutputID) (result []explorer.SiacoinOutput, err error)
@@ -196,6 +197,14 @@ func (s *server) blocksMetricsIDHandler(jc jape.Context) {
 	}
 	metrics, err := s.e.Metrics(id)
 	if jc.Check("failed to get metrics", err) != nil {
+		return
+	}
+	jc.Encode(metrics)
+}
+
+func (s *server) blocksMetricsHostHandler(jc jape.Context) {
+	metrics, err := s.e.HostMetrics()
+	if jc.Check("failed to get host metrics", err) != nil {
 		return
 	}
 	jc.Encode(metrics)
@@ -490,6 +499,7 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 
 		"GET    /metrics/block":     srv.blocksMetricsHandler,
 		"GET    /metrics/block/:id": srv.blocksMetricsIDHandler,
+		"GET    /metrics/host":      srv.blocksMetricsHostHandler,
 
 		"GET    /search/:id": srv.searchIDHandler,
 	})

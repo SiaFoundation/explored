@@ -184,6 +184,12 @@ func (c *Client) BlockMetricsID(id types.BlockID) (resp explorer.Metrics, err er
 	return
 }
 
+// HostMetrics returns various metrics about currently available hosts.
+func (c *Client) HostMetrics() (resp explorer.HostMetrics, err error) {
+	err = c.c.GET("/metrics/host", &resp)
+	return
+}
+
 // Search returns what type of object an ID is.
 func (c *Client) Search(id types.Hash256) (resp explorer.SearchType, err error) {
 	err = c.c.GET(fmt.Sprintf("/search/%s", id), &resp)
