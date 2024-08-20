@@ -19,6 +19,7 @@ func (s *Store) Metrics(id types.BlockID) (result explorer.Metrics, err error) {
 	return
 }
 
+// HostMetrics implements explorer.Store
 func (s *Store) HostMetrics() (result explorer.HostMetrics, err error) {
 	err = s.transaction(func(tx *txn) error {
 		rows, err := tx.Query(`SELECT price_table_host_block_height,price_table_update_price_table_cost,price_table_account_balance_cost,price_table_fund_account_cost,price_table_latest_revision_cost,price_table_subscription_memory_cost,price_table_subscription_notification_cost,price_table_init_base_cost,price_table_memory_time_cost,price_table_download_bandwidth_cost,price_table_upload_bandwidth_cost,price_table_drop_sectors_base_cost,price_table_drop_sectors_unit_cost,price_table_has_sector_base_cost,price_table_read_base_cost,price_table_read_length_cost,price_table_renew_contract_cost,price_table_revision_base_cost,price_table_swap_sector_base_cost,price_table_write_base_cost,price_table_write_length_cost,price_table_write_store_cost,price_table_txn_fee_min_recommended,price_table_txn_fee_max_recommended,price_table_contract_price,price_table_collateral_cost,price_table_max_collateral,price_table_max_duration,price_table_window_size,price_table_registry_entries_left,price_table_registry_entries_total FROM host_info WHERE last_scan_successful = 1`)
