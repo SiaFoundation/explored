@@ -48,7 +48,7 @@ type (
 		Block(id types.BlockID) (explorer.Block, error)
 		BestTip(height uint64) (types.ChainIndex, error)
 		Metrics(id types.BlockID) (explorer.Metrics, error)
-		HostMetrics() (HostMetrics, error)
+		HostMetrics() (explorer.HostMetrics, error)
 		Transactions(ids []types.TransactionID) ([]explorer.Transaction, error)
 		Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 		SiacoinElements(ids []types.SiacoinOutputID) (result []explorer.SiacoinOutput, err error)
