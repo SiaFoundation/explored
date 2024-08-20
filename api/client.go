@@ -124,6 +124,18 @@ func (c *Client) AddressSiafundUTXOs(address types.Address, offset, limit uint64
 	return
 }
 
+// OutputSiacoin returns the specified siacoin output.
+func (c *Client) OutputSiacoin(id types.SiacoinOutputID) (resp explorer.SiacoinOutput, err error) {
+	err = c.c.GET(fmt.Sprintf("/outputs/siacoin/%s", id), &resp)
+	return
+}
+
+// OutputSiafund returns the specified siafund output.
+func (c *Client) OutputSiafund(id types.SiafundOutputID) (resp explorer.SiafundOutput, err error) {
+	err = c.c.GET(fmt.Sprintf("/outputs/siafund/%s", id), &resp)
+	return
+}
+
 // AddressEvents returns the specified address' events.
 func (c *Client) AddressEvents(address types.Address, offset, limit uint64) (resp []explorer.Event, err error) {
 	err = c.c.GET(fmt.Sprintf("/addresses/%s/events?offset=%d&limit=%d", address, offset, limit), &resp)

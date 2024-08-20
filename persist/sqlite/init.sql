@@ -46,7 +46,7 @@ CREATE TABLE siacoin_elements (
         output_id BLOB UNIQUE NOT NULL,
         leaf_index BLOB NOT NULL,
 
-        spent INTEGER NOT NULL,
+        spent_index BLOB,
         source INTEGER NOT NULL,
         maturity_height INTEGER NOT NULL,
         address BLOB NOT NULL,
@@ -55,7 +55,7 @@ CREATE TABLE siacoin_elements (
 
 CREATE INDEX siacoin_elements_maturity_height_index ON siacoin_elements(maturity_height);
 CREATE INDEX siacoin_elements_output_id_index ON siacoin_elements(output_id);
-CREATE INDEX siacoin_elements_address_spent_index ON siacoin_elements(address, spent);
+CREATE INDEX siacoin_elements_address_spent_index ON siacoin_elements(address, spent_index);
 
 CREATE TABLE siafund_elements (
         id INTEGER PRIMARY KEY,
@@ -64,14 +64,14 @@ CREATE TABLE siafund_elements (
         output_id BLOB UNIQUE NOT NULL,
         leaf_index BLOB NOT NULL,
 
-        spent INTEGER NOT NULL,
+        spent_index BLOB,
         claim_start BLOB NOT NULL,
         address BLOB NOT NULL,
         value BLOB NOT NULL
 );
 
 CREATE INDEX siafund_elements_output_id_index ON siafund_elements(output_id);
-CREATE INDEX siafund_elements_address_spent_index ON siafund_elements(address, spent);
+CREATE INDEX siafund_elements_address_spent_index ON siafund_elements(address, spent_index);
 
 CREATE TABLE file_contract_elements (
         id INTEGER PRIMARY KEY,

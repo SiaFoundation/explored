@@ -85,6 +85,8 @@ func (d *decodable) Scan(src any) error {
 			return fmt.Errorf("cannot scan %T to %T", src, d.v)
 		}
 		return nil
+	case nil:
+		return nil
 	default:
 		return fmt.Errorf("cannot scan %T to %T", src, d.v)
 	}
@@ -92,4 +94,22 @@ func (d *decodable) Scan(src any) error {
 
 func decode(obj any) sql.Scanner {
 	return &decodable{obj}
+}
+
+type nullDecodable struct {
+	v any
+}
+
+func decodeNull(obj any) sql.Scanner {
+	return &nullDecodable{obj}
+}
+
+// Scan implements the sql.Scanner interface.
+func (d *nullDecodable) Scan(src any) error {
+	if src == nil {
+		return nil
+	}
+
+	dd := decode(d.v)
+	return dd.Scan(src)
 }

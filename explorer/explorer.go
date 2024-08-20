@@ -45,7 +45,7 @@ type Store interface {
 	Contracts(ids []types.FileContractID) (result []FileContract, err error)
 	ContractsKey(key types.PublicKey) (result []FileContract, err error)
 	SiacoinElements(ids []types.SiacoinOutputID) (result []SiacoinOutput, err error)
-	SiafundElements(ids []types.SiafundOutputID) (result []types.SiafundElement, err error)
+	SiafundElements(ids []types.SiafundOutputID) (result []SiafundOutput, err error)
 }
 
 // Explorer implements a Sia explorer.
@@ -184,7 +184,7 @@ func (e *Explorer) SiacoinElements(ids []types.SiacoinOutputID) (result []Siacoi
 }
 
 // SiafundElements returns the siafund elements with the specified IDs.
-func (e *Explorer) SiafundElements(ids []types.SiafundOutputID) (result []types.SiafundElement, err error) {
+func (e *Explorer) SiafundElements(ids []types.SiafundOutputID) (result []SiafundOutput, err error) {
 	return e.s.SiafundElements(ids)
 }
 
