@@ -82,6 +82,24 @@ func (e *Explorer) scanHost(host HostAnnouncement) (Host, error) {
 	}, nil
 }
 
+func (e *Explorer) scanThread(req chan HostAnnouncement, resp chan Host) {
+	for host := range req {
+		if scan, err := e.scanHost(host); err != nil {
+			resp <- Host{
+				PublicKey:  host.PublicKey,
+				NetAddress: host.NetAddress,
+
+				LastScan:           time.Now(),
+				TotalScans:         1,
+				FailedInteractions: 1,
+			}
+			e.log.Info("failed to scan host", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()), zap.Error(err))
+		} else {
+			resp <- scan
+		}
+	}
+}
+
 func (e *Explorer) scanHosts() {
 	const (
 		scanBatchSize = 100
@@ -92,6 +110,12 @@ func (e *Explorer) scanHosts() {
 	e.waitForSync()
 	e.log.Info("Syncing complete, will begin scanning hosts")
 
+	announcements := make(chan HostAnnouncement)
+	scans := make(chan Host)
+
+	for i := 0; i < e.scanCfg.Threads; i++ {
+		go e.scanThread(announcements, scans)
+	}
 	for {
 		offset := uint64(0)
 		cutoff := time.Now().Add(-e.scanCfg.MaxLastScan)
@@ -100,32 +124,28 @@ func (e *Explorer) scanHosts() {
 			if err != nil {
 				e.log.Error("failed to get hosts for scanning", zap.Error(err))
 			}
-
 			offset += uint64(len(hosts))
+
+			for _, host := range hosts {
+				announcements <- host
+			}
+
 			if len(hosts) < scanBatchSize {
 				break
 			}
+		}
 
-			var scanned []Host
-			for _, host := range hosts {
-				if scan, err := e.scanHost(host); err != nil {
-					scanned = append(scanned, Host{
-						PublicKey:  host.PublicKey,
-						NetAddress: host.NetAddress,
-
-						LastScan:           time.Now(),
-						TotalScans:         1,
-						FailedInteractions: 1,
-					})
-					e.log.Info("failed to scan host", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()), zap.Error(err))
-				} else {
-					scanned = append(scanned, scan)
-				}
-			}
-
-			if err := e.s.AddHostScans(scanned); err != nil {
-				e.log.Error("failed to add host scans", zap.Error(err))
+		var scanned []Host
+		for scan := range scans {
+			scanned = append(scanned, scan)
+			if uint64(len(scanned)) == offset {
+				break
 			}
 		}
+
+		if err := e.s.AddHostScans(scanned); err != nil {
+			e.log.Error("failed to add host scans", zap.Error(err))
+		}
+		e.log.Debug("Added all scans to DB", zap.Int("count", len(scanned)))
 	}
 }
