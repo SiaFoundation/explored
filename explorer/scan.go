@@ -83,19 +83,24 @@ func (e *Explorer) scanHost(host HostAnnouncement) (Host, error) {
 }
 
 func (e *Explorer) scanThread(req chan HostAnnouncement, resp chan Host) {
-	for host := range req {
-		if scan, err := e.scanHost(host); err != nil {
-			resp <- Host{
-				PublicKey:  host.PublicKey,
-				NetAddress: host.NetAddress,
+	for {
+		select {
+		case <-e.quit:
+			break
+		case host := <-req:
+			if scan, err := e.scanHost(host); err != nil {
+				resp <- Host{
+					PublicKey:  host.PublicKey,
+					NetAddress: host.NetAddress,
 
-				LastScan:           time.Now(),
-				TotalScans:         1,
-				FailedInteractions: 1,
+					LastScan:           time.Now(),
+					TotalScans:         1,
+					FailedInteractions: 1,
+				}
+				e.log.Info("failed to scan host", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()), zap.Error(err))
+			} else {
+				resp <- scan
 			}
-			e.log.Info("failed to scan host", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()), zap.Error(err))
-		} else {
-			resp <- scan
 		}
 	}
 }
