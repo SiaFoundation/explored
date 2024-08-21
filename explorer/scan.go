@@ -32,7 +32,7 @@ func (e *Explorer) waitForSync() {
 func (e *Explorer) scanHost(host HostAnnouncement) (Host, error) {
 	e.log.Debug("Scanning host", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()))
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), e.scanCfg.Timeout)
 	defer cancel()
 
 	dialer := (&net.Dialer{})
@@ -84,8 +84,7 @@ func (e *Explorer) scanHost(host HostAnnouncement) (Host, error) {
 
 func (e *Explorer) scanHosts() {
 	const (
-		scanBatchSize   = 100
-		scanMinInterval = 3 * time.Hour
+		scanBatchSize = 100
 	)
 
 	e.log.Info("Waiting for syncing to complete before scanning hosts")
@@ -95,7 +94,7 @@ func (e *Explorer) scanHosts() {
 
 	for {
 		offset := uint64(0)
-		cutoff := time.Now().Add(-scanMinInterval)
+		cutoff := time.Now().Add(-e.scanCfg.MaxLastScan)
 		for {
 			hosts, err := e.s.HostsForScanning(cutoff, offset, scanBatchSize)
 			if err != nil {

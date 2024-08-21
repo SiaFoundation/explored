@@ -10,6 +10,7 @@ import (
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
+	"go.sia.tech/explored/config"
 	"go.uber.org/zap"
 )
 
@@ -61,6 +62,8 @@ type Explorer struct {
 	s  Store
 	cm ChainManager
 
+	scanCfg config.Scanner
+
 	mu  sync.Mutex
 	log *zap.Logger
 
@@ -88,8 +91,13 @@ func (e *Explorer) syncStore(index types.ChainIndex, batchSize int) error {
 }
 
 // NewExplorer returns a Sia explorer.
-func NewExplorer(cm ChainManager, store Store, batchSize int, log *zap.Logger) (*Explorer, error) {
-	e := &Explorer{s: store, cm: cm, log: log}
+func NewExplorer(cm ChainManager, store Store, batchSize int, scanCfg config.Scanner, log *zap.Logger) (*Explorer, error) {
+	e := &Explorer{
+		s:       store,
+		cm:      cm,
+		scanCfg: scanCfg,
+		log:     log,
+	}
 
 	tip, err := e.s.Tip()
 	if errors.Is(err, ErrNoTip) {

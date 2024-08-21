@@ -43,6 +43,11 @@ var cfg = config.Config{
 		Bootstrap:  true,
 		EnableUPNP: false,
 	},
+	Scanner: config.Scanner{
+		Threads:     10,
+		Timeout:     30 * time.Second,
+		MaxLastScan: 3 * time.Hour,
+	},
 	Consensus: config.Consensus{
 		Network: "mainnet",
 	},
@@ -343,7 +348,7 @@ func main() {
 	defer s.Close()
 	go s.Run(ctx)
 
-	e, err := explorer.NewExplorer(cm, store, cfg.Index.BatchSize, log.Named("explorer"))
+	e, err := explorer.NewExplorer(cm, store, cfg.Index.BatchSize, cfg.Scanner, log.Named("explorer"))
 	if err != nil {
 		log.Error("failed to create explorer", zap.Error(err))
 		return
