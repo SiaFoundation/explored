@@ -30,8 +30,6 @@ func (e *Explorer) waitForSync() {
 }
 
 func (e *Explorer) scanHost(host HostAnnouncement) (Host, error) {
-	e.log.Debug("Scanning host", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()))
-
 	ctx, cancel := context.WithTimeout(context.Background(), e.scanCfg.Timeout)
 	defer cancel()
 
@@ -77,6 +75,7 @@ func (e *Explorer) scanHost(host HostAnnouncement) (Host, error) {
 		PriceTable: table,
 
 		LastScan:               time.Now(),
+		LastScanSuccessful:     true,
 		TotalScans:             1,
 		SuccessfulInteractions: 1,
 	}, nil
@@ -88,19 +87,25 @@ func (e *Explorer) scanThread(req chan HostAnnouncement, resp chan Host) {
 		case <-e.quit:
 			break
 		case host := <-req:
-			if scan, err := e.scanHost(host); err != nil {
+			e.log.Debug("Scanning host", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()))
+
+			scan, err := e.scanHost(host)
+			if err != nil {
 				resp <- Host{
 					PublicKey:  host.PublicKey,
 					NetAddress: host.NetAddress,
 
 					LastScan:           time.Now(),
-					LastScanSuccessful: true,
+					LastScanSuccessful: false,
 					TotalScans:         1,
 					FailedInteractions: 1,
 				}
-				e.log.Info("failed to scan host", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()), zap.Error(err))
+
+				e.log.Debug("Failed to scan host", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()), zap.Error(err))
 			} else {
 				resp <- scan
+
+				e.log.Debug("Successfully scanned host", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()), zap.Error(err))
 			}
 		}
 	}
@@ -123,14 +128,14 @@ func (e *Explorer) scanHosts() {
 		go e.scanThread(announcements, scans)
 	}
 	for {
-		offset := uint64(0)
+		offset := 0
 		cutoff := time.Now().Add(-e.scanCfg.MaxLastScan)
 		for {
-			hosts, err := e.s.HostsForScanning(cutoff, offset, scanBatchSize)
+			hosts, err := e.s.HostsForScanning(cutoff, uint64(offset), scanBatchSize)
 			if err != nil {
 				e.log.Error("failed to get hosts for scanning", zap.Error(err))
 			}
-			offset += uint64(len(hosts))
+			offset += len(hosts)
 
 			for _, host := range hosts {
 				announcements <- host
@@ -144,7 +149,7 @@ func (e *Explorer) scanHosts() {
 		var scanned []Host
 		for scan := range scans {
 			scanned = append(scanned, scan)
-			if uint64(len(scanned)) == offset {
+			if len(scanned) == offset {
 				break
 			}
 		}
