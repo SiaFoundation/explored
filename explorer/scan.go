@@ -94,6 +94,7 @@ func (e *Explorer) scanThread(req chan HostAnnouncement, resp chan Host) {
 					NetAddress: host.NetAddress,
 
 					LastScan:           time.Now(),
+					LastScanSuccessful: true,
 					TotalScans:         1,
 					FailedInteractions: 1,
 				}

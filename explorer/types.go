@@ -150,6 +150,7 @@ type Host struct {
 
 	KnownSince             time.Time `json:"knownSince"`
 	LastScan               time.Time `json:"lastScan"`
+	LastScanSuccessful     bool      `json:"lastScanSuccessful"`
 	LastAnnouncement       time.Time `json:"lastAnnouncement"`
 	TotalScans             uint64    `json:"totalScans"`
 	SuccessfulInteractions uint64    `json:"successfulInteractions"`
