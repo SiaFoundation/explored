@@ -121,7 +121,6 @@ func (e *Explorer) addAndScanHosts(hosts chan HostAnnouncement) {
 
 	// wait until they're done
 	wg.Wait()
-	return
 }
 
 func (e *Explorer) scanHosts() {
