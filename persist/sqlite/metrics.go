@@ -52,9 +52,10 @@ func (s *Store) HostMetrics() (result explorer.HostMetrics, err error) {
 			result.Settings.UploadBandwidthPrice = result.Settings.UploadBandwidthPrice.Add(host.Settings.UploadBandwidthPrice)
 			result.Settings.EphemeralAccountExpiry += host.Settings.EphemeralAccountExpiry
 			result.Settings.MaxEphemeralAccountBalance = result.Settings.MaxEphemeralAccountBalance.Add(host.Settings.MaxEphemeralAccountBalance)
-			result.Settings.RevisionNumber = host.Settings.RevisionNumber
+			result.Settings.RevisionNumber += host.Settings.RevisionNumber
 
 			result.PriceTable.Validity += host.PriceTable.Validity
+			result.PriceTable.HostBlockHeight += host.PriceTable.HostBlockHeight
 			result.PriceTable.UpdatePriceTableCost = result.PriceTable.UpdatePriceTableCost.Add(host.PriceTable.UpdatePriceTableCost)
 			result.PriceTable.AccountBalanceCost = result.PriceTable.AccountBalanceCost.Add(host.PriceTable.AccountBalanceCost)
 			result.PriceTable.FundAccountCost = result.PriceTable.FundAccountCost.Add(host.PriceTable.FundAccountCost)
@@ -84,7 +85,7 @@ func (s *Store) HostMetrics() (result explorer.HostMetrics, err error) {
 			result.PriceTable.MaxDuration += host.PriceTable.MaxDuration
 			result.PriceTable.WindowSize += host.PriceTable.WindowSize
 			result.PriceTable.RegistryEntriesLeft += host.PriceTable.RegistryEntriesLeft
-			result.PriceTable.RegistryEntriesTotal = host.PriceTable.RegistryEntriesTotal
+			result.PriceTable.RegistryEntriesTotal += host.PriceTable.RegistryEntriesTotal
 
 			count++
 		}
@@ -112,6 +113,7 @@ func (s *Store) HostMetrics() (result explorer.HostMetrics, err error) {
 			result.Settings.RevisionNumber /= count
 
 			result.PriceTable.Validity /= time.Duration(count)
+			result.PriceTable.HostBlockHeight /= count
 			result.PriceTable.UpdatePriceTableCost = result.PriceTable.UpdatePriceTableCost.Div64(count)
 			result.PriceTable.AccountBalanceCost = result.PriceTable.AccountBalanceCost.Div64(count)
 			result.PriceTable.FundAccountCost = result.PriceTable.FundAccountCost.Div64(count)

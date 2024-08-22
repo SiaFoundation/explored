@@ -2004,10 +2004,19 @@ func TestHostAnnouncement(t *testing.T) {
 		StorageUtilization: 0,
 	})
 
-	hosts, _ := (db.HostsForScanning(time.Unix(0, 0), 0, 100))
-	t.Log(len(hosts))
-	t.Log(db.Hosts([]types.PublicKey{hosts[0].PublicKey}))
-	t.Log(db.HostMetrics())
+	hosts, err := db.HostsForScanning(time.Unix(0, 0), 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(t, "len(hosts)", 3, len(hosts))
+
+	scans, err := db.Hosts([]types.PublicKey{hosts[0].PublicKey})
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(t, "len(scans)", 1, len(scans))
+
+	db.HostMetrics()
 }
 
 func TestMultipleReorg(t *testing.T) {

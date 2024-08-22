@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	crhpv2 "go.sia.tech/core/rhp/v2"
@@ -81,17 +82,13 @@ func (e *Explorer) scanHost(host HostAnnouncement) (Host, error) {
 	}, nil
 }
 
-func (e *Explorer) scanThread(req chan HostAnnouncement, resp chan Host) {
-	for {
-		select {
-		case <-e.quit:
-			break
-		case host := <-req:
-			e.log.Debug("Scanning host", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()))
-
+func (e *Explorer) addAndScanHosts(hosts chan HostAnnouncement) {
+	worker := func() {
+		var scans []Host
+		for host := range hosts {
 			scan, err := e.scanHost(host)
 			if err != nil {
-				resp <- Host{
+				scans = append(scans, Host{
 					PublicKey:  host.PublicKey,
 					NetAddress: host.NetAddress,
 
@@ -99,16 +96,32 @@ func (e *Explorer) scanThread(req chan HostAnnouncement, resp chan Host) {
 					LastScanSuccessful: false,
 					TotalScans:         1,
 					FailedInteractions: 1,
-				}
-
-				e.log.Debug("Failed to scan host", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()), zap.Error(err))
-			} else {
-				resp <- scan
-
-				e.log.Debug("Successfully scanned host", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()), zap.Error(err))
+				})
+				e.log.Debug("Scanning host failed", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()), zap.Error(err))
+				continue
 			}
+
+			e.log.Debug("Scanning host succeeded", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()))
+			scans = append(scans, scan)
+		}
+		if err := e.s.AddHostScans(scans); err != nil {
+			e.log.Error("Failed to add host scans to DB", zap.Error(err))
 		}
 	}
+
+	// launch all workers
+	var wg sync.WaitGroup
+	for t := 0; t < e.scanCfg.Threads; t++ {
+		wg.Add(1)
+		go func() {
+			worker()
+			wg.Done()
+		}()
+	}
+
+	// wait until they're done
+	wg.Wait()
+	return
 }
 
 func (e *Explorer) scanHosts() {
@@ -121,42 +134,30 @@ func (e *Explorer) scanHosts() {
 	e.waitForSync()
 	e.log.Info("Syncing complete, will begin scanning hosts")
 
-	announcements := make(chan HostAnnouncement)
-	scans := make(chan Host)
-
-	for i := 0; i < e.scanCfg.Threads; i++ {
-		go e.scanThread(announcements, scans)
-	}
 	for {
 		offset := 0
 		cutoff := time.Now().Add(-e.scanCfg.MaxLastScan)
-		for {
-			hosts, err := e.s.HostsForScanning(cutoff, uint64(offset), scanBatchSize)
-			if err != nil {
-				e.log.Error("failed to get hosts for scanning", zap.Error(err))
-			}
-			offset += len(hosts)
 
-			for _, host := range hosts {
-				announcements <- host
-			}
+		announcements := make(chan HostAnnouncement)
+		go func() {
+			for {
+				hosts, err := e.s.HostsForScanning(cutoff, uint64(offset), scanBatchSize)
+				if err != nil {
+					e.log.Error("failed to get hosts for scanning", zap.Error(err))
+				}
+				offset += len(hosts)
 
-			if len(hosts) < scanBatchSize {
-				break
-			}
-		}
+				for _, host := range hosts {
+					announcements <- host
+				}
 
-		var scanned []Host
-		for scan := range scans {
-			scanned = append(scanned, scan)
-			if len(scanned) == offset {
-				break
+				if len(hosts) < scanBatchSize {
+					break
+				}
 			}
-		}
+			close(announcements)
+		}()
 
-		if err := e.s.AddHostScans(scanned); err != nil {
-			e.log.Error("failed to add host scans", zap.Error(err))
-		}
-		e.log.Debug("Added all scans to DB", zap.Int("count", len(scanned)))
+		e.addAndScanHosts(announcements)
 	}
 }

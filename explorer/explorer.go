@@ -63,7 +63,6 @@ type Explorer struct {
 	cm ChainManager
 
 	scanCfg config.Scanner
-	quit    chan struct{}
 
 	mu  sync.Mutex
 	log *zap.Logger
@@ -136,11 +135,6 @@ func NewExplorer(cm ChainManager, store Store, batchSize int, scanCfg config.Sca
 		}
 	})
 	return e, nil
-}
-
-// Close closes the explorer.
-func (e *Explorer) Close() {
-	e.quit <- struct{}{}
 }
 
 // Tip returns the tip of the best known valid chain.
