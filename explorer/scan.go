@@ -82,7 +82,7 @@ func (e *Explorer) scanHost(host HostAnnouncement) (Host, error) {
 	}, nil
 }
 
-func (e *Explorer) addAndScanHosts(hosts chan HostAnnouncement) {
+func (e *Explorer) addHostScans(hosts chan HostAnnouncement) {
 	worker := func() {
 		var scans []Host
 		for host := range hosts {
@@ -158,6 +158,6 @@ func (e *Explorer) scanHosts() {
 			}
 		}()
 
-		e.addAndScanHosts(announcements)
+		e.addHostScans(announcements)
 	}
 }
