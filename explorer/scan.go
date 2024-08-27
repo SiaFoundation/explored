@@ -138,6 +138,8 @@ func (e *Explorer) scanHosts() {
 		cutoff := time.Now().Add(-e.scanCfg.MaxLastScan)
 
 		announcements := make(chan HostAnnouncement)
+		defer close(announcements)
+
 		go func() {
 			for {
 				hosts, err := e.s.HostsForScanning(cutoff, uint64(offset), scanBatchSize)
@@ -154,7 +156,6 @@ func (e *Explorer) scanHosts() {
 					break
 				}
 			}
-			close(announcements)
 		}()
 
 		e.addAndScanHosts(announcements)
