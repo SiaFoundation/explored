@@ -145,6 +145,7 @@ func (e *Explorer) scanHosts() {
 				hosts, err := e.s.HostsForScanning(cutoff, uint64(offset), scanBatchSize)
 				if err != nil {
 					e.log.Error("failed to get hosts for scanning", zap.Error(err))
+					return
 				}
 				offset += len(hosts)
 
