@@ -143,6 +143,16 @@ type Metrics struct {
 	ContractRevenue types.Currency `json:"contractRevenue"`
 }
 
+// HostScan represents the results of a host scan.
+type HostScan struct {
+	PublicKey types.PublicKey `json:"publicKey"`
+	Success   bool            `json:"success"`
+	Timestamp time.Time       `json:"timestamp"`
+
+	Settings   rhpv2.HostSettings   `json:"settings"`
+	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
+}
+
 // Host represents a host and the information gathered from scanning it.
 type Host struct {
 	PublicKey  types.PublicKey `json:"publicKey"`

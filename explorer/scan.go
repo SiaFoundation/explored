@@ -30,72 +30,64 @@ func (e *Explorer) waitForSync() {
 	}
 }
 
-func (e *Explorer) scanHost(host HostAnnouncement) (Host, error) {
+func (e *Explorer) scanHost(host HostAnnouncement) (HostScan, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), e.scanCfg.Timeout)
 	defer cancel()
 
 	dialer := (&net.Dialer{})
 	conn, err := dialer.DialContext(ctx, "tcp", host.NetAddress)
 	if err != nil {
-		return Host{}, fmt.Errorf("scanHost: failed to connect to host: %w", err)
+		return HostScan{}, fmt.Errorf("scanHost: failed to connect to host: %w", err)
 	}
 	defer conn.Close()
 
 	transport, err := crhpv2.NewRenterTransport(conn, host.PublicKey)
 	if err != nil {
-		return Host{}, fmt.Errorf("scanHost: failed to establish v2 transport: %w", err)
+		return HostScan{}, fmt.Errorf("scanHost: failed to establish v2 transport: %w", err)
 	}
 	defer transport.Close()
 
 	settings, err := rhpv2.RPCSettings(ctx, transport)
 	if err != nil {
-		return Host{}, fmt.Errorf("scanHost: failed to get host settings: %w", err)
+		return HostScan{}, fmt.Errorf("scanHost: failed to get host settings: %w", err)
 	}
 
 	hostIP, _, err := net.SplitHostPort(settings.NetAddress)
 	if err != nil {
-		return Host{}, fmt.Errorf("scanHost: failed to parse net address: %w", err)
+		return HostScan{}, fmt.Errorf("scanHost: failed to parse net address: %w", err)
 	}
 
 	v3Addr := net.JoinHostPort(hostIP, settings.SiaMuxPort)
 	v3Session, err := rhpv3.NewSession(ctx, host.PublicKey, v3Addr, e.cm, nil)
 	if err != nil {
-		return Host{}, fmt.Errorf("scanHost: failed to establish v3 transport: %w", err)
+		return HostScan{}, fmt.Errorf("scanHost: failed to establish v3 transport: %w", err)
 	}
 
 	table, err := v3Session.ScanPriceTable()
 	if err != nil {
-		return Host{}, fmt.Errorf("scanHost: failed to scan price table: %w", err)
+		return HostScan{}, fmt.Errorf("scanHost: failed to scan price table: %w", err)
 	}
 
-	return Host{
-		PublicKey:  host.PublicKey,
-		NetAddress: host.NetAddress,
+	return HostScan{
+		PublicKey: host.PublicKey,
+		Success:   true,
+		Timestamp: time.Now(),
 
 		Settings:   settings,
 		PriceTable: table,
-
-		LastScan:               time.Now(),
-		LastScanSuccessful:     true,
-		TotalScans:             1,
-		SuccessfulInteractions: 1,
 	}, nil
 }
 
 func (e *Explorer) addHostScans(hosts chan HostAnnouncement) {
 	worker := func() {
-		var scans []Host
+		var scans []HostScan
 		for host := range hosts {
 			scan, err := e.scanHost(host)
 			if err != nil {
-				scans = append(scans, Host{
-					PublicKey:  host.PublicKey,
-					NetAddress: host.NetAddress,
-
-					LastScan:           time.Now(),
-					LastScanSuccessful: false,
-					TotalScans:         1,
-					FailedInteractions: 1,
+				scans = append(scans, HostScan{
+					PublicKey: host.PublicKey,
+					Success:   false,
+					Timestamp: time.Now(),
 				})
 				e.log.Debug("Scanning host failed", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()), zap.Error(err))
 				continue

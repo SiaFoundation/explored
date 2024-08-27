@@ -112,7 +112,7 @@ func signTxn(cs consensus.State, pk types.PrivateKey, txn *types.Transaction) {
 	}
 }
 
-func check(t *testing.T, desc string, expect, got any) {
+func check[T any](t *testing.T, desc string, expect, got T) {
 	if !reflect.DeepEqual(expect, got) {
 		t.Fatalf("expected %v %s, got %v", expect, desc, got)
 	}
@@ -2010,13 +2010,62 @@ func TestHostAnnouncement(t *testing.T) {
 	}
 	check(t, "len(hosts)", 3, len(hosts))
 
-	scans, err := db.Hosts([]types.PublicKey{hosts[0].PublicKey})
-	if err != nil {
-		t.Fatal(err)
+	{
+		scans, err := db.Hosts([]types.PublicKey{hosts[0].PublicKey})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "len(scans)", 1, len(scans))
 	}
-	check(t, "len(scans)", 1, len(scans))
 
-	db.HostMetrics()
+	scan1 := explorer.HostScan{
+		PublicKey: hosts[0].PublicKey,
+		Success:   true,
+		Timestamp: time.Now(),
+	}
+	scan2 := explorer.HostScan{
+		PublicKey: hosts[0].PublicKey,
+		Success:   false,
+		Timestamp: time.Now(),
+	}
+
+	{
+		if err := db.AddHostScans([]explorer.HostScan{scan1}); err != nil {
+			t.Fatal(err)
+		}
+
+		scans, err := db.Hosts([]types.PublicKey{hosts[0].PublicKey})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "len(scans)", 1, len(scans))
+
+		scan := scans[0]
+		check(t, "last scan", scan1.Timestamp.Unix(), scan.LastScan.Unix())
+		check(t, "last scan successful", scan1.Success, scan.LastScanSuccessful)
+		check(t, "total scans", 1, scan.TotalScans)
+		check(t, "successful interactions", 1, scan.SuccessfulInteractions)
+		check(t, "failed interactions", 0, scan.FailedInteractions)
+	}
+
+	{
+		if err := db.AddHostScans([]explorer.HostScan{scan2}); err != nil {
+			t.Fatal(err)
+		}
+
+		scans, err := db.Hosts([]types.PublicKey{hosts[0].PublicKey})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "len(scans)", 1, len(scans))
+
+		scan := scans[0]
+		check(t, "last scan", scan2.Timestamp.Unix(), scan.LastScan.Unix())
+		check(t, "last scan successful", scan2.Success, scan.LastScanSuccessful)
+		check(t, "total scans", 2, scan.TotalScans)
+		check(t, "successful interactions", 1, scan.SuccessfulInteractions)
+		check(t, "failed interactions", 1, scan.FailedInteractions)
+	}
 }
 
 func TestMultipleReorg(t *testing.T) {

@@ -35,7 +35,7 @@ type ChainManager interface {
 // and blocks.
 type Store interface {
 	UpdateChainState(reverted []chain.RevertUpdate, applied []chain.ApplyUpdate) error
-	AddHostScans(scans []Host) error
+	AddHostScans(scans []HostScan) error
 
 	Tip() (types.ChainIndex, error)
 	Block(id types.BlockID) (Block, error)
