@@ -85,26 +85,25 @@ func (e *Explorer) scanHost(host HostAnnouncement) (HostScan, error) {
 func (e *Explorer) addHostScans(ctx context.Context, hosts chan HostAnnouncement) {
 	worker := func() {
 		var scans []HostScan
-		for {
-			select {
-			case <-ctx.Done():
+		for host := range hosts {
+			if ctx.Err() != nil {
 				e.log.Debug("Terminating worker early due to interrupt")
 				break
-			case host := <-hosts:
-				scan, err := e.scanHost(host)
-				if err != nil {
-					scans = append(scans, HostScan{
-						PublicKey: host.PublicKey,
-						Success:   false,
-						Timestamp: time.Now(),
-					})
-					e.log.Debug("Scanning host failed", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()), zap.Error(err))
-					continue
-				}
-
-				e.log.Debug("Scanning host succeeded", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()))
-				scans = append(scans, scan)
 			}
+
+			scan, err := e.scanHost(host)
+			if err != nil {
+				scans = append(scans, HostScan{
+					PublicKey: host.PublicKey,
+					Success:   false,
+					Timestamp: time.Now(),
+				})
+				e.log.Debug("Scanning host failed", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()), zap.Error(err))
+				continue
+			}
+
+			e.log.Debug("Scanning host succeeded", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()))
+			scans = append(scans, scan)
 		}
 
 		if err := e.s.AddHostScans(scans); err != nil {
