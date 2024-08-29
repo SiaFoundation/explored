@@ -138,7 +138,7 @@ func (e *Explorer) scanHosts(ctx context.Context) {
 	}
 	e.log.Info("Syncing complete, will begin scanning hosts")
 
-	for ctx.Err() != nil {
+	for ctx.Err() == nil {
 		offset := 0
 		cutoff := time.Now().Add(-e.scanCfg.MaxLastScan)
 
@@ -146,7 +146,7 @@ func (e *Explorer) scanHosts(ctx context.Context) {
 
 		go func() {
 			defer close(announcements)
-			for ctx.Err() != nil {
+			for ctx.Err() == nil {
 				hosts, err := e.s.HostsForScanning(cutoff, uint64(offset), scanBatchSize)
 				if err != nil {
 					e.log.Error("failed to get hosts for scanning", zap.Error(err))
