@@ -1492,6 +1492,14 @@ func TestRevertBalance(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
+	{
+		b, err := db.Block(cm.Tip().ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "spent_index", *b.Transactions[0].SiacoinOutputs[0].SpentIndex, cm.Tip())
+	}
+
 	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
