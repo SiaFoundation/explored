@@ -96,9 +96,13 @@ ORDER BY ts.transaction_order ASC`
 	result := make(map[int64][]explorer.SiacoinOutput)
 	for rows.Next() {
 		var txnID int64
+		var spentIndex types.ChainIndex
 		var sco explorer.SiacoinOutput
-		if err := rows.Scan(&txnID, decode(&sco.StateElement.ID), decode(&sco.LeafIndex), decodeNull(&sco.SpentIndex), &sco.Source, &sco.MaturityHeight, decode(&sco.SiacoinOutput.Address), decode(&sco.SiacoinOutput.Value)); err != nil {
+		if err := rows.Scan(&txnID, decode(&sco.StateElement.ID), decode(&sco.LeafIndex), decodeNull(&spentIndex), &sco.Source, &sco.MaturityHeight, decode(&sco.SiacoinOutput.Address), decode(&sco.SiacoinOutput.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan siacoin output: %w", err)
+		}
+		if spentIndex != (types.ChainIndex{}) {
+			sco.SpentIndex = &spentIndex
 		}
 		result[txnID] = append(result[txnID], sco)
 	}
@@ -170,9 +174,13 @@ ORDER BY ts.transaction_order ASC`
 	result := make(map[int64][]explorer.SiafundOutput)
 	for rows.Next() {
 		var txnID int64
+		var spentIndex types.ChainIndex
 		var sfo explorer.SiafundOutput
-		if err := rows.Scan(&txnID, decode(&sfo.StateElement.ID), decode(&sfo.StateElement.LeafIndex), decodeNull(&sfo.SpentIndex), decode(&sfo.ClaimStart), decode(&sfo.SiafundOutput.Address), decode(&sfo.SiafundOutput.Value)); err != nil {
+		if err := rows.Scan(&txnID, decode(&sfo.StateElement.ID), decode(&sfo.StateElement.LeafIndex), decodeNull(&spentIndex), decode(&sfo.ClaimStart), decode(&sfo.SiafundOutput.Address), decode(&sfo.SiafundOutput.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan siafund output: %w", err)
+		}
+		if spentIndex != (types.ChainIndex{}) {
+			sfo.SpentIndex = &spentIndex
 		}
 		result[txnID] = append(result[txnID], sfo)
 	}
@@ -387,9 +395,13 @@ ORDER BY mp.block_order ASC`
 
 	var result []explorer.SiacoinOutput
 	for rows.Next() {
+		var spentIndex types.ChainIndex
 		var output explorer.SiacoinOutput
-		if err := rows.Scan(decode(&output.StateElement.ID), decode(&output.StateElement.LeafIndex), decodeNull(&output.SpentIndex), &output.Source, &output.MaturityHeight, decode(&output.SiacoinOutput.Address), decode(&output.SiacoinOutput.Value)); err != nil {
+		if err := rows.Scan(decode(&output.StateElement.ID), decode(&output.StateElement.LeafIndex), decodeNull(&spentIndex), &output.Source, &output.MaturityHeight, decode(&output.SiacoinOutput.Address), decode(&output.SiacoinOutput.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan miner payout: %w", err)
+		}
+		if spentIndex != (types.ChainIndex{}) {
+			output.SpentIndex = &spentIndex
 		}
 		result = append(result, output)
 	}
