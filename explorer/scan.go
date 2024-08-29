@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func (e *Explorer) waitForSync() {
+func (e *Explorer) waitForSync(ctx context.Context) bool {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
@@ -24,10 +24,14 @@ func (e *Explorer) waitForSync() {
 		}
 
 		select {
+		case <-ctx.Done():
+			return false
 		case <-ticker.C:
 			continue
 		}
 	}
+
+	return true
 }
 
 func (e *Explorer) scanHost(host HostAnnouncement) (HostScan, error) {
@@ -78,24 +82,31 @@ func (e *Explorer) scanHost(host HostAnnouncement) (HostScan, error) {
 	}, nil
 }
 
-func (e *Explorer) addHostScans(hosts chan HostAnnouncement) {
+func (e *Explorer) addHostScans(ctx context.Context, hosts chan HostAnnouncement) {
 	worker := func() {
 		var scans []HostScan
-		for host := range hosts {
-			scan, err := e.scanHost(host)
-			if err != nil {
-				scans = append(scans, HostScan{
-					PublicKey: host.PublicKey,
-					Success:   false,
-					Timestamp: time.Now(),
-				})
-				e.log.Debug("Scanning host failed", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()), zap.Error(err))
-				continue
-			}
+		for {
+			select {
+			case <-ctx.Done():
+				e.log.Debug("Terminating worker early due to interrupt")
+				break
+			case host := <-hosts:
+				scan, err := e.scanHost(host)
+				if err != nil {
+					scans = append(scans, HostScan{
+						PublicKey: host.PublicKey,
+						Success:   false,
+						Timestamp: time.Now(),
+					})
+					e.log.Debug("Scanning host failed", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()), zap.Error(err))
+					continue
+				}
 
-			e.log.Debug("Scanning host succeeded", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()))
-			scans = append(scans, scan)
+				e.log.Debug("Scanning host succeeded", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()))
+				scans = append(scans, scan)
+			}
 		}
+
 		if err := e.s.AddHostScans(scans); err != nil {
 			e.log.Error("Failed to add host scans to DB", zap.Error(err))
 		}
@@ -115,17 +126,20 @@ func (e *Explorer) addHostScans(hosts chan HostAnnouncement) {
 	wg.Wait()
 }
 
-func (e *Explorer) scanHosts() {
+func (e *Explorer) scanHosts(ctx context.Context) {
 	const (
 		scanBatchSize = 100
 	)
 
 	e.log.Info("Waiting for syncing to complete before scanning hosts")
 	// don't scan hosts till we're at least nearly done with syncing
-	e.waitForSync()
+	if !e.waitForSync(ctx) {
+		e.log.Info("Interrupted before syncing started")
+		return
+	}
 	e.log.Info("Syncing complete, will begin scanning hosts")
 
-	for {
+	for ctx.Err() != nil {
 		offset := 0
 		cutoff := time.Now().Add(-e.scanCfg.MaxLastScan)
 
@@ -133,7 +147,7 @@ func (e *Explorer) scanHosts() {
 
 		go func() {
 			defer close(announcements)
-			for {
+			for ctx.Err() != nil {
 				hosts, err := e.s.HostsForScanning(cutoff, uint64(offset), scanBatchSize)
 				if err != nil {
 					e.log.Error("failed to get hosts for scanning", zap.Error(err))
@@ -151,6 +165,6 @@ func (e *Explorer) scanHosts() {
 			}
 		}()
 
-		e.addHostScans(announcements)
+		e.addHostScans(ctx, announcements)
 	}
 }

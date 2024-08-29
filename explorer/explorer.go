@@ -1,6 +1,7 @@
 package explorer
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -91,7 +92,7 @@ func (e *Explorer) syncStore(index types.ChainIndex, batchSize int) error {
 }
 
 // NewExplorer returns a Sia explorer.
-func NewExplorer(cm ChainManager, store Store, batchSize int, scanCfg config.Scanner, log *zap.Logger) (*Explorer, error) {
+func NewExplorer(ctx context.Context, cm ChainManager, store Store, batchSize int, scanCfg config.Scanner, log *zap.Logger) (*Explorer, error) {
 	e := &Explorer{
 		s:       store,
 		cm:      cm,
@@ -126,7 +127,7 @@ func NewExplorer(cm ChainManager, store Store, batchSize int, scanCfg config.Sca
 		}
 	}()
 
-	go e.scanHosts()
+	go e.scanHosts(ctx)
 
 	e.unsubscribe = e.cm.OnReorg(func(index types.ChainIndex) {
 		select {
