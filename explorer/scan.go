@@ -13,25 +13,32 @@ import (
 	"go.uber.org/zap"
 )
 
-func (e *Explorer) waitForSync(ctx context.Context) bool {
-	ticker := time.NewTicker(time.Second)
+func (e *Explorer) waitForSync(ctx context.Context) error {
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
 	for {
-		cs := e.cm.TipState()
-		if cs.PrevTimestamps[0].After(time.Now().Add(-time.Hour)) {
+		cs, err := e.Tip()
+		if err != nil {
+			return err
+		}
+		b, err := e.Block(cs.ID)
+		if err != nil {
+			return err
+		}
+		if b.Timestamp.After(time.Now().Add(-time.Hour)) {
 			break
 		}
 
 		select {
 		case <-ctx.Done():
-			return false
+			return ctx.Err()
 		case <-ticker.C:
 			continue
 		}
 	}
 
-	return true
+	return nil
 }
 
 func (e *Explorer) scanHost(host HostAnnouncement) (HostScan, error) {
@@ -132,8 +139,8 @@ func (e *Explorer) scanHosts(ctx context.Context) {
 
 	e.log.Info("Waiting for syncing to complete before scanning hosts")
 	// don't scan hosts till we're at least nearly done with syncing
-	if !e.waitForSync(ctx) {
-		e.log.Info("Interrupted before syncing started")
+	if err := e.waitForSync(ctx); err != nil {
+		e.log.Info("Interrupted before syncing started:", zap.Error(err))
 		return
 	}
 	e.log.Info("Syncing complete, will begin scanning hosts")
