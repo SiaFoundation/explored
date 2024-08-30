@@ -361,10 +361,15 @@ ORDER BY transaction_order ASC`
 	return result, nil
 }
 
+type transactionID struct {
+	id    types.TransactionID
+	order int
+}
+
 // blockTransactionIDs returns the database ID for each transaction in the
 // block.
-func blockTransactionIDs(tx *txn, blockID types.BlockID) (idMap map[int64]types.TransactionID, err error) {
-	rows, err := tx.Query(`SELECT bt.transaction_id, t.transaction_id
+func blockTransactionIDs(tx *txn, blockID types.BlockID) (idMap map[int64]transactionID, err error) {
+	rows, err := tx.Query(`SELECT bt.transaction_id, block_order, t.transaction_id
 FROM block_transactions bt
 INNER JOIN transactions t ON (t.id = bt.transaction_id)
 WHERE block_id = ? ORDER BY block_order ASC`, encode(blockID))
@@ -373,14 +378,15 @@ WHERE block_id = ? ORDER BY block_order ASC`, encode(blockID))
 	}
 	defer rows.Close()
 
-	idMap = make(map[int64]types.TransactionID)
+	idMap = make(map[int64]transactionID)
 	for rows.Next() {
 		var dbID int64
+		var blockOrder int
 		var txnID types.TransactionID
-		if err := rows.Scan(&dbID, decode(&txnID)); err != nil {
+		if err := rows.Scan(&dbID, &blockOrder, decode(&txnID)); err != nil {
 			return nil, fmt.Errorf("failed to scan block transaction: %w", err)
 		}
-		idMap[dbID] = txnID
+		idMap[dbID] = transactionID{id: txnID, order: blockOrder}
 	}
 	return
 }
@@ -414,7 +420,7 @@ ORDER BY mp.block_order ASC`
 }
 
 // transactionDatabaseIDs returns the database ID for each transaction.
-func transactionDatabaseIDs(tx *txn, txnIDs []types.TransactionID) (dbIDs map[int64]types.TransactionID, err error) {
+func transactionDatabaseIDs(tx *txn, txnIDs []types.TransactionID) (dbIDs map[int64]transactionID, err error) {
 	encodedIDs := func(ids []types.TransactionID) []any {
 		result := make([]any, len(ids))
 		for i, id := range ids {
@@ -430,22 +436,24 @@ func transactionDatabaseIDs(tx *txn, txnIDs []types.TransactionID) (dbIDs map[in
 	}
 	defer rows.Close()
 
-	dbIDs = make(map[int64]types.TransactionID)
+	i := 0
+	dbIDs = make(map[int64]transactionID)
 	for rows.Next() {
 		var dbID int64
 		var txnID types.TransactionID
 		if err := rows.Scan(&dbID, decode(&txnID)); err != nil {
 			return nil, fmt.Errorf("failed to scan transaction: %w", err)
 		}
-		dbIDs[dbID] = txnID
+		dbIDs[dbID] = transactionID{id: txnID, order: i}
+		i++
 	}
 	return
 }
 
-func getTransactions(tx *txn, idMap map[int64]types.TransactionID) ([]explorer.Transaction, error) {
-	dbIDs := make([]int64, 0, len(idMap))
-	for dbID := range idMap {
-		dbIDs = append(dbIDs, dbID)
+func getTransactions(tx *txn, idMap map[int64]transactionID) ([]explorer.Transaction, error) {
+	dbIDs := make([]int64, len(idMap))
+	for dbID, id := range idMap {
+		dbIDs[id.order] = dbID
 	}
 
 	txnArbitraryData, err := transactionArbitraryData(tx, dbIDs)
@@ -501,7 +509,7 @@ func getTransactions(tx *txn, idMap map[int64]types.TransactionID) ([]explorer.T
 	var results []explorer.Transaction
 	for _, dbID := range dbIDs {
 		txn := explorer.Transaction{
-			ID:                    idMap[dbID],
+			ID:                    idMap[dbID].id,
 			SiacoinInputs:         txnSiacoinInputs[dbID],
 			SiacoinOutputs:        txnSiacoinOutputs[dbID],
 			SiafundInputs:         txnSiafundInputs[dbID],
