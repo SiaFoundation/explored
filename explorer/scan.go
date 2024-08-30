@@ -20,15 +20,13 @@ func (e *Explorer) waitForSync() error {
 		cs, err := e.Tip()
 		if err != nil {
 			e.log.Debug("Couldn't get tip, waiting", zap.Error(err))
-			continue
-		}
-		b, err := e.Block(cs.ID)
-		if err != nil {
-			e.log.Debug("Couldn't get tip block, waiting", zap.Error(err))
-			continue
-		}
-		if b.Timestamp.After(time.Now().Add(-time.Hour)) {
-			break
+		} else {
+			b, err := e.Block(cs.ID)
+			if err != nil {
+				return err
+			} else if b.Timestamp.After(time.Now().Add(-time.Hour)) {
+				break
+			}
 		}
 
 		select {
