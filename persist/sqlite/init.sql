@@ -146,6 +146,7 @@ CREATE TABLE block_transactions (
 );
 
 CREATE INDEX block_transactions_block_id_index ON block_transactions(block_id);
+CREATE INDEX block_transactions_transaction_id_index ON block_transactions(transaction_id);
 
 CREATE TABLE transaction_arbitrary_data (
         transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
@@ -188,11 +189,12 @@ CREATE TABLE transaction_storage_proofs (
 );
 
 CREATE INDEX transaction_storage_proofs_transaction_id_index ON transaction_storage_proofs(transaction_id);
+CREATE INDEX transaction_storage_proofs_parent_id_index ON transaction_storage_proofs(parent_id);
 
 CREATE TABLE transaction_siacoin_inputs (
         transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
         transaction_order INTEGER NOT NULL,
-        parent_id BLOB NOT NULL,
+        parent_id BLOB NOT NULL, -- TODO: change this to a reference to the siacoin_element and join for queries
         unlock_conditions BLOB NOT NULL,
         UNIQUE(transaction_id, transaction_order)
 );
@@ -211,7 +213,7 @@ CREATE INDEX transaction_siacoin_outputs_transaction_id_index ON transaction_sia
 CREATE TABLE transaction_siafund_inputs (
         transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
         transaction_order INTEGER NOT NULL,
-        parent_id BLOB NOT NULL,
+        parent_id BLOB NOT NULL, -- TODO: change this to a reference to the siacoin_element and join for queries
         unlock_conditions BLOB NOT NULL,
         claim_address BLOB NOT NULL,
         UNIQUE(transaction_id, transaction_order)
@@ -222,7 +224,7 @@ CREATE INDEX transaction_siafund_inputs_transaction_id_index ON transaction_siaf
 CREATE TABLE transaction_siafund_outputs (
         transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
         transaction_order INTEGER NOT NULL,
-        output_id INTEGER REFERENCES siafund_elements(id) ON DELETE CASCADE NOT NULL,
+        output_id INTEGER REFERENCES siafund_elements(id) ON DELETE CASCADE NOT NULL, -- add an index to all foreign keys
         UNIQUE(transaction_id, transaction_order)
 );
 
@@ -231,7 +233,7 @@ CREATE INDEX transaction_siafund_outputs_transaction_id_index ON transaction_sia
 CREATE TABLE transaction_file_contracts (
         transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
         transaction_order INTEGER NOT NULL,
-        contract_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL,
+        contract_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL, -- add an index to all foreign keys
         UNIQUE(transaction_id, transaction_order)
 );
 
@@ -240,7 +242,7 @@ CREATE INDEX transaction_file_contracts_transaction_id_index ON transaction_file
 CREATE TABLE transaction_file_contract_revisions (
         transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
         transaction_order INTEGER NOT NULL,
-        contract_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL,
+        contract_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL, -- add an index to all foreign keys
         parent_id BLOB NOT NULL,
         unlock_conditions BLOB NOT NULL,
         UNIQUE(transaction_id, transaction_order)
@@ -261,13 +263,13 @@ CREATE TABLE events (
         maturity_height INTEGER NOT NULL,
         date_created INTEGER NOT NULL,
         event_type TEXT NOT NULL,
-        block_id BLOB NOT NULL REFERENCES blocks(id) ON DELETE CASCADE,
+        block_id BLOB NOT NULL REFERENCES blocks(id) ON DELETE CASCADE, -- add an index to all foreign keys
         height INTEGER NOT NULL
 );
 CREATE INDEX events_block_id_height_index ON events(block_id, height);
 
 CREATE TABLE event_addresses (
-        event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+        event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE, 
         address_id INTEGER NOT NULL REFERENCES address_balance(id),
         PRIMARY KEY (event_id, address_id)
 );
