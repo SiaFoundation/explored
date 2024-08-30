@@ -85,8 +85,6 @@ func (d *decodable) Scan(src any) error {
 			return fmt.Errorf("cannot scan %T to %T", src, d.v)
 		}
 		return nil
-	case nil:
-		return nil
 	default:
 		return fmt.Errorf("cannot scan %T to %T", src, d.v)
 	}
