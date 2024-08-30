@@ -66,6 +66,7 @@ type Explorer struct {
 	scanCfg config.Scanner
 
 	mu  sync.Mutex
+	ctx context.Context
 	log *zap.Logger
 
 	unsubscribe func()
@@ -97,6 +98,7 @@ func NewExplorer(ctx context.Context, cm ChainManager, store Store, batchSize in
 		s:       store,
 		cm:      cm,
 		scanCfg: scanCfg,
+		ctx:     ctx,
 		log:     log,
 	}
 
@@ -127,7 +129,7 @@ func NewExplorer(ctx context.Context, cm ChainManager, store Store, batchSize in
 		}
 	}()
 
-	go e.scanHosts(ctx)
+	go e.scanHosts()
 
 	e.unsubscribe = e.cm.OnReorg(func(index types.ChainIndex) {
 		select {

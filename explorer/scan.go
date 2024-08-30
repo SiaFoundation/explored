@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func (e *Explorer) waitForSync(ctx context.Context) error {
+func (e *Explorer) waitForSync() error {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
@@ -31,8 +31,8 @@ func (e *Explorer) waitForSync(ctx context.Context) error {
 		}
 
 		select {
-		case <-ctx.Done():
-			return ctx.Err()
+		case <-e.ctx.Done():
+			return e.ctx.Err()
 		case <-ticker.C:
 			continue
 		}
@@ -93,7 +93,7 @@ func (e *Explorer) addHostScans(ctx context.Context, hosts chan HostAnnouncement
 	worker := func() {
 		var scans []HostScan
 		for host := range hosts {
-			if ctx.Err() != nil {
+			if e.ctx.Err() != nil {
 				e.log.Debug("Terminating worker early due to interrupt")
 				break
 			}
@@ -132,20 +132,20 @@ func (e *Explorer) addHostScans(ctx context.Context, hosts chan HostAnnouncement
 	wg.Wait()
 }
 
-func (e *Explorer) scanHosts(ctx context.Context) {
+func (e *Explorer) scanHosts() {
 	const (
 		scanBatchSize = 100
 	)
 
 	e.log.Info("Waiting for syncing to complete before scanning hosts")
 	// don't scan hosts till we're at least nearly done with syncing
-	if err := e.waitForSync(ctx); err != nil {
+	if err := e.waitForSync(); err != nil {
 		e.log.Info("Interrupted before syncing started:", zap.Error(err))
 		return
 	}
 	e.log.Info("Syncing complete, will begin scanning hosts")
 
-	for ctx.Err() == nil {
+	for e.ctx.Err() == nil {
 		offset := 0
 		cutoff := time.Now().Add(-e.scanCfg.MaxLastScan)
 
@@ -153,7 +153,7 @@ func (e *Explorer) scanHosts(ctx context.Context) {
 
 		go func() {
 			defer close(announcements)
-			for ctx.Err() == nil {
+			for e.ctx.Err() == nil {
 				hosts, err := e.s.HostsForScanning(cutoff, uint64(offset), scanBatchSize)
 				if err != nil {
 					e.log.Error("failed to get hosts for scanning", zap.Error(err))
@@ -171,6 +171,6 @@ func (e *Explorer) scanHosts(ctx context.Context) {
 			}
 		}()
 
-		e.addHostScans(ctx, announcements)
+		e.addHostScans(e.ctx, announcements)
 	}
 }
