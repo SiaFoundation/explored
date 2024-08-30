@@ -66,8 +66,10 @@ type Explorer struct {
 	scanCfg config.Scanner
 
 	mu  sync.Mutex
-	ctx context.Context
 	log *zap.Logger
+
+	wg  sync.WaitGroup
+	ctx context.Context
 
 	unsubscribe func()
 }
@@ -138,6 +140,14 @@ func NewExplorer(ctx context.Context, cm ChainManager, store Store, batchSize in
 		}
 	})
 	return e, nil
+}
+
+// Close tries to close the scanning goroutines in the explorer.
+func (e *Explorer) Close(cancel func()) {
+	if cancel != nil {
+		cancel()
+	}
+	e.wg.Wait()
 }
 
 // Tip returns the tip of the best known valid chain.

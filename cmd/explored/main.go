@@ -353,6 +353,7 @@ func main() {
 		log.Error("failed to create explorer", zap.Error(err))
 		return
 	}
+	defer e.Close(cancel)
 
 	api := api.NewServer(e, cm, s)
 	server := &http.Server{

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"sync"
 	"time"
 
 	crhpv2 "go.sia.tech/core/rhp/v2"
@@ -42,7 +41,7 @@ func (e *Explorer) waitForSync() error {
 }
 
 func (e *Explorer) scanHost(host HostAnnouncement) (HostScan, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), e.scanCfg.Timeout)
+	ctx, cancel := context.WithTimeout(e.ctx, e.scanCfg.Timeout)
 	defer cancel()
 
 	dialer := (&net.Dialer{})
@@ -89,16 +88,14 @@ func (e *Explorer) scanHost(host HostAnnouncement) (HostScan, error) {
 	}, nil
 }
 
-func (e *Explorer) addHostScans(ctx context.Context, hosts chan HostAnnouncement) {
+func (e *Explorer) addHostScans(hosts chan HostAnnouncement) {
 	worker := func() {
 		var scans []HostScan
 		for host := range hosts {
+			scan, err := e.scanHost(host)
 			if e.ctx.Err() != nil {
-				e.log.Debug("Terminating worker early due to interrupt")
 				break
 			}
-
-			scan, err := e.scanHost(host)
 			if err != nil {
 				scans = append(scans, HostScan{
 					PublicKey: host.PublicKey,
@@ -119,17 +116,16 @@ func (e *Explorer) addHostScans(ctx context.Context, hosts chan HostAnnouncement
 	}
 
 	// launch all workers
-	var wg sync.WaitGroup
 	for t := 0; t < e.scanCfg.Threads; t++ {
-		wg.Add(1)
+		e.wg.Add(1)
 		go func() {
 			worker()
-			wg.Done()
+			e.wg.Done()
 		}()
 	}
 
 	// wait until they're done
-	wg.Wait()
+	e.wg.Wait()
 }
 
 func (e *Explorer) scanHosts() {
@@ -171,6 +167,6 @@ func (e *Explorer) scanHosts() {
 			}
 		}()
 
-		e.addHostScans(e.ctx, announcements)
+		e.addHostScans(announcements)
 	}
 }
