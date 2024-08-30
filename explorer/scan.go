@@ -19,11 +19,13 @@ func (e *Explorer) waitForSync() error {
 	for {
 		cs, err := e.Tip()
 		if err != nil {
-			return err
+			e.log.Debug("Couldn't get tip, waiting", zap.Error(err))
+			continue
 		}
 		b, err := e.Block(cs.ID)
 		if err != nil {
-			return err
+			e.log.Debug("Couldn't get tip block, waiting", zap.Error(err))
+			continue
 		}
 		if b.Timestamp.After(time.Now().Add(-time.Hour)) {
 			break
