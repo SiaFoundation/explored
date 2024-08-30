@@ -168,5 +168,6 @@ func (e *Explorer) scanHosts() {
 		}()
 
 		e.addHostScans(announcements)
+		time.Sleep(30 * time.Second)
 	}
 }
