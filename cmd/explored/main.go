@@ -76,7 +76,6 @@ func tryLoadConfig() {
 	if str := os.Getenv("EXPLORED_CONFIG_FILE"); str != "" {
 		configPath = str
 	}
-	fmt.Println("loading config from", configPath)
 
 	// If the config file doesn't exist, don't try to load it.
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
@@ -97,7 +96,6 @@ func tryLoadConfig() {
 		fmt.Println("failed to decode config file:", err)
 		os.Exit(1)
 	}
-	fmt.Println("config loaded")
 }
 
 // jsonEncoder returns a zapcore.Encoder that encodes logs as JSON intended for
