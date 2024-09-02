@@ -270,8 +270,11 @@ func main() {
 	case "zen":
 		network, genesisBlock = chain.TestnetZen()
 		cfg.Syncer.Peers = append(cfg.Syncer.Peers, syncer.ZenBootstrapPeers...)
+	case "anagami":
+		network, genesisBlock = chain.TestnetAnagami()
+		cfg.Syncer.Peers = append(cfg.Syncer.Peers, syncer.AnagamiBootstrapPeers...)
 	default:
-		log.Fatal("network must be 'mainnet' or 'zen'", zap.String("network", cfg.Consensus.Network))
+		log.Fatal("network must be 'mainnet', 'zen', or 'anagami'", zap.String("network", cfg.Consensus.Network))
 	}
 
 	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(cfg.Directory, "consensus.db"))
