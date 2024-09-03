@@ -25,7 +25,7 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to fetch transaction ID: %w", err)
 		}
-		txns, err := getTransactions(tx, map[int64]types.TransactionID{txnID: types.TransactionID(ev.ID)})
+		txns, err := getTransactions(tx, map[int64]transactionID{txnID: {id: types.TransactionID(ev.ID)}})
 		if err != nil || len(txns) == 0 {
 			return explorer.Event{}, 0, fmt.Errorf("failed to fetch transaction: %w", err)
 		}

@@ -1499,6 +1499,7 @@ func TestRevertBalance(t *testing.T) {
 			t.Fatal(err)
 		}
 		check(t, "spent_index", *b.Transactions[0].SiacoinOutputs[0].SpentIndex, cm.Tip())
+		check(t, "spent_index", b.Transactions[1].SiacoinOutputs[0].SpentIndex, (*types.ChainIndex)(nil))
 	}
 
 	checkMetrics(t, db, cm, explorer.Metrics{
