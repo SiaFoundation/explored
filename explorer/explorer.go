@@ -68,8 +68,9 @@ type Explorer struct {
 	mu  sync.Mutex
 	log *zap.Logger
 
-	wg  sync.WaitGroup
-	ctx context.Context
+	wg        sync.WaitGroup
+	ctx       context.Context
+	ctxCancel context.CancelFunc
 
 	unsubscribe func()
 }
@@ -95,13 +96,15 @@ func (e *Explorer) syncStore(index types.ChainIndex, batchSize int) error {
 }
 
 // NewExplorer returns a Sia explorer.
-func NewExplorer(ctx context.Context, cm ChainManager, store Store, batchSize int, scanCfg config.Scanner, log *zap.Logger) (*Explorer, error) {
+func NewExplorer(cm ChainManager, store Store, batchSize int, scanCfg config.Scanner, log *zap.Logger) (*Explorer, error) {
+	ctx, ctxCancel := context.WithCancel(context.Background())
 	e := &Explorer{
-		s:       store,
-		cm:      cm,
-		scanCfg: scanCfg,
-		ctx:     ctx,
-		log:     log,
+		s:         store,
+		cm:        cm,
+		scanCfg:   scanCfg,
+		ctx:       ctx,
+		ctxCancel: ctxCancel,
+		log:       log,
 	}
 
 	tip, err := e.s.Tip()
@@ -143,10 +146,8 @@ func NewExplorer(ctx context.Context, cm ChainManager, store Store, batchSize in
 }
 
 // Close tries to close the scanning goroutines in the explorer.
-func (e *Explorer) Close(cancel func()) {
-	if cancel != nil {
-		cancel()
-	}
+func (e *Explorer) Close() {
+	e.ctxCancel()
 	e.wg.Wait()
 }
 

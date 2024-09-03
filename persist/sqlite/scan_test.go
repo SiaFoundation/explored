@@ -1,7 +1,6 @@
 package sqlite
 
 import (
-	"context"
 	"errors"
 	"path/filepath"
 	"reflect"
@@ -159,12 +158,11 @@ func TestScan(t *testing.T) {
 		MaxLastScan: 3 * time.Hour,
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	e, err := explorer.NewExplorer(ctx, cm, db, 1000, cfg, log)
+	e, err := explorer.NewExplorer(cm, db, 1000, cfg, log)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer e.Close(cancel)
+	defer e.Close()
 
 	var pubkey1 types.PublicKey
 	if err := pubkey1.UnmarshalText([]byte(`ed25519:a90d3c26a22d66903c06a1bf869e14e829e95cfa25b6bf08189c98713fc92449`)); err != nil {

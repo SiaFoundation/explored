@@ -348,12 +348,12 @@ func main() {
 	defer s.Close()
 	go s.Run(ctx)
 
-	e, err := explorer.NewExplorer(ctx, cm, store, cfg.Index.BatchSize, cfg.Scanner, log.Named("explorer"))
+	e, err := explorer.NewExplorer(cm, store, cfg.Index.BatchSize, cfg.Scanner, log.Named("explorer"))
 	if err != nil {
 		log.Error("failed to create explorer", zap.Error(err))
 		return
 	}
-	defer e.Close(cancel)
+	defer e.Close()
 
 	api := api.NewServer(e, cm, s)
 	server := &http.Server{

@@ -157,8 +157,13 @@ func (e *Explorer) scanHosts() {
 				}
 				offset += len(hosts)
 
+			LOOP:
 				for _, host := range hosts {
-					announcements <- host
+					select {
+					case <-e.ctx.Done():
+						break LOOP
+					case announcements <- host:
+					}
 				}
 
 				if len(hosts) < scanBatchSize {
@@ -168,6 +173,9 @@ func (e *Explorer) scanHosts() {
 		}()
 
 		e.addHostScans(announcements)
-		time.Sleep(30 * time.Second)
+		select {
+		case <-e.ctx.Done():
+		case <-time.After(30 * time.Second):
+		}
 	}
 }
