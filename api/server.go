@@ -202,7 +202,7 @@ func (s *server) blocksMetricsIDHandler(jc jape.Context) {
 	jc.Encode(metrics)
 }
 
-func (s *server) blocksMetricsHostHandler(jc jape.Context) {
+func (s *server) hostMetricsHandler(jc jape.Context) {
 	metrics, err := s.e.HostMetrics()
 	if jc.Check("failed to get host metrics", err) != nil {
 		return
@@ -499,7 +499,7 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 
 		"GET    /metrics/block":     srv.blocksMetricsHandler,
 		"GET    /metrics/block/:id": srv.blocksMetricsIDHandler,
-		"GET    /metrics/host":      srv.blocksMetricsHostHandler,
+		"GET    /metrics/host":      srv.hostMetricsHandler,
 
 		"GET    /search/:id": srv.searchIDHandler,
 	})
