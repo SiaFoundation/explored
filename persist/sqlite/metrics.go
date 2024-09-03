@@ -27,6 +27,7 @@ func (s *Store) HostMetrics() (result explorer.HostMetrics, err error) {
 		if err != nil {
 			return fmt.Errorf("failed to get hosts: %w", err)
 		}
+		defer rows.Close()
 
 		var count uint64
 		for rows.Next() {
