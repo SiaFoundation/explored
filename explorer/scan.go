@@ -100,10 +100,11 @@ func (e *Explorer) addHostScans(hosts chan HostAnnouncement) {
 	worker := func() {
 		var scans []HostScan
 		for host := range hosts {
-			scan, err := e.scanHost(host)
 			if e.ctx.Err() != nil {
 				break
 			}
+
+			scan, err := e.scanHost(host)
 			if err != nil {
 				scans = append(scans, HostScan{
 					PublicKey: host.PublicKey,
