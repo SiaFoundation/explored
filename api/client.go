@@ -25,6 +25,12 @@ func NewClient(addr, password string) *Client {
 	}}
 }
 
+// State returns information about the current state of the explored daemon.
+func (c *Client) State() (resp StateResponse, err error) {
+	err = c.c.GET("/state", &resp)
+	return
+}
+
 // TxpoolBroadcast broadcasts a set of transaction to the network.
 func (c *Client) TxpoolBroadcast(txns []types.Transaction, v2txns []types.V2Transaction) (err error) {
 	err = c.c.POST("/txpool/broadcast", TxpoolBroadcastRequest{txns, v2txns}, nil)
