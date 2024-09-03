@@ -142,10 +142,23 @@ func NewExplorer(cm ChainManager, store Store, batchSize int, scanCfg config.Sca
 	return e, nil
 }
 
-// Close tries to close the scanning goroutines in the explorer.
-func (e *Explorer) Close() {
+// Shutdown tries to close the scanning goroutines in the explorer.
+func (e *Explorer) Shutdown(ctx context.Context) error {
 	e.ctxCancel()
-	e.wg.Wait()
+
+	done := make(chan struct{})
+	go func() {
+		e.wg.Wait()
+		close(done)
+	}()
+
+	// Wait for the WaitGroup to finish or the context to be cancelled
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // Tip returns the tip of the best known valid chain.

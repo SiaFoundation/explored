@@ -354,7 +354,9 @@ func main() {
 		log.Error("failed to create explorer", zap.Error(err))
 		return
 	}
-	defer e.Close()
+	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer timeoutCancel()
+	defer e.Shutdown(timeoutCtx)
 
 	api := api.NewServer(e, cm, s)
 	server := &http.Server{

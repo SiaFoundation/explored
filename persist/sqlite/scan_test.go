@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"context"
 	"errors"
 	"path/filepath"
 	"reflect"
@@ -162,7 +163,9 @@ func TestScan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer e.Close()
+	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer timeoutCancel()
+	defer e.Shutdown(timeoutCtx)
 
 	var pubkey1 types.PublicKey
 	if err := pubkey1.UnmarshalText([]byte(`ed25519:a90d3c26a22d66903c06a1bf869e14e829e95cfa25b6bf08189c98713fc92449`)); err != nil {
