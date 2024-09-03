@@ -136,7 +136,7 @@ func (e *Explorer) scanHosts() {
 	e.log.Info("Waiting for syncing to complete before scanning hosts")
 	// don't scan hosts till we're at least nearly done with syncing
 	if err := e.waitForSync(); err != nil {
-		e.log.Info("Interrupted before syncing started:", zap.Error(err))
+		e.log.Info("Interrupted before scanning started:", zap.Error(err))
 		return
 	}
 	e.log.Info("Syncing complete, will begin scanning hosts")
