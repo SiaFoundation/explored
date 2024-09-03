@@ -12,6 +12,10 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	scanBatchSize = 100
+)
+
 func isSynced(b Block) bool {
 	return time.Since(b.Timestamp) <= 3*time.Hour
 }
@@ -133,10 +137,6 @@ func (e *Explorer) addHostScans(hosts chan HostAnnouncement) {
 }
 
 func (e *Explorer) scanHosts() {
-	const (
-		scanBatchSize = 100
-	)
-
 	e.log.Info("Waiting for syncing to complete before scanning hosts")
 	// don't scan hosts till we're at least nearly done with syncing
 	if err := e.waitForSync(); err != nil {
