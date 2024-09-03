@@ -65,7 +65,6 @@ type Explorer struct {
 
 	scanCfg config.Scanner
 
-	mu  sync.Mutex
 	log *zap.Logger
 
 	wg        sync.WaitGroup
@@ -120,7 +119,6 @@ func NewExplorer(cm ChainManager, store Store, batchSize int, scanCfg config.Sca
 	reorgChan := make(chan types.ChainIndex, 1)
 	go func() {
 		for range reorgChan {
-			e.mu.Lock()
 			lastTip, err := e.s.Tip()
 			if errors.Is(err, ErrNoTip) {
 				lastTip = types.ChainIndex{}
@@ -130,7 +128,6 @@ func NewExplorer(cm ChainManager, store Store, batchSize int, scanCfg config.Sca
 			if err := e.syncStore(lastTip, batchSize); err != nil {
 				e.log.Error("failed to sync store", zap.Error(err))
 			}
-			e.mu.Unlock()
 		}
 	}()
 
