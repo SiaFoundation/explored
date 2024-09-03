@@ -100,7 +100,7 @@ func (e *Explorer) addHostScans(hosts chan HostAnnouncement) {
 	worker := func() {
 		var scans []HostScan
 		for host := range hosts {
-			if e.ctx.Err() != nil {
+			if e.isClosed() {
 				break
 			}
 
@@ -137,6 +137,15 @@ func (e *Explorer) addHostScans(hosts chan HostAnnouncement) {
 	e.wg.Wait()
 }
 
+func (e *Explorer) isClosed() bool {
+	select {
+	case <-e.ctx.Done():
+		return true
+	default:
+		return false
+	}
+}
+
 func (e *Explorer) scanHosts() {
 	e.log.Info("Waiting for syncing to complete before scanning hosts")
 	// don't scan hosts till we're at least nearly done with syncing
@@ -146,7 +155,7 @@ func (e *Explorer) scanHosts() {
 	}
 	e.log.Info("Syncing complete, will begin scanning hosts")
 
-	for e.ctx.Err() == nil {
+	for !e.isClosed() {
 		offset := 0
 		cutoff := time.Now().Add(-e.scanCfg.MaxLastScan)
 
@@ -154,7 +163,7 @@ func (e *Explorer) scanHosts() {
 
 		go func() {
 			defer close(announcements)
-			for e.ctx.Err() == nil {
+			for !e.isClosed() {
 				hosts, err := e.s.HostsForScanning(cutoff, uint64(offset), scanBatchSize)
 				if err != nil {
 					e.log.Error("failed to get hosts for scanning", zap.Error(err))
