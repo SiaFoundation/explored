@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	crhpv2 "go.sia.tech/core/rhp/v2"
@@ -125,16 +126,17 @@ func (e *Explorer) addHostScans(hosts chan HostAnnouncement) {
 	}
 
 	// launch all workers
+	var wg sync.WaitGroup
 	for t := 0; t < e.scanCfg.Threads; t++ {
-		e.wg.Add(1)
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			worker()
-			e.wg.Done()
 		}()
 	}
 
 	// wait until they're done
-	e.wg.Wait()
+	wg.Wait()
 }
 
 func (e *Explorer) isClosed() bool {
@@ -143,6 +145,29 @@ func (e *Explorer) isClosed() bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func (e *Explorer) fetchHosts(hosts chan HostAnnouncement) {
+	var exhausted bool
+	offset := 0
+	cutoff := time.Now().Add(-e.scanCfg.MaxLastScan)
+	for !exhausted && !e.isClosed() {
+		batch, err := e.s.HostsForScanning(cutoff, uint64(offset), scanBatchSize)
+		if err != nil {
+			e.log.Error("failed to get hosts for scanning", zap.Error(err))
+			return
+		} else if len(batch) < scanBatchSize {
+			exhausted = true
+		}
+
+		for _, host := range batch {
+			select {
+			case <-e.ctx.Done():
+				return
+			case hosts <- host:
+			}
+		}
 	}
 }
 
@@ -156,39 +181,38 @@ func (e *Explorer) scanHosts() {
 	e.log.Info("Syncing complete, will begin scanning hosts")
 
 	for !e.isClosed() {
-		offset := 0
-		cutoff := time.Now().Add(-e.scanCfg.MaxLastScan)
-
-		announcements := make(chan HostAnnouncement)
-
+		// fetch hosts
+		hosts := make(chan HostAnnouncement, scanBatchSize)
+		e.wg.Add(1)
 		go func() {
-			defer close(announcements)
-			for !e.isClosed() {
-				hosts, err := e.s.HostsForScanning(cutoff, uint64(offset), scanBatchSize)
-				if err != nil {
-					e.log.Error("failed to get hosts for scanning", zap.Error(err))
-					return
-				}
-				offset += len(hosts)
-
-			LOOP:
-				for _, host := range hosts {
-					select {
-					case <-e.ctx.Done():
-						break LOOP
-					case announcements <- host:
-					}
-				}
-
-				if len(hosts) < scanBatchSize {
-					break
-				}
-			}
+			defer e.wg.Done()
+			e.fetchHosts(hosts)
+			close(hosts)
 		}()
 
-		e.addHostScans(announcements)
+		// scan hosts
+		e.wg.Add(1)
+		go func() {
+			defer e.wg.Done()
+			e.addHostScans(hosts)
+		}()
+
+		// wait for scans to complete
+		waitChan := make(chan struct{})
+		go func() {
+			e.wg.Wait()
+			close(waitChan)
+		}()
+		select {
+		case <-waitChan:
+		case <-e.ctx.Done():
+			return
+		}
+
+		// pause
 		select {
 		case <-e.ctx.Done():
+			return
 		case <-time.After(30 * time.Second):
 		}
 	}
