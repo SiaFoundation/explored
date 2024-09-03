@@ -111,11 +111,11 @@ func (e *Explorer) addHostScans(hosts chan HostAnnouncement) {
 					Success:   false,
 					Timestamp: time.Now(),
 				})
-				e.log.Debug("Scanning host failed", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()), zap.Error(err))
+				e.log.Debug("Scanning host failed", zap.String("addr", host.NetAddress), zap.Stringer("pk", host.PublicKey), zap.Error(err))
 				continue
 			}
 
-			e.log.Debug("Scanning host succeeded", zap.String("addr", host.NetAddress), zap.String("pk", host.PublicKey.String()))
+			e.log.Debug("Scanning host succeeded", zap.String("addr", host.NetAddress), zap.Stringer("pk", host.PublicKey))
 			scans = append(scans, scan)
 		}
 
