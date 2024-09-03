@@ -12,6 +12,10 @@ import (
 	"go.uber.org/zap"
 )
 
+func isSynced(b Block) bool {
+	return time.Since(b.Timestamp) <= 3*time.Hour
+}
+
 func (e *Explorer) waitForSync() error {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
@@ -24,7 +28,7 @@ func (e *Explorer) waitForSync() error {
 			b, err := e.Block(cs.ID)
 			if err != nil {
 				return err
-			} else if b.Timestamp.After(time.Now().Add(-time.Hour)) {
+			} else if isSynced(b) {
 				break
 			}
 		}
