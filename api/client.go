@@ -69,9 +69,15 @@ func (c *Client) SyncerBroadcastBlock(b types.Block) (err error) {
 	return
 }
 
+// ConsensusTip returns the current tip of the chain manager.
+func (c *Client) ConsensusTip() (resp types.ChainIndex, err error) {
+	err = c.c.GET("/consensus/tip", &resp)
+	return
+}
+
 // Tip returns the current tip of the explorer.
 func (c *Client) Tip() (resp types.ChainIndex, err error) {
-	err = c.c.GET("/consensus/tip", &resp)
+	err = c.c.GET("/explorer/tip", &resp)
 	return
 }
 

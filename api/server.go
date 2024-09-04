@@ -189,6 +189,14 @@ func (s *server) consensusStateHandler(jc jape.Context) {
 	jc.Encode(s.cm.TipState())
 }
 
+func (s *server) explorerTipHandler(jc jape.Context) {
+	tip, err := s.e.Tip()
+	if jc.Check("failed to get tip", err) != nil {
+		return
+	}
+	jc.Encode(tip)
+}
+
 func (s *server) blocksMetricsHandler(jc jape.Context) {
 	tip, err := s.e.Tip()
 	if jc.Check("failed to get tip", err) != nil {
@@ -466,6 +474,8 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET 	/consensus/state":         srv.consensusStateHandler,
 		"GET    /consensus/tip":         srv.consensusTipHandler,
 		"GET    /consensus/tip/:height": srv.consensusTipHeightHandler,
+
+		"GET    /explorer/tip": srv.explorerTipHandler,
 
 		"GET    /blocks/:id": srv.blocksIDHandler,
 
