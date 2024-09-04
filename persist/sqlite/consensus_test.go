@@ -423,6 +423,9 @@ func TestSendTransactions(t *testing.T) {
 			expectSci := expectTxn.SiacoinInputs[i]
 			gotSci := gotTxn.SiacoinInputs[i]
 
+			if gotSci.Value == types.ZeroCurrency {
+				t.Fatal("invalid value")
+			}
 			check(t, "parent ID", expectSci.ParentID, gotSci.ParentID)
 			check(t, "unlock conditions", expectSci.UnlockConditions, gotSci.UnlockConditions)
 		}
@@ -438,6 +441,9 @@ func TestSendTransactions(t *testing.T) {
 			expectSfi := expectTxn.SiafundInputs[i]
 			gotSfi := gotTxn.SiafundInputs[i]
 
+			if gotSfi.Value == 0 {
+				t.Fatal("invalid value")
+			}
 			check(t, "parent ID", expectSfi.ParentID, gotSfi.ParentID)
 			check(t, "claim address", expectSfi.ClaimAddress, gotSfi.ClaimAddress)
 			check(t, "unlock conditions", expectSfi.UnlockConditions, gotSfi.UnlockConditions)
@@ -1627,6 +1633,9 @@ func TestRevertSendTransactions(t *testing.T) {
 			expectSci := expectTxn.SiacoinInputs[i]
 			gotSci := gotTxn.SiacoinInputs[i]
 
+			if gotSci.Value == types.ZeroCurrency {
+				t.Fatal("invalid value")
+			}
 			check(t, "parent ID", expectSci.ParentID, gotSci.ParentID)
 			check(t, "unlock conditions", expectSci.UnlockConditions, gotSci.UnlockConditions)
 		}
@@ -1642,6 +1651,9 @@ func TestRevertSendTransactions(t *testing.T) {
 			expectSfi := expectTxn.SiafundInputs[i]
 			gotSfi := gotTxn.SiafundInputs[i]
 
+			if gotSfi.Value == 0 {
+				t.Fatal("invalid value")
+			}
 			check(t, "parent ID", expectSfi.ParentID, gotSfi.ParentID)
 			check(t, "claim address", expectSfi.ClaimAddress, gotSfi.ClaimAddress)
 			check(t, "unlock conditions", expectSfi.UnlockConditions, gotSfi.UnlockConditions)

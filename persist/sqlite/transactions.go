@@ -110,22 +110,23 @@ ORDER BY ts.transaction_order ASC`
 }
 
 // transactionSiacoinInputs returns the siacoin inputs for each transaction.
-func transactionSiacoinInputs(tx *txn, txnIDs []int64) (map[int64][]types.SiacoinInput, error) {
-	query := `SELECT transaction_id, parent_id, unlock_conditions
-FROM transaction_siacoin_inputs
-WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
-ORDER BY transaction_order ASC`
+func transactionSiacoinInputs(tx *txn, txnIDs []int64) (map[int64][]explorer.SiacoinInput, error) {
+	query := `SELECT ts.transaction_id, ts.parent_id, ts.unlock_conditions, sc.value
+FROM siacoin_elements sc
+INNER JOIN transaction_siacoin_inputs ts ON (ts.parent_id = sc.output_id)
+WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
+ORDER BY ts.transaction_order ASC`
 	rows, err := tx.Query(query, queryArgs(txnIDs)...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	result := make(map[int64][]types.SiacoinInput)
+	result := make(map[int64][]explorer.SiacoinInput)
 	for rows.Next() {
 		var txnID int64
-		var sci types.SiacoinInput
-		if err := rows.Scan(&txnID, decode(&sci.ParentID), decode(&sci.UnlockConditions)); err != nil {
+		var sci explorer.SiacoinInput
+		if err := rows.Scan(&txnID, decode(&sci.ParentID), decode(&sci.UnlockConditions), decode(&sci.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan siacoin input: %w", err)
 		}
 		result[txnID] = append(result[txnID], sci)
@@ -134,22 +135,23 @@ ORDER BY transaction_order ASC`
 }
 
 // transactionSiafundInputs returns the siafund inputs for each transaction.
-func transactionSiafundInputs(tx *txn, txnIDs []int64) (map[int64][]types.SiafundInput, error) {
-	query := `SELECT transaction_id, parent_id, unlock_conditions, claim_address
-FROM transaction_siafund_inputs
-WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
-ORDER BY transaction_order ASC`
+func transactionSiafundInputs(tx *txn, txnIDs []int64) (map[int64][]explorer.SiafundInput, error) {
+	query := `SELECT ts.transaction_id, ts.parent_id, ts.unlock_conditions, ts.claim_address, sf.value
+FROM siafund_elements sf
+INNER JOIN transaction_siafund_inputs ts ON (ts.parent_id = sf.output_id)
+WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
+ORDER BY ts.transaction_order ASC`
 	rows, err := tx.Query(query, queryArgs(txnIDs)...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	result := make(map[int64][]types.SiafundInput)
+	result := make(map[int64][]explorer.SiafundInput)
 	for rows.Next() {
 		var txnID int64
-		var sfi types.SiafundInput
-		if err := rows.Scan(&txnID, decode(&sfi.ParentID), decode(&sfi.UnlockConditions), decode(&sfi.ClaimAddress)); err != nil {
+		var sfi explorer.SiafundInput
+		if err := rows.Scan(&txnID, decode(&sfi.ParentID), decode(&sfi.UnlockConditions), decode(&sfi.ClaimAddress), decode(&sfi.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan siafund input: %w", err)
 		}
 		result[txnID] = append(result[txnID], sfi)
