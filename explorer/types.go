@@ -64,6 +64,20 @@ func (d Source) MarshalJSON() ([]byte, error) {
 	}
 }
 
+// A SiacoinInput is a types.SiacoinInput with information about the parent
+// value.
+type SiacoinInput struct {
+	Value types.Currency
+	types.SiacoinInput
+}
+
+// A SiafundInput is a types.SiafundInput with information about the parent
+// value.
+type SiafundInput struct {
+	Value uint64
+	types.SiafundInput
+}
+
 // A SiacoinOutput is a types.SiacoinElement with added fields for the source
 // and when it was spent.
 type SiacoinOutput struct {
@@ -99,9 +113,9 @@ type FileContractRevision struct {
 // A Transaction is a transaction that uses the wrapped types above.
 type Transaction struct {
 	ID                    types.TransactionID          `json:"id"`
-	SiacoinInputs         []types.SiacoinInput         `json:"siacoinInputs,omitempty"`
+	SiacoinInputs         []SiacoinInput               `json:"siacoinInputs,omitempty"`
 	SiacoinOutputs        []SiacoinOutput              `json:"siacoinOutputs,omitempty"`
-	SiafundInputs         []types.SiafundInput         `json:"siafundInputs,omitempty"`
+	SiafundInputs         []SiafundInput               `json:"siafundInputs,omitempty"`
 	SiafundOutputs        []SiafundOutput              `json:"siafundOutputs,omitempty"`
 	FileContracts         []FileContract               `json:"fileContracts,omitempty"`
 	FileContractRevisions []FileContractRevision       `json:"fileContractRevisions,omitempty"`

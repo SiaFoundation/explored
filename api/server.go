@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"runtime"
 	"strings"
+	"time"
 
 	"go.sia.tech/jape"
 
@@ -14,6 +16,7 @@ import (
 	"go.sia.tech/core/gateway"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/syncer"
+	"go.sia.tech/explored/build"
 	"go.sia.tech/explored/explorer"
 )
 
@@ -76,6 +79,18 @@ type server struct {
 	cm ChainManager
 	e  Explorer
 	s  Syncer
+
+	startTime time.Time
+}
+
+func (s *server) stateHandler(jc jape.Context) {
+	jc.Encode(StateResponse{
+		Version:   build.Version(),
+		Commit:    build.Commit(),
+		OS:        runtime.GOOS,
+		BuildTime: build.Time(),
+		StartTime: s.startTime,
+	})
 }
 
 func (s *server) syncerConnectHandler(jc jape.Context) {
@@ -175,6 +190,14 @@ func (s *server) consensusNetworkHandler(jc jape.Context) {
 
 func (s *server) consensusStateHandler(jc jape.Context) {
 	jc.Encode(s.cm.TipState())
+}
+
+func (s *server) explorerTipHandler(jc jape.Context) {
+	tip, err := s.e.Tip()
+	if jc.Check("failed to get tip", err) != nil {
+		return
+	}
+	jc.Encode(tip)
 }
 
 func (s *server) blocksMetricsHandler(jc jape.Context) {
@@ -460,11 +483,13 @@ func (s *server) searchIDHandler(jc jape.Context) {
 // NewServer returns an HTTP handler that serves the explored API.
 func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 	srv := server{
-		cm: cm,
-		e:  e,
-		s:  s,
+		cm:        cm,
+		e:         e,
+		s:         s,
+		startTime: time.Now().UTC(),
 	}
 	return jape.Mux(map[string]jape.Handler{
+		"GET    /state":                  srv.stateHandler,
 		"GET    /syncer/peers":           srv.syncerPeersHandler,
 		"POST   /syncer/connect":         srv.syncerConnectHandler,
 		"POST   /syncer/broadcast/block": srv.syncerBroadcastBlockHandler,
@@ -477,6 +502,8 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET 	/consensus/state":         srv.consensusStateHandler,
 		"GET    /consensus/tip":         srv.consensusTipHandler,
 		"GET    /consensus/tip/:height": srv.consensusTipHeightHandler,
+
+		"GET    /explorer/tip": srv.explorerTipHandler,
 
 		"GET    /blocks/:id": srv.blocksIDHandler,
 

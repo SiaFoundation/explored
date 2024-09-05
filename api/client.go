@@ -25,6 +25,12 @@ func NewClient(addr, password string) *Client {
 	}}
 }
 
+// State returns information about the current state of the explored daemon.
+func (c *Client) State() (resp StateResponse, err error) {
+	err = c.c.GET("/state", &resp)
+	return
+}
+
 // TxpoolBroadcast broadcasts a set of transaction to the network.
 func (c *Client) TxpoolBroadcast(txns []types.Transaction, v2txns []types.V2Transaction) (err error) {
 	err = c.c.POST("/txpool/broadcast", TxpoolBroadcastRequest{txns, v2txns}, nil)
@@ -63,9 +69,15 @@ func (c *Client) SyncerBroadcastBlock(b types.Block) (err error) {
 	return
 }
 
+// ConsensusTip returns the current tip of the chain manager.
+func (c *Client) ConsensusTip() (resp types.ChainIndex, err error) {
+	err = c.c.GET("/consensus/tip", &resp)
+	return
+}
+
 // Tip returns the current tip of the explorer.
 func (c *Client) Tip() (resp types.ChainIndex, err error) {
-	err = c.c.GET("/consensus/tip", &resp)
+	err = c.c.GET("/explorer/tip", &resp)
 	return
 }
 

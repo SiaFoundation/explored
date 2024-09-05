@@ -6,6 +6,16 @@ import (
 	"go.sia.tech/core/types"
 )
 
+// A StateResponse returns information about the current state of the explored
+// daemon.
+type StateResponse struct {
+	Version   string    `json:"version"`
+	Commit    string    `json:"commit"`
+	OS        string    `json:"os"`
+	BuildTime time.Time `json:"buildTime"`
+	StartTime time.Time `json:"startTime"`
+}
+
 // A GatewayPeer is a currently-connected peer.
 type GatewayPeer struct {
 	Addr    string `json:"addr"`
