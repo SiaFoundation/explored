@@ -11,3 +11,15 @@ env:
 jobs:
   test:
     uses: SiaFoundation/workflows/.github/workflows/go-test.yml@master
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Jape Analyzer
+        uses: SiaFoundation/action-golang-analysis@HEAD
+        with:
+          analyzers: |
+            go.sia.tech/jape.Analyzer@master
+          directories: |
+            api
