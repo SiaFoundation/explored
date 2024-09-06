@@ -113,7 +113,6 @@ type FileContractRevision struct {
 // A Transaction is a transaction that uses the wrapped types above.
 type Transaction struct {
 	ID                    types.TransactionID          `json:"id"`
-	ChainIndices          []types.ChainIndex           `json:"chainIndices,omitempty"`
 	SiacoinInputs         []SiacoinInput               `json:"siacoinInputs,omitempty"`
 	SiacoinOutputs        []SiacoinOutput              `json:"siacoinOutputs,omitempty"`
 	SiafundInputs         []SiafundInput               `json:"siafundInputs,omitempty"`
