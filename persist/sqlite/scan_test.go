@@ -154,9 +154,10 @@ func TestScan(t *testing.T) {
 	cm := chain.NewManager(store, genesisState)
 
 	cfg := config.Scanner{
-		Threads:     10,
-		Timeout:     30 * time.Second,
-		MaxLastScan: 3 * time.Hour,
+		Threads:             10,
+		Timeout:             30 * time.Second,
+		MaxLastScan:         3 * time.Hour,
+		MinLastAnnouncement: 90 * 24 * time.Hour,
 	}
 
 	e, err := explorer.NewExplorer(cm, db, 1000, cfg, log)
@@ -172,14 +173,20 @@ func TestScan(t *testing.T) {
 		t.Fatal(err)
 	}
 	pubkey2 := types.GeneratePrivateKey().PublicKey()
+
+	ts := types.CurrentTimestamp()
 	hosts := []explorer.Host{
 		{
-			PublicKey:  pubkey1,
-			NetAddress: "sia1.siahost.ca:9982",
+			PublicKey:        pubkey1,
+			NetAddress:       "sia1.siahost.ca:9982",
+			LastAnnouncement: ts,
+			KnownSince:       ts,
 		},
 		{
-			PublicKey:  pubkey2,
-			NetAddress: "example.com:9982",
+			PublicKey:        pubkey2,
+			NetAddress:       "example.com:9982",
+			LastAnnouncement: ts,
+			KnownSince:       ts,
 		},
 	}
 

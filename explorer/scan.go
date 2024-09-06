@@ -8,6 +8,7 @@ import (
 	"time"
 
 	crhpv2 "go.sia.tech/core/rhp/v2"
+	"go.sia.tech/core/types"
 	rhpv2 "go.sia.tech/explored/internal/rhp/v2"
 	rhpv3 "go.sia.tech/explored/internal/rhp/v3"
 	"go.uber.org/zap"
@@ -90,7 +91,7 @@ func (e *Explorer) scanHost(host HostAnnouncement) (HostScan, error) {
 	return HostScan{
 		PublicKey: host.PublicKey,
 		Success:   true,
-		Timestamp: time.Now(),
+		Timestamp: types.CurrentTimestamp(),
 
 		Settings:   settings,
 		PriceTable: table,
@@ -110,7 +111,7 @@ func (e *Explorer) addHostScans(hosts chan HostAnnouncement) {
 				scans = append(scans, HostScan{
 					PublicKey: host.PublicKey,
 					Success:   false,
-					Timestamp: time.Now(),
+					Timestamp: types.CurrentTimestamp(),
 				})
 				e.log.Debug("Scanning host failed", zap.String("addr", host.NetAddress), zap.Stringer("pk", host.PublicKey), zap.Error(err))
 				continue
@@ -152,7 +153,7 @@ func (e *Explorer) fetchHosts(hosts chan HostAnnouncement) {
 	var exhausted bool
 	offset := 0
 
-	t := time.Now().UTC()
+	t := types.CurrentTimestamp()
 	cutoff := t.Add(-e.scanCfg.MaxLastScan)
 	lastAnnouncement := t.Add(-e.scanCfg.MinLastAnnouncement)
 
