@@ -53,6 +53,7 @@ type (
 		Metrics(id types.BlockID) (explorer.Metrics, error)
 		HostMetrics() (explorer.HostMetrics, error)
 		Transactions(ids []types.TransactionID) ([]explorer.Transaction, error)
+		TransactionChainIndices(id types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error)
 		Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 		SiacoinElements(ids []types.SiacoinOutputID) (result []explorer.SiacoinOutput, err error)
 		SiafundElements(ids []types.SiafundOutputID) (result []explorer.SiafundOutput, err error)
@@ -260,6 +261,29 @@ func (s *server) transactionsIDHandler(jc jape.Context) {
 		return
 	}
 	jc.Encode(txns[0])
+}
+
+func (s *server) transactionsIDIndicesHandler(jc jape.Context) {
+	var id types.TransactionID
+	if jc.DecodeParam("id", &id) != nil {
+		return
+	}
+
+	limit := uint64(100)
+	offset := uint64(0)
+	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
+		return
+	}
+
+	if limit > 500 {
+		limit = 500
+	}
+
+	indices, err := s.e.TransactionChainIndices(id, offset, limit)
+	if jc.Check("failed to get transaction indices", err) != nil {
+		return
+	}
+	jc.Encode(indices)
 }
 
 func (s *server) transactionsBatchHandler(jc jape.Context) {
@@ -507,8 +531,9 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 
 		"GET    /blocks/:id": srv.blocksIDHandler,
 
-		"GET    /transactions/:id": srv.transactionsIDHandler,
-		"POST   /transactions":     srv.transactionsBatchHandler,
+		"GET    /transactions/:id":      srv.transactionsIDHandler,
+		"POST   /transactions":          srv.transactionsBatchHandler,
+		"GET /transactions/:id/indices": srv.transactionsIDIndicesHandler,
 
 		"GET    /addresses/:address/utxos/siacoin": srv.addressessAddressUtxosSiacoinHandler,
 		"GET    /addresses/:address/utxos/siafund": srv.addressessAddressUtxosSiafundHandler,

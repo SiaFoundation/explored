@@ -412,6 +412,19 @@ func TestSendTransactions(t *testing.T) {
 		check(t, "siafunds", expectSF, sf)
 	}
 
+	checkChainIndices := func(t *testing.T, txnID types.TransactionID, expected []types.ChainIndex) {
+		indices, err := db.TransactionChainIndices(txnID, 0, 100)
+		switch {
+		case err != nil:
+			t.Fatal(err)
+		case len(indices) != len(expected):
+			t.Fatalf("expected %d indices, got %d", len(expected), len(indices))
+		}
+		for i := range indices {
+			check(t, "index", expected[i], indices[i])
+		}
+	}
+
 	checkTransaction := func(expectTxn types.Transaction, gotTxn explorer.Transaction) {
 		check(t, "siacoin inputs", len(expectTxn.SiacoinInputs), len(gotTxn.SiacoinInputs))
 		check(t, "siacoin outputs", len(expectTxn.SiacoinOutputs), len(gotTxn.SiacoinOutputs))
@@ -578,7 +591,7 @@ func TestSendTransactions(t *testing.T) {
 		// with the actual transactions
 		for i := range b.Transactions {
 			checkTransaction(b.Transactions[i], block.Transactions[i])
-			check(t, "chain indices", []types.ChainIndex{cm.Tip()}, block.Transactions[i].ChainIndices)
+			checkChainIndices(t, b.Transactions[i].ID(), []types.ChainIndex{cm.Tip()})
 
 			txns, err := db.Transactions([]types.TransactionID{b.Transactions[i].ID()})
 			if err != nil {
@@ -1625,6 +1638,19 @@ func TestRevertSendTransactions(t *testing.T) {
 		check(t, "siafunds", expectSF, sf)
 	}
 
+	checkChainIndices := func(t *testing.T, txnID types.TransactionID, expected []types.ChainIndex) {
+		indices, err := db.TransactionChainIndices(txnID, 0, 100)
+		switch {
+		case err != nil:
+			t.Fatal(err)
+		case len(indices) != len(expected):
+			t.Fatalf("expected %d indices, got %d", len(expected), len(indices))
+		}
+		for i := range indices {
+			check(t, "index", expected[i], indices[i])
+		}
+	}
+
 	checkTransaction := func(expectTxn types.Transaction, gotTxn explorer.Transaction) {
 		check(t, "siacoin inputs", len(expectTxn.SiacoinInputs), len(gotTxn.SiacoinInputs))
 		check(t, "siacoin outputs", len(expectTxn.SiacoinOutputs), len(gotTxn.SiacoinOutputs))
@@ -1782,7 +1808,7 @@ func TestRevertSendTransactions(t *testing.T) {
 		// with the actual transactions
 		for i := range b.Transactions {
 			checkTransaction(b.Transactions[i], block.Transactions[i])
-			check(t, "chain indices", []types.ChainIndex{cm.Tip()}, block.Transactions[i].ChainIndices)
+			checkChainIndices(t, b.Transactions[i].ID(), []types.ChainIndex{cm.Tip()})
 
 			txns, err := db.Transactions([]types.TransactionID{b.Transactions[i].ID()})
 			if err != nil {
