@@ -45,7 +45,7 @@ type Store interface {
 	Metrics(id types.BlockID) (Metrics, error)
 	HostMetrics() (HostMetrics, error)
 	Transactions(ids []types.TransactionID) ([]Transaction, error)
-	TransactionIndices(txid types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error)
+	TransactionChainIndices(txid types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error)
 	UnspentSiacoinOutputs(address types.Address, offset, limit uint64) ([]SiacoinOutput, error)
 	UnspentSiafundOutputs(address types.Address, offset, limit uint64) ([]SiafundOutput, error)
 	AddressEvents(address types.Address, offset, limit uint64) (events []Event, err error)
@@ -197,8 +197,11 @@ func (e *Explorer) Transactions(ids []types.TransactionID) ([]Transaction, error
 	return e.s.Transactions(ids)
 }
 
-func (e *Explorer) TransactionIndices(id types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error) {
-	return e.s.TransactionIndices(id, offset, limit)
+// TransactionChainIndices returns the chain indices of the blocks the transaction
+// was included in. If the transaction has not been included in any blocks, the
+// result will be nil,nil.
+func (e *Explorer) TransactionChainIndices(id types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error) {
+	return e.s.TransactionChainIndices(id, offset, limit)
 }
 
 // UnspentSiacoinOutputs returns the unspent siacoin outputs owned by the

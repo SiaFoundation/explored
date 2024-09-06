@@ -7,10 +7,10 @@ import (
 	"go.sia.tech/explored/explorer"
 )
 
-// transactionChainIndices returns the chain indices of the blocks the transaction
+// TransactionChainIndices returns the chain indices of the blocks the transaction
 // was included in. If the transaction has not been included in any blocks, the
 // result will be nil,nil.
-func (s *Store) TransactionIndices(txnID types.TransactionID, offset, limit uint64) (indices []types.ChainIndex, err error) {
+func (s *Store) TransactionChainIndices(txnID types.TransactionID, offset, limit uint64) (indices []types.ChainIndex, err error) {
 	err = s.transaction(func(tx *txn) error {
 		rows, err := tx.Query(`SELECT DISTINCT b.id, b.height FROM blocks b
 INNER JOIN block_transactions bt ON (bt.block_id = b.id)

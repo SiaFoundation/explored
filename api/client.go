@@ -124,7 +124,9 @@ func (c *Client) Transactions(ids []types.TransactionID) (resp []explorer.Transa
 	return
 }
 
-func (c *Client) TransactionIndices(id types.TransactionID, offset, limit uint64) (resp []types.ChainIndex, err error) {
+// TransactionChainIndices returns chain indices a transaction was
+// included in.
+func (c *Client) TransactionChainIndices(id types.TransactionID, offset, limit uint64) (resp []types.ChainIndex, err error) {
 	err = c.c.GET(fmt.Sprintf("/transactions/%s/indices?offset=%d&limit=%d", id, offset, limit), &resp)
 	return
 }

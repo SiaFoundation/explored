@@ -53,7 +53,7 @@ type (
 		Metrics(id types.BlockID) (explorer.Metrics, error)
 		HostMetrics() (explorer.HostMetrics, error)
 		Transactions(ids []types.TransactionID) ([]explorer.Transaction, error)
-		TransactionIndices(id types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error)
+		TransactionChainIndices(id types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error)
 		Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 		SiacoinElements(ids []types.SiacoinOutputID) (result []explorer.SiacoinOutput, err error)
 		SiafundElements(ids []types.SiafundOutputID) (result []explorer.SiafundOutput, err error)
@@ -279,7 +279,7 @@ func (s *server) transactionsIDIndicesHandler(jc jape.Context) {
 		limit = 500
 	}
 
-	indices, err := s.e.TransactionIndices(id, offset, limit)
+	indices, err := s.e.TransactionChainIndices(id, offset, limit)
 	if jc.Check("failed to get transaction indices", err) != nil {
 		return
 	}

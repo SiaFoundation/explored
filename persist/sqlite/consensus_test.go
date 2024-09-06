@@ -413,7 +413,7 @@ func TestSendTransactions(t *testing.T) {
 	}
 
 	checkChainIndices := func(t *testing.T, txnID types.TransactionID, expected []types.ChainIndex) {
-		indices, err := db.TransactionIndices(txnID, 0, 100)
+		indices, err := db.TransactionChainIndices(txnID, 0, 100)
 		switch {
 		case err != nil:
 			t.Fatal(err)
@@ -1639,7 +1639,7 @@ func TestRevertSendTransactions(t *testing.T) {
 	}
 
 	checkChainIndices := func(t *testing.T, txnID types.TransactionID, expected []types.ChainIndex) {
-		indices, err := db.TransactionIndices(txnID, 0, 100)
+		indices, err := db.TransactionChainIndices(txnID, 0, 100)
 		switch {
 		case err != nil:
 			t.Fatal(err)
