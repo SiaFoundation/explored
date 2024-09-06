@@ -7,6 +7,32 @@ import (
 	"go.sia.tech/explored/explorer"
 )
 
+// transactionChainIndices returns the chain indices of the blocks the transaction
+// was in.
+func transactionChainIndices(tx *txn, txnIDs []int64) (map[int64][]types.ChainIndex, error) {
+	query := `SELECT bt.transaction_id, bt.block_id, b.height
+FROM block_transactions bt
+JOIN blocks b ON bt.block_id = b.id
+WHERE bt.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
+ORDER BY bt.block_order ASC`
+	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64][]types.ChainIndex)
+	for rows.Next() {
+		var txnID int64
+		var index types.ChainIndex
+		if err := rows.Scan(&txnID, decode(&index.ID), decode(&index.Height)); err != nil {
+			return nil, fmt.Errorf("failed to scan chain index: %w", err)
+		}
+		result[txnID] = append(result[txnID], index)
+	}
+	return result, nil
+}
+
 // transactionMinerFee returns the miner fees for each transaction.
 func transactionMinerFee(tx *txn, txnIDs []int64) (map[int64][]types.Currency, error) {
 	query := `SELECT transaction_id, fee
@@ -458,6 +484,11 @@ func getTransactions(tx *txn, idMap map[int64]transactionID) ([]explorer.Transac
 		dbIDs[id.order] = dbID
 	}
 
+	txnChainIndices, err := transactionChainIndices(tx, dbIDs)
+	if err != nil {
+		return nil, fmt.Errorf("getTransactions: failed to get chain indices: %w", err)
+	}
+
 	txnArbitraryData, err := transactionArbitraryData(tx, dbIDs)
 	if err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get arbitrary data: %w", err)
@@ -512,6 +543,7 @@ func getTransactions(tx *txn, idMap map[int64]transactionID) ([]explorer.Transac
 	for _, dbID := range dbIDs {
 		txn := explorer.Transaction{
 			ID:                    idMap[dbID].id,
+			ChainIndices:          txnChainIndices[dbID],
 			SiacoinInputs:         txnSiacoinInputs[dbID],
 			SiacoinOutputs:        txnSiacoinOutputs[dbID],
 			SiafundInputs:         txnSiafundInputs[dbID],
