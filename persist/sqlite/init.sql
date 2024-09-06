@@ -133,7 +133,6 @@ CREATE TABLE transactions (
 	id INTEGER PRIMARY KEY,
 	transaction_id BLOB UNIQUE NOT NULL
 );
-
 CREATE INDEX transactions_transaction_id_index ON transactions(transaction_id);
 
 CREATE TABLE block_transactions (
@@ -144,6 +143,7 @@ CREATE TABLE block_transactions (
 );
 CREATE INDEX block_transactions_block_id_index ON block_transactions(block_id);
 CREATE INDEX block_transactions_transaction_id_index ON block_transactions(transaction_id);
+CREATE INDEX block_transactions_transaction_id_block_id ON block_transactions(transaction_id, block_id);
 
 CREATE TABLE transaction_arbitrary_data (
 	transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
