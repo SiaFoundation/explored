@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
@@ -111,7 +112,7 @@ func signTxn(cs consensus.State, pk types.PrivateKey, txn *types.Transaction) {
 	}
 }
 
-func check(t *testing.T, desc string, expect, got any) {
+func check[T any](t *testing.T, desc string, expect, got T) {
 	if !reflect.DeepEqual(expect, got) {
 		t.Fatalf("expected %v %s, got %v", expect, desc, got)
 	}
@@ -2000,17 +2001,22 @@ func TestHostAnnouncement(t *testing.T) {
 
 	txn2 := types.Transaction{
 		ArbitraryData: [][]byte{
-			createAnnouncement(pk2, "127.0.0.1:5678"),
+			createAnnouncement(pk1, "127.0.0.1:5678"),
 		},
 	}
 	txn3 := types.Transaction{
+		ArbitraryData: [][]byte{
+			createAnnouncement(pk2, "127.0.0.1:9999"),
+		},
+	}
+	txn4 := types.Transaction{
 		ArbitraryData: [][]byte{
 			createAnnouncement(pk3, "127.0.0.1:9999"),
 		},
 	}
 
 	// Mine a block containing host announcement
-	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn2, txn3}, types.VoidAddress)}); err != nil {
+	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn2, txn3, txn4}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
@@ -2020,6 +2026,70 @@ func TestHostAnnouncement(t *testing.T) {
 		ActiveContracts:    0,
 		StorageUtilization: 0,
 	})
+
+	ts := time.Unix(0, 0)
+	hosts, err := db.HostsForScanning(ts, ts, 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(t, "len(hosts)", 3, len(hosts))
+
+	{
+		scans, err := db.Hosts([]types.PublicKey{hosts[0].PublicKey})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "len(scans)", 1, len(scans))
+	}
+
+	scan1 := explorer.HostScan{
+		PublicKey: hosts[0].PublicKey,
+		Success:   true,
+		Timestamp: time.Now(),
+	}
+	scan2 := explorer.HostScan{
+		PublicKey: hosts[0].PublicKey,
+		Success:   false,
+		Timestamp: time.Now(),
+	}
+
+	{
+		if err := db.AddHostScans([]explorer.HostScan{scan1}); err != nil {
+			t.Fatal(err)
+		}
+
+		scans, err := db.Hosts([]types.PublicKey{hosts[0].PublicKey})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "len(scans)", 1, len(scans))
+
+		scan := scans[0]
+		check(t, "last scan", scan1.Timestamp.Unix(), scan.LastScan.Unix())
+		check(t, "last scan successful", scan1.Success, scan.LastScanSuccessful)
+		check(t, "total scans", 1, scan.TotalScans)
+		check(t, "successful interactions", 1, scan.SuccessfulInteractions)
+		check(t, "failed interactions", 0, scan.FailedInteractions)
+	}
+
+	{
+		if err := db.AddHostScans([]explorer.HostScan{scan2}); err != nil {
+			t.Fatal(err)
+		}
+
+		scans, err := db.Hosts([]types.PublicKey{hosts[0].PublicKey})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "len(scans)", 1, len(scans))
+
+		scan := scans[0]
+		check(t, "last scan", scan2.Timestamp.Unix(), scan.LastScan.Unix())
+		check(t, "last scan successful", scan2.Success, scan.LastScanSuccessful)
+		check(t, "total scans", 2, scan.TotalScans)
+		check(t, "successful interactions", 1, scan.SuccessfulInteractions)
+		check(t, "failed interactions", 1, scan.FailedInteractions)
+	}
 }
 
 func TestMultipleReorg(t *testing.T) {

@@ -43,6 +43,12 @@ var cfg = config.Config{
 		Bootstrap:  true,
 		EnableUPNP: false,
 	},
+	Scanner: config.Scanner{
+		Threads:             10,
+		Timeout:             30 * time.Second,
+		MaxLastScan:         3 * time.Hour,
+		MinLastAnnouncement: 90 * 24 * time.Hour,
+	},
 	Consensus: config.Consensus{
 		Network: "mainnet",
 	},
@@ -344,11 +350,14 @@ func main() {
 	defer s.Close()
 	go s.Run(ctx)
 
-	e, err := explorer.NewExplorer(cm, store, cfg.Index.BatchSize, log.Named("explorer"))
+	e, err := explorer.NewExplorer(cm, store, cfg.Index.BatchSize, cfg.Scanner, log.Named("explorer"))
 	if err != nil {
 		log.Error("failed to create explorer", zap.Error(err))
 		return
 	}
+	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer timeoutCancel()
+	defer e.Shutdown(timeoutCtx)
 
 	api := api.NewServer(e, cm, s)
 	server := &http.Server{

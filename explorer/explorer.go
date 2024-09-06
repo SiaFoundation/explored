@@ -1,13 +1,17 @@
 package explorer
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
+	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
+	"go.sia.tech/explored/config"
 	"go.uber.org/zap"
 )
 
@@ -21,6 +25,7 @@ var (
 // A ChainManager manages the consensus state
 type ChainManager interface {
 	Tip() types.ChainIndex
+	TipState() consensus.State
 	BestIndex(height uint64) (types.ChainIndex, bool)
 
 	OnReorg(fn func(types.ChainIndex)) (cancel func())
@@ -31,12 +36,14 @@ type ChainManager interface {
 // and blocks.
 type Store interface {
 	UpdateChainState(reverted []chain.RevertUpdate, applied []chain.ApplyUpdate) error
+	AddHostScans(scans []HostScan) error
 
 	Tip() (types.ChainIndex, error)
 	Block(id types.BlockID) (Block, error)
 	BestTip(height uint64) (types.ChainIndex, error)
 	MerkleProof(leafIndex uint64) ([]types.Hash256, error)
 	Metrics(id types.BlockID) (Metrics, error)
+	HostMetrics() (HostMetrics, error)
 	Transactions(ids []types.TransactionID) ([]Transaction, error)
 	UnspentSiacoinOutputs(address types.Address, offset, limit uint64) ([]SiacoinOutput, error)
 	UnspentSiafundOutputs(address types.Address, offset, limit uint64) ([]SiafundOutput, error)
@@ -46,24 +53,35 @@ type Store interface {
 	ContractsKey(key types.PublicKey) (result []FileContract, err error)
 	SiacoinElements(ids []types.SiacoinOutputID) (result []SiacoinOutput, err error)
 	SiafundElements(ids []types.SiafundOutputID) (result []SiafundOutput, err error)
+
+	Hosts(pks []types.PublicKey) ([]Host, error)
+	HostsForScanning(maxLastScan, minLastAnnouncement time.Time, offset, limit uint64) ([]HostAnnouncement, error)
 }
 
 // Explorer implements a Sia explorer.
 type Explorer struct {
 	s  Store
-	mu sync.Mutex
+	cm ChainManager
+
+	scanCfg config.Scanner
+
+	log *zap.Logger
+
+	wg        sync.WaitGroup
+	ctx       context.Context
+	ctxCancel context.CancelFunc
 
 	unsubscribe func()
 }
 
-func syncStore(store Store, cm ChainManager, index types.ChainIndex, batchSize int) error {
-	for index != cm.Tip() {
-		crus, caus, err := cm.UpdatesSince(index, batchSize)
+func (e *Explorer) syncStore(index types.ChainIndex, batchSize int) error {
+	for index != e.cm.Tip() {
+		crus, caus, err := e.cm.UpdatesSince(index, batchSize)
 		if err != nil {
 			return fmt.Errorf("failed to subscribe to chain manager: %w", err)
 		}
 
-		if err := store.UpdateChainState(crus, caus); err != nil {
+		if err := e.s.UpdateChainState(crus, caus); err != nil {
 			return fmt.Errorf("failed to process updates: %w", err)
 		}
 		if len(crus) > 0 {
@@ -77,43 +95,70 @@ func syncStore(store Store, cm ChainManager, index types.ChainIndex, batchSize i
 }
 
 // NewExplorer returns a Sia explorer.
-func NewExplorer(cm ChainManager, store Store, batchSize int, log *zap.Logger) (*Explorer, error) {
-	e := &Explorer{s: store}
+func NewExplorer(cm ChainManager, store Store, batchSize int, scanCfg config.Scanner, log *zap.Logger) (*Explorer, error) {
+	ctx, ctxCancel := context.WithCancel(context.Background())
+	e := &Explorer{
+		s:         store,
+		cm:        cm,
+		scanCfg:   scanCfg,
+		ctx:       ctx,
+		ctxCancel: ctxCancel,
+		log:       log,
+	}
 
-	tip, err := store.Tip()
+	tip, err := e.s.Tip()
 	if errors.Is(err, ErrNoTip) {
 		tip = types.ChainIndex{}
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to get tip: %w", err)
 	}
-	if err := syncStore(store, cm, tip, batchSize); err != nil {
+	if err := e.syncStore(tip, batchSize); err != nil {
 		return nil, fmt.Errorf("failed to subscribe to chain manager: %w", err)
 	}
 
 	reorgChan := make(chan types.ChainIndex, 1)
 	go func() {
 		for range reorgChan {
-			e.mu.Lock()
-			lastTip, err := store.Tip()
+			lastTip, err := e.s.Tip()
 			if errors.Is(err, ErrNoTip) {
 				lastTip = types.ChainIndex{}
 			} else if err != nil {
-				log.Error("failed to get tip", zap.Error(err))
+				e.log.Error("failed to get tip", zap.Error(err))
 			}
-			if err := syncStore(store, cm, lastTip, batchSize); err != nil {
-				log.Error("failed to sync store", zap.Error(err))
+			if err := e.syncStore(lastTip, batchSize); err != nil {
+				e.log.Error("failed to sync store", zap.Error(err))
 			}
-			e.mu.Unlock()
 		}
 	}()
 
-	e.unsubscribe = cm.OnReorg(func(index types.ChainIndex) {
+	go e.scanHosts()
+
+	e.unsubscribe = e.cm.OnReorg(func(index types.ChainIndex) {
 		select {
 		case reorgChan <- index:
 		default:
 		}
 	})
 	return e, nil
+}
+
+// Shutdown tries to close the scanning goroutines in the explorer.
+func (e *Explorer) Shutdown(ctx context.Context) error {
+	e.ctxCancel()
+
+	done := make(chan struct{})
+	go func() {
+		e.wg.Wait()
+		close(done)
+	}()
+
+	// Wait for the WaitGroup to finish or the context to be cancelled
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // Tip returns the tip of the best known valid chain.
@@ -139,6 +184,11 @@ func (e *Explorer) MerkleProof(leafIndex uint64) ([]types.Hash256, error) {
 // Metrics returns various metrics about Sia.
 func (e *Explorer) Metrics(id types.BlockID) (Metrics, error) {
 	return e.s.Metrics(id)
+}
+
+// HostMetrics returns various metrics about currently available hosts.
+func (e *Explorer) HostMetrics() (HostMetrics, error) {
+	return e.s.HostMetrics()
 }
 
 // Transactions returns the transactions with the specified IDs.
@@ -186,6 +236,11 @@ func (e *Explorer) SiacoinElements(ids []types.SiacoinOutputID) (result []Siacoi
 // SiafundElements returns the siafund elements with the specified IDs.
 func (e *Explorer) SiafundElements(ids []types.SiafundOutputID) (result []SiafundOutput, err error) {
 	return e.s.SiafundElements(ids)
+}
+
+// Hosts returns the hosts with the specified public keys.
+func (e *Explorer) Hosts(pks []types.PublicKey) ([]Host, error) {
+	return e.s.Hosts(pks)
 }
 
 // Search returns the element type (address, block, transaction, contract ID)

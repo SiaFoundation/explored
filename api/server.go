@@ -51,6 +51,7 @@ type (
 		Block(id types.BlockID) (explorer.Block, error)
 		BestTip(height uint64) (types.ChainIndex, error)
 		Metrics(id types.BlockID) (explorer.Metrics, error)
+		HostMetrics() (explorer.HostMetrics, error)
 		Transactions(ids []types.TransactionID) ([]explorer.Transaction, error)
 		Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 		SiacoinElements(ids []types.SiacoinOutputID) (result []explorer.SiacoinOutput, err error)
@@ -61,6 +62,8 @@ type (
 		Contracts(ids []types.FileContractID) (result []explorer.FileContract, err error)
 		ContractsKey(key types.PublicKey) (result []explorer.FileContract, err error)
 		Search(id types.Hash256) (explorer.SearchType, error)
+
+		Hosts(pks []types.PublicKey) ([]explorer.Host, error)
 	}
 )
 
@@ -217,6 +220,14 @@ func (s *server) blocksMetricsIDHandler(jc jape.Context) {
 	}
 	metrics, err := s.e.Metrics(id)
 	if jc.Check("failed to get metrics", err) != nil {
+		return
+	}
+	jc.Encode(metrics)
+}
+
+func (s *server) hostMetricsHandler(jc jape.Context) {
+	metrics, err := s.e.HostMetrics()
+	if jc.Check("failed to get host metrics", err) != nil {
 		return
 	}
 	jc.Encode(metrics)
@@ -430,6 +441,23 @@ func (s *server) pubkeyContractsHandler(jc jape.Context) {
 	jc.Encode(fcs)
 }
 
+func (s *server) pubkeyHostHandler(jc jape.Context) {
+	errNotFound := errors.New("host not found")
+
+	var key types.PublicKey
+	if jc.DecodeParam("key", &key) != nil {
+		return
+	}
+	hosts, err := s.e.Hosts([]types.PublicKey{key})
+	if jc.Check("failed to get host", err) != nil {
+		return
+	} else if len(hosts) == 0 {
+		jc.Error(errNotFound, http.StatusNotFound)
+		return
+	}
+	jc.Encode(hosts[0])
+}
+
 func (s *server) searchIDHandler(jc jape.Context) {
 	errNotFound := errors.New("no contract found")
 	const maxLen = len(types.Hash256{})
@@ -494,9 +522,11 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"POST   /contracts":     srv.contractsBatchHandler,
 
 		"GET    /pubkey/:key/contracts": srv.pubkeyContractsHandler,
+		"GET    /pubkey/:key/host":      srv.pubkeyHostHandler,
 
 		"GET    /metrics/block":     srv.blocksMetricsHandler,
 		"GET    /metrics/block/:id": srv.blocksMetricsIDHandler,
+		"GET    /metrics/host":      srv.hostMetricsHandler,
 
 		"GET    /search/:id": srv.searchIDHandler,
 	})
