@@ -65,14 +65,14 @@ func (d Source) MarshalJSON() ([]byte, error) {
 // A SiacoinInput is a types.SiacoinInput with information about the parent
 // value.
 type SiacoinInput struct {
-	Value types.Currency
+	Value types.Currency `json:"value"`
 	types.SiacoinInput
 }
 
 // A SiafundInput is a types.SiafundInput with information about the parent
 // value.
 type SiafundInput struct {
-	Value uint64
+	Value uint64 `json:"value"`
 	types.SiafundInput
 }
 
