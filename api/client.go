@@ -124,6 +124,11 @@ func (c *Client) Transactions(ids []types.TransactionID) (resp []explorer.Transa
 	return
 }
 
+func (c *Client) TransactionIndices(id types.TransactionID, offset, limit uint64) (resp []types.ChainIndex, err error) {
+	err = c.c.GET(fmt.Sprintf("/transactions/%s/indices?offset=%d&limit=%d", id, offset, limit), &resp)
+	return
+}
+
 // AddressSiacoinUTXOs returns the specified address' unspent outputs.
 func (c *Client) AddressSiacoinUTXOs(address types.Address, offset, limit uint64) (resp []explorer.SiacoinOutput, err error) {
 	err = c.c.GET(fmt.Sprintf("/addresses/%s/utxos/siacoin?offset=%d&limit=%d", address, offset, limit), &resp)
