@@ -269,7 +269,17 @@ func (s *server) transactionsIDIndicesHandler(jc jape.Context) {
 		return
 	}
 
-	indices, err := s.e.TransactionIndices(id, 0, 100)
+	limit := uint64(100)
+	offset := uint64(0)
+	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
+		return
+	}
+
+	if limit > 500 {
+		limit = 500
+	}
+
+	indices, err := s.e.TransactionIndices(id, offset, limit)
 	if jc.Check("failed to get transaction indices", err) != nil {
 		return
 	}
