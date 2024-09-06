@@ -18,9 +18,10 @@ type (
 
 	// Scanner contains the configuration for the host scanner.
 	Scanner struct {
-		Threads     int           `yaml:"threads,omitempty"`
-		Timeout     time.Duration `yaml:"timeout,omitempty"`
-		MaxLastScan time.Duration `yaml:"maxLastScan,omitempty"`
+		Threads             int           `yaml:"threads,omitempty"`
+		Timeout             time.Duration `yaml:"timeout,omitempty"`
+		MaxLastScan         time.Duration `yaml:"maxLastScan,omitempty"`
+		MinLastAnnouncement time.Duration `yaml:"minLastAnnouncement,omitempty"`
 	}
 
 	// Consensus contains the configuration for the consensus set.

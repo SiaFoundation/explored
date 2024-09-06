@@ -55,7 +55,7 @@ type Store interface {
 	SiafundElements(ids []types.SiafundOutputID) (result []SiafundOutput, err error)
 
 	Hosts(pks []types.PublicKey) ([]Host, error)
-	HostsForScanning(maxLastScan time.Time, offset, limit uint64) ([]HostAnnouncement, error)
+	HostsForScanning(maxLastScan, minLastAnnouncement time.Time, offset, limit uint64) ([]HostAnnouncement, error)
 }
 
 // Explorer implements a Sia explorer.

@@ -2025,7 +2025,8 @@ func TestHostAnnouncement(t *testing.T) {
 		StorageUtilization: 0,
 	})
 
-	hosts, err := db.HostsForScanning(time.Unix(0, 0), 0, 100)
+	ts := time.Unix(0, 0)
+	hosts, err := db.HostsForScanning(ts, ts, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}

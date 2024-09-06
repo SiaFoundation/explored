@@ -151,9 +151,13 @@ func (e *Explorer) isClosed() bool {
 func (e *Explorer) fetchHosts(hosts chan HostAnnouncement) {
 	var exhausted bool
 	offset := 0
-	cutoff := time.Now().Add(-e.scanCfg.MaxLastScan)
+
+	t := time.Now().UTC()
+	cutoff := t.Add(-e.scanCfg.MaxLastScan)
+	lastAnnouncement := t.Add(-e.scanCfg.MinLastAnnouncement)
+
 	for !exhausted && !e.isClosed() {
-		batch, err := e.s.HostsForScanning(cutoff, uint64(offset), scanBatchSize)
+		batch, err := e.s.HostsForScanning(cutoff, lastAnnouncement, uint64(offset), scanBatchSize)
 		if err != nil {
 			e.log.Error("failed to get hosts for scanning", zap.Error(err))
 			return

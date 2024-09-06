@@ -44,9 +44,10 @@ var cfg = config.Config{
 		EnableUPNP: false,
 	},
 	Scanner: config.Scanner{
-		Threads:     10,
-		Timeout:     30 * time.Second,
-		MaxLastScan: 3 * time.Hour,
+		Threads:             10,
+		Timeout:             30 * time.Second,
+		MaxLastScan:         3 * time.Hour,
+		MinLastAnnouncement: 90 * 24 * time.Hour,
 	},
 	Consensus: config.Consensus{
 		Network: "mainnet",

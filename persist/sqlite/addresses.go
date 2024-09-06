@@ -109,9 +109,9 @@ func (s *Store) Hosts(pks []types.PublicKey) (result []explorer.Host, err error)
 }
 
 // HostsForScanning returns hosts ordered by the transaction they were created in.
-func (s *Store) HostsForScanning(maxLastScan time.Time, offset, limit uint64) (result []explorer.HostAnnouncement, err error) {
+func (s *Store) HostsForScanning(maxLastScan, minLastAnnouncement time.Time, offset, limit uint64) (result []explorer.HostAnnouncement, err error) {
 	err = s.transaction(func(tx *txn) error {
-		rows, err := tx.Query(`SELECT public_key, net_address FROM host_info WHERE last_scan <= ? ORDER BY last_scan ASC LIMIT ? OFFSET ?`, encode(maxLastScan), limit, offset)
+		rows, err := tx.Query(`SELECT public_key, net_address FROM host_info WHERE last_scan <= ? AND last_announcement >= ? ORDER BY last_scan ASC LIMIT ? OFFSET ?`, encode(maxLastScan), encode(minLastAnnouncement), limit, offset)
 		if err != nil {
 			return err
 		}
