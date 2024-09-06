@@ -577,6 +577,7 @@ func TestSendTransactions(t *testing.T) {
 		// with the actual transactions
 		for i := range b.Transactions {
 			checkTransaction(b.Transactions[i], block.Transactions[i])
+			check(t, "chain indices", []types.ChainIndex{cm.Tip()}, block.Transactions[i].ChainIndices)
 
 			txns, err := db.Transactions([]types.TransactionID{b.Transactions[i].ID()})
 			if err != nil {
@@ -1780,6 +1781,7 @@ func TestRevertSendTransactions(t *testing.T) {
 		// with the actual transactions
 		for i := range b.Transactions {
 			checkTransaction(b.Transactions[i], block.Transactions[i])
+			check(t, "chain indices", []types.ChainIndex{cm.Tip()}, block.Transactions[i].ChainIndices)
 
 			txns, err := db.Transactions([]types.TransactionID{b.Transactions[i].ID()})
 			if err != nil {
