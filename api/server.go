@@ -51,7 +51,9 @@ type (
 		Block(id types.BlockID) (explorer.Block, error)
 		BestTip(height uint64) (types.ChainIndex, error)
 		Metrics(id types.BlockID) (explorer.Metrics, error)
+		HostMetrics() (explorer.HostMetrics, error)
 		Transactions(ids []types.TransactionID) ([]explorer.Transaction, error)
+		TransactionChainIndices(id types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error)
 		Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 		SiacoinElements(ids []types.SiacoinOutputID) (result []explorer.SiacoinOutput, err error)
 		SiafundElements(ids []types.SiafundOutputID) (result []explorer.SiafundOutput, err error)
@@ -61,6 +63,8 @@ type (
 		Contracts(ids []types.FileContractID) (result []explorer.FileContract, err error)
 		ContractsKey(key types.PublicKey) (result []explorer.FileContract, err error)
 		Search(id types.Hash256) (explorer.SearchType, error)
+
+		Hosts(pks []types.PublicKey) ([]explorer.Host, error)
 	}
 )
 
@@ -222,6 +226,14 @@ func (s *server) blocksMetricsIDHandler(jc jape.Context) {
 	jc.Encode(metrics)
 }
 
+func (s *server) hostMetricsHandler(jc jape.Context) {
+	metrics, err := s.e.HostMetrics()
+	if jc.Check("failed to get host metrics", err) != nil {
+		return
+	}
+	jc.Encode(metrics)
+}
+
 func (s *server) blocksIDHandler(jc jape.Context) {
 	var id types.BlockID
 	if jc.DecodeParam("id", &id) != nil {
@@ -249,6 +261,29 @@ func (s *server) transactionsIDHandler(jc jape.Context) {
 		return
 	}
 	jc.Encode(txns[0])
+}
+
+func (s *server) transactionsIDIndicesHandler(jc jape.Context) {
+	var id types.TransactionID
+	if jc.DecodeParam("id", &id) != nil {
+		return
+	}
+
+	limit := uint64(100)
+	offset := uint64(0)
+	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
+		return
+	}
+
+	if limit > 500 {
+		limit = 500
+	}
+
+	indices, err := s.e.TransactionChainIndices(id, offset, limit)
+	if jc.Check("failed to get transaction indices", err) != nil {
+		return
+	}
+	jc.Encode(indices)
 }
 
 func (s *server) transactionsBatchHandler(jc jape.Context) {
@@ -430,6 +465,23 @@ func (s *server) pubkeyContractsHandler(jc jape.Context) {
 	jc.Encode(fcs)
 }
 
+func (s *server) pubkeyHostHandler(jc jape.Context) {
+	errNotFound := errors.New("host not found")
+
+	var key types.PublicKey
+	if jc.DecodeParam("key", &key) != nil {
+		return
+	}
+	hosts, err := s.e.Hosts([]types.PublicKey{key})
+	if jc.Check("failed to get host", err) != nil {
+		return
+	} else if len(hosts) == 0 {
+		jc.Error(errNotFound, http.StatusNotFound)
+		return
+	}
+	jc.Encode(hosts[0])
+}
+
 func (s *server) searchIDHandler(jc jape.Context) {
 	errNotFound := errors.New("no contract found")
 	const maxLen = len(types.Hash256{})
@@ -479,8 +531,9 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 
 		"GET    /blocks/:id": srv.blocksIDHandler,
 
-		"GET    /transactions/:id": srv.transactionsIDHandler,
-		"POST   /transactions":     srv.transactionsBatchHandler,
+		"GET    /transactions/:id":      srv.transactionsIDHandler,
+		"POST   /transactions":          srv.transactionsBatchHandler,
+		"GET /transactions/:id/indices": srv.transactionsIDIndicesHandler,
 
 		"GET    /addresses/:address/utxos/siacoin": srv.addressessAddressUtxosSiacoinHandler,
 		"GET    /addresses/:address/utxos/siafund": srv.addressessAddressUtxosSiafundHandler,
@@ -494,9 +547,11 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"POST   /contracts":     srv.contractsBatchHandler,
 
 		"GET    /pubkey/:key/contracts": srv.pubkeyContractsHandler,
+		"GET    /pubkey/:key/host":      srv.pubkeyHostHandler,
 
 		"GET    /metrics/block":     srv.blocksMetricsHandler,
 		"GET    /metrics/block/:id": srv.blocksMetricsIDHandler,
+		"GET    /metrics/host":      srv.hostMetricsHandler,
 
 		"GET    /search/:id": srv.searchIDHandler,
 	})

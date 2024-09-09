@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
@@ -111,7 +112,7 @@ func signTxn(cs consensus.State, pk types.PrivateKey, txn *types.Transaction) {
 	}
 }
 
-func check(t *testing.T, desc string, expect, got any) {
+func check[T any](t *testing.T, desc string, expect, got T) {
 	if !reflect.DeepEqual(expect, got) {
 		t.Fatalf("expected %v %s, got %v", expect, desc, got)
 	}
@@ -411,6 +412,19 @@ func TestSendTransactions(t *testing.T) {
 		check(t, "siafunds", expectSF, sf)
 	}
 
+	checkChainIndices := func(t *testing.T, txnID types.TransactionID, expected []types.ChainIndex) {
+		indices, err := db.TransactionChainIndices(txnID, 0, 100)
+		switch {
+		case err != nil:
+			t.Fatal(err)
+		case len(indices) != len(expected):
+			t.Fatalf("expected %d indices, got %d", len(expected), len(indices))
+		}
+		for i := range indices {
+			check(t, "index", expected[i], indices[i])
+		}
+	}
+
 	checkTransaction := func(expectTxn types.Transaction, gotTxn explorer.Transaction) {
 		check(t, "siacoin inputs", len(expectTxn.SiacoinInputs), len(gotTxn.SiacoinInputs))
 		check(t, "siacoin outputs", len(expectTxn.SiacoinOutputs), len(gotTxn.SiacoinOutputs))
@@ -577,6 +591,7 @@ func TestSendTransactions(t *testing.T) {
 		// with the actual transactions
 		for i := range b.Transactions {
 			checkTransaction(b.Transactions[i], block.Transactions[i])
+			checkChainIndices(t, b.Transactions[i].ID(), []types.ChainIndex{cm.Tip()})
 
 			txns, err := db.Transactions([]types.TransactionID{b.Transactions[i].ID()})
 			if err != nil {
@@ -1623,6 +1638,19 @@ func TestRevertSendTransactions(t *testing.T) {
 		check(t, "siafunds", expectSF, sf)
 	}
 
+	checkChainIndices := func(t *testing.T, txnID types.TransactionID, expected []types.ChainIndex) {
+		indices, err := db.TransactionChainIndices(txnID, 0, 100)
+		switch {
+		case err != nil:
+			t.Fatal(err)
+		case len(indices) != len(expected):
+			t.Fatalf("expected %d indices, got %d", len(expected), len(indices))
+		}
+		for i := range indices {
+			check(t, "index", expected[i], indices[i])
+		}
+	}
+
 	checkTransaction := func(expectTxn types.Transaction, gotTxn explorer.Transaction) {
 		check(t, "siacoin inputs", len(expectTxn.SiacoinInputs), len(gotTxn.SiacoinInputs))
 		check(t, "siacoin outputs", len(expectTxn.SiacoinOutputs), len(gotTxn.SiacoinOutputs))
@@ -1780,6 +1808,7 @@ func TestRevertSendTransactions(t *testing.T) {
 		// with the actual transactions
 		for i := range b.Transactions {
 			checkTransaction(b.Transactions[i], block.Transactions[i])
+			checkChainIndices(t, b.Transactions[i].ID(), []types.ChainIndex{cm.Tip()})
 
 			txns, err := db.Transactions([]types.TransactionID{b.Transactions[i].ID()})
 			if err != nil {
@@ -1998,17 +2027,22 @@ func TestHostAnnouncement(t *testing.T) {
 
 	txn2 := types.Transaction{
 		ArbitraryData: [][]byte{
-			createAnnouncement(pk2, "127.0.0.1:5678"),
+			createAnnouncement(pk1, "127.0.0.1:5678"),
 		},
 	}
 	txn3 := types.Transaction{
+		ArbitraryData: [][]byte{
+			createAnnouncement(pk2, "127.0.0.1:9999"),
+		},
+	}
+	txn4 := types.Transaction{
 		ArbitraryData: [][]byte{
 			createAnnouncement(pk3, "127.0.0.1:9999"),
 		},
 	}
 
 	// Mine a block containing host announcement
-	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn2, txn3}, types.VoidAddress)}); err != nil {
+	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn2, txn3, txn4}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
@@ -2018,6 +2052,70 @@ func TestHostAnnouncement(t *testing.T) {
 		ActiveContracts:    0,
 		StorageUtilization: 0,
 	})
+
+	ts := time.Unix(0, 0)
+	hosts, err := db.HostsForScanning(ts, ts, 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(t, "len(hosts)", 3, len(hosts))
+
+	{
+		scans, err := db.Hosts([]types.PublicKey{hosts[0].PublicKey})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "len(scans)", 1, len(scans))
+	}
+
+	scan1 := explorer.HostScan{
+		PublicKey: hosts[0].PublicKey,
+		Success:   true,
+		Timestamp: time.Now(),
+	}
+	scan2 := explorer.HostScan{
+		PublicKey: hosts[0].PublicKey,
+		Success:   false,
+		Timestamp: time.Now(),
+	}
+
+	{
+		if err := db.AddHostScans([]explorer.HostScan{scan1}); err != nil {
+			t.Fatal(err)
+		}
+
+		scans, err := db.Hosts([]types.PublicKey{hosts[0].PublicKey})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "len(scans)", 1, len(scans))
+
+		scan := scans[0]
+		check(t, "last scan", scan1.Timestamp.Unix(), scan.LastScan.Unix())
+		check(t, "last scan successful", scan1.Success, scan.LastScanSuccessful)
+		check(t, "total scans", 1, scan.TotalScans)
+		check(t, "successful interactions", 1, scan.SuccessfulInteractions)
+		check(t, "failed interactions", 0, scan.FailedInteractions)
+	}
+
+	{
+		if err := db.AddHostScans([]explorer.HostScan{scan2}); err != nil {
+			t.Fatal(err)
+		}
+
+		scans, err := db.Hosts([]types.PublicKey{hosts[0].PublicKey})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "len(scans)", 1, len(scans))
+
+		scan := scans[0]
+		check(t, "last scan", scan2.Timestamp.Unix(), scan.LastScan.Unix())
+		check(t, "last scan successful", scan2.Success, scan.LastScanSuccessful)
+		check(t, "total scans", 2, scan.TotalScans)
+		check(t, "successful interactions", 1, scan.SuccessfulInteractions)
+		check(t, "failed interactions", 1, scan.FailedInteractions)
+	}
 }
 
 func TestMultipleReorg(t *testing.T) {

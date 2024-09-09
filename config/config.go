@@ -1,5 +1,7 @@
 package config
 
+import "time"
+
 type (
 	// HTTP contains the configuration for the HTTP server.
 	HTTP struct {
@@ -12,6 +14,14 @@ type (
 		Bootstrap  bool     `yaml:"bootstrap,omitempty"`
 		EnableUPNP bool     `yaml:"enableUPnP,omitempty"`
 		Peers      []string `yaml:"peers,omitempty"`
+	}
+
+	// Scanner contains the configuration for the host scanner.
+	Scanner struct {
+		Threads             int           `yaml:"threads,omitempty"`
+		Timeout             time.Duration `yaml:"timeout,omitempty"`
+		MaxLastScan         time.Duration `yaml:"maxLastScan,omitempty"`
+		MinLastAnnouncement time.Duration `yaml:"minLastAnnouncement,omitempty"`
 	}
 
 	// Consensus contains the configuration for the consensus set.
@@ -56,6 +66,7 @@ type (
 		HTTP      HTTP      `yaml:"http,omitempty"`
 		Consensus Consensus `yaml:"consensus,omitempty"`
 		Syncer    Syncer    `yaml:"syncer,omitempty"`
+		Scanner   Scanner   `yaml:"scanner,omitempty"`
 		Log       Log       `yaml:"log,omitempty"`
 		Index     Index     `yaml:"index,omitempty"`
 	}

@@ -123,6 +123,13 @@ func (c *Client) Transactions(ids []types.TransactionID) (resp []explorer.Transa
 	return
 }
 
+// TransactionChainIndices returns chain indices a transaction was
+// included in.
+func (c *Client) TransactionChainIndices(id types.TransactionID, offset, limit uint64) (resp []types.ChainIndex, err error) {
+	err = c.c.GET(fmt.Sprintf("/transactions/%s/indices?offset=%d&limit=%d", id, offset, limit), &resp)
+	return
+}
+
 // AddressSiacoinUTXOs returns the specified address' unspent outputs.
 func (c *Client) AddressSiacoinUTXOs(address types.Address, offset, limit uint64) (resp []explorer.SiacoinOutput, err error) {
 	err = c.c.GET(fmt.Sprintf("/addresses/%s/utxos/siacoin?offset=%d&limit=%d", address, offset, limit), &resp)
@@ -177,6 +184,12 @@ func (c *Client) ContractsKey(key types.PublicKey) (resp []explorer.FileContract
 	return
 }
 
+// Host returns information about the host with a given ed25519 key.
+func (c *Client) Host(key types.PublicKey) (resp explorer.Host, err error) {
+	err = c.c.GET(fmt.Sprintf("/pubkey/%s/host", key), &resp)
+	return
+}
+
 // BlockMetrics returns the most recent metrics about the Sia blockchain.
 func (c *Client) BlockMetrics() (resp explorer.Metrics, err error) {
 	err = c.c.GET("/metrics/block", &resp)
@@ -186,6 +199,12 @@ func (c *Client) BlockMetrics() (resp explorer.Metrics, err error) {
 // BlockMetricsID returns various metrics about Sia at the given block ID.
 func (c *Client) BlockMetricsID(id types.BlockID) (resp explorer.Metrics, err error) {
 	err = c.c.GET(fmt.Sprintf("/metrics/block/%s", id), &resp)
+	return
+}
+
+// HostMetrics returns various metrics about currently available hosts.
+func (c *Client) HostMetrics() (resp explorer.HostMetrics, err error) {
+	err = c.c.GET("/metrics/host", &resp)
 	return
 }
 

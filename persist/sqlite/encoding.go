@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"go.sia.tech/core/rhp/v3"
 	"go.sia.tech/core/types"
 )
 
@@ -25,6 +26,8 @@ func encode(obj any) any {
 		obj.EncodeTo(e)
 		e.Flush()
 		return buf.Bytes()
+	case rhp.SettingsID:
+		return obj[:]
 	case []types.Hash256:
 		var buf bytes.Buffer
 		e := types.NewEncoder(&buf)
@@ -61,6 +64,8 @@ func (d *decodable) Scan(src any) error {
 			}
 			v.Hi = binary.BigEndian.Uint64(src)
 			v.Lo = binary.BigEndian.Uint64(src[8:])
+		case *rhp.SettingsID:
+			*v = rhp.SettingsID(src)
 		case types.DecoderFrom:
 			dec := types.NewBufDecoder(src)
 			v.DecodeFrom(dec)
@@ -81,6 +86,8 @@ func (d *decodable) Scan(src any) error {
 			*v = uint64(src)
 		case *time.Time:
 			*v = time.Unix(src, 0).UTC()
+		case *time.Duration:
+			*v = time.Duration(src)
 		default:
 			return fmt.Errorf("cannot scan %T to %T", src, d.v)
 		}

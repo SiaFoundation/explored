@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"go.sia.tech/core/consensus"
+	rhpv2 "go.sia.tech/core/rhp/v2"
+	rhpv3 "go.sia.tech/core/rhp/v3"
 	"go.sia.tech/core/types"
 )
 
@@ -65,14 +67,14 @@ func (d Source) MarshalJSON() ([]byte, error) {
 // A SiacoinInput is a types.SiacoinInput with information about the parent
 // value.
 type SiacoinInput struct {
-	Value types.Currency
+	Value types.Currency `json:"value"`
 	types.SiacoinInput
 }
 
 // A SiafundInput is a types.SiafundInput with information about the parent
 // value.
 type SiafundInput struct {
-	Value uint64
+	Value uint64 `json:"value"`
 	types.SiafundInput
 }
 
@@ -154,4 +156,38 @@ type Metrics struct {
 	CirculatingSupply types.Currency `json:"circulatingSupply"`
 	// Total contract revenue
 	ContractRevenue types.Currency `json:"contractRevenue"`
+}
+
+// HostScan represents the results of a host scan.
+type HostScan struct {
+	PublicKey types.PublicKey `json:"publicKey"`
+	Success   bool            `json:"success"`
+	Timestamp time.Time       `json:"timestamp"`
+
+	Settings   rhpv2.HostSettings   `json:"settings"`
+	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
+}
+
+// Host represents a host and the information gathered from scanning it.
+type Host struct {
+	PublicKey  types.PublicKey `json:"publicKey"`
+	NetAddress string          `json:"netAddress"`
+
+	KnownSince             time.Time `json:"knownSince"`
+	LastScan               time.Time `json:"lastScan"`
+	LastScanSuccessful     bool      `json:"lastScanSuccessful"`
+	LastAnnouncement       time.Time `json:"lastAnnouncement"`
+	TotalScans             uint64    `json:"totalScans"`
+	SuccessfulInteractions uint64    `json:"successfulInteractions"`
+	FailedInteractions     uint64    `json:"failedInteractions"`
+
+	Settings   rhpv2.HostSettings   `json:"settings"`
+	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
+}
+
+// HostMetrics represents averages of scanned information from hosts.
+type HostMetrics struct {
+	ActiveHosts uint64               `json:"activeHosts"`
+	Settings    rhpv2.HostSettings   `json:"settings"`
+	PriceTable  rhpv3.HostPriceTable `json:"priceTable"`
 }

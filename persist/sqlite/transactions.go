@@ -7,6 +7,34 @@ import (
 	"go.sia.tech/explored/explorer"
 )
 
+// TransactionChainIndices returns the chain indices of the blocks the transaction
+// was included in. If the transaction has not been included in any blocks, the
+// result will be nil,nil.
+func (s *Store) TransactionChainIndices(txnID types.TransactionID, offset, limit uint64) (indices []types.ChainIndex, err error) {
+	err = s.transaction(func(tx *txn) error {
+		rows, err := tx.Query(`SELECT DISTINCT b.id, b.height FROM blocks b
+INNER JOIN block_transactions bt ON (bt.block_id = b.id)
+INNER JOIN transactions t ON (t.id = bt.transaction_id)
+WHERE t.transaction_id = ?
+ORDER BY b.height DESC 
+LIMIT ? OFFSET ?`, encode(txnID), limit, offset)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var index types.ChainIndex
+			if err := rows.Scan(decode(&index.ID), decode(&index.Height)); err != nil {
+				return fmt.Errorf("failed to scan chain index: %w", err)
+			}
+			indices = append(indices, index)
+		}
+		return rows.Err()
+	})
+	return
+}
+
 // transactionMinerFee returns the miner fees for each transaction.
 func transactionMinerFee(tx *txn, txnIDs []int64) (map[int64][]types.Currency, error) {
 	query := `SELECT transaction_id, fee
