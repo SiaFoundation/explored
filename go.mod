@@ -5,7 +5,7 @@ go 1.22
 toolchain go1.23.0
 
 require (
-	github.com/mattn/go-sqlite3 v1.14.22
+	github.com/mattn/go-sqlite3 v1.14.23
 	go.sia.tech/core v0.4.6
 	go.sia.tech/coreutils v0.3.2
 	go.sia.tech/jape v0.12.1
