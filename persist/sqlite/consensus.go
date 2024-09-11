@@ -910,10 +910,11 @@ func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []expl
 }
 
 func addMetrics(tx *txn, s explorer.UpdateState) error {
-	_, err := tx.Exec(`INSERT INTO network_metrics(block_id, height, difficulty, total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	_, err := tx.Exec(`INSERT INTO network_metrics(block_id, height, difficulty, siafund_pool, total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		encode(s.Metrics.Index.ID),
 		s.Metrics.Index.Height,
 		encode(s.Metrics.Difficulty),
+		encode(s.Metrics.SiafundPool),
 		s.Metrics.TotalHosts,
 		s.Metrics.ActiveContracts,
 		s.Metrics.FailedContracts,
