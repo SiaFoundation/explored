@@ -171,8 +171,9 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 	if err != nil {
 		return err
 	}
-	state.Metrics.Difficulty = cau.State.Difficulty
 	state.Metrics.Index = cau.State.Index
+	state.Metrics.Difficulty = cau.State.Difficulty
+	state.Metrics.SiafundPool = cau.State.SiafundPool
 
 	return tx.ApplyIndex(state)
 }
