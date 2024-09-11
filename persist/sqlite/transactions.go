@@ -157,6 +157,7 @@ ORDER BY ts.transaction_order ASC`
 		if err := rows.Scan(&txnID, decode(&sci.ParentID), decode(&sci.UnlockConditions), decode(&sci.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan siacoin input: %w", err)
 		}
+		sci.Address = sci.UnlockConditions.UnlockHash()
 		result[txnID] = append(result[txnID], sci)
 	}
 	return result, nil
@@ -182,6 +183,7 @@ ORDER BY ts.transaction_order ASC`
 		if err := rows.Scan(&txnID, decode(&sfi.ParentID), decode(&sfi.UnlockConditions), decode(&sfi.ClaimAddress), decode(&sfi.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan siafund input: %w", err)
 		}
+		sfi.Address = sfi.UnlockConditions.UnlockHash()
 		result[txnID] = append(result[txnID], sfi)
 	}
 	return result, nil

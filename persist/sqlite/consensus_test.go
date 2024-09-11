@@ -442,6 +442,7 @@ func TestSendTransactions(t *testing.T) {
 			}
 			check(t, "parent ID", expectSci.ParentID, gotSci.ParentID)
 			check(t, "unlock conditions", expectSci.UnlockConditions, gotSci.UnlockConditions)
+			check(t, "address", expectSci.UnlockConditions.UnlockHash(), gotSci.Address)
 		}
 		for i := range expectTxn.SiacoinOutputs {
 			expectSco := expectTxn.SiacoinOutputs[i]
@@ -461,6 +462,7 @@ func TestSendTransactions(t *testing.T) {
 			check(t, "parent ID", expectSfi.ParentID, gotSfi.ParentID)
 			check(t, "claim address", expectSfi.ClaimAddress, gotSfi.ClaimAddress)
 			check(t, "unlock conditions", expectSfi.UnlockConditions, gotSfi.UnlockConditions)
+			check(t, "address", expectSfi.UnlockConditions.UnlockHash(), gotSfi.Address)
 		}
 		for i := range expectTxn.SiafundOutputs {
 			expectSfo := expectTxn.SiafundOutputs[i]
@@ -1666,6 +1668,7 @@ func TestRevertSendTransactions(t *testing.T) {
 			}
 			check(t, "parent ID", expectSci.ParentID, gotSci.ParentID)
 			check(t, "unlock conditions", expectSci.UnlockConditions, gotSci.UnlockConditions)
+			check(t, "address", expectSci.UnlockConditions.UnlockHash(), gotSci.Address)
 		}
 		for i := range expectTxn.SiacoinOutputs {
 			expectSco := expectTxn.SiacoinOutputs[i]
@@ -1685,6 +1688,7 @@ func TestRevertSendTransactions(t *testing.T) {
 			check(t, "parent ID", expectSfi.ParentID, gotSfi.ParentID)
 			check(t, "claim address", expectSfi.ClaimAddress, gotSfi.ClaimAddress)
 			check(t, "unlock conditions", expectSfi.UnlockConditions, gotSfi.UnlockConditions)
+			check(t, "address", expectSfi.UnlockConditions.UnlockHash(), gotSfi.Address)
 		}
 		for i := range expectTxn.SiafundOutputs {
 			expectSfo := expectTxn.SiafundOutputs[i]
