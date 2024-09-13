@@ -5,7 +5,6 @@ import (
 
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
-	"go.sia.tech/coreutils/syncer"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/jape"
 )
@@ -58,7 +57,7 @@ func (c *Client) SyncerConnect(addr string) (err error) {
 }
 
 // SyncerPeers returns the peers of the syncer.
-func (c *Client) SyncerPeers() (resp []*syncer.Peer, err error) {
+func (c *Client) SyncerPeers() (resp []string, err error) {
 	err = c.c.GET("/syncer/peers", &resp)
 	return
 }
@@ -211,6 +210,6 @@ func (c *Client) HostMetrics() (resp explorer.HostMetrics, err error) {
 
 // Search returns what type of object an ID is.
 func (c *Client) Search(id types.Hash256) (resp explorer.SearchType, err error) {
-	err = c.c.GET(fmt.Sprintf("/search/%s", id), &resp)
+	err = c.c.GET(fmt.Sprintf("/search/%s", id.String()), &resp)
 	return
 }
