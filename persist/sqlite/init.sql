@@ -17,6 +17,7 @@ CREATE TABLE network_metrics (
 
 	height INTEGER NOT NULL,
 	difficulty BLOB NOT NULL,
+	siafund_pool BLOB NOT NULL,
 	total_hosts INTEGER NOT NULL,
 	active_contracts INTEGER NOT NULL,
 	failed_contracts INTEGER NOT NULL,
@@ -274,6 +275,7 @@ CREATE TABLE host_announcements (
 	UNIQUE(transaction_id, transaction_order)
 );
 CREATE INDEX host_announcements_transaction_id_index ON host_announcements(transaction_id);
+CREATE INDEX host_announcements_public_key_index ON host_announcements(public_key);
 
 CREATE TABLE transaction_events (
     event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
