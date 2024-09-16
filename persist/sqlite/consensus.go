@@ -767,7 +767,7 @@ func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []expl
 		DO UPDATE SET resolved = ?, valid = ?, leaf_index = ?
 		RETURNING id;`)
 	if err != nil {
-		return nil, fmt.Errorf("updateFileContractElements: failed to prepare file_contract_elements statement: %w", err)
+		return nil, fmt.Errorf("updateFileContractElements: failed to prepare main statement: %w", err)
 	}
 	defer stmt.Close()
 
@@ -909,6 +909,51 @@ func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []expl
 	return fcDBIds, nil
 }
 
+func updateFileContractIndices(tx *txn, revert bool, index types.ChainIndex, fces []explorer.FileContractUpdate) error {
+	confirmationIndexStmt, err := tx.Prepare(`UPDATE last_contract_revision SET confirmation_index = ?, confirmation_transaction_id = ? WHERE contract_id = ?`)
+	if err != nil {
+		return fmt.Errorf("updateFileContractIndices: failed to prepare confirmation index statement: %w", err)
+	}
+	defer confirmationIndexStmt.Close()
+
+	proofIndexStmt, err := tx.Prepare(`UPDATE last_contract_revision SET proof_index = ?, proof_transaction_id = ? WHERE contract_id = ?`)
+	if err != nil {
+		return fmt.Errorf("updateFileContractIndices: failed to prepare proof index statement: %w", err)
+	}
+	defer proofIndexStmt.Close()
+
+	for _, update := range fces {
+		// id stays the same even if revert happens so we don't need to check that here
+		fcID := update.FileContractElement.ID
+
+		if revert {
+			if update.ConfirmationTransactionID != nil {
+				if _, err := confirmationIndexStmt.Exec(nil, nil, encode(fcID)); err != nil {
+					return fmt.Errorf("updateFileContractIndices: failed to update confirmation index: %w", err)
+				}
+			}
+			if update.ProofTransactionID != nil {
+				if _, err := proofIndexStmt.Exec(nil, nil, encode(fcID)); err != nil {
+					return fmt.Errorf("updateFileContractIndices: failed to update proof index: %w", err)
+				}
+			}
+		} else {
+			if update.ConfirmationTransactionID != nil {
+				if _, err := confirmationIndexStmt.Exec(encode(index), encode(update.ConfirmationTransactionID), encode(fcID)); err != nil {
+					return fmt.Errorf("updateFileContractIndices: failed to update confirmation index: %w", err)
+				}
+			}
+			if update.ProofTransactionID != nil {
+				if _, err := proofIndexStmt.Exec(encode(index), encode(update.ProofTransactionID), encode(fcID)); err != nil {
+					return fmt.Errorf("updateFileContractIndices: failed to update proof index: %w", err)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 func addMetrics(tx *txn, s explorer.UpdateState) error {
 	_, err := tx.Exec(`INSERT INTO network_metrics(block_id, height, difficulty, siafund_pool, total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		encode(s.Metrics.Index.ID),
@@ -983,6 +1028,8 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to update metrics: %w", err)
 	} else if err := addEvents(ut.tx, scDBIds, fcDBIds, txnDBIds, state.Events); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add events: %w", err)
+	} else if err := updateFileContractIndices(ut.tx, false, state.Metrics.Index, state.FileContractElements); err != nil {
+		return fmt.Errorf("ApplyIndex: failed to update file contract element indices: %w", err)
 	}
 
 	return nil
@@ -1013,6 +1060,8 @@ func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("RevertIndex: failed to delete block: %w", err)
 	} else if err := updateStateTree(ut.tx, state.TreeUpdates); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update state tree: %w", err)
+	} else if err := updateFileContractIndices(ut.tx, true, state.Metrics.Index, state.FileContractElements); err != nil {
+		return fmt.Errorf("RevertIndex: failed to update file contract element indices: %w", err)
 	}
 
 	return nil

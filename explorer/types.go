@@ -100,6 +100,13 @@ type SiafundOutput struct {
 type FileContract struct {
 	Resolved bool `json:"resolved"`
 	Valid    bool `json:"valid"`
+
+	ConfirmationIndex         *types.ChainIndex    `json:"confirmationIndex"`
+	ConfirmationTransactionID *types.TransactionID `json:"confirmationTransactionID"`
+
+	ProofIndex         *types.ChainIndex    `json:"proofIndex"`
+	ProofTransactionID *types.TransactionID `json:"proofTransactionID"`
+
 	types.FileContractElement
 }
 

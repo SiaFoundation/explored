@@ -855,6 +855,8 @@ func TestFileContract(t *testing.T) {
 		}
 		check(t, "fcs", 1, len(dbFCs))
 		checkFC(false, false, fc, dbFCs[0])
+		check(t, "confirmation index", cm.Tip(), *dbFCs[0].ConfirmationIndex)
+		check(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 	}
 
 	{
@@ -902,6 +904,9 @@ func TestFileContract(t *testing.T) {
 		check(t, "len(contracts)", 1, len(renterContracts))
 		checkFC(false, false, fc, renterContracts[0])
 		checkFC(false, false, fc, hostContracts[0])
+
+		check(t, "confirmation index", cm.Tip(), *renterContracts[0].ConfirmationIndex)
+		check(t, "confirmation transaction ID", txn.ID(), *renterContracts[0].ConfirmationTransactionID)
 	}
 
 	checkMetrics(t, db, cm, explorer.Metrics{
