@@ -14,8 +14,8 @@ type (
 		Revision            *types.FileContractElement
 		Resolved, Valid     bool
 
-		ConfirmationTransactionID *types.TransactionID `json:"transactionID"`
-		ProofTransactionID        *types.TransactionID `json:"transactionID"`
+		ConfirmationTransactionID *types.TransactionID
+		ProofTransactionID        *types.TransactionID
 	}
 
 	// A DBFileContract represents a file contract element in the DB.
