@@ -125,6 +125,8 @@ type Transaction struct {
 	MinerFees             []types.Currency             `json:"minerFees,omitempty"`
 	ArbitraryData         [][]byte                     `json:"arbitraryData,omitempty"`
 	Signatures            []types.TransactionSignature `json:"signatures,omitempty"`
+
+	HostAnnouncements []HostAnnouncement `json:"hostAnnouncements,omitempty"`
 }
 
 // A Block is a block containing wrapped transactions and siacoin
