@@ -2010,6 +2010,17 @@ func TestHostAnnouncement(t *testing.T) {
 	pk2 := types.GeneratePrivateKey()
 	pk3 := types.GeneratePrivateKey()
 
+	checkHostAnnouncements := func(expectedArbitraryData [][]byte, got []explorer.HostAnnouncement) {
+		t.Helper()
+
+		expected := explorer.ParseHostAnnouncements(expectedArbitraryData)
+		check(t, "len(hostAnnouncements)", len(expected), len(got))
+		for i := range expected {
+			check(t, "host public key", expected[i].PublicKey, got[i].PublicKey)
+			check(t, "host net address", expected[i].NetAddress, got[i].NetAddress)
+		}
+	}
+
 	txn1 := types.Transaction{
 		ArbitraryData: [][]byte{
 			createAnnouncement(pk1, "127.0.0.1:1234"),
@@ -2056,6 +2067,33 @@ func TestHostAnnouncement(t *testing.T) {
 		ActiveContracts:    0,
 		StorageUtilization: 0,
 	})
+
+	{
+		dbTxns, err := db.Transactions([]types.TransactionID{txn1.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "len(txns)", 1, len(dbTxns))
+		checkHostAnnouncements(txn1.ArbitraryData, dbTxns[0].HostAnnouncements)
+	}
+
+	{
+		dbTxns, err := db.Transactions([]types.TransactionID{txn2.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "len(txns)", 1, len(dbTxns))
+		checkHostAnnouncements(txn2.ArbitraryData, dbTxns[0].HostAnnouncements)
+	}
+
+	{
+		dbTxns, err := db.Transactions([]types.TransactionID{txn3.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "len(txns)", 1, len(dbTxns))
+		checkHostAnnouncements(txn3.ArbitraryData, dbTxns[0].HostAnnouncements)
+	}
 
 	ts := time.Unix(0, 0)
 	hosts, err := db.HostsForScanning(ts, ts, 0, 100)
