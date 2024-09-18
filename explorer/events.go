@@ -110,6 +110,26 @@ type ChainUpdate interface {
 	ForEachV2FileContractElement(func(fce types.V2FileContractElement, created bool, rev *types.V2FileContractElement, res types.V2FileContractResolutionType))
 }
 
+// ParseHostAnnouncements parses host announcements from transaction arbitrary data.
+func ParseHostAnnouncements(arbitraryData [][]byte) (result []HostAnnouncement) {
+	for _, arb := range arbitraryData {
+		var prefix types.Specifier
+		var uk types.UnlockKey
+		d := types.NewBufDecoder(arb)
+		prefix.DecodeFrom(d)
+		netAddress := d.ReadString()
+		uk.DecodeFrom(d)
+		if d.Err() == nil && prefix == SpecifierAnnouncement &&
+			uk.Algorithm == types.SpecifierEd25519 && len(uk.Key) == len(types.PublicKey{}) {
+			result = append(result, HostAnnouncement{
+				PublicKey:  *(*types.PublicKey)(uk.Key),
+				NetAddress: netAddress,
+			})
+		}
+	}
+	return
+}
+
 // AppliedEvents extracts a list of relevant events from a chain update.
 func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 	var events []Event
@@ -193,21 +213,7 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 		relevant := relevantTxn(txn)
 
 		var e EventTransaction
-		for _, arb := range txn.ArbitraryData {
-			var prefix types.Specifier
-			var uk types.UnlockKey
-			d := types.NewBufDecoder(arb)
-			prefix.DecodeFrom(d)
-			netAddress := d.ReadString()
-			uk.DecodeFrom(d)
-			if d.Err() == nil && prefix == SpecifierAnnouncement &&
-				uk.Algorithm == types.SpecifierEd25519 && len(uk.Key) == len(types.PublicKey{}) {
-				e.HostAnnouncements = append(e.HostAnnouncements, HostAnnouncement{
-					PublicKey:  *(*types.PublicKey)(uk.Key),
-					NetAddress: netAddress,
-				})
-			}
-		}
+		e.HostAnnouncements = ParseHostAnnouncements(txn.ArbitraryData)
 		for i := range txn.MinerFees {
 			e.Fee = e.Fee.Add(txn.MinerFees[i])
 		}

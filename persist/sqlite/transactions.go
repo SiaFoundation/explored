@@ -553,6 +553,8 @@ func getTransactions(tx *txn, idMap map[int64]transactionID) ([]explorer.Transac
 			ArbitraryData:         txnArbitraryData[dbID],
 			Signatures:            txnSignatures[dbID],
 		}
+		txn.HostAnnouncements = explorer.ParseHostAnnouncements(txn.ArbitraryData)
+
 		results = append(results, txn)
 	}
 	return results, nil
