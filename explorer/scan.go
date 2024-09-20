@@ -9,6 +9,7 @@ import (
 
 	crhpv2 "go.sia.tech/core/rhp/v2"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/chain"
 	rhpv2 "go.sia.tech/explored/internal/rhp/v2"
 	rhpv3 "go.sia.tech/explored/internal/rhp/v3"
 	"go.uber.org/zap"
@@ -50,7 +51,7 @@ func (e *Explorer) waitForSync() error {
 	return nil
 }
 
-func (e *Explorer) scanHost(host HostAnnouncement) (HostScan, error) {
+func (e *Explorer) scanHost(host chain.HostAnnouncement) (HostScan, error) {
 	ctx, cancel := context.WithTimeout(e.ctx, e.scanCfg.Timeout)
 	defer cancel()
 
@@ -98,7 +99,7 @@ func (e *Explorer) scanHost(host HostAnnouncement) (HostScan, error) {
 	}, nil
 }
 
-func (e *Explorer) addHostScans(hosts chan HostAnnouncement) {
+func (e *Explorer) addHostScans(hosts chan chain.HostAnnouncement) {
 	worker := func() {
 		var scans []HostScan
 		for host := range hosts {
@@ -149,7 +150,7 @@ func (e *Explorer) isClosed() bool {
 	}
 }
 
-func (e *Explorer) fetchHosts(hosts chan HostAnnouncement) {
+func (e *Explorer) fetchHosts(hosts chan chain.HostAnnouncement) {
 	var exhausted bool
 	offset := 0
 
@@ -187,7 +188,7 @@ func (e *Explorer) scanHosts() {
 
 	for !e.isClosed() {
 		// fetch hosts
-		hosts := make(chan HostAnnouncement, scanBatchSize)
+		hosts := make(chan chain.HostAnnouncement, scanBatchSize)
 		e.wg.Add(1)
 		go func() {
 			defer e.wg.Done()

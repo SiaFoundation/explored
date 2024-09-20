@@ -9,6 +9,7 @@ import (
 	rhpv2 "go.sia.tech/core/rhp/v2"
 	rhpv3 "go.sia.tech/core/rhp/v3"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/chain"
 )
 
 // A Source represents where a siacoin output came from.
@@ -126,7 +127,7 @@ type Transaction struct {
 	ArbitraryData         [][]byte                     `json:"arbitraryData,omitempty"`
 	Signatures            []types.TransactionSignature `json:"signatures,omitempty"`
 
-	HostAnnouncements []HostAnnouncement `json:"hostAnnouncements,omitempty"`
+	HostAnnouncements []chain.HostAnnouncement `json:"hostAnnouncements,omitempty"`
 }
 
 // A Block is a block containing wrapped transactions and siacoin
