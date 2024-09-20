@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
 )
 
@@ -38,7 +39,7 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 
 		eventTx.Transaction = txns[0]
 		for rows.Next() {
-			var announcement explorer.HostAnnouncement
+			var announcement chain.HostAnnouncement
 			if err := rows.Scan(decode(&announcement.PublicKey), &announcement.NetAddress); err != nil {
 				return explorer.Event{}, 0, fmt.Errorf("failed to scan announcement: %w", err)
 			}
@@ -109,7 +110,7 @@ func (s *Store) Hosts(pks []types.PublicKey) (result []explorer.Host, err error)
 }
 
 // HostsForScanning returns hosts ordered by the transaction they were created in.
-func (s *Store) HostsForScanning(maxLastScan, minLastAnnouncement time.Time, offset, limit uint64) (result []explorer.HostAnnouncement, err error) {
+func (s *Store) HostsForScanning(maxLastScan, minLastAnnouncement time.Time, offset, limit uint64) (result []chain.HostAnnouncement, err error) {
 	err = s.transaction(func(tx *txn) error {
 		rows, err := tx.Query(`SELECT public_key, net_address FROM host_info WHERE last_scan <= ? AND last_announcement >= ? ORDER BY last_scan ASC LIMIT ? OFFSET ?`, encode(maxLastScan), encode(minLastAnnouncement), limit, offset)
 		if err != nil {
@@ -118,7 +119,7 @@ func (s *Store) HostsForScanning(maxLastScan, minLastAnnouncement time.Time, off
 		defer rows.Close()
 
 		for rows.Next() {
-			var host explorer.HostAnnouncement
+			var host chain.HostAnnouncement
 			if err := rows.Scan(decode(&host.PublicKey), &host.NetAddress); err != nil {
 				return err
 			}

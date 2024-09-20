@@ -2010,10 +2010,16 @@ func TestHostAnnouncement(t *testing.T) {
 	pk2 := types.GeneratePrivateKey()
 	pk3 := types.GeneratePrivateKey()
 
-	checkHostAnnouncements := func(expectedArbitraryData [][]byte, got []explorer.HostAnnouncement) {
+	checkHostAnnouncements := func(expectedArbitraryData [][]byte, got []chain.HostAnnouncement) {
 		t.Helper()
 
-		expected := explorer.ParseHostAnnouncements(expectedArbitraryData)
+		var expected []chain.HostAnnouncement
+		for _, arb := range expectedArbitraryData {
+			var ha chain.HostAnnouncement
+			if ha.FromArbitraryData(arb) {
+				expected = append(expected, ha)
+			}
+		}
 		check(t, "len(hostAnnouncements)", len(expected), len(got))
 		for i := range expected {
 			check(t, "host public key", expected[i].PublicKey, got[i].PublicKey)
