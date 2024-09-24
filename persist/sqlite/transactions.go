@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
 )
 
@@ -589,6 +590,14 @@ func getTransactions(tx *txn, idMap map[int64]transactionID) ([]explorer.Transac
 			ArbitraryData:         txnArbitraryData[dbID],
 			Signatures:            txnSignatures[dbID],
 		}
+
+		for _, arb := range txn.ArbitraryData {
+			var ha chain.HostAnnouncement
+			if ha.FromArbitraryData(arb) {
+				txn.HostAnnouncements = append(txn.HostAnnouncements, ha)
+			}
+		}
+
 		results = append(results, txn)
 	}
 	return results, nil

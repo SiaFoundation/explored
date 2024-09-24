@@ -5,6 +5,7 @@ import (
 
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/chain"
 )
 
 // event type constants
@@ -47,12 +48,6 @@ func (*EventFoundationSubsidy) EventType() string { return EventTypeFoundationSu
 // EventType implements Event.
 func (*EventContractPayout) EventType() string { return EventTypeContractPayout }
 
-// A HostAnnouncement represents a host announcement within an EventTransaction.
-type HostAnnouncement struct {
-	PublicKey  types.PublicKey `json:"publicKey"`
-	NetAddress string          `json:"netAddress"`
-}
-
 // An EventSiafundInput represents a siafund input within an EventTransaction.
 type EventSiafundInput struct {
 	SiafundElement types.SiafundElement `json:"siafundElement"`
@@ -80,9 +75,9 @@ type EventV2FileContract struct {
 
 // An EventTransaction represents a transaction that affects the wallet.
 type EventTransaction struct {
-	Transaction       Transaction        `json:"transaction"`
-	HostAnnouncements []HostAnnouncement `json:"hostAnnouncements"`
-	Fee               types.Currency     `json:"fee"`
+	Transaction       Transaction              `json:"transaction"`
+	HostAnnouncements []chain.HostAnnouncement `json:"hostAnnouncements"`
+	Fee               types.Currency           `json:"fee"`
 }
 
 // An EventMinerPayout represents a miner payout from a block.
@@ -194,20 +189,12 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 
 		var e EventTransaction
 		for _, arb := range txn.ArbitraryData {
-			var prefix types.Specifier
-			var uk types.UnlockKey
-			d := types.NewBufDecoder(arb)
-			prefix.DecodeFrom(d)
-			netAddress := d.ReadString()
-			uk.DecodeFrom(d)
-			if d.Err() == nil && prefix == SpecifierAnnouncement &&
-				uk.Algorithm == types.SpecifierEd25519 && len(uk.Key) == len(types.PublicKey{}) {
-				e.HostAnnouncements = append(e.HostAnnouncements, HostAnnouncement{
-					PublicKey:  *(*types.PublicKey)(uk.Key),
-					NetAddress: netAddress,
-				})
+			var ha chain.HostAnnouncement
+			if ha.FromArbitraryData(arb) {
+				e.HostAnnouncements = append(e.HostAnnouncements, ha)
 			}
 		}
+
 		for i := range txn.MinerFees {
 			e.Fee = e.Fee.Add(txn.MinerFees[i])
 		}
@@ -221,11 +208,9 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 
 		var e EventTransaction
 		for _, a := range txn.Attestations {
-			if a.Key == "HostAnnouncement" {
-				e.HostAnnouncements = append(e.HostAnnouncements, HostAnnouncement{
-					PublicKey:  a.PublicKey,
-					NetAddress: string(a.Value),
-				})
+			var ha chain.HostAnnouncement
+			if ha.FromAttestation(a) {
+				e.HostAnnouncements = append(e.HostAnnouncements, ha)
 			}
 		}
 		addEvent(types.Hash256(txn.ID()), cs.Index.Height, &e, relevant) // transaction maturity height is the current block height
