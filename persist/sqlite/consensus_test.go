@@ -867,6 +867,9 @@ func TestFileContract(t *testing.T) {
 		check(t, "transactions", 1, len(txns))
 		check(t, "file contracts", 1, len(txns[0].FileContracts))
 		checkFC(false, false, fc, txns[0].FileContracts[0])
+
+		check(t, "confirmation index", cm.Tip(), *txns[0].FileContracts[0].ConfirmationIndex)
+		check(t, "confirmation transaction ID", txn.ID(), *txns[0].FileContracts[0].ConfirmationTransactionID)
 	}
 
 	uc := types.UnlockConditions{
@@ -939,6 +942,9 @@ func TestFileContract(t *testing.T) {
 		fcr := txns[0].FileContractRevisions[0]
 		check(t, "parent id", txn.FileContractID(0), fcr.ParentID)
 		check(t, "unlock conditions", uc, fcr.UnlockConditions)
+
+		check(t, "confirmation index", prevTip, *fcr.ConfirmationIndex)
+		check(t, "confirmation transaction ID", txn.ID(), *fcr.ConfirmationTransactionID)
 
 		checkFC(false, false, fc, fcr.FileContract)
 	}
@@ -1183,6 +1189,9 @@ func TestEphemeralFileContract(t *testing.T) {
 		check(t, "transactions", 1, len(txns))
 		check(t, "file contracts", 1, len(txns[0].FileContracts))
 		checkFC(true, false, false, fc, txns[0].FileContracts[0])
+
+		check(t, "confirmation index", cm.Tip(), *txns[0].FileContracts[0].ConfirmationIndex)
+		check(t, "confirmation transaction ID", txn.ID(), *txns[0].FileContracts[0].ConfirmationTransactionID)
 	}
 
 	{
