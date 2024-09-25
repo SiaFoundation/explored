@@ -855,6 +855,8 @@ func TestFileContract(t *testing.T) {
 		}
 		check(t, "fcs", 1, len(dbFCs))
 		checkFC(false, false, fc, dbFCs[0])
+		check(t, "confirmation index", cm.Tip(), *dbFCs[0].ConfirmationIndex)
+		check(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 	}
 
 	{
@@ -865,6 +867,9 @@ func TestFileContract(t *testing.T) {
 		check(t, "transactions", 1, len(txns))
 		check(t, "file contracts", 1, len(txns[0].FileContracts))
 		checkFC(false, false, fc, txns[0].FileContracts[0])
+
+		check(t, "confirmation index", cm.Tip(), *txns[0].FileContracts[0].ConfirmationIndex)
+		check(t, "confirmation transaction ID", txn.ID(), *txns[0].FileContracts[0].ConfirmationTransactionID)
 	}
 
 	uc := types.UnlockConditions{
@@ -884,6 +889,7 @@ func TestFileContract(t *testing.T) {
 	}
 	signTxn(&reviseTxn)
 
+	prevTip := cm.Tip()
 	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{reviseTxn}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
@@ -902,6 +908,11 @@ func TestFileContract(t *testing.T) {
 		check(t, "len(contracts)", 1, len(renterContracts))
 		checkFC(false, false, fc, renterContracts[0])
 		checkFC(false, false, fc, hostContracts[0])
+
+		check(t, "confirmation index", prevTip, *renterContracts[0].ConfirmationIndex)
+		check(t, "confirmation transaction ID", txn.ID(), *renterContracts[0].ConfirmationTransactionID)
+		check(t, "confirmation index", prevTip, *hostContracts[0].ConfirmationIndex)
+		check(t, "confirmation transaction ID", txn.ID(), *hostContracts[0].ConfirmationTransactionID)
 	}
 
 	checkMetrics(t, db, cm, explorer.Metrics{
@@ -931,6 +942,9 @@ func TestFileContract(t *testing.T) {
 		fcr := txns[0].FileContractRevisions[0]
 		check(t, "parent id", txn.FileContractID(0), fcr.ParentID)
 		check(t, "unlock conditions", uc, fcr.UnlockConditions)
+
+		check(t, "confirmation index", prevTip, *fcr.ConfirmationIndex)
+		check(t, "confirmation transaction ID", txn.ID(), *fcr.ConfirmationTransactionID)
 
 		checkFC(false, false, fc, fcr.FileContract)
 	}
@@ -963,6 +977,9 @@ func TestFileContract(t *testing.T) {
 		}
 		check(t, "fcs", 1, len(dbFCs))
 		checkFC(true, false, fc, dbFCs[0])
+
+		check(t, "confirmation index", prevTip, *dbFCs[0].ConfirmationIndex)
+		check(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 	}
 
 	for i := 0; i < 100; i++ {
@@ -985,6 +1002,11 @@ func TestFileContract(t *testing.T) {
 		check(t, "len(contracts)", 1, len(renterContracts))
 		checkFC(true, false, fc, renterContracts[0])
 		checkFC(true, false, fc, hostContracts[0])
+
+		check(t, "confirmation index", prevTip, *renterContracts[0].ConfirmationIndex)
+		check(t, "confirmation transaction ID", txn.ID(), *renterContracts[0].ConfirmationTransactionID)
+		check(t, "confirmation index", prevTip, *hostContracts[0].ConfirmationIndex)
+		check(t, "confirmation transaction ID", txn.ID(), *hostContracts[0].ConfirmationTransactionID)
 	}
 
 	checkMetrics(t, db, cm, explorer.Metrics{
@@ -1167,6 +1189,9 @@ func TestEphemeralFileContract(t *testing.T) {
 		check(t, "transactions", 1, len(txns))
 		check(t, "file contracts", 1, len(txns[0].FileContracts))
 		checkFC(true, false, false, fc, txns[0].FileContracts[0])
+
+		check(t, "confirmation index", cm.Tip(), *txns[0].FileContracts[0].ConfirmationIndex)
+		check(t, "confirmation transaction ID", txn.ID(), *txns[0].FileContracts[0].ConfirmationTransactionID)
 	}
 
 	{
@@ -2629,6 +2654,9 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		}
 		check(t, "fcs", 1, len(dbFCs))
 		checkFC(false, false, fc, dbFCs[0])
+
+		check(t, "confirmation index", cm.Tip(), *dbFCs[0].ConfirmationIndex)
+		check(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 	}
 
 	{
@@ -2683,6 +2711,9 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		}
 		check(t, "fcs", 1, len(dbFCs))
 		checkFC(false, false, revFC, dbFCs[0])
+
+		check(t, "confirmation index", prevState1.Index, *dbFCs[0].ConfirmationIndex)
+		check(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 	}
 
 	{
@@ -2728,6 +2759,9 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			}
 			check(t, "fcs", 1, len(dbFCs))
 			checkFC(false, false, fc, dbFCs[0])
+
+			check(t, "confirmation index", prevState1.Index, *dbFCs[0].ConfirmationIndex)
+			check(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 		}
 
 		// storage utilization should be back to contractFilesize instead of
@@ -2767,6 +2801,9 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			}
 			check(t, "fcs", 1, len(dbFCs))
 			checkFC(false, false, revFC, dbFCs[0])
+
+			check(t, "confirmation index", prevState1.Index, *dbFCs[0].ConfirmationIndex)
+			check(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 		}
 
 		// should have revision filesize

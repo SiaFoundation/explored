@@ -96,8 +96,16 @@ CREATE INDEX file_contract_elements_contract_id_index ON file_contract_elements(
 CREATE TABLE last_contract_revision (
 	contract_id BLOB PRIMARY KEY NOT NULL,
 	block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
+
 	ed25519_renter_key BLOB,
 	ed25519_host_key BLOB,
+
+	confirmation_index BLOB,
+	confirmation_transaction_id BLOB REFERENCES transactions(transaction_id),
+
+	proof_index BLOB,
+	proof_transaction_id BLOB REFERENCES transactions(transaction_id),
+
 	contract_element_id INTEGER UNIQUE REFERENCES file_contract_elements(id) NOT NULL
 );
 

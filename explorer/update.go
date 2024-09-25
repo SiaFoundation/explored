@@ -13,6 +13,9 @@ type (
 		FileContractElement types.FileContractElement
 		Revision            *types.FileContractElement
 		Resolved, Valid     bool
+
+		ConfirmationTransactionID *types.TransactionID
+		ProofTransactionID        *types.TransactionID
 	}
 
 	// A DBFileContract represents a file contract element in the DB.
@@ -121,15 +124,37 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 		}
 	})
 
-	var fces []FileContractUpdate
+	fceMap := make(map[types.FileContractID]FileContractUpdate)
 	cau.ForEachFileContractElement(func(fce types.FileContractElement, created bool, rev *types.FileContractElement, resolved, valid bool) {
-		fces = append(fces, FileContractUpdate{
+		fceMap[types.FileContractID(fce.ID)] = FileContractUpdate{
 			FileContractElement: fce,
 			Revision:            rev,
 			Resolved:            resolved,
 			Valid:               valid,
-		})
+		}
 	})
+	for _, txn := range cau.Block.Transactions {
+		txnID := txn.ID()
+		for i := range txn.FileContracts {
+			fcID := txn.FileContractID(i)
+
+			v := fceMap[fcID]
+			v.ConfirmationTransactionID = &txnID
+			fceMap[fcID] = v
+		}
+		for _, sp := range txn.StorageProofs {
+			fcID := sp.ParentID
+
+			v := fceMap[fcID]
+			v.ProofTransactionID = &txnID
+			fceMap[fcID] = v
+		}
+	}
+
+	var fces []FileContractUpdate
+	for _, fce := range fceMap {
+		fces = append(fces, fce)
+	}
 
 	var treeUpdates []TreeNodeUpdate
 	cau.ForEachTreeNode(func(row, column uint64, hash types.Hash256) {
@@ -217,15 +242,37 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 		}
 	})
 
-	var fces []FileContractUpdate
+	fceMap := make(map[types.FileContractID]FileContractUpdate)
 	cru.ForEachFileContractElement(func(fce types.FileContractElement, created bool, rev *types.FileContractElement, resolved, valid bool) {
-		fces = append(fces, FileContractUpdate{
+		fceMap[types.FileContractID(fce.ID)] = FileContractUpdate{
 			FileContractElement: fce,
 			Revision:            rev,
 			Resolved:            resolved,
 			Valid:               valid,
-		})
+		}
 	})
+	for _, txn := range cru.Block.Transactions {
+		txnID := txn.ID()
+		for i := range txn.FileContracts {
+			fcID := txn.FileContractID(i)
+
+			v := fceMap[fcID]
+			v.ConfirmationTransactionID = &txnID
+			fceMap[fcID] = v
+		}
+		for _, sp := range txn.StorageProofs {
+			fcID := sp.ParentID
+
+			v := fceMap[fcID]
+			v.ProofTransactionID = &txnID
+			fceMap[fcID] = v
+		}
+	}
+
+	var fces []FileContractUpdate
+	for _, fce := range fceMap {
+		fces = append(fces, fce)
+	}
 
 	var treeUpdates []TreeNodeUpdate
 	cru.ForEachTreeNode(func(row, column uint64, hash types.Hash256) {
