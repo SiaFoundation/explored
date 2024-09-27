@@ -431,8 +431,8 @@ ORDER BY transaction_order ASC`
 }
 
 type transactionID struct {
-	id    types.TransactionID
-	order int
+	id   types.TransactionID
+	dbID int64
 }
 
 // blockTransactionIDs returns the database ID for each transaction in the
@@ -450,12 +450,12 @@ WHERE block_id = ? ORDER BY block_order ASC`, encode(blockID))
 	idMap = make(map[int64]transactionID)
 	for rows.Next() {
 		var dbID int64
-		var blockOrder int
+		var blockOrder int64
 		var txnID types.TransactionID
 		if err := rows.Scan(&dbID, &blockOrder, decode(&txnID)); err != nil {
 			return nil, fmt.Errorf("failed to scan block transaction: %w", err)
 		}
-		idMap[dbID] = transactionID{id: txnID, order: blockOrder}
+		idMap[blockOrder] = transactionID{id: txnID, dbID: dbID}
 	}
 	return
 }
@@ -505,7 +505,7 @@ func transactionDatabaseIDs(tx *txn, txnIDs []types.TransactionID) (dbIDs map[in
 	}
 	defer rows.Close()
 
-	i := 0
+	var i int64
 	dbIDs = make(map[int64]transactionID)
 	for rows.Next() {
 		var dbID int64
@@ -513,7 +513,7 @@ func transactionDatabaseIDs(tx *txn, txnIDs []types.TransactionID) (dbIDs map[in
 		if err := rows.Scan(&dbID, decode(&txnID)); err != nil {
 			return nil, fmt.Errorf("failed to scan transaction: %w", err)
 		}
-		dbIDs[dbID] = transactionID{id: txnID, order: i}
+		dbIDs[i] = transactionID{id: txnID, dbID: dbID}
 		i++
 	}
 	return
@@ -521,8 +521,8 @@ func transactionDatabaseIDs(tx *txn, txnIDs []types.TransactionID) (dbIDs map[in
 
 func getTransactions(tx *txn, idMap map[int64]transactionID) ([]explorer.Transaction, error) {
 	dbIDs := make([]int64, len(idMap))
-	for dbID, id := range idMap {
-		dbIDs[id.order] = dbID
+	for order, id := range idMap {
+		dbIDs[order] = id.dbID
 	}
 
 	txnArbitraryData, err := transactionArbitraryData(tx, dbIDs)
@@ -576,9 +576,9 @@ func getTransactions(tx *txn, idMap map[int64]transactionID) ([]explorer.Transac
 	}
 
 	var results []explorer.Transaction
-	for _, dbID := range dbIDs {
+	for order, dbID := range dbIDs {
 		txn := explorer.Transaction{
-			ID:                    idMap[dbID].id,
+			ID:                    idMap[int64(order)].id,
 			SiacoinInputs:         txnSiacoinInputs[dbID],
 			SiacoinOutputs:        txnSiacoinOutputs[dbID],
 			SiafundInputs:         txnSiafundInputs[dbID],
