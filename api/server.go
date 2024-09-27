@@ -62,6 +62,7 @@ type (
 		AddressEvents(address types.Address, offset, limit uint64) (events []explorer.Event, err error)
 		Contracts(ids []types.FileContractID) (result []explorer.FileContract, err error)
 		ContractsKey(key types.PublicKey) (result []explorer.FileContract, err error)
+		ContractRevisions(id types.FileContractID) (result []types.FileContractElement, err error)
 		Search(id types.Hash256) (explorer.SearchType, error)
 
 		Hosts(pks []types.PublicKey) ([]explorer.Host, error)
@@ -73,7 +74,26 @@ const (
 )
 
 var (
-	errTooManyIDs = fmt.Errorf("too many IDs provided (provide less than %d)", maxIDs)
+	// ErrTransactionNotFound is returned by /transactions/:id when we are
+	// unable to find the transaction with that `id`.
+	ErrTransactionNotFound = errors.New("no transaction found")
+	// ErrSiacoinOutputNotFound is returned by /outputs/siacoin/:id when we
+	// are unable to find the siacoin output with that `id`.
+	ErrSiacoinOutputNotFound = errors.New("no siacoin output found")
+	// ErrSiafundOutputNotFound is returned by /outputs/siafund/:id when we
+	// are unable to find the siafund output with that `id`.
+	ErrSiafundOutputNotFound = errors.New("no siafund output found")
+	// ErrHostNotFound is returned by /pubkey/:key/host when we are unable to
+	// find the host with the pubkey `key`.
+	ErrHostNotFound = errors.New("no host found")
+
+	// ErrNoSearchResults is returned by /search/:id when we do not find any
+	// elements with that ID.
+	ErrNoSearchResults = errors.New("no search results found")
+
+	// ErrTooManyIDs is returned by the batch transaction and contract
+	// endpoints when more than maxIDs IDs are specified.
+	ErrTooManyIDs = fmt.Errorf("too many IDs provided (provide less than %d)", maxIDs)
 )
 
 type server struct {
@@ -247,8 +267,6 @@ func (s *server) blocksIDHandler(jc jape.Context) {
 }
 
 func (s *server) transactionsIDHandler(jc jape.Context) {
-	errNotFound := errors.New("no transaction found")
-
 	var id types.TransactionID
 	if jc.DecodeParam("id", &id) != nil {
 		return
@@ -257,7 +275,7 @@ func (s *server) transactionsIDHandler(jc jape.Context) {
 	if jc.Check("failed to get transaction", err) != nil {
 		return
 	} else if len(txns) == 0 {
-		jc.Error(errNotFound, http.StatusNotFound)
+		jc.Error(ErrTransactionNotFound, http.StatusNotFound)
 		return
 	}
 	jc.Encode(txns[0])
@@ -291,7 +309,7 @@ func (s *server) transactionsBatchHandler(jc jape.Context) {
 	if jc.Decode(&ids) != nil {
 		return
 	} else if len(ids) > maxIDs {
-		jc.Error(errTooManyIDs, http.StatusBadRequest)
+		jc.Error(ErrTooManyIDs, http.StatusBadRequest)
 		return
 	}
 
@@ -379,8 +397,6 @@ func (s *server) addressessAddressEventsHandler(jc jape.Context) {
 }
 
 func (s *server) outputsSiacoinHandler(jc jape.Context) {
-	errNotFound := errors.New("no siacoin output found")
-
 	var id types.SiacoinOutputID
 	if jc.DecodeParam("id", &id) != nil {
 		return
@@ -390,7 +406,7 @@ func (s *server) outputsSiacoinHandler(jc jape.Context) {
 	if jc.Check("failed to get siacoin elements", err) != nil {
 		return
 	} else if len(outputs) == 0 {
-		jc.Error(errNotFound, http.StatusNotFound)
+		jc.Error(ErrSiacoinOutputNotFound, http.StatusNotFound)
 		return
 	}
 
@@ -398,8 +414,6 @@ func (s *server) outputsSiacoinHandler(jc jape.Context) {
 }
 
 func (s *server) outputsSiafundHandler(jc jape.Context) {
-	errNotFound := errors.New("no siafund output found")
-
 	var id types.SiafundOutputID
 	if jc.DecodeParam("id", &id) != nil {
 		return
@@ -409,15 +423,13 @@ func (s *server) outputsSiafundHandler(jc jape.Context) {
 	if jc.Check("failed to get siafund elements", err) != nil {
 		return
 	} else if len(outputs) == 0 {
-		jc.Error(errNotFound, http.StatusNotFound)
+		jc.Error(ErrSiafundOutputNotFound, http.StatusNotFound)
 		return
 	}
 
 	jc.Encode(outputs[0])
 }
 func (s *server) contractsIDHandler(jc jape.Context) {
-	errNotFound := errors.New("no contract found")
-
 	var id types.FileContractID
 	if jc.DecodeParam("id", &id) != nil {
 		return
@@ -426,10 +438,26 @@ func (s *server) contractsIDHandler(jc jape.Context) {
 	if jc.Check("failed to get contract", err) != nil {
 		return
 	} else if len(fcs) == 0 {
-		jc.Error(errNotFound, http.StatusNotFound)
+		jc.Error(explorer.ErrContractNotFound, http.StatusNotFound)
 		return
 	}
 	jc.Encode(fcs[0])
+}
+
+func (s *server) contractsIDRevisionsHandler(jc jape.Context) {
+	var id types.FileContractID
+	if jc.DecodeParam("id", &id) != nil {
+		return
+	}
+
+	fcs, err := s.e.ContractRevisions(id)
+	if errors.Is(err, explorer.ErrContractNotFound) {
+		jc.Error(fmt.Errorf("%w: %v", err, id), http.StatusNotFound)
+		return
+	} else if jc.Check("failed to fetch contract revisions", err) != nil {
+		return
+	}
+	jc.Encode(fcs)
 }
 
 func (s *server) contractsBatchHandler(jc jape.Context) {
@@ -437,7 +465,7 @@ func (s *server) contractsBatchHandler(jc jape.Context) {
 	if jc.Decode(&ids) != nil {
 		return
 	} else if len(ids) > maxIDs {
-		jc.Error(errTooManyIDs, http.StatusBadRequest)
+		jc.Error(ErrTooManyIDs, http.StatusBadRequest)
 		return
 	}
 
@@ -449,8 +477,6 @@ func (s *server) contractsBatchHandler(jc jape.Context) {
 }
 
 func (s *server) pubkeyContractsHandler(jc jape.Context) {
-	errNotFound := errors.New("no contract found")
-
 	var key types.PublicKey
 	if jc.DecodeParam("key", &key) != nil {
 		return
@@ -459,15 +485,13 @@ func (s *server) pubkeyContractsHandler(jc jape.Context) {
 	if jc.Check("failed to get contracts", err) != nil {
 		return
 	} else if len(fcs) == 0 {
-		jc.Error(errNotFound, http.StatusNotFound)
+		jc.Error(explorer.ErrContractNotFound, http.StatusNotFound)
 		return
 	}
 	jc.Encode(fcs)
 }
 
 func (s *server) pubkeyHostHandler(jc jape.Context) {
-	errNotFound := errors.New("host not found")
-
 	var key types.PublicKey
 	if jc.DecodeParam("key", &key) != nil {
 		return
@@ -476,14 +500,13 @@ func (s *server) pubkeyHostHandler(jc jape.Context) {
 	if jc.Check("failed to get host", err) != nil {
 		return
 	} else if len(hosts) == 0 {
-		jc.Error(errNotFound, http.StatusNotFound)
+		jc.Error(ErrHostNotFound, http.StatusNotFound)
 		return
 	}
 	jc.Encode(hosts[0])
 }
 
 func (s *server) searchIDHandler(jc jape.Context) {
-	errNotFound := errors.New("no contract found")
 	const maxLen = len(types.Hash256{})
 
 	// get everything after separator if there is one
@@ -498,7 +521,7 @@ func (s *server) searchIDHandler(jc jape.Context) {
 	if jc.Check("failed to search ID", err) != nil {
 		return
 	} else if result == explorer.SearchTypeInvalid {
-		jc.Error(errNotFound, http.StatusNotFound)
+		jc.Error(ErrNoSearchResults, http.StatusNotFound)
 		return
 	}
 	jc.Encode(result)
@@ -543,8 +566,9 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET    /outputs/siacoin/:id": srv.outputsSiacoinHandler,
 		"GET    /outputs/siafund/:id": srv.outputsSiafundHandler,
 
-		"GET    /contracts/:id": srv.contractsIDHandler,
-		"POST   /contracts":     srv.contractsBatchHandler,
+		"GET    /contracts/:id":           srv.contractsIDHandler,
+		"GET    /contracts/:id/revisions": srv.contractsIDRevisionsHandler,
+		"POST   /contracts":               srv.contractsBatchHandler,
 
 		"GET    /pubkey/:key/contracts": srv.pubkeyContractsHandler,
 		"GET    /pubkey/:key/host":      srv.pubkeyHostHandler,

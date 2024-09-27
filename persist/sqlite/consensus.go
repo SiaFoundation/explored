@@ -165,18 +165,6 @@ func addFileContracts(tx *txn, id int64, txn types.Transaction, fcDBIds map[expl
 	}
 	defer stmt.Close()
 
-	validOutputsStmt, err := tx.Prepare(`INSERT INTO file_contract_valid_proof_outputs(contract_id, contract_order, address, value) VALUES (?, ?, ?, ?)`)
-	if err != nil {
-		return fmt.Errorf("addFileContracts: failed to prepare valid proof outputs statement: %w", err)
-	}
-	defer validOutputsStmt.Close()
-
-	missedOutputsStmt, err := tx.Prepare(`INSERT INTO file_contract_missed_proof_outputs(contract_id, contract_order, address, value) VALUES (?, ?, ?, ?)`)
-	if err != nil {
-		return fmt.Errorf("addFileContracts: failed to prepare missed proof outputs statement: %w", err)
-	}
-	defer missedOutputsStmt.Close()
-
 	for i := range txn.FileContracts {
 		dbID, ok := fcDBIds[explorer.DBFileContract{ID: txn.FileContractID(i), RevisionNumber: 0}]
 		if !ok {
@@ -185,18 +173,6 @@ func addFileContracts(tx *txn, id int64, txn types.Transaction, fcDBIds map[expl
 
 		if _, err := stmt.Exec(id, i, dbID); err != nil {
 			return fmt.Errorf("addFileContracts: failed to execute transaction_file_contracts statement: %w", err)
-		}
-
-		for j, sco := range txn.FileContracts[i].ValidProofOutputs {
-			if _, err := validOutputsStmt.Exec(dbID, j, encode(sco.Address), encode(sco.Value)); err != nil {
-				return fmt.Errorf("addFileContracts: failed to execute valid proof outputs statement: %w", err)
-			}
-		}
-
-		for j, sco := range txn.FileContracts[i].MissedProofOutputs {
-			if _, err := missedOutputsStmt.Exec(dbID, j, encode(sco.Address), encode(sco.Value)); err != nil {
-				return fmt.Errorf("addFileContracts: failed to execute missed proof outputs statement: %w", err)
-			}
 		}
 	}
 	return nil
@@ -209,18 +185,6 @@ func addFileContractRevisions(tx *txn, id int64, txn types.Transaction, dbIDs ma
 	}
 	defer stmt.Close()
 
-	validOutputsStmt, err := tx.Prepare(`INSERT INTO file_contract_valid_proof_outputs(contract_id, contract_order, address, value) VALUES (?, ?, ?, ?)`)
-	if err != nil {
-		return fmt.Errorf("addFileContracts: failed to prepare valid proof outputs statement: %w", err)
-	}
-	defer validOutputsStmt.Close()
-
-	missedOutputsStmt, err := tx.Prepare(`INSERT INTO file_contract_missed_proof_outputs(contract_id, contract_order, address, value) VALUES (?, ?, ?, ?)`)
-	if err != nil {
-		return fmt.Errorf("addFileContracts: failed to prepare missed proof outputs statement: %w", err)
-	}
-	defer missedOutputsStmt.Close()
-
 	for i := range txn.FileContractRevisions {
 		fcr := &txn.FileContractRevisions[i]
 		dbID, ok := dbIDs[explorer.DBFileContract{ID: fcr.ParentID, RevisionNumber: fcr.FileContract.RevisionNumber}]
@@ -230,18 +194,6 @@ func addFileContractRevisions(tx *txn, id int64, txn types.Transaction, dbIDs ma
 
 		if _, err := stmt.Exec(id, i, dbID, encode(fcr.ParentID), encode(fcr.UnlockConditions)); err != nil {
 			return fmt.Errorf("addFileContractRevisions: failed to execute statement: %w", err)
-		}
-
-		for j, sco := range txn.FileContractRevisions[i].ValidProofOutputs {
-			if _, err := validOutputsStmt.Exec(dbID, j, encode(sco.Address), encode(sco.Value)); err != nil {
-				return fmt.Errorf("addFileContractRevisions: failed to execute valid proof outputs statement: %w", err)
-			}
-		}
-
-		for j, sco := range txn.FileContractRevisions[i].MissedProofOutputs {
-			if _, err := missedOutputsStmt.Exec(dbID, j, encode(sco.Address), encode(sco.Value)); err != nil {
-				return fmt.Errorf("addFileContractRevisions: failed to execute missed proof outputs statement: %w", err)
-			}
 		}
 	}
 
@@ -761,8 +713,8 @@ func deleteBlock(tx *txn, bid types.BlockID) error {
 }
 
 func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []explorer.FileContractUpdate) (map[explorer.DBFileContract]int64, error) {
-	stmt, err := tx.Prepare(`INSERT INTO file_contract_elements(contract_id, leaf_index, resolved, valid, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number)
-		VALUES (?, ?, FALSE, FALSE, ?, ?, ?, ?, ?, ?, ?)
+	stmt, err := tx.Prepare(`INSERT INTO file_contract_elements(contract_id, block_id, leaf_index, resolved, valid, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number)
+		VALUES (?, ?, ?, FALSE, FALSE, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (contract_id, revision_number)
 		DO UPDATE SET resolved = ?, valid = ?, leaf_index = ?
 		RETURNING id;`)
@@ -771,14 +723,26 @@ func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []expl
 	}
 	defer stmt.Close()
 
-	revisionStmt, err := tx.Prepare(`INSERT INTO last_contract_revision(contract_id, block_id, contract_element_id, ed25519_renter_key, ed25519_host_key)
-	VALUES (?, ?, ?, ?, ?)
+	revisionStmt, err := tx.Prepare(`INSERT INTO last_contract_revision(contract_id, contract_element_id, ed25519_renter_key, ed25519_host_key)
+	VALUES (?, ?, ?, ?)
 	ON CONFLICT (contract_id)
 	DO UPDATE SET contract_element_id = ?, ed25519_renter_key = COALESCE(?, ed25519_renter_key), ed25519_host_key = COALESCE(?, ed25519_host_key)`)
 	if err != nil {
 		return nil, fmt.Errorf("updateFileContractElements: failed to prepare last_contract_revision statement: %w", err)
 	}
 	defer revisionStmt.Close()
+
+	validOutputsStmt, err := tx.Prepare(`INSERT INTO file_contract_valid_proof_outputs(contract_id, contract_order, address, value) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING`)
+	if err != nil {
+		return nil, fmt.Errorf("addFileContracts: failed to prepare valid proof outputs statement: %w", err)
+	}
+	defer validOutputsStmt.Close()
+
+	missedOutputsStmt, err := tx.Prepare(`INSERT INTO file_contract_missed_proof_outputs(contract_id, contract_order, address, value) VALUES (?, ?, ?, ?)  ON CONFLICT DO NOTHING`)
+	if err != nil {
+		return nil, fmt.Errorf("addFileContracts: failed to prepare missed proof outputs statement: %w", err)
+	}
+	defer missedOutputsStmt.Close()
 
 	fcKeys := make(map[explorer.DBFileContract][2]types.PublicKey)
 	// populate fcKeys using revision UnlockConditions fields
@@ -815,9 +779,20 @@ func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []expl
 	addFC := func(fcID types.FileContractID, leafIndex uint64, fc types.FileContract, resolved, valid, lastRevision bool) error {
 		var dbID int64
 		dbFC := explorer.DBFileContract{ID: fcID, RevisionNumber: fc.RevisionNumber}
-		err := stmt.QueryRow(encode(fcID), encode(leafIndex), encode(fc.Filesize), encode(fc.FileMerkleRoot), encode(fc.WindowStart), encode(fc.WindowEnd), encode(fc.Payout), encode(fc.UnlockHash), encode(fc.RevisionNumber), resolved, valid, encode(leafIndex)).Scan(&dbID)
+		err := stmt.QueryRow(encode(fcID), encode(b.ID()), encode(leafIndex), encode(fc.Filesize), encode(fc.FileMerkleRoot), encode(fc.WindowStart), encode(fc.WindowEnd), encode(fc.Payout), encode(fc.UnlockHash), encode(fc.RevisionNumber), resolved, valid, encode(leafIndex)).Scan(&dbID)
 		if err != nil {
 			return fmt.Errorf("failed to execute file_contract_elements statement: %w", err)
+		}
+
+		for i, sco := range fc.ValidProofOutputs {
+			if _, err := validOutputsStmt.Exec(dbID, i, encode(sco.Address), encode(sco.Value)); err != nil {
+				return fmt.Errorf("updateFileContractElements: failed to execute valid proof outputs statement: %w", err)
+			}
+		}
+		for i, sco := range fc.MissedProofOutputs {
+			if _, err := missedOutputsStmt.Exec(dbID, i, encode(sco.Address), encode(sco.Value)); err != nil {
+				return fmt.Errorf("updateFileContractElements: failed to execute missed proof outputs statement: %w", err)
+			}
 		}
 
 		// only update if it's the most recent revision which will come from
@@ -829,7 +804,7 @@ func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []expl
 				hostKey = encode(keys[1]).([]byte)
 			}
 
-			if _, err := revisionStmt.Exec(encode(fcID), encode(b.ID()), dbID, renterKey, hostKey, dbID, renterKey, hostKey); err != nil {
+			if _, err := revisionStmt.Exec(encode(fcID), dbID, renterKey, hostKey, dbID, renterKey, hostKey); err != nil {
 				return fmt.Errorf("failed to update last revision number: %w", err)
 			}
 		}
