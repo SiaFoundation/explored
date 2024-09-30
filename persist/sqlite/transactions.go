@@ -498,7 +498,7 @@ func transactionDatabaseIDs(tx *txn, txnIDs []types.TransactionID) (dbIDs map[in
 		return result
 	}
 
-	query := `SELECT id, transaction_id FROM transactions WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)`
+	query := `SELECT id, transaction_id FROM transactions WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `) ORDER BY id`
 	rows, err := tx.Query(query, encodedIDs(txnIDs)...)
 	if err != nil {
 		return nil, err

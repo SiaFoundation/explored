@@ -2097,6 +2097,29 @@ func TestHostAnnouncement(t *testing.T) {
 	})
 
 	{
+		b, err := db.Block(cm.Tip().ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "len(txns)", 3, len(b.Transactions))
+		check(t, "txns[0].ID", txn2.ID(), b.Transactions[0].ID)
+		check(t, "txns[1].ID", txn3.ID(), b.Transactions[1].ID)
+		check(t, "txns[2].ID", txn4.ID(), b.Transactions[2].ID)
+	}
+
+	{
+		dbTxns, err := db.Transactions([]types.TransactionID{txn1.ID(), txn2.ID(), txn3.ID(), txn4.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "len(txns)", 4, len(dbTxns))
+		check(t, "txns[0].ID", txn1.ID(), dbTxns[0].ID)
+		check(t, "txns[1].ID", txn2.ID(), dbTxns[1].ID)
+		check(t, "txns[2].ID", txn3.ID(), dbTxns[2].ID)
+		check(t, "txns[3].ID", txn4.ID(), dbTxns[3].ID)
+	}
+
+	{
 		dbTxns, err := db.Transactions([]types.TransactionID{txn1.ID()})
 		if err != nil {
 			t.Fatal(err)
