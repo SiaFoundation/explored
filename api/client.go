@@ -184,6 +184,13 @@ func (c *Client) ContractsKey(key types.PublicKey) (resp []explorer.FileContract
 	return
 }
 
+// ContractRevisions returns all the revisions of the contract with the
+// specified ID.
+func (c *Client) ContractRevisions(id types.FileContractID) (resp []types.FileContractElement, err error) {
+	err = c.c.GET(fmt.Sprintf("/contracts/%s/revisions", id), &resp)
+	return
+}
+
 // Host returns information about the host with a given ed25519 key.
 func (c *Client) Host(key types.PublicKey) (resp explorer.Host, err error) {
 	err = c.c.GET(fmt.Sprintf("/pubkey/%s/host", key), &resp)

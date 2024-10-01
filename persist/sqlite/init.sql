@@ -75,6 +75,7 @@ CREATE INDEX siafund_elements_address_spent_index ON siafund_elements(address, s
 
 CREATE TABLE file_contract_elements (
 	id INTEGER PRIMARY KEY,
+	block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
 
 	contract_id BLOB NOT NULL,
 	leaf_index BLOB NOT NULL,
@@ -95,7 +96,6 @@ CREATE INDEX file_contract_elements_contract_id_index ON file_contract_elements(
 
 CREATE TABLE last_contract_revision (
 	contract_id BLOB PRIMARY KEY NOT NULL,
-	block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
 
 	ed25519_renter_key BLOB,
 	ed25519_host_key BLOB,
@@ -106,7 +106,7 @@ CREATE TABLE last_contract_revision (
 	proof_index BLOB,
 	proof_transaction_id BLOB REFERENCES transactions(transaction_id),
 
-	contract_element_id INTEGER UNIQUE REFERENCES file_contract_elements(id) NOT NULL
+	contract_element_id INTEGER UNIQUE REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL
 );
 
 CREATE TABLE file_contract_valid_proof_outputs (

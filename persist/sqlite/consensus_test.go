@@ -139,6 +139,82 @@ func checkMetrics(t *testing.T, db explorer.Store, cm *chain.Manager, expected e
 	// don't check circulating supply here because it requires a lot of accounting
 }
 
+func checkFCRevisions(t *testing.T, revisionNumbers []uint64, fcs []types.FileContractElement) {
+	t.Helper()
+
+	check(t, "number of revisions", len(revisionNumbers), len(fcs))
+	for i := range revisionNumbers {
+		check(t, "revision number", revisionNumbers[i], fcs[i].FileContract.RevisionNumber)
+	}
+}
+
+func checkTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer.Transaction) {
+	t.Helper()
+
+	check(t, "siacoin inputs", len(expectTxn.SiacoinInputs), len(gotTxn.SiacoinInputs))
+	check(t, "siacoin outputs", len(expectTxn.SiacoinOutputs), len(gotTxn.SiacoinOutputs))
+	check(t, "siafund inputs", len(expectTxn.SiafundInputs), len(gotTxn.SiafundInputs))
+	check(t, "siafund outputs", len(expectTxn.SiafundOutputs), len(gotTxn.SiafundOutputs))
+	check(t, "miner fees", len(expectTxn.MinerFees), len(gotTxn.MinerFees))
+	check(t, "signatures", len(expectTxn.Signatures), len(gotTxn.Signatures))
+
+	for i := range expectTxn.SiacoinInputs {
+		expectSci := expectTxn.SiacoinInputs[i]
+		gotSci := gotTxn.SiacoinInputs[i]
+
+		if gotSci.Value == types.ZeroCurrency {
+			t.Fatal("invalid value")
+		}
+		check(t, "parent ID", expectSci.ParentID, gotSci.ParentID)
+		check(t, "unlock conditions", expectSci.UnlockConditions, gotSci.UnlockConditions)
+		check(t, "address", expectSci.UnlockConditions.UnlockHash(), gotSci.Address)
+	}
+	for i := range expectTxn.SiacoinOutputs {
+		expectSco := expectTxn.SiacoinOutputs[i]
+		gotSco := gotTxn.SiacoinOutputs[i].SiacoinOutput
+
+		check(t, "address", expectSco.Address, gotSco.Address)
+		check(t, "value", expectSco.Value, gotSco.Value)
+		check(t, "source", explorer.SourceTransaction, gotTxn.SiacoinOutputs[i].Source)
+	}
+	for i := range expectTxn.SiafundInputs {
+		expectSfi := expectTxn.SiafundInputs[i]
+		gotSfi := gotTxn.SiafundInputs[i]
+
+		if gotSfi.Value == 0 {
+			t.Fatal("invalid value")
+		}
+		check(t, "parent ID", expectSfi.ParentID, gotSfi.ParentID)
+		check(t, "claim address", expectSfi.ClaimAddress, gotSfi.ClaimAddress)
+		check(t, "unlock conditions", expectSfi.UnlockConditions, gotSfi.UnlockConditions)
+		check(t, "address", expectSfi.UnlockConditions.UnlockHash(), gotSfi.Address)
+	}
+	for i := range expectTxn.SiafundOutputs {
+		expectSfo := expectTxn.SiafundOutputs[i]
+		gotSfo := gotTxn.SiafundOutputs[i].SiafundOutput
+
+		check(t, "address", expectSfo.Address, gotSfo.Address)
+		check(t, "value", expectSfo.Value, gotSfo.Value)
+	}
+	for i := range expectTxn.MinerFees {
+		check(t, "miner fee", expectTxn.MinerFees[i], gotTxn.MinerFees[i])
+	}
+	for i := range expectTxn.Signatures {
+		expectSig := expectTxn.Signatures[i]
+		gotSig := gotTxn.Signatures[i]
+
+		check(t, "parent ID", expectSig.ParentID, gotSig.ParentID)
+		check(t, "public key index", expectSig.PublicKeyIndex, gotSig.PublicKeyIndex)
+		check(t, "timelock", expectSig.Timelock, gotSig.Timelock)
+		check(t, "signature", expectSig.Signature, gotSig.Signature)
+
+		// reflect.DeepEqual treats empty slices as different from nil
+		// slices so these will differ because the decoder is doing
+		// cf.X = make([]uint64, d.ReadPrefix()) and the prefix is 0
+		// check(t, "covered fields", expectSig.CoveredFields, gotSig.CoveredFields)
+	}
+}
+
 func syncDB(t *testing.T, db *sqlite.Store, cm *chain.Manager) {
 	index, err := db.Tip()
 	if err != nil && !errors.Is(err, explorer.ErrNoTip) {
@@ -425,71 +501,6 @@ func TestSendTransactions(t *testing.T) {
 		}
 	}
 
-	checkTransaction := func(expectTxn types.Transaction, gotTxn explorer.Transaction) {
-		check(t, "siacoin inputs", len(expectTxn.SiacoinInputs), len(gotTxn.SiacoinInputs))
-		check(t, "siacoin outputs", len(expectTxn.SiacoinOutputs), len(gotTxn.SiacoinOutputs))
-		check(t, "siafund inputs", len(expectTxn.SiafundInputs), len(gotTxn.SiafundInputs))
-		check(t, "siafund outputs", len(expectTxn.SiafundOutputs), len(gotTxn.SiafundOutputs))
-		check(t, "miner fees", len(expectTxn.MinerFees), len(gotTxn.MinerFees))
-		check(t, "signatures", len(expectTxn.Signatures), len(gotTxn.Signatures))
-
-		for i := range expectTxn.SiacoinInputs {
-			expectSci := expectTxn.SiacoinInputs[i]
-			gotSci := gotTxn.SiacoinInputs[i]
-
-			if gotSci.Value == types.ZeroCurrency {
-				t.Fatal("invalid value")
-			}
-			check(t, "parent ID", expectSci.ParentID, gotSci.ParentID)
-			check(t, "unlock conditions", expectSci.UnlockConditions, gotSci.UnlockConditions)
-			check(t, "address", expectSci.UnlockConditions.UnlockHash(), gotSci.Address)
-		}
-		for i := range expectTxn.SiacoinOutputs {
-			expectSco := expectTxn.SiacoinOutputs[i]
-			gotSco := gotTxn.SiacoinOutputs[i].SiacoinOutput
-
-			check(t, "address", expectSco.Address, gotSco.Address)
-			check(t, "value", expectSco.Value, gotSco.Value)
-			check(t, "source", explorer.SourceTransaction, gotTxn.SiacoinOutputs[i].Source)
-		}
-		for i := range expectTxn.SiafundInputs {
-			expectSfi := expectTxn.SiafundInputs[i]
-			gotSfi := gotTxn.SiafundInputs[i]
-
-			if gotSfi.Value == 0 {
-				t.Fatal("invalid value")
-			}
-			check(t, "parent ID", expectSfi.ParentID, gotSfi.ParentID)
-			check(t, "claim address", expectSfi.ClaimAddress, gotSfi.ClaimAddress)
-			check(t, "unlock conditions", expectSfi.UnlockConditions, gotSfi.UnlockConditions)
-			check(t, "address", expectSfi.UnlockConditions.UnlockHash(), gotSfi.Address)
-		}
-		for i := range expectTxn.SiafundOutputs {
-			expectSfo := expectTxn.SiafundOutputs[i]
-			gotSfo := gotTxn.SiafundOutputs[i].SiafundOutput
-
-			check(t, "address", expectSfo.Address, gotSfo.Address)
-			check(t, "value", expectSfo.Value, gotSfo.Value)
-		}
-		for i := range expectTxn.MinerFees {
-			check(t, "miner fee", expectTxn.MinerFees[i], gotTxn.MinerFees[i])
-		}
-		for i := range expectTxn.Signatures {
-			expectSig := expectTxn.Signatures[i]
-			gotSig := gotTxn.Signatures[i]
-
-			check(t, "parent ID", expectSig.ParentID, gotSig.ParentID)
-			check(t, "public key index", expectSig.PublicKeyIndex, gotSig.PublicKeyIndex)
-			check(t, "timelock", expectSig.Timelock, gotSig.Timelock)
-			check(t, "signature", expectSig.Signature, gotSig.Signature)
-
-			// reflect.DeepEqual treats empty slices as different from nil
-			// slices so these will differ because the decoder is doing
-			// cf.X = make([]uint64, d.ReadPrefix()) and the prefix is 0
-			// check(t, "covered fields", expectSig.CoveredFields, gotSig.CoveredFields)
-		}
-	}
-
 	expectedPayout := cm.TipState().BlockReward()
 	maturityHeight := cm.TipState().MaturityHeight()
 
@@ -592,7 +603,7 @@ func TestSendTransactions(t *testing.T) {
 		// Ensure the transactions in the block and retrieved separately match
 		// with the actual transactions
 		for i := range b.Transactions {
-			checkTransaction(b.Transactions[i], block.Transactions[i])
+			checkTransaction(t, b.Transactions[i], block.Transactions[i])
 			checkChainIndices(t, b.Transactions[i].ID(), []types.ChainIndex{cm.Tip()})
 
 			txns, err := db.Transactions([]types.TransactionID{b.Transactions[i].ID()})
@@ -600,7 +611,7 @@ func TestSendTransactions(t *testing.T) {
 				t.Fatal(err)
 			}
 			check(t, "transactions", 1, len(txns))
-			checkTransaction(b.Transactions[i], txns[0])
+			checkTransaction(t, b.Transactions[i], txns[0])
 		}
 
 		type expectedUTXOs struct {
@@ -860,6 +871,14 @@ func TestFileContract(t *testing.T) {
 	}
 
 	{
+		dbFCs, err := db.ContractRevisions(fcID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		checkFCRevisions(t, []uint64{0}, dbFCs)
+	}
+
+	{
 		txns, err := db.Transactions([]types.TransactionID{txn.ID()})
 		if err != nil {
 			t.Fatal(err)
@@ -929,6 +948,14 @@ func TestFileContract(t *testing.T) {
 		}
 		check(t, "fcs", 1, len(dbFCs))
 		checkFC(false, false, fc, dbFCs[0])
+	}
+
+	{
+		dbFCs, err := db.ContractRevisions(fcID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		checkFCRevisions(t, []uint64{0, 1}, dbFCs)
 	}
 
 	{
@@ -1182,6 +1209,14 @@ func TestEphemeralFileContract(t *testing.T) {
 	}
 
 	{
+		dbFCs, err := db.ContractRevisions(fcID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		checkFCRevisions(t, []uint64{0, 1}, dbFCs)
+	}
+
+	{
 		txns, err := db.Transactions([]types.TransactionID{txn.ID()})
 		if err != nil {
 			t.Fatal(err)
@@ -1251,6 +1286,14 @@ func TestEphemeralFileContract(t *testing.T) {
 		}
 		check(t, "fcs", 1, len(dbFCs))
 		checkFC(true, false, false, revisedFC3, dbFCs[0])
+	}
+
+	{
+		dbFCs, err := db.ContractRevisions(fcID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		checkFCRevisions(t, []uint64{0, 1, 2, 3}, dbFCs)
 	}
 
 	{
@@ -1678,52 +1721,6 @@ func TestRevertSendTransactions(t *testing.T) {
 		}
 	}
 
-	checkTransaction := func(expectTxn types.Transaction, gotTxn explorer.Transaction) {
-		check(t, "siacoin inputs", len(expectTxn.SiacoinInputs), len(gotTxn.SiacoinInputs))
-		check(t, "siacoin outputs", len(expectTxn.SiacoinOutputs), len(gotTxn.SiacoinOutputs))
-		check(t, "siafund inputs", len(expectTxn.SiafundInputs), len(gotTxn.SiafundInputs))
-		check(t, "siafund outputs", len(expectTxn.SiafundOutputs), len(gotTxn.SiafundOutputs))
-
-		for i := range expectTxn.SiacoinInputs {
-			expectSci := expectTxn.SiacoinInputs[i]
-			gotSci := gotTxn.SiacoinInputs[i]
-
-			if gotSci.Value == types.ZeroCurrency {
-				t.Fatal("invalid value")
-			}
-			check(t, "parent ID", expectSci.ParentID, gotSci.ParentID)
-			check(t, "unlock conditions", expectSci.UnlockConditions, gotSci.UnlockConditions)
-			check(t, "address", expectSci.UnlockConditions.UnlockHash(), gotSci.Address)
-		}
-		for i := range expectTxn.SiacoinOutputs {
-			expectSco := expectTxn.SiacoinOutputs[i]
-			gotSco := gotTxn.SiacoinOutputs[i].SiacoinOutput
-
-			check(t, "address", expectSco.Address, gotSco.Address)
-			check(t, "value", expectSco.Value, gotSco.Value)
-			check(t, "source", explorer.SourceTransaction, gotTxn.SiacoinOutputs[i].Source)
-		}
-		for i := range expectTxn.SiafundInputs {
-			expectSfi := expectTxn.SiafundInputs[i]
-			gotSfi := gotTxn.SiafundInputs[i]
-
-			if gotSfi.Value == 0 {
-				t.Fatal("invalid value")
-			}
-			check(t, "parent ID", expectSfi.ParentID, gotSfi.ParentID)
-			check(t, "claim address", expectSfi.ClaimAddress, gotSfi.ClaimAddress)
-			check(t, "unlock conditions", expectSfi.UnlockConditions, gotSfi.UnlockConditions)
-			check(t, "address", expectSfi.UnlockConditions.UnlockHash(), gotSfi.Address)
-		}
-		for i := range expectTxn.SiafundOutputs {
-			expectSfo := expectTxn.SiafundOutputs[i]
-			gotSfo := gotTxn.SiafundOutputs[i].SiafundOutput
-
-			check(t, "address", expectSfo.Address, gotSfo.Address)
-			check(t, "value", expectSfo.Value, gotSfo.Value)
-		}
-	}
-
 	expectedPayout := cm.TipState().BlockReward()
 	maturityHeight := cm.TipState().MaturityHeight()
 
@@ -1836,7 +1833,7 @@ func TestRevertSendTransactions(t *testing.T) {
 		// Ensure the transactions in the block and retrieved separately match
 		// with the actual transactions
 		for i := range b.Transactions {
-			checkTransaction(b.Transactions[i], block.Transactions[i])
+			checkTransaction(t, b.Transactions[i], block.Transactions[i])
 			checkChainIndices(t, b.Transactions[i].ID(), []types.ChainIndex{cm.Tip()})
 
 			txns, err := db.Transactions([]types.TransactionID{b.Transactions[i].ID()})
@@ -1844,7 +1841,7 @@ func TestRevertSendTransactions(t *testing.T) {
 				t.Fatal(err)
 			}
 			check(t, "transactions", 1, len(txns))
-			checkTransaction(b.Transactions[i], txns[0])
+			checkTransaction(t, b.Transactions[i], txns[0])
 		}
 
 		type expectedUTXOs struct {
@@ -2098,6 +2095,29 @@ func TestHostAnnouncement(t *testing.T) {
 		ActiveContracts:    0,
 		StorageUtilization: 0,
 	})
+
+	{
+		b, err := db.Block(cm.Tip().ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "len(txns)", 3, len(b.Transactions))
+		check(t, "txns[0].ID", txn2.ID(), b.Transactions[0].ID)
+		check(t, "txns[1].ID", txn3.ID(), b.Transactions[1].ID)
+		check(t, "txns[2].ID", txn4.ID(), b.Transactions[2].ID)
+	}
+
+	{
+		dbTxns, err := db.Transactions([]types.TransactionID{txn1.ID(), txn2.ID(), txn3.ID(), txn4.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "len(txns)", 4, len(dbTxns))
+		check(t, "txns[0].ID", txn1.ID(), dbTxns[0].ID)
+		check(t, "txns[1].ID", txn2.ID(), dbTxns[1].ID)
+		check(t, "txns[2].ID", txn3.ID(), dbTxns[2].ID)
+		check(t, "txns[3].ID", txn4.ID(), dbTxns[3].ID)
+	}
 
 	{
 		dbTxns, err := db.Transactions([]types.TransactionID{txn1.ID()})
@@ -2660,6 +2680,14 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	}
 
 	{
+		dbFCs, err := db.ContractRevisions(fcID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		checkFCRevisions(t, []uint64{0}, dbFCs)
+	}
+
+	{
 		txns, err := db.Transactions([]types.TransactionID{txn.ID()})
 		if err != nil {
 			t.Fatal(err)
@@ -2731,6 +2759,29 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		checkFC(false, false, revFC, fcr.FileContract)
 	}
 
+	{
+		dbFCs, err := db.ContractRevisions(fcID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		checkFCRevisions(t, []uint64{0, 1}, dbFCs)
+	}
+
+	{
+		renterContracts, err := db.ContractsKey(renterPublicKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		hostContracts, err := db.ContractsKey(hostPublicKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
+		check(t, "len(contracts)", 1, len(renterContracts))
+		checkFC(false, false, revFC, renterContracts[0])
+		checkFC(false, false, revFC, hostContracts[0])
+	}
+
 	extra := cm.Tip().Height - prevState1.Index.Height + 1
 	for reorg := uint64(0); reorg < 2; reorg++ {
 		// revert the revision
@@ -2762,6 +2813,14 @@ func TestMultipleReorgFileContract(t *testing.T) {
 
 			check(t, "confirmation index", prevState1.Index, *dbFCs[0].ConfirmationIndex)
 			check(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
+		}
+
+		{
+			dbFCs, err := db.ContractRevisions(fcID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			checkFCRevisions(t, []uint64{0}, dbFCs)
 		}
 
 		// storage utilization should be back to contractFilesize instead of
@@ -2840,6 +2899,26 @@ func TestMultipleReorgFileContract(t *testing.T) {
 				t.Fatal(err)
 			}
 			check(t, "fcs", 0, len(dbFCs))
+		}
+
+		{
+			renterContracts, err := db.ContractsKey(renterPublicKey)
+			if err != nil {
+				t.Fatal(err)
+			}
+			hostContracts, err := db.ContractsKey(hostPublicKey)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
+			check(t, "len(contracts)", 0, len(renterContracts))
+		}
+
+		{
+			_, err := db.ContractRevisions(fcID)
+			if err != explorer.ErrContractNotFound {
+				t.Fatal(err)
+			}
 		}
 
 		// no more contracts or storage utilization
