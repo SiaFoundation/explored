@@ -68,17 +68,6 @@ func TestBalance(t *testing.T) {
 
 	cm := chain.NewManager(store, genesisState)
 
-	// checkBalance checks that an address has the balances we expect
-	checkBalance := func(addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
-		sc, immatureSC, sf, err := db.Balance(addr)
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "siacoins", expectSC, sc)
-		testutil.Equal(t, "immature siacoins", expectImmatureSC, immatureSC)
-		testutil.Equal(t, "siafunds", expectSF, sf)
-	}
-
 	// Generate three addresses: addr1, addr2, addr3
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
@@ -109,14 +98,14 @@ func TestBalance(t *testing.T) {
 
 	// Mine until the payout matures
 	for i := cm.Tip().Height; i < maturityHeight; i++ {
-		checkBalance(addr1, types.ZeroCurrency, expectedPayout, 0)
+		testutil.CheckBalance(t, db, addr1, types.ZeroCurrency, expectedPayout, 0)
 		if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
 			t.Fatal(err)
 		}
 		syncDB(t, db, cm)
 	}
 
-	checkBalance(addr1, expectedPayout, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr1, expectedPayout, types.ZeroCurrency, 0)
 
 	// Send all of the payout except 100 SC to addr2
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
@@ -155,8 +144,8 @@ func TestBalance(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	checkBalance(addr2, utxos[0].SiacoinOutput.Value.Sub(types.Siacoins(100)), types.ZeroCurrency, 0)
-	checkBalance(addr3, types.Siacoins(100), types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr2, utxos[0].SiacoinOutput.Value.Sub(types.Siacoins(100)), types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr3, types.Siacoins(100), types.ZeroCurrency, 0)
 }
 
 func TestSiafundBalance(t *testing.T) {
@@ -193,17 +182,6 @@ func TestSiafundBalance(t *testing.T) {
 	}
 
 	cm := chain.NewManager(store, genesisState)
-
-	// checkBalance checks that an address has the balances we expect
-	checkBalance := func(addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
-		sc, immatureSC, sf, err := db.Balance(addr)
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "siacoins", expectSC, sc)
-		testutil.Equal(t, "immature siacoins", expectImmatureSC, immatureSC)
-		testutil.Equal(t, "siafunds", expectSF, sf)
-	}
 
 	// Send all of the payout except 100 SF to addr2
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
@@ -242,9 +220,9 @@ func TestSiafundBalance(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
-	checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency, giftSF-100)
-	checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 100)
+	testutil.CheckBalance(t, db, addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr2, types.ZeroCurrency, types.ZeroCurrency, giftSF-100)
+	testutil.CheckBalance(t, db, addr3, types.ZeroCurrency, types.ZeroCurrency, 100)
 }
 
 func TestSendTransactions(t *testing.T) {
@@ -282,30 +260,6 @@ func TestSendTransactions(t *testing.T) {
 
 	cm := chain.NewManager(store, genesisState)
 
-	// checkBalance checks that an address has the balances we expect
-	checkBalance := func(addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
-		sc, immatureSC, sf, err := db.Balance(addr)
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "siacoins", expectSC, sc)
-		testutil.Equal(t, "immature siacoins", expectImmatureSC, immatureSC)
-		testutil.Equal(t, "siafunds", expectSF, sf)
-	}
-
-	checkChainIndices := func(t *testing.T, txnID types.TransactionID, expected []types.ChainIndex) {
-		indices, err := db.TransactionChainIndices(txnID, 0, 100)
-		switch {
-		case err != nil:
-			t.Fatal(err)
-		case len(indices) != len(expected):
-			t.Fatalf("expected %d indices, got %d", len(expected), len(indices))
-		}
-		for i := range indices {
-			testutil.Equal(t, "index", expected[i], indices[i])
-		}
-	}
-
 	expectedPayout := cm.TipState().BlockReward()
 	maturityHeight := cm.TipState().MaturityHeight()
 
@@ -323,9 +277,9 @@ func TestSendTransactions(t *testing.T) {
 		syncDB(t, db, cm)
 	}
 
-	checkBalance(addr1, expectedPayout, types.ZeroCurrency, giftSF)
-	checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
-	checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr1, expectedPayout, types.ZeroCurrency, giftSF)
+	testutil.CheckBalance(t, db, addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
 
 	const n = 100
 
@@ -384,9 +338,9 @@ func TestSendTransactions(t *testing.T) {
 
 		testutil.CheckMetrics(t, db, cm, explorer.Metrics{})
 
-		checkBalance(addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
-		checkBalance(addr2, types.Siacoins(1).Mul64(uint64(i+1)), types.ZeroCurrency, 1*uint64(i+1))
-		checkBalance(addr3, types.Siacoins(2).Mul64(uint64(i+1)), types.ZeroCurrency, 2*uint64(i+1))
+		testutil.CheckBalance(t, db, addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
+		testutil.CheckBalance(t, db, addr2, types.Siacoins(1).Mul64(uint64(i+1)), types.ZeroCurrency, 1*uint64(i+1))
+		testutil.CheckBalance(t, db, addr3, types.Siacoins(2).Mul64(uint64(i+1)), types.ZeroCurrency, 2*uint64(i+1))
 
 		// Ensure the block we retrieved from the database is the same as the
 		// actual block
@@ -409,7 +363,7 @@ func TestSendTransactions(t *testing.T) {
 		// with the actual transactions
 		for i := range b.Transactions {
 			testutil.CheckTransaction(t, b.Transactions[i], block.Transactions[i])
-			checkChainIndices(t, b.Transactions[i].ID(), []types.ChainIndex{cm.Tip()})
+			testutil.CheckChainIndices(t, db, b.Transactions[i].ID(), []types.ChainIndex{cm.Tip()})
 
 			txns, err := db.Transactions([]types.TransactionID{b.Transactions[i].ID()})
 			if err != nil {
@@ -596,30 +550,6 @@ func TestFileContract(t *testing.T) {
 	scOutputID := genesisBlock.Transactions[0].SiacoinOutputID(0)
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
 
-	checkFC := func(resolved, valid bool, expected types.FileContract, got explorer.FileContract) {
-		testutil.Equal(t, "resolved state", resolved, got.Resolved)
-		testutil.Equal(t, "valid state", valid, got.Valid)
-
-		gotFC := got.FileContract
-		testutil.Equal(t, "filesize", expected.Filesize, gotFC.Filesize)
-		testutil.Equal(t, "file merkle root", expected.FileMerkleRoot, gotFC.FileMerkleRoot)
-		testutil.Equal(t, "window start", expected.WindowStart, gotFC.WindowStart)
-		testutil.Equal(t, "window end", expected.WindowEnd, gotFC.WindowEnd)
-		testutil.Equal(t, "payout", expected.Payout, gotFC.Payout)
-		testutil.Equal(t, "unlock hash", expected.UnlockHash, gotFC.UnlockHash)
-		testutil.Equal(t, "revision number", expected.RevisionNumber, gotFC.RevisionNumber)
-		testutil.Equal(t, "valid proof outputs", len(expected.ValidProofOutputs), len(gotFC.ValidProofOutputs))
-		for i := range expected.ValidProofOutputs {
-			testutil.Equal(t, "valid proof output address", expected.ValidProofOutputs[i].Address, gotFC.ValidProofOutputs[i].Address)
-			testutil.Equal(t, "valid proof output value", expected.ValidProofOutputs[i].Value, gotFC.ValidProofOutputs[i].Value)
-		}
-		testutil.Equal(t, "missed proof outputs", len(expected.MissedProofOutputs), len(gotFC.MissedProofOutputs))
-		for i := range expected.MissedProofOutputs {
-			testutil.Equal(t, "missed proof output address", expected.MissedProofOutputs[i].Address, gotFC.MissedProofOutputs[i].Address)
-			testutil.Equal(t, "missed proof output value", expected.MissedProofOutputs[i].Value, gotFC.MissedProofOutputs[i].Value)
-		}
-	}
-
 	windowStart := cm.Tip().Height + 10
 	windowEnd := windowStart + 10
 	fc := prepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), windowStart, windowEnd, types.VoidAddress)
@@ -648,7 +578,7 @@ func TestFileContract(t *testing.T) {
 			t.Fatal(err)
 		}
 		testutil.Equal(t, "fcs", 1, len(dbFCs))
-		checkFC(false, false, fc, dbFCs[0])
+		testutil.CheckFC(t, false, false, false, fc, dbFCs[0])
 		testutil.Equal(t, "confirmation index", cm.Tip(), *dbFCs[0].ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 	}
@@ -668,7 +598,7 @@ func TestFileContract(t *testing.T) {
 		}
 		testutil.Equal(t, "transactions", 1, len(txns))
 		testutil.Equal(t, "file contracts", 1, len(txns[0].FileContracts))
-		checkFC(false, false, fc, txns[0].FileContracts[0])
+		testutil.CheckFC(t, false, false, false, fc, txns[0].FileContracts[0])
 
 		testutil.Equal(t, "confirmation index", cm.Tip(), *txns[0].FileContracts[0].ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *txns[0].FileContracts[0].ConfirmationTransactionID)
@@ -708,8 +638,8 @@ func TestFileContract(t *testing.T) {
 		}
 		testutil.Equal(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
 		testutil.Equal(t, "len(contracts)", 1, len(renterContracts))
-		checkFC(false, false, fc, renterContracts[0])
-		checkFC(false, false, fc, hostContracts[0])
+		testutil.CheckFC(t, false, false, false, fc, renterContracts[0])
+		testutil.CheckFC(t, false, false, false, fc, hostContracts[0])
 
 		testutil.Equal(t, "confirmation index", prevTip, *renterContracts[0].ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *renterContracts[0].ConfirmationTransactionID)
@@ -730,7 +660,7 @@ func TestFileContract(t *testing.T) {
 			t.Fatal(err)
 		}
 		testutil.Equal(t, "fcs", 1, len(dbFCs))
-		checkFC(false, false, fc, dbFCs[0])
+		testutil.CheckFC(t, false, false, false, fc, dbFCs[0])
 	}
 
 	{
@@ -756,7 +686,7 @@ func TestFileContract(t *testing.T) {
 		testutil.Equal(t, "confirmation index", prevTip, *fcr.ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *fcr.ConfirmationTransactionID)
 
-		checkFC(false, false, fc, fcr.FileContract)
+		testutil.CheckFC(t, false, false, false, fc, fcr.FileContract)
 	}
 
 	for i := cm.Tip().Height; i < windowEnd; i++ {
@@ -786,7 +716,7 @@ func TestFileContract(t *testing.T) {
 			t.Fatal(err)
 		}
 		testutil.Equal(t, "fcs", 1, len(dbFCs))
-		checkFC(true, false, fc, dbFCs[0])
+		testutil.CheckFC(t, false, true, false, fc, dbFCs[0])
 
 		testutil.Equal(t, "confirmation index", prevTip, *dbFCs[0].ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
@@ -810,8 +740,8 @@ func TestFileContract(t *testing.T) {
 		}
 		testutil.Equal(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
 		testutil.Equal(t, "len(contracts)", 1, len(renterContracts))
-		checkFC(true, false, fc, renterContracts[0])
-		checkFC(true, false, fc, hostContracts[0])
+		testutil.CheckFC(t, false, true, false, fc, renterContracts[0])
+		testutil.CheckFC(t, false, true, false, fc, hostContracts[0])
 
 		testutil.Equal(t, "confirmation index", prevTip, *renterContracts[0].ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *renterContracts[0].ConfirmationTransactionID)
@@ -864,38 +794,6 @@ func TestEphemeralFileContract(t *testing.T) {
 
 	scOutputID := genesisBlock.Transactions[0].SiacoinOutputID(0)
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
-
-	checkFC := func(revision, resolved, valid bool, expected types.FileContract, got explorer.FileContract) {
-		testutil.Equal(t, "resolved state", resolved, got.Resolved)
-		testutil.Equal(t, "valid state", valid, got.Valid)
-
-		gotFC := got.FileContract
-		testutil.Equal(t, "filesize", expected.Filesize, gotFC.Filesize)
-		testutil.Equal(t, "file merkle root", expected.FileMerkleRoot, gotFC.FileMerkleRoot)
-		testutil.Equal(t, "window start", expected.WindowStart, gotFC.WindowStart)
-		testutil.Equal(t, "window end", expected.WindowEnd, gotFC.WindowEnd)
-
-		// See core/types.FileContractRevision
-		// Essentially, a revision cannot change the total payout, so this value
-		// is replaced with a sentinel value of types.MaxCurrency in revisions
-		// if it is decoded.
-		if !revision {
-			testutil.Equal(t, "payout", expected.Payout, gotFC.Payout)
-		}
-
-		testutil.Equal(t, "unlock hash", expected.UnlockHash, gotFC.UnlockHash)
-		testutil.Equal(t, "revision number", expected.RevisionNumber, gotFC.RevisionNumber)
-		testutil.Equal(t, "valid proof outputs", len(expected.ValidProofOutputs), len(gotFC.ValidProofOutputs))
-		for i := range expected.ValidProofOutputs {
-			testutil.Equal(t, "valid proof output address", expected.ValidProofOutputs[i].Address, gotFC.ValidProofOutputs[i].Address)
-			testutil.Equal(t, "valid proof output value", expected.ValidProofOutputs[i].Value, gotFC.ValidProofOutputs[i].Value)
-		}
-		testutil.Equal(t, "missed proof outputs", len(expected.MissedProofOutputs), len(gotFC.MissedProofOutputs))
-		for i := range expected.MissedProofOutputs {
-			testutil.Equal(t, "missed proof output address", expected.MissedProofOutputs[i].Address, gotFC.MissedProofOutputs[i].Address)
-			testutil.Equal(t, "missed proof output value", expected.MissedProofOutputs[i].Value, gotFC.MissedProofOutputs[i].Value)
-		}
-	}
 
 	windowStart := cm.Tip().Height + 10
 	windowEnd := windowStart + 10
@@ -955,8 +853,8 @@ func TestEphemeralFileContract(t *testing.T) {
 		}
 		testutil.Equal(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
 		testutil.Equal(t, "len(contracts)", 1, len(renterContracts))
-		checkFC(true, false, false, revisedFC1, renterContracts[0])
-		checkFC(true, false, false, revisedFC1, hostContracts[0])
+		testutil.CheckFC(t, true, false, false, revisedFC1, renterContracts[0])
+		testutil.CheckFC(t, true, false, false, revisedFC1, hostContracts[0])
 	}
 
 	// Explorer.Contracts should return latest revision
@@ -966,7 +864,7 @@ func TestEphemeralFileContract(t *testing.T) {
 			t.Fatal(err)
 		}
 		testutil.Equal(t, "fcs", 1, len(dbFCs))
-		checkFC(true, false, false, revisedFC1, dbFCs[0])
+		testutil.CheckFC(t, true, false, false, revisedFC1, dbFCs[0])
 	}
 
 	{
@@ -984,7 +882,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		}
 		testutil.Equal(t, "transactions", 1, len(txns))
 		testutil.Equal(t, "file contracts", 1, len(txns[0].FileContracts))
-		checkFC(true, false, false, fc, txns[0].FileContracts[0])
+		testutil.CheckFC(t, true, false, false, fc, txns[0].FileContracts[0])
 
 		testutil.Equal(t, "confirmation index", cm.Tip(), *txns[0].FileContracts[0].ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *txns[0].FileContracts[0].ConfirmationTransactionID)
@@ -1002,7 +900,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		testutil.Equal(t, "parent id", txn.FileContractID(0), fcr.ParentID)
 		testutil.Equal(t, "unlock conditions", uc, fcr.UnlockConditions)
 
-		checkFC(true, false, false, revisedFC1, fcr.FileContract)
+		testutil.CheckFC(t, true, false, false, revisedFC1, fcr.FileContract)
 	}
 
 	revisedFC2 := revisedFC1
@@ -1046,7 +944,7 @@ func TestEphemeralFileContract(t *testing.T) {
 			t.Fatal(err)
 		}
 		testutil.Equal(t, "fcs", 1, len(dbFCs))
-		checkFC(true, false, false, revisedFC3, dbFCs[0])
+		testutil.CheckFC(t, true, false, false, revisedFC3, dbFCs[0])
 	}
 
 	{
@@ -1068,8 +966,8 @@ func TestEphemeralFileContract(t *testing.T) {
 		}
 		testutil.Equal(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
 		testutil.Equal(t, "len(contracts)", 1, len(renterContracts))
-		checkFC(true, false, false, revisedFC3, renterContracts[0])
-		checkFC(true, false, false, revisedFC3, hostContracts[0])
+		testutil.CheckFC(t, true, false, false, revisedFC3, renterContracts[0])
+		testutil.CheckFC(t, true, false, false, revisedFC3, hostContracts[0])
 	}
 
 	{
@@ -1083,7 +981,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		fcr := txns[0].FileContractRevisions[0]
 		testutil.Equal(t, "parent id", txn.FileContractID(0), fcr.ParentID)
 		testutil.Equal(t, "unlock conditions", uc, fcr.UnlockConditions)
-		checkFC(true, false, false, revisedFC2, fcr.FileContract)
+		testutil.CheckFC(t, true, false, false, revisedFC2, fcr.FileContract)
 	}
 
 	{
@@ -1097,7 +995,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		fcr := txns[0].FileContractRevisions[0]
 		testutil.Equal(t, "parent id", txn.FileContractID(0), fcr.ParentID)
 		testutil.Equal(t, "unlock conditions", uc, fcr.UnlockConditions)
-		checkFC(true, false, false, revisedFC3, fcr.FileContract)
+		testutil.CheckFC(t, true, false, false, revisedFC3, fcr.FileContract)
 	}
 }
 
@@ -1213,17 +1111,6 @@ func TestRevertBalance(t *testing.T) {
 
 	cm := chain.NewManager(store, genesisState)
 
-	// checkBalance checks that an address has the balances we expect
-	checkBalance := func(addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
-		sc, immatureSC, sf, err := db.Balance(addr)
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "siacoins", expectSC, sc)
-		testutil.Equal(t, "immature siacoins", expectImmatureSC, immatureSC)
-		testutil.Equal(t, "siafunds", expectSF, sf)
-	}
-
 	// Generate three addresses: addr1, addr2, addr3
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
@@ -1274,8 +1161,8 @@ func TestRevertBalance(t *testing.T) {
 
 	// Mine until the payout matures
 	for i := cm.Tip().Height; i < maturityHeight; i++ {
-		checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
-		checkBalance(addr2, types.ZeroCurrency, expectedPayout.Mul64(2), 0)
+		testutil.CheckBalance(t, db, addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+		testutil.CheckBalance(t, db, addr2, types.ZeroCurrency, expectedPayout.Mul64(2), 0)
 		if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
 			t.Fatal(err)
 		}
@@ -1287,8 +1174,8 @@ func TestRevertBalance(t *testing.T) {
 			StorageUtilization: 0,
 		})
 	}
-	checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
-	checkBalance(addr2, expectedPayout.Mul64(1), expectedPayout.Mul64(1), 0)
+	testutil.CheckBalance(t, db, addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr2, expectedPayout.Mul64(1), expectedPayout.Mul64(1), 0)
 
 	utxos1, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
 	if err != nil {
@@ -1359,10 +1246,10 @@ func TestRevertBalance(t *testing.T) {
 		StorageUtilization: 0,
 	})
 
-	checkBalance(addr1, hundredSC, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr1, hundredSC, types.ZeroCurrency, 0)
 	// second block added in reorg has now matured
-	checkBalance(addr2, utxos2[1].SiacoinOutput.Value, types.ZeroCurrency, 0)
-	checkBalance(addr3, utxos2[0].SiacoinOutput.Value.Sub(hundredSC), types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr2, utxos2[1].SiacoinOutput.Value, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr3, utxos2[0].SiacoinOutput.Value.Sub(hundredSC), types.ZeroCurrency, 0)
 
 	{
 		// Reorg everything from before
@@ -1388,9 +1275,9 @@ func TestRevertBalance(t *testing.T) {
 		syncDB(t, db, cm)
 	}
 
-	checkBalance(addr1, expectedPayout, types.ZeroCurrency, 0)
-	checkBalance(addr2, expectedPayout, types.ZeroCurrency, 0)
-	checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr1, expectedPayout, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr2, expectedPayout, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
 
 	utxos1, err = db.UnspentSiacoinOutputs(addr1, 0, 100)
 	if err != nil {
@@ -1458,30 +1345,6 @@ func TestRevertSendTransactions(t *testing.T) {
 
 	cm := chain.NewManager(store, genesisState)
 
-	// checkBalance checks that an address has the balances we expect
-	checkBalance := func(addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
-		sc, immatureSC, sf, err := db.Balance(addr)
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "siacoins", expectSC, sc)
-		testutil.Equal(t, "immature siacoins", expectImmatureSC, immatureSC)
-		testutil.Equal(t, "siafunds", expectSF, sf)
-	}
-
-	checkChainIndices := func(t *testing.T, txnID types.TransactionID, expected []types.ChainIndex) {
-		indices, err := db.TransactionChainIndices(txnID, 0, 100)
-		switch {
-		case err != nil:
-			t.Fatal(err)
-		case len(indices) != len(expected):
-			t.Fatalf("expected %d indices, got %d", len(expected), len(indices))
-		}
-		for i := range indices {
-			testutil.Equal(t, "index", expected[i], indices[i])
-		}
-	}
-
 	expectedPayout := cm.TipState().BlockReward()
 	maturityHeight := cm.TipState().MaturityHeight()
 
@@ -1504,9 +1367,9 @@ func TestRevertSendTransactions(t *testing.T) {
 		syncDB(t, db, cm)
 	}
 
-	checkBalance(addr1, expectedPayout, types.ZeroCurrency, giftSF)
-	checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
-	checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr1, expectedPayout, types.ZeroCurrency, giftSF)
+	testutil.CheckBalance(t, db, addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
 
 	const n = 26
 
@@ -1570,9 +1433,9 @@ func TestRevertSendTransactions(t *testing.T) {
 			StorageUtilization: 0,
 		})
 
-		checkBalance(addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
-		checkBalance(addr2, types.Siacoins(1).Mul64(uint64(i+1)), types.ZeroCurrency, 1*uint64(i+1))
-		checkBalance(addr3, types.Siacoins(2).Mul64(uint64(i+1)), types.ZeroCurrency, 2*uint64(i+1))
+		testutil.CheckBalance(t, db, addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
+		testutil.CheckBalance(t, db, addr2, types.Siacoins(1).Mul64(uint64(i+1)), types.ZeroCurrency, 1*uint64(i+1))
+		testutil.CheckBalance(t, db, addr3, types.Siacoins(2).Mul64(uint64(i+1)), types.ZeroCurrency, 2*uint64(i+1))
 
 		// Ensure the block we retrieved from the database is the same as the
 		// actual block
@@ -1595,7 +1458,7 @@ func TestRevertSendTransactions(t *testing.T) {
 		// with the actual transactions
 		for i := range b.Transactions {
 			testutil.CheckTransaction(t, b.Transactions[i], block.Transactions[i])
-			checkChainIndices(t, b.Transactions[i].ID(), []types.ChainIndex{cm.Tip()})
+			testutil.CheckChainIndices(t, db, b.Transactions[i].ID(), []types.ChainIndex{cm.Tip()})
 
 			txns, err := db.Transactions([]types.TransactionID{b.Transactions[i].ID()})
 			if err != nil {
@@ -1667,9 +1530,9 @@ func TestRevertSendTransactions(t *testing.T) {
 		addr1SCs := expectedPayout.Sub(types.Siacoins(1 + 2).Mul64(uint64(n - 3)))
 		addr1SFs := giftSF - (1+2)*uint64(n-3)
 
-		checkBalance(addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
-		checkBalance(addr2, types.Siacoins(1).Mul64(uint64(n-3)), types.ZeroCurrency, 1*uint64(n-3))
-		checkBalance(addr3, types.Siacoins(2).Mul64(uint64(n-3)), types.ZeroCurrency, 2*uint64(n-3))
+		testutil.CheckBalance(t, db, addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
+		testutil.CheckBalance(t, db, addr2, types.Siacoins(1).Mul64(uint64(n-3)), types.ZeroCurrency, 1*uint64(n-3))
+		testutil.CheckBalance(t, db, addr3, types.Siacoins(2).Mul64(uint64(n-3)), types.ZeroCurrency, 2*uint64(n-3))
 
 		scUtxos1, err := db.UnspentSiacoinOutputs(addr1, 0, n)
 		if err != nil {
@@ -2012,17 +1875,6 @@ func TestMultipleReorg(t *testing.T) {
 
 	cm := chain.NewManager(store, genesisState)
 
-	// checkBalance checks that an address has the balances we expect
-	checkBalance := func(addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
-		sc, immatureSC, sf, err := db.Balance(addr)
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "siacoins", expectSC, sc)
-		testutil.Equal(t, "immature siacoins", expectImmatureSC, immatureSC)
-		testutil.Equal(t, "siafunds", expectSF, sf)
-	}
-
 	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
 	// transfer gift from addr1 to addr2
 	// element gets added at height 1
@@ -2061,9 +1913,9 @@ func TestMultipleReorg(t *testing.T) {
 
 	{
 		// addr2 should have all the SC
-		checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
-		checkBalance(addr2, giftSC, types.ZeroCurrency, giftSF)
-		checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
+		testutil.CheckBalance(t, db, addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+		testutil.CheckBalance(t, db, addr2, giftSC, types.ZeroCurrency, giftSF)
+		testutil.CheckBalance(t, db, addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
 
 		scUtxos1, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
 		if err != nil {
@@ -2143,9 +1995,9 @@ func TestMultipleReorg(t *testing.T) {
 
 	{
 		// addr3 should have all the SC
-		checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
-		checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
-		checkBalance(addr3, giftSC, types.ZeroCurrency, giftSF)
+		testutil.CheckBalance(t, db, addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+		testutil.CheckBalance(t, db, addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
+		testutil.CheckBalance(t, db, addr3, giftSC, types.ZeroCurrency, giftSF)
 
 		scUtxos1, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
 		if err != nil {
@@ -2208,9 +2060,9 @@ func TestMultipleReorg(t *testing.T) {
 		// we should be back in state before block 12 (addr2 has all the SC
 		// instead of addr3)
 		{
-			checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
-			checkBalance(addr2, giftSC, types.ZeroCurrency, giftSF)
-			checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
+			testutil.CheckBalance(t, db, addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+			testutil.CheckBalance(t, db, addr2, giftSC, types.ZeroCurrency, giftSF)
+			testutil.CheckBalance(t, db, addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
 
 			scUtxos1, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
 			if err != nil {
@@ -2274,9 +2126,9 @@ func TestMultipleReorg(t *testing.T) {
 		// we should be back in state before the reverts (addr3 has all the SC
 		// instead of addr2)
 		{
-			checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
-			checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
-			checkBalance(addr3, giftSC, types.ZeroCurrency, giftSF)
+			testutil.CheckBalance(t, db, addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+			testutil.CheckBalance(t, db, addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
+			testutil.CheckBalance(t, db, addr3, giftSC, types.ZeroCurrency, giftSF)
 
 			scUtxos1, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
 			if err != nil {
@@ -2354,30 +2206,6 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	scOutputID := genesisBlock.Transactions[0].SiacoinOutputID(0)
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
 
-	checkFC := func(resolved, valid bool, expected types.FileContract, got explorer.FileContract) {
-		testutil.Equal(t, "resolved state", resolved, got.Resolved)
-		testutil.Equal(t, "valid state", valid, got.Valid)
-
-		gotFC := got.FileContract
-		testutil.Equal(t, "filesize", expected.Filesize, gotFC.Filesize)
-		testutil.Equal(t, "file merkle root", expected.FileMerkleRoot, gotFC.FileMerkleRoot)
-		testutil.Equal(t, "window start", expected.WindowStart, gotFC.WindowStart)
-		testutil.Equal(t, "window end", expected.WindowEnd, gotFC.WindowEnd)
-		testutil.Equal(t, "payout", expected.Payout, gotFC.Payout)
-		testutil.Equal(t, "unlock hash", expected.UnlockHash, gotFC.UnlockHash)
-		testutil.Equal(t, "revision number", expected.RevisionNumber, gotFC.RevisionNumber)
-		testutil.Equal(t, "valid proof outputs", len(expected.ValidProofOutputs), len(gotFC.ValidProofOutputs))
-		for i := range expected.ValidProofOutputs {
-			testutil.Equal(t, "valid proof output address", expected.ValidProofOutputs[i].Address, gotFC.ValidProofOutputs[i].Address)
-			testutil.Equal(t, "valid proof output value", expected.ValidProofOutputs[i].Value, gotFC.ValidProofOutputs[i].Value)
-		}
-		testutil.Equal(t, "missed proof outputs", len(expected.MissedProofOutputs), len(gotFC.MissedProofOutputs))
-		for i := range expected.MissedProofOutputs {
-			testutil.Equal(t, "missed proof output address", expected.MissedProofOutputs[i].Address, gotFC.MissedProofOutputs[i].Address)
-			testutil.Equal(t, "missed proof output value", expected.MissedProofOutputs[i].Value, gotFC.MissedProofOutputs[i].Value)
-		}
-	}
-
 	windowStart := cm.Tip().Height + 10
 	windowEnd := windowStart + 10
 	fc := prepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), windowStart, windowEnd, types.VoidAddress)
@@ -2412,7 +2240,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			t.Fatal(err)
 		}
 		testutil.Equal(t, "fcs", 1, len(dbFCs))
-		checkFC(false, false, fc, dbFCs[0])
+		testutil.CheckFC(t, false, false, false, fc, dbFCs[0])
 
 		testutil.Equal(t, "confirmation index", cm.Tip(), *dbFCs[0].ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
@@ -2433,7 +2261,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		}
 		testutil.Equal(t, "transactions", 1, len(txns))
 		testutil.Equal(t, "file contracts", 1, len(txns[0].FileContracts))
-		checkFC(false, false, fc, txns[0].FileContracts[0])
+		testutil.CheckFC(t, false, false, false, fc, txns[0].FileContracts[0])
 	}
 
 	uc := types.UnlockConditions{
@@ -2477,7 +2305,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			t.Fatal(err)
 		}
 		testutil.Equal(t, "fcs", 1, len(dbFCs))
-		checkFC(false, false, revFC, dbFCs[0])
+		testutil.CheckFC(t, false, false, false, revFC, dbFCs[0])
 
 		testutil.Equal(t, "confirmation index", prevState1.Index, *dbFCs[0].ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
@@ -2495,7 +2323,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		testutil.Equal(t, "parent id", txn.FileContractID(0), fcr.ParentID)
 		testutil.Equal(t, "unlock conditions", uc, fcr.UnlockConditions)
 
-		checkFC(false, false, revFC, fcr.FileContract)
+		testutil.CheckFC(t, false, false, false, revFC, fcr.FileContract)
 	}
 
 	{
@@ -2517,8 +2345,8 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		}
 		testutil.Equal(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
 		testutil.Equal(t, "len(contracts)", 1, len(renterContracts))
-		checkFC(false, false, revFC, renterContracts[0])
-		checkFC(false, false, revFC, hostContracts[0])
+		testutil.CheckFC(t, false, false, false, revFC, renterContracts[0])
+		testutil.CheckFC(t, false, false, false, revFC, hostContracts[0])
 	}
 
 	extra := cm.Tip().Height - prevState1.Index.Height + 1
@@ -2548,7 +2376,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 				t.Fatal(err)
 			}
 			testutil.Equal(t, "fcs", 1, len(dbFCs))
-			checkFC(false, false, fc, dbFCs[0])
+			testutil.CheckFC(t, false, false, false, fc, dbFCs[0])
 
 			testutil.Equal(t, "confirmation index", prevState1.Index, *dbFCs[0].ConfirmationIndex)
 			testutil.Equal(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
@@ -2598,7 +2426,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 				t.Fatal(err)
 			}
 			testutil.Equal(t, "fcs", 1, len(dbFCs))
-			checkFC(false, false, revFC, dbFCs[0])
+			testutil.CheckFC(t, false, false, false, revFC, dbFCs[0])
 
 			testutil.Equal(t, "confirmation index", prevState1.Index, *dbFCs[0].ConfirmationIndex)
 			testutil.Equal(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
