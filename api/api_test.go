@@ -110,11 +110,11 @@ func TestAPI(t *testing.T) {
 
 	network, genesisBlock := testutil.TestV1Network(addr1, giftSC, giftSF)
 
-	e, cm, close, err := newExplorer(t, network, genesisBlock)
+	e, cm, closer, err := newExplorer(t, network, genesisBlock)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer close()
+	defer closer()
 
 	listenAddr := "127.0.0.1:9999"
 	server, listener, err := newServer(t, cm, e, listenAddr)

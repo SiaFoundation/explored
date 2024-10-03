@@ -9,7 +9,7 @@ import (
 	"go.sia.tech/explored/explorer"
 )
 
-// Check checks if two values of the same type are equal and fails otherwise.
+// Equal checks if two values of the same type are equal and fails otherwise.
 func Equal[T any](t *testing.T, desc string, expect, got T) {
 	t.Helper()
 
