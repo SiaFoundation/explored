@@ -99,8 +99,8 @@ func TestAPI(t *testing.T) {
 	hostPublicKey := hostPrivateKey.PublicKey()
 
 	giftSC := types.Siacoins(1000)
-	giftSF := 1000
-	contractFilesize := 10
+	giftSF := uint64(1000)
+	contractFilesize := uint64(10)
 
 	genesisBlock, bdb, cm, db, e, err := newExplorer(t, addr1, giftSC, giftSF)
 	if err != nil {
@@ -192,7 +192,7 @@ func TestAPI(t *testing.T) {
 	}
 
 	// Ensure explorer has time to add blocks
-	time.Sleep(3 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	client := api.NewClient("http://"+listenAddr+"/api", "")
 
