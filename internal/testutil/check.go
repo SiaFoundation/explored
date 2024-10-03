@@ -114,7 +114,6 @@ func CheckFC(t *testing.T, revision, resolved, valid bool, expected types.FileCo
 	Check(t, "file merkle root", expected.FileMerkleRoot, gotFC.FileMerkleRoot)
 	Check(t, "window start", expected.WindowStart, gotFC.WindowStart)
 	Check(t, "window end", expected.WindowEnd, gotFC.WindowEnd)
-	// Check(t, "payout", expected.Payout, gotFC.Payout)
 	if !revision {
 		Check(t, "payout", expected.Payout, gotFC.Payout)
 	}
