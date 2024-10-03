@@ -306,9 +306,10 @@ func TestAPI(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			cs := cm.TipState()
 			testutil.Check(t, "index", tip, resp.Index)
-			// check(t, "difficulty", cs.Difficulty, resp.Difficulty)
-			// check(t, "siafund pool", cs.SiafundPool, resp.SiafundPool)
+			testutil.Check(t, "difficulty", cs.Difficulty, resp.Difficulty)
+			testutil.Check(t, "siafund pool", cs.SiafundPool, resp.SiafundPool)
 			testutil.Check(t, "total hosts", 0, resp.TotalHosts)
 			testutil.Check(t, "active contracts", 1, resp.ActiveContracts)
 			testutil.Check(t, "failed contracts", 0, resp.FailedContracts)
