@@ -124,7 +124,7 @@ func TestScan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testutil.Check(t, "len(dbHosts)", 2, len(dbHosts))
+	testutil.Equal(t, "len(dbHosts)", 2, len(dbHosts))
 
 	sort.Slice(hosts, func(i, j int) bool {
 		return hosts[i].NetAddress < hosts[j].NetAddress
@@ -133,18 +133,18 @@ func TestScan(t *testing.T) {
 		return dbHosts[i].NetAddress < dbHosts[j].NetAddress
 	})
 	host1 := dbHosts[0]
-	testutil.Check(t, "host1.NetAddress", hosts[0].NetAddress, host1.NetAddress)
-	testutil.Check(t, "host1.PublicKey", hosts[0].PublicKey, host1.PublicKey)
-	testutil.Check(t, "host1.TotalScans", 1, host1.TotalScans)
-	testutil.Check(t, "host1.SuccessfulInteractions", 0, host1.SuccessfulInteractions)
-	testutil.Check(t, "host1.FailedInteractions", 1, host1.FailedInteractions)
-	testutil.Check(t, "host1.LastScanSuccessful", false, host1.LastScanSuccessful)
+	testutil.Equal(t, "host1.NetAddress", hosts[0].NetAddress, host1.NetAddress)
+	testutil.Equal(t, "host1.PublicKey", hosts[0].PublicKey, host1.PublicKey)
+	testutil.Equal(t, "host1.TotalScans", 1, host1.TotalScans)
+	testutil.Equal(t, "host1.SuccessfulInteractions", 0, host1.SuccessfulInteractions)
+	testutil.Equal(t, "host1.FailedInteractions", 1, host1.FailedInteractions)
+	testutil.Equal(t, "host1.LastScanSuccessful", false, host1.LastScanSuccessful)
 
 	host2 := dbHosts[1]
-	testutil.Check(t, "host2.NetAddress", hosts[1].NetAddress, host2.NetAddress)
-	testutil.Check(t, "host2.PublicKey", hosts[1].PublicKey, host2.PublicKey)
-	testutil.Check(t, "host2.TotalScans", 1, host2.TotalScans)
-	testutil.Check(t, "host2.SuccessfulInteractions", 1, host2.SuccessfulInteractions)
-	testutil.Check(t, "host2.FailedInteractions", 0, host2.FailedInteractions)
-	testutil.Check(t, "host2.LastScanSuccessful", true, host2.LastScanSuccessful)
+	testutil.Equal(t, "host2.NetAddress", hosts[1].NetAddress, host2.NetAddress)
+	testutil.Equal(t, "host2.PublicKey", hosts[1].PublicKey, host2.PublicKey)
+	testutil.Equal(t, "host2.TotalScans", 1, host2.TotalScans)
+	testutil.Equal(t, "host2.SuccessfulInteractions", 1, host2.SuccessfulInteractions)
+	testutil.Equal(t, "host2.FailedInteractions", 0, host2.FailedInteractions)
+	testutil.Equal(t, "host2.LastScanSuccessful", true, host2.LastScanSuccessful)
 }

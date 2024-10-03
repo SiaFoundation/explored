@@ -74,9 +74,9 @@ func TestBalance(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "siacoins", expectSC, sc)
-		testutil.Check(t, "immature siacoins", expectImmatureSC, immatureSC)
-		testutil.Check(t, "siafunds", expectSF, sf)
+		testutil.Equal(t, "siacoins", expectSC, sc)
+		testutil.Equal(t, "immature siacoins", expectImmatureSC, immatureSC)
+		testutil.Equal(t, "siafunds", expectSF, sf)
 	}
 
 	// Generate three addresses: addr1, addr2, addr3
@@ -98,14 +98,14 @@ func TestBalance(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	// Check that addr1 has the miner payout output
+	// Equal that addr1 has the miner payout output
 	utxos, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
-	testutil.Check(t, "utxos", 1, len(utxos))
-	testutil.Check(t, "value", expectedPayout, utxos[0].SiacoinOutput.Value)
-	testutil.Check(t, "source", explorer.SourceMinerPayout, utxos[0].Source)
+	testutil.Equal(t, "utxos", 1, len(utxos))
+	testutil.Equal(t, "value", expectedPayout, utxos[0].SiacoinOutput.Value)
+	testutil.Equal(t, "source", explorer.SourceMinerPayout, utxos[0].Source)
 
 	// Mine until the payout matures
 	for i := cm.Tip().Height; i < maturityHeight; i++ {
@@ -200,9 +200,9 @@ func TestSiafundBalance(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "siacoins", expectSC, sc)
-		testutil.Check(t, "immature siacoins", expectImmatureSC, immatureSC)
-		testutil.Check(t, "siafunds", expectSF, sf)
+		testutil.Equal(t, "siacoins", expectSC, sc)
+		testutil.Equal(t, "immature siacoins", expectImmatureSC, immatureSC)
+		testutil.Equal(t, "siafunds", expectSF, sf)
 	}
 
 	// Send all of the payout except 100 SF to addr2
@@ -288,9 +288,9 @@ func TestSendTransactions(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "siacoins", expectSC, sc)
-		testutil.Check(t, "immature siacoins", expectImmatureSC, immatureSC)
-		testutil.Check(t, "siafunds", expectSF, sf)
+		testutil.Equal(t, "siacoins", expectSC, sc)
+		testutil.Equal(t, "immature siacoins", expectImmatureSC, immatureSC)
+		testutil.Equal(t, "siafunds", expectSF, sf)
 	}
 
 	checkChainIndices := func(t *testing.T, txnID types.TransactionID, expected []types.ChainIndex) {
@@ -302,7 +302,7 @@ func TestSendTransactions(t *testing.T) {
 			t.Fatalf("expected %d indices, got %d", len(expected), len(indices))
 		}
 		for i := range indices {
-			testutil.Check(t, "index", expected[i], indices[i])
+			testutil.Equal(t, "index", expected[i], indices[i])
 		}
 	}
 
@@ -329,14 +329,14 @@ func TestSendTransactions(t *testing.T) {
 
 	const n = 100
 
-	// Check that addr1 has the miner payout output
+	// Equal that addr1 has the miner payout output
 	utxos, err := db.UnspentSiacoinOutputs(addr1, 0, n)
 	if err != nil {
 		t.Fatal(err)
 	}
-	testutil.Check(t, "utxos", 1, len(utxos))
-	testutil.Check(t, "value", expectedPayout, utxos[0].SiacoinOutput.Value)
-	testutil.Check(t, "source", explorer.SourceMinerPayout, utxos[0].Source)
+	testutil.Equal(t, "utxos", 1, len(utxos))
+	testutil.Equal(t, "value", expectedPayout, utxos[0].SiacoinOutput.Value)
+	testutil.Equal(t, "source", explorer.SourceMinerPayout, utxos[0].Source)
 
 	sfOutputID := genesisBlock.Transactions[0].SiafundOutputID(0)
 	scOutputID := utxos[0].ID
@@ -382,7 +382,7 @@ func TestSendTransactions(t *testing.T) {
 		}
 		syncDB(t, db, cm)
 
-		testutil.CheckMetrics(t, db, cm, explorer.Metrics{})
+		testutil.EqualMetrics(t, db, cm, explorer.Metrics{})
 
 		checkBalance(addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
 		checkBalance(addr2, types.Siacoins(1).Mul64(uint64(i+1)), types.ZeroCurrency, 1*uint64(i+1))
@@ -394,29 +394,29 @@ func TestSendTransactions(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "transactions", len(b.Transactions), len(block.Transactions))
-		testutil.Check(t, "miner payouts", len(b.MinerPayouts), len(block.MinerPayouts))
-		testutil.Check(t, "nonce", b.Nonce, block.Nonce)
-		testutil.Check(t, "timestamp", b.Timestamp, block.Timestamp)
+		testutil.Equal(t, "transactions", len(b.Transactions), len(block.Transactions))
+		testutil.Equal(t, "miner payouts", len(b.MinerPayouts), len(block.MinerPayouts))
+		testutil.Equal(t, "nonce", b.Nonce, block.Nonce)
+		testutil.Equal(t, "timestamp", b.Timestamp, block.Timestamp)
 
 		// Ensure the miner payouts in the block match
 		for i := range b.MinerPayouts {
-			testutil.Check(t, "address", b.MinerPayouts[i].Address, b.MinerPayouts[i].Address)
-			testutil.Check(t, "value", b.MinerPayouts[i].Value, b.MinerPayouts[i].Value)
+			testutil.Equal(t, "address", b.MinerPayouts[i].Address, b.MinerPayouts[i].Address)
+			testutil.Equal(t, "value", b.MinerPayouts[i].Value, b.MinerPayouts[i].Value)
 		}
 
 		// Ensure the transactions in the block and retrieved separately match
 		// with the actual transactions
 		for i := range b.Transactions {
-			testutil.CheckTransaction(t, b.Transactions[i], block.Transactions[i])
+			testutil.EqualTransaction(t, b.Transactions[i], block.Transactions[i])
 			checkChainIndices(t, b.Transactions[i].ID(), []types.ChainIndex{cm.Tip()})
 
 			txns, err := db.Transactions([]types.TransactionID{b.Transactions[i].ID()})
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "transactions", 1, len(txns))
-			testutil.CheckTransaction(t, b.Transactions[i], txns[0])
+			testutil.Equal(t, "transactions", 1, len(txns))
+			testutil.EqualTransaction(t, b.Transactions[i], txns[0])
 		}
 
 		type expectedUTXOs struct {
@@ -443,17 +443,17 @@ func TestSendTransactions(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			testutil.Check(t, "sc utxos", e.sc, len(sc))
-			testutil.Check(t, "sf utxos", e.sf, len(sf))
+			testutil.Equal(t, "sc utxos", e.sc, len(sc))
+			testutil.Equal(t, "sf utxos", e.sf, len(sf))
 
 			for _, sco := range sc {
-				testutil.Check(t, "address", e.addr, sco.SiacoinOutput.Address)
-				testutil.Check(t, "value", e.scValue, sco.SiacoinOutput.Value)
-				testutil.Check(t, "source", explorer.SourceTransaction, sco.Source)
+				testutil.Equal(t, "address", e.addr, sco.SiacoinOutput.Address)
+				testutil.Equal(t, "value", e.scValue, sco.SiacoinOutput.Value)
+				testutil.Equal(t, "source", explorer.SourceTransaction, sco.Source)
 			}
 			for _, sfo := range sf {
-				testutil.Check(t, "address", e.addr, sfo.SiafundOutput.Address)
-				testutil.Check(t, "value", e.sfValue, sfo.SiafundOutput.Value)
+				testutil.Equal(t, "address", e.addr, sfo.SiafundOutput.Address)
+				testutil.Equal(t, "value", e.sfValue, sfo.SiafundOutput.Value)
 			}
 		}
 	}
@@ -494,7 +494,7 @@ func TestTip(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "tip", cm.Tip(), tip)
+		testutil.Equal(t, "tip", cm.Tip(), tip)
 	}
 
 	for i := 0; i < n; i++ {
@@ -597,26 +597,26 @@ func TestFileContract(t *testing.T) {
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
 
 	checkFC := func(resolved, valid bool, expected types.FileContract, got explorer.FileContract) {
-		testutil.Check(t, "resolved state", resolved, got.Resolved)
-		testutil.Check(t, "valid state", valid, got.Valid)
+		testutil.Equal(t, "resolved state", resolved, got.Resolved)
+		testutil.Equal(t, "valid state", valid, got.Valid)
 
 		gotFC := got.FileContract
-		testutil.Check(t, "filesize", expected.Filesize, gotFC.Filesize)
-		testutil.Check(t, "file merkle root", expected.FileMerkleRoot, gotFC.FileMerkleRoot)
-		testutil.Check(t, "window start", expected.WindowStart, gotFC.WindowStart)
-		testutil.Check(t, "window end", expected.WindowEnd, gotFC.WindowEnd)
-		testutil.Check(t, "payout", expected.Payout, gotFC.Payout)
-		testutil.Check(t, "unlock hash", expected.UnlockHash, gotFC.UnlockHash)
-		testutil.Check(t, "revision number", expected.RevisionNumber, gotFC.RevisionNumber)
-		testutil.Check(t, "valid proof outputs", len(expected.ValidProofOutputs), len(gotFC.ValidProofOutputs))
+		testutil.Equal(t, "filesize", expected.Filesize, gotFC.Filesize)
+		testutil.Equal(t, "file merkle root", expected.FileMerkleRoot, gotFC.FileMerkleRoot)
+		testutil.Equal(t, "window start", expected.WindowStart, gotFC.WindowStart)
+		testutil.Equal(t, "window end", expected.WindowEnd, gotFC.WindowEnd)
+		testutil.Equal(t, "payout", expected.Payout, gotFC.Payout)
+		testutil.Equal(t, "unlock hash", expected.UnlockHash, gotFC.UnlockHash)
+		testutil.Equal(t, "revision number", expected.RevisionNumber, gotFC.RevisionNumber)
+		testutil.Equal(t, "valid proof outputs", len(expected.ValidProofOutputs), len(gotFC.ValidProofOutputs))
 		for i := range expected.ValidProofOutputs {
-			testutil.Check(t, "valid proof output address", expected.ValidProofOutputs[i].Address, gotFC.ValidProofOutputs[i].Address)
-			testutil.Check(t, "valid proof output value", expected.ValidProofOutputs[i].Value, gotFC.ValidProofOutputs[i].Value)
+			testutil.Equal(t, "valid proof output address", expected.ValidProofOutputs[i].Address, gotFC.ValidProofOutputs[i].Address)
+			testutil.Equal(t, "valid proof output value", expected.ValidProofOutputs[i].Value, gotFC.ValidProofOutputs[i].Value)
 		}
-		testutil.Check(t, "missed proof outputs", len(expected.MissedProofOutputs), len(gotFC.MissedProofOutputs))
+		testutil.Equal(t, "missed proof outputs", len(expected.MissedProofOutputs), len(gotFC.MissedProofOutputs))
 		for i := range expected.MissedProofOutputs {
-			testutil.Check(t, "missed proof output address", expected.MissedProofOutputs[i].Address, gotFC.MissedProofOutputs[i].Address)
-			testutil.Check(t, "missed proof output value", expected.MissedProofOutputs[i].Value, gotFC.MissedProofOutputs[i].Value)
+			testutil.Equal(t, "missed proof output address", expected.MissedProofOutputs[i].Address, gotFC.MissedProofOutputs[i].Address)
+			testutil.Equal(t, "missed proof output value", expected.MissedProofOutputs[i].Value, gotFC.MissedProofOutputs[i].Value)
 		}
 	}
 
@@ -647,10 +647,10 @@ func TestFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "fcs", 1, len(dbFCs))
+		testutil.Equal(t, "fcs", 1, len(dbFCs))
 		checkFC(false, false, fc, dbFCs[0])
-		testutil.Check(t, "confirmation index", cm.Tip(), *dbFCs[0].ConfirmationIndex)
-		testutil.Check(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
+		testutil.Equal(t, "confirmation index", cm.Tip(), *dbFCs[0].ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 	}
 
 	{
@@ -658,7 +658,7 @@ func TestFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.CheckFCRevisions(t, []uint64{0}, dbFCs)
+		testutil.EqualFCRevisions(t, []uint64{0}, dbFCs)
 	}
 
 	{
@@ -666,12 +666,12 @@ func TestFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "transactions", 1, len(txns))
-		testutil.Check(t, "file contracts", 1, len(txns[0].FileContracts))
+		testutil.Equal(t, "transactions", 1, len(txns))
+		testutil.Equal(t, "file contracts", 1, len(txns[0].FileContracts))
 		checkFC(false, false, fc, txns[0].FileContracts[0])
 
-		testutil.Check(t, "confirmation index", cm.Tip(), *txns[0].FileContracts[0].ConfirmationIndex)
-		testutil.Check(t, "confirmation transaction ID", txn.ID(), *txns[0].FileContracts[0].ConfirmationTransactionID)
+		testutil.Equal(t, "confirmation index", cm.Tip(), *txns[0].FileContracts[0].ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *txns[0].FileContracts[0].ConfirmationTransactionID)
 	}
 
 	uc := types.UnlockConditions{
@@ -706,18 +706,18 @@ func TestFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
-		testutil.Check(t, "len(contracts)", 1, len(renterContracts))
+		testutil.Equal(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
+		testutil.Equal(t, "len(contracts)", 1, len(renterContracts))
 		checkFC(false, false, fc, renterContracts[0])
 		checkFC(false, false, fc, hostContracts[0])
 
-		testutil.Check(t, "confirmation index", prevTip, *renterContracts[0].ConfirmationIndex)
-		testutil.Check(t, "confirmation transaction ID", txn.ID(), *renterContracts[0].ConfirmationTransactionID)
-		testutil.Check(t, "confirmation index", prevTip, *hostContracts[0].ConfirmationIndex)
-		testutil.Check(t, "confirmation transaction ID", txn.ID(), *hostContracts[0].ConfirmationTransactionID)
+		testutil.Equal(t, "confirmation index", prevTip, *renterContracts[0].ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *renterContracts[0].ConfirmationTransactionID)
+		testutil.Equal(t, "confirmation index", prevTip, *hostContracts[0].ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *hostContracts[0].ConfirmationTransactionID)
 	}
 
-	testutil.CheckMetrics(t, db, cm, explorer.Metrics{
+	testutil.EqualMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
 		StorageUtilization: contractFilesize,
@@ -729,7 +729,7 @@ func TestFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "fcs", 1, len(dbFCs))
+		testutil.Equal(t, "fcs", 1, len(dbFCs))
 		checkFC(false, false, fc, dbFCs[0])
 	}
 
@@ -738,7 +738,7 @@ func TestFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.CheckFCRevisions(t, []uint64{0, 1}, dbFCs)
+		testutil.EqualFCRevisions(t, []uint64{0, 1}, dbFCs)
 	}
 
 	{
@@ -746,21 +746,21 @@ func TestFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "transactions", 1, len(txns))
-		testutil.Check(t, "file contracts", 1, len(txns[0].FileContractRevisions))
+		testutil.Equal(t, "transactions", 1, len(txns))
+		testutil.Equal(t, "file contracts", 1, len(txns[0].FileContractRevisions))
 
 		fcr := txns[0].FileContractRevisions[0]
-		testutil.Check(t, "parent id", txn.FileContractID(0), fcr.ParentID)
-		testutil.Check(t, "unlock conditions", uc, fcr.UnlockConditions)
+		testutil.Equal(t, "parent id", txn.FileContractID(0), fcr.ParentID)
+		testutil.Equal(t, "unlock conditions", uc, fcr.UnlockConditions)
 
-		testutil.Check(t, "confirmation index", prevTip, *fcr.ConfirmationIndex)
-		testutil.Check(t, "confirmation transaction ID", txn.ID(), *fcr.ConfirmationTransactionID)
+		testutil.Equal(t, "confirmation index", prevTip, *fcr.ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *fcr.ConfirmationTransactionID)
 
 		checkFC(false, false, fc, fcr.FileContract)
 	}
 
 	for i := cm.Tip().Height; i < windowEnd; i++ {
-		testutil.CheckMetrics(t, db, cm, explorer.Metrics{
+		testutil.EqualMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    1,
 			StorageUtilization: 1 * contractFilesize,
@@ -772,7 +772,7 @@ func TestFileContract(t *testing.T) {
 		syncDB(t, db, cm)
 	}
 
-	testutil.CheckMetrics(t, db, cm, explorer.Metrics{
+	testutil.EqualMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:          0,
 		ActiveContracts:     0,
 		FailedContracts:     1,
@@ -785,11 +785,11 @@ func TestFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "fcs", 1, len(dbFCs))
+		testutil.Equal(t, "fcs", 1, len(dbFCs))
 		checkFC(true, false, fc, dbFCs[0])
 
-		testutil.Check(t, "confirmation index", prevTip, *dbFCs[0].ConfirmationIndex)
-		testutil.Check(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
+		testutil.Equal(t, "confirmation index", prevTip, *dbFCs[0].ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 	}
 
 	for i := 0; i < 100; i++ {
@@ -808,18 +808,18 @@ func TestFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
-		testutil.Check(t, "len(contracts)", 1, len(renterContracts))
+		testutil.Equal(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
+		testutil.Equal(t, "len(contracts)", 1, len(renterContracts))
 		checkFC(true, false, fc, renterContracts[0])
 		checkFC(true, false, fc, hostContracts[0])
 
-		testutil.Check(t, "confirmation index", prevTip, *renterContracts[0].ConfirmationIndex)
-		testutil.Check(t, "confirmation transaction ID", txn.ID(), *renterContracts[0].ConfirmationTransactionID)
-		testutil.Check(t, "confirmation index", prevTip, *hostContracts[0].ConfirmationIndex)
-		testutil.Check(t, "confirmation transaction ID", txn.ID(), *hostContracts[0].ConfirmationTransactionID)
+		testutil.Equal(t, "confirmation index", prevTip, *renterContracts[0].ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *renterContracts[0].ConfirmationTransactionID)
+		testutil.Equal(t, "confirmation index", prevTip, *hostContracts[0].ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *hostContracts[0].ConfirmationTransactionID)
 	}
 
-	testutil.CheckMetrics(t, db, cm, explorer.Metrics{
+	testutil.EqualMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:          0,
 		ActiveContracts:     0,
 		FailedContracts:     1,
@@ -866,34 +866,34 @@ func TestEphemeralFileContract(t *testing.T) {
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
 
 	checkFC := func(revision, resolved, valid bool, expected types.FileContract, got explorer.FileContract) {
-		testutil.Check(t, "resolved state", resolved, got.Resolved)
-		testutil.Check(t, "valid state", valid, got.Valid)
+		testutil.Equal(t, "resolved state", resolved, got.Resolved)
+		testutil.Equal(t, "valid state", valid, got.Valid)
 
 		gotFC := got.FileContract
-		testutil.Check(t, "filesize", expected.Filesize, gotFC.Filesize)
-		testutil.Check(t, "file merkle root", expected.FileMerkleRoot, gotFC.FileMerkleRoot)
-		testutil.Check(t, "window start", expected.WindowStart, gotFC.WindowStart)
-		testutil.Check(t, "window end", expected.WindowEnd, gotFC.WindowEnd)
+		testutil.Equal(t, "filesize", expected.Filesize, gotFC.Filesize)
+		testutil.Equal(t, "file merkle root", expected.FileMerkleRoot, gotFC.FileMerkleRoot)
+		testutil.Equal(t, "window start", expected.WindowStart, gotFC.WindowStart)
+		testutil.Equal(t, "window end", expected.WindowEnd, gotFC.WindowEnd)
 
 		// See core/types.FileContractRevision
 		// Essentially, a revision cannot change the total payout, so this value
 		// is replaced with a sentinel value of types.MaxCurrency in revisions
 		// if it is decoded.
 		if !revision {
-			testutil.Check(t, "payout", expected.Payout, gotFC.Payout)
+			testutil.Equal(t, "payout", expected.Payout, gotFC.Payout)
 		}
 
-		testutil.Check(t, "unlock hash", expected.UnlockHash, gotFC.UnlockHash)
-		testutil.Check(t, "revision number", expected.RevisionNumber, gotFC.RevisionNumber)
-		testutil.Check(t, "valid proof outputs", len(expected.ValidProofOutputs), len(gotFC.ValidProofOutputs))
+		testutil.Equal(t, "unlock hash", expected.UnlockHash, gotFC.UnlockHash)
+		testutil.Equal(t, "revision number", expected.RevisionNumber, gotFC.RevisionNumber)
+		testutil.Equal(t, "valid proof outputs", len(expected.ValidProofOutputs), len(gotFC.ValidProofOutputs))
 		for i := range expected.ValidProofOutputs {
-			testutil.Check(t, "valid proof output address", expected.ValidProofOutputs[i].Address, gotFC.ValidProofOutputs[i].Address)
-			testutil.Check(t, "valid proof output value", expected.ValidProofOutputs[i].Value, gotFC.ValidProofOutputs[i].Value)
+			testutil.Equal(t, "valid proof output address", expected.ValidProofOutputs[i].Address, gotFC.ValidProofOutputs[i].Address)
+			testutil.Equal(t, "valid proof output value", expected.ValidProofOutputs[i].Value, gotFC.ValidProofOutputs[i].Value)
 		}
-		testutil.Check(t, "missed proof outputs", len(expected.MissedProofOutputs), len(gotFC.MissedProofOutputs))
+		testutil.Equal(t, "missed proof outputs", len(expected.MissedProofOutputs), len(gotFC.MissedProofOutputs))
 		for i := range expected.MissedProofOutputs {
-			testutil.Check(t, "missed proof output address", expected.MissedProofOutputs[i].Address, gotFC.MissedProofOutputs[i].Address)
-			testutil.Check(t, "missed proof output value", expected.MissedProofOutputs[i].Value, gotFC.MissedProofOutputs[i].Value)
+			testutil.Equal(t, "missed proof output address", expected.MissedProofOutputs[i].Address, gotFC.MissedProofOutputs[i].Address)
+			testutil.Equal(t, "missed proof output value", expected.MissedProofOutputs[i].Value, gotFC.MissedProofOutputs[i].Value)
 		}
 	}
 
@@ -938,7 +938,7 @@ func TestEphemeralFileContract(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	testutil.CheckMetrics(t, db, cm, explorer.Metrics{
+	testutil.EqualMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
 		StorageUtilization: contractFilesize,
@@ -953,8 +953,8 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
-		testutil.Check(t, "len(contracts)", 1, len(renterContracts))
+		testutil.Equal(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
+		testutil.Equal(t, "len(contracts)", 1, len(renterContracts))
 		checkFC(true, false, false, revisedFC1, renterContracts[0])
 		checkFC(true, false, false, revisedFC1, hostContracts[0])
 	}
@@ -965,7 +965,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "fcs", 1, len(dbFCs))
+		testutil.Equal(t, "fcs", 1, len(dbFCs))
 		checkFC(true, false, false, revisedFC1, dbFCs[0])
 	}
 
@@ -974,7 +974,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.CheckFCRevisions(t, []uint64{0, 1}, dbFCs)
+		testutil.EqualFCRevisions(t, []uint64{0, 1}, dbFCs)
 	}
 
 	{
@@ -982,12 +982,12 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "transactions", 1, len(txns))
-		testutil.Check(t, "file contracts", 1, len(txns[0].FileContracts))
+		testutil.Equal(t, "transactions", 1, len(txns))
+		testutil.Equal(t, "file contracts", 1, len(txns[0].FileContracts))
 		checkFC(true, false, false, fc, txns[0].FileContracts[0])
 
-		testutil.Check(t, "confirmation index", cm.Tip(), *txns[0].FileContracts[0].ConfirmationIndex)
-		testutil.Check(t, "confirmation transaction ID", txn.ID(), *txns[0].FileContracts[0].ConfirmationTransactionID)
+		testutil.Equal(t, "confirmation index", cm.Tip(), *txns[0].FileContracts[0].ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *txns[0].FileContracts[0].ConfirmationTransactionID)
 	}
 
 	{
@@ -995,12 +995,12 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "transactions", 1, len(txns))
-		testutil.Check(t, "file contracts", 1, len(txns[0].FileContractRevisions))
+		testutil.Equal(t, "transactions", 1, len(txns))
+		testutil.Equal(t, "file contracts", 1, len(txns[0].FileContractRevisions))
 
 		fcr := txns[0].FileContractRevisions[0]
-		testutil.Check(t, "parent id", txn.FileContractID(0), fcr.ParentID)
-		testutil.Check(t, "unlock conditions", uc, fcr.UnlockConditions)
+		testutil.Equal(t, "parent id", txn.FileContractID(0), fcr.ParentID)
+		testutil.Equal(t, "unlock conditions", uc, fcr.UnlockConditions)
 
 		checkFC(true, false, false, revisedFC1, fcr.FileContract)
 	}
@@ -1033,7 +1033,7 @@ func TestEphemeralFileContract(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	testutil.CheckMetrics(t, db, cm, explorer.Metrics{
+	testutil.EqualMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
 		StorageUtilization: contractFilesize,
@@ -1045,7 +1045,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "fcs", 1, len(dbFCs))
+		testutil.Equal(t, "fcs", 1, len(dbFCs))
 		checkFC(true, false, false, revisedFC3, dbFCs[0])
 	}
 
@@ -1054,7 +1054,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.CheckFCRevisions(t, []uint64{0, 1, 2, 3}, dbFCs)
+		testutil.EqualFCRevisions(t, []uint64{0, 1, 2, 3}, dbFCs)
 	}
 
 	{
@@ -1066,8 +1066,8 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
-		testutil.Check(t, "len(contracts)", 1, len(renterContracts))
+		testutil.Equal(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
+		testutil.Equal(t, "len(contracts)", 1, len(renterContracts))
 		checkFC(true, false, false, revisedFC3, renterContracts[0])
 		checkFC(true, false, false, revisedFC3, hostContracts[0])
 	}
@@ -1077,12 +1077,12 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "transactions", 1, len(txns))
-		testutil.Check(t, "file contracts", 1, len(txns[0].FileContractRevisions))
+		testutil.Equal(t, "transactions", 1, len(txns))
+		testutil.Equal(t, "file contracts", 1, len(txns[0].FileContractRevisions))
 
 		fcr := txns[0].FileContractRevisions[0]
-		testutil.Check(t, "parent id", txn.FileContractID(0), fcr.ParentID)
-		testutil.Check(t, "unlock conditions", uc, fcr.UnlockConditions)
+		testutil.Equal(t, "parent id", txn.FileContractID(0), fcr.ParentID)
+		testutil.Equal(t, "unlock conditions", uc, fcr.UnlockConditions)
 		checkFC(true, false, false, revisedFC2, fcr.FileContract)
 	}
 
@@ -1091,12 +1091,12 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "transactions", 1, len(txns))
-		testutil.Check(t, "file contracts", 1, len(txns[0].FileContractRevisions))
+		testutil.Equal(t, "transactions", 1, len(txns))
+		testutil.Equal(t, "file contracts", 1, len(txns[0].FileContractRevisions))
 
 		fcr := txns[0].FileContractRevisions[0]
-		testutil.Check(t, "parent id", txn.FileContractID(0), fcr.ParentID)
-		testutil.Check(t, "unlock conditions", uc, fcr.UnlockConditions)
+		testutil.Equal(t, "parent id", txn.FileContractID(0), fcr.ParentID)
+		testutil.Equal(t, "unlock conditions", uc, fcr.UnlockConditions)
 		checkFC(true, false, false, revisedFC3, fcr.FileContract)
 	}
 }
@@ -1142,10 +1142,10 @@ func TestRevertTip(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "tip", cm.Tip(), tip)
+		testutil.Equal(t, "tip", cm.Tip(), tip)
 	}
 
-	testutil.CheckMetrics(t, db, cm, explorer.Metrics{
+	testutil.EqualMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -1169,10 +1169,10 @@ func TestRevertTip(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "tip", cm.Tip(), tip)
+		testutil.Equal(t, "tip", cm.Tip(), tip)
 	}
 
-	testutil.CheckMetrics(t, db, cm, explorer.Metrics{
+	testutil.EqualMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -1219,9 +1219,9 @@ func TestRevertBalance(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "siacoins", expectSC, sc)
-		testutil.Check(t, "immature siacoins", expectImmatureSC, immatureSC)
-		testutil.Check(t, "siafunds", expectSF, sf)
+		testutil.Equal(t, "siacoins", expectSC, sc)
+		testutil.Equal(t, "immature siacoins", expectImmatureSC, immatureSC)
+		testutil.Equal(t, "siafunds", expectSF, sf)
 	}
 
 	// Generate three addresses: addr1, addr2, addr3
@@ -1247,14 +1247,14 @@ func TestRevertBalance(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	// Check that addr1 has the miner payout output
+	// Equal that addr1 has the miner payout output
 	utxos, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
-	testutil.Check(t, "utxos", 1, len(utxos))
-	testutil.Check(t, "value", expectedPayout, utxos[0].SiacoinOutput.Value)
-	testutil.Check(t, "source", explorer.SourceMinerPayout, utxos[0].Source)
+	testutil.Equal(t, "utxos", 1, len(utxos))
+	testutil.Equal(t, "value", expectedPayout, utxos[0].SiacoinOutput.Value)
+	testutil.Equal(t, "source", explorer.SourceMinerPayout, utxos[0].Source)
 
 	{
 		// Mine to trigger a reorg
@@ -1281,7 +1281,7 @@ func TestRevertBalance(t *testing.T) {
 		}
 		syncDB(t, db, cm)
 
-		testutil.CheckMetrics(t, db, cm, explorer.Metrics{
+		testutil.EqualMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    0,
 			StorageUtilization: 0,
@@ -1294,16 +1294,16 @@ func TestRevertBalance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testutil.Check(t, "addr1 utxos", 0, len(utxos1))
+	testutil.Equal(t, "addr1 utxos", 0, len(utxos1))
 
 	utxos2, err := db.UnspentSiacoinOutputs(addr2, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
-	testutil.Check(t, "addr2 utxos", 2, len(utxos2))
+	testutil.Equal(t, "addr2 utxos", 2, len(utxos2))
 	for _, utxo := range utxos2 {
-		testutil.Check(t, "value", expectedPayout, utxo.SiacoinOutput.Value)
-		testutil.Check(t, "source", explorer.SourceMinerPayout, utxo.Source)
+		testutil.Equal(t, "value", expectedPayout, utxo.SiacoinOutput.Value)
+		testutil.Equal(t, "source", explorer.SourceMinerPayout, utxo.Source)
 	}
 
 	// Send all of the payout except 100 SC to addr3
@@ -1349,11 +1349,11 @@ func TestRevertBalance(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "spent_index", *b.Transactions[0].SiacoinOutputs[0].SpentIndex, cm.Tip())
-		testutil.Check(t, "spent_index", b.Transactions[1].SiacoinOutputs[0].SpentIndex, (*types.ChainIndex)(nil))
+		testutil.Equal(t, "spent_index", *b.Transactions[0].SiacoinOutputs[0].SpentIndex, cm.Tip())
+		testutil.Equal(t, "spent_index", b.Transactions[1].SiacoinOutputs[0].SpentIndex, (*types.ChainIndex)(nil))
 	}
 
-	testutil.CheckMetrics(t, db, cm, explorer.Metrics{
+	testutil.EqualMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -1396,27 +1396,27 @@ func TestRevertBalance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testutil.Check(t, "addr1 utxos", 1, len(utxos1))
+	testutil.Equal(t, "addr1 utxos", 1, len(utxos1))
 	for _, utxo := range utxos1 {
-		testutil.Check(t, "value", expectedPayout, utxo.SiacoinOutput.Value)
-		testutil.Check(t, "source", explorer.SourceMinerPayout, utxo.Source)
+		testutil.Equal(t, "value", expectedPayout, utxo.SiacoinOutput.Value)
+		testutil.Equal(t, "source", explorer.SourceMinerPayout, utxo.Source)
 	}
 
 	utxos2, err = db.UnspentSiacoinOutputs(addr2, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
-	testutil.Check(t, "addr2 utxos", 1, len(utxos2))
+	testutil.Equal(t, "addr2 utxos", 1, len(utxos2))
 	for _, utxo := range utxos2 {
-		testutil.Check(t, "value", expectedPayout, utxo.SiacoinOutput.Value)
-		testutil.Check(t, "source", explorer.SourceMinerPayout, utxo.Source)
+		testutil.Equal(t, "value", expectedPayout, utxo.SiacoinOutput.Value)
+		testutil.Equal(t, "source", explorer.SourceMinerPayout, utxo.Source)
 	}
 
 	utxos3, err := db.UnspentSiacoinOutputs(addr3, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
-	testutil.Check(t, "addr3 utxos", 0, len(utxos3))
+	testutil.Equal(t, "addr3 utxos", 0, len(utxos3))
 }
 
 func TestRevertSendTransactions(t *testing.T) {
@@ -1464,9 +1464,9 @@ func TestRevertSendTransactions(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "siacoins", expectSC, sc)
-		testutil.Check(t, "immature siacoins", expectImmatureSC, immatureSC)
-		testutil.Check(t, "siafunds", expectSF, sf)
+		testutil.Equal(t, "siacoins", expectSC, sc)
+		testutil.Equal(t, "immature siacoins", expectImmatureSC, immatureSC)
+		testutil.Equal(t, "siafunds", expectSF, sf)
 	}
 
 	checkChainIndices := func(t *testing.T, txnID types.TransactionID, expected []types.ChainIndex) {
@@ -1478,7 +1478,7 @@ func TestRevertSendTransactions(t *testing.T) {
 			t.Fatalf("expected %d indices, got %d", len(expected), len(indices))
 		}
 		for i := range indices {
-			testutil.Check(t, "index", expected[i], indices[i])
+			testutil.Equal(t, "index", expected[i], indices[i])
 		}
 	}
 
@@ -1510,14 +1510,14 @@ func TestRevertSendTransactions(t *testing.T) {
 
 	const n = 26
 
-	// Check that addr1 has the miner payout output
+	// Equal that addr1 has the miner payout output
 	utxos, err := db.UnspentSiacoinOutputs(addr1, 0, n)
 	if err != nil {
 		t.Fatal(err)
 	}
-	testutil.Check(t, "utxos", 1, len(utxos))
-	testutil.Check(t, "value", expectedPayout, utxos[0].SiacoinOutput.Value)
-	testutil.Check(t, "source", explorer.SourceMinerPayout, utxos[0].Source)
+	testutil.Equal(t, "utxos", 1, len(utxos))
+	testutil.Equal(t, "value", expectedPayout, utxos[0].SiacoinOutput.Value)
+	testutil.Equal(t, "source", explorer.SourceMinerPayout, utxos[0].Source)
 
 	sfOutputID := genesisBlock.Transactions[0].SiafundOutputID(0)
 	scOutputID := utxos[0].ID
@@ -1564,7 +1564,7 @@ func TestRevertSendTransactions(t *testing.T) {
 		blocks = append(blocks, b)
 		syncDB(t, db, cm)
 
-		testutil.CheckMetrics(t, db, cm, explorer.Metrics{
+		testutil.EqualMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    0,
 			StorageUtilization: 0,
@@ -1580,29 +1580,29 @@ func TestRevertSendTransactions(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "transactions", len(b.Transactions), len(block.Transactions))
-		testutil.Check(t, "miner payouts", len(b.MinerPayouts), len(block.MinerPayouts))
-		testutil.Check(t, "nonce", b.Nonce, block.Nonce)
-		testutil.Check(t, "timestamp", b.Timestamp, block.Timestamp)
+		testutil.Equal(t, "transactions", len(b.Transactions), len(block.Transactions))
+		testutil.Equal(t, "miner payouts", len(b.MinerPayouts), len(block.MinerPayouts))
+		testutil.Equal(t, "nonce", b.Nonce, block.Nonce)
+		testutil.Equal(t, "timestamp", b.Timestamp, block.Timestamp)
 
 		// Ensure the miner payouts in the block match
 		for i := range b.MinerPayouts {
-			testutil.Check(t, "address", b.MinerPayouts[i].Address, b.MinerPayouts[i].Address)
-			testutil.Check(t, "value", b.MinerPayouts[i].Value, b.MinerPayouts[i].Value)
+			testutil.Equal(t, "address", b.MinerPayouts[i].Address, b.MinerPayouts[i].Address)
+			testutil.Equal(t, "value", b.MinerPayouts[i].Value, b.MinerPayouts[i].Value)
 		}
 
 		// Ensure the transactions in the block and retrieved separately match
 		// with the actual transactions
 		for i := range b.Transactions {
-			testutil.CheckTransaction(t, b.Transactions[i], block.Transactions[i])
+			testutil.EqualTransaction(t, b.Transactions[i], block.Transactions[i])
 			checkChainIndices(t, b.Transactions[i].ID(), []types.ChainIndex{cm.Tip()})
 
 			txns, err := db.Transactions([]types.TransactionID{b.Transactions[i].ID()})
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "transactions", 1, len(txns))
-			testutil.CheckTransaction(t, b.Transactions[i], txns[0])
+			testutil.Equal(t, "transactions", 1, len(txns))
+			testutil.EqualTransaction(t, b.Transactions[i], txns[0])
 		}
 
 		type expectedUTXOs struct {
@@ -1629,17 +1629,17 @@ func TestRevertSendTransactions(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			testutil.Check(t, "sc utxos", e.sc, len(sc))
-			testutil.Check(t, "sf utxos", e.sf, len(sf))
+			testutil.Equal(t, "sc utxos", e.sc, len(sc))
+			testutil.Equal(t, "sf utxos", e.sf, len(sf))
 
 			for _, sco := range sc {
-				testutil.Check(t, "address", e.addr, sco.SiacoinOutput.Address)
-				testutil.Check(t, "value", e.scValue, sco.SiacoinOutput.Value)
-				testutil.Check(t, "source", explorer.SourceTransaction, sco.Source)
+				testutil.Equal(t, "address", e.addr, sco.SiacoinOutput.Address)
+				testutil.Equal(t, "value", e.scValue, sco.SiacoinOutput.Value)
+				testutil.Equal(t, "source", explorer.SourceTransaction, sco.Source)
 			}
 			for _, sfo := range sf {
-				testutil.Check(t, "address", e.addr, sfo.SiafundOutput.Address)
-				testutil.Check(t, "value", e.sfValue, sfo.SiafundOutput.Value)
+				testutil.Equal(t, "address", e.addr, sfo.SiafundOutput.Address)
+				testutil.Equal(t, "value", e.sfValue, sfo.SiafundOutput.Value)
 			}
 		}
 	}
@@ -1675,67 +1675,67 @@ func TestRevertSendTransactions(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "addr1 sc utxos", 1, len(scUtxos1))
+		testutil.Equal(t, "addr1 sc utxos", 1, len(scUtxos1))
 		for _, sce := range scUtxos1 {
-			testutil.Check(t, "address", addr1, sce.SiacoinOutput.Address)
-			testutil.Check(t, "value", addr1SCs, sce.SiacoinOutput.Value)
-			testutil.Check(t, "source", explorer.SourceTransaction, sce.Source)
+			testutil.Equal(t, "address", addr1, sce.SiacoinOutput.Address)
+			testutil.Equal(t, "value", addr1SCs, sce.SiacoinOutput.Value)
+			testutil.Equal(t, "source", explorer.SourceTransaction, sce.Source)
 		}
 
 		scUtxos2, err := db.UnspentSiacoinOutputs(addr2, 0, n)
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "addr2 sc utxos", n-3, len(scUtxos2))
+		testutil.Equal(t, "addr2 sc utxos", n-3, len(scUtxos2))
 		for _, sce := range scUtxos2 {
-			testutil.Check(t, "address", addr2, sce.SiacoinOutput.Address)
-			testutil.Check(t, "value", types.Siacoins(1), sce.SiacoinOutput.Value)
-			testutil.Check(t, "source", explorer.SourceTransaction, sce.Source)
+			testutil.Equal(t, "address", addr2, sce.SiacoinOutput.Address)
+			testutil.Equal(t, "value", types.Siacoins(1), sce.SiacoinOutput.Value)
+			testutil.Equal(t, "source", explorer.SourceTransaction, sce.Source)
 		}
 
 		scUtxos3, err := db.UnspentSiacoinOutputs(addr3, 0, n)
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "addr3 sc utxos", n-3, len(scUtxos3))
+		testutil.Equal(t, "addr3 sc utxos", n-3, len(scUtxos3))
 		for _, sce := range scUtxos3 {
-			testutil.Check(t, "address", addr3, sce.SiacoinOutput.Address)
-			testutil.Check(t, "value", types.Siacoins(2), sce.SiacoinOutput.Value)
-			testutil.Check(t, "source", explorer.SourceTransaction, sce.Source)
+			testutil.Equal(t, "address", addr3, sce.SiacoinOutput.Address)
+			testutil.Equal(t, "value", types.Siacoins(2), sce.SiacoinOutput.Value)
+			testutil.Equal(t, "source", explorer.SourceTransaction, sce.Source)
 		}
 
 		sfUtxos1, err := db.UnspentSiafundOutputs(addr1, 0, n)
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "addr1 sf utxos", 1, len(sfUtxos1))
+		testutil.Equal(t, "addr1 sf utxos", 1, len(sfUtxos1))
 		for _, sfe := range sfUtxos1 {
-			testutil.Check(t, "address", addr1, sfe.SiafundOutput.Address)
-			testutil.Check(t, "value", addr1SFs, sfe.SiafundOutput.Value)
+			testutil.Equal(t, "address", addr1, sfe.SiafundOutput.Address)
+			testutil.Equal(t, "value", addr1SFs, sfe.SiafundOutput.Value)
 		}
 
 		sfUtxos2, err := db.UnspentSiafundOutputs(addr2, 0, n)
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "addr2 sf utxos", n-3, len(sfUtxos2))
+		testutil.Equal(t, "addr2 sf utxos", n-3, len(sfUtxos2))
 		for _, sfe := range sfUtxos2 {
-			testutil.Check(t, "address", addr2, sfe.SiafundOutput.Address)
-			testutil.Check(t, "value", uint64(1), sfe.SiafundOutput.Value)
+			testutil.Equal(t, "address", addr2, sfe.SiafundOutput.Address)
+			testutil.Equal(t, "value", uint64(1), sfe.SiafundOutput.Value)
 		}
 
 		sfUtxos3, err := db.UnspentSiafundOutputs(addr3, 0, n)
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "addr3 sf utxos", n-3, len(sfUtxos3))
+		testutil.Equal(t, "addr3 sf utxos", n-3, len(sfUtxos3))
 		for _, sfe := range sfUtxos3 {
-			testutil.Check(t, "address", addr3, sfe.SiafundOutput.Address)
-			testutil.Check(t, "value", uint64(2), sfe.SiafundOutput.Value)
+			testutil.Equal(t, "address", addr3, sfe.SiafundOutput.Address)
+			testutil.Equal(t, "value", uint64(2), sfe.SiafundOutput.Value)
 		}
 	}
 
-	testutil.CheckMetrics(t, db, cm, explorer.Metrics{
+	testutil.EqualMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -1803,10 +1803,10 @@ func TestHostAnnouncement(t *testing.T) {
 				expected = append(expected, ha)
 			}
 		}
-		testutil.Check(t, "len(hostAnnouncements)", len(expected), len(got))
+		testutil.Equal(t, "len(hostAnnouncements)", len(expected), len(got))
 		for i := range expected {
-			testutil.Check(t, "host public key", expected[i].PublicKey, got[i].PublicKey)
-			testutil.Check(t, "host net address", expected[i].NetAddress, got[i].NetAddress)
+			testutil.Equal(t, "host public key", expected[i].PublicKey, got[i].PublicKey)
+			testutil.Equal(t, "host net address", expected[i].NetAddress, got[i].NetAddress)
 		}
 	}
 
@@ -1823,7 +1823,7 @@ func TestHostAnnouncement(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	testutil.CheckMetrics(t, db, cm, explorer.Metrics{
+	testutil.EqualMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         1,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -1851,7 +1851,7 @@ func TestHostAnnouncement(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	testutil.CheckMetrics(t, db, cm, explorer.Metrics{
+	testutil.EqualMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         3,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -1862,10 +1862,10 @@ func TestHostAnnouncement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "len(txns)", 3, len(b.Transactions))
-		testutil.Check(t, "txns[0].ID", txn2.ID(), b.Transactions[0].ID)
-		testutil.Check(t, "txns[1].ID", txn3.ID(), b.Transactions[1].ID)
-		testutil.Check(t, "txns[2].ID", txn4.ID(), b.Transactions[2].ID)
+		testutil.Equal(t, "len(txns)", 3, len(b.Transactions))
+		testutil.Equal(t, "txns[0].ID", txn2.ID(), b.Transactions[0].ID)
+		testutil.Equal(t, "txns[1].ID", txn3.ID(), b.Transactions[1].ID)
+		testutil.Equal(t, "txns[2].ID", txn4.ID(), b.Transactions[2].ID)
 	}
 
 	{
@@ -1873,11 +1873,11 @@ func TestHostAnnouncement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "len(txns)", 4, len(dbTxns))
-		testutil.Check(t, "txns[0].ID", txn1.ID(), dbTxns[0].ID)
-		testutil.Check(t, "txns[1].ID", txn2.ID(), dbTxns[1].ID)
-		testutil.Check(t, "txns[2].ID", txn3.ID(), dbTxns[2].ID)
-		testutil.Check(t, "txns[3].ID", txn4.ID(), dbTxns[3].ID)
+		testutil.Equal(t, "len(txns)", 4, len(dbTxns))
+		testutil.Equal(t, "txns[0].ID", txn1.ID(), dbTxns[0].ID)
+		testutil.Equal(t, "txns[1].ID", txn2.ID(), dbTxns[1].ID)
+		testutil.Equal(t, "txns[2].ID", txn3.ID(), dbTxns[2].ID)
+		testutil.Equal(t, "txns[3].ID", txn4.ID(), dbTxns[3].ID)
 	}
 
 	{
@@ -1885,7 +1885,7 @@ func TestHostAnnouncement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "len(txns)", 1, len(dbTxns))
+		testutil.Equal(t, "len(txns)", 1, len(dbTxns))
 		checkHostAnnouncements(txn1.ArbitraryData, dbTxns[0].HostAnnouncements)
 	}
 
@@ -1894,7 +1894,7 @@ func TestHostAnnouncement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "len(txns)", 1, len(dbTxns))
+		testutil.Equal(t, "len(txns)", 1, len(dbTxns))
 		checkHostAnnouncements(txn2.ArbitraryData, dbTxns[0].HostAnnouncements)
 	}
 
@@ -1903,7 +1903,7 @@ func TestHostAnnouncement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "len(txns)", 1, len(dbTxns))
+		testutil.Equal(t, "len(txns)", 1, len(dbTxns))
 		checkHostAnnouncements(txn3.ArbitraryData, dbTxns[0].HostAnnouncements)
 	}
 
@@ -1912,14 +1912,14 @@ func TestHostAnnouncement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testutil.Check(t, "len(hosts)", 3, len(hosts))
+	testutil.Equal(t, "len(hosts)", 3, len(hosts))
 
 	{
 		scans, err := db.Hosts([]types.PublicKey{hosts[0].PublicKey})
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "len(scans)", 1, len(scans))
+		testutil.Equal(t, "len(scans)", 1, len(scans))
 	}
 
 	scan1 := explorer.HostScan{
@@ -1942,14 +1942,14 @@ func TestHostAnnouncement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "len(scans)", 1, len(scans))
+		testutil.Equal(t, "len(scans)", 1, len(scans))
 
 		scan := scans[0]
-		testutil.Check(t, "last scan", scan1.Timestamp.Unix(), scan.LastScan.Unix())
-		testutil.Check(t, "last scan successful", scan1.Success, scan.LastScanSuccessful)
-		testutil.Check(t, "total scans", 1, scan.TotalScans)
-		testutil.Check(t, "successful interactions", 1, scan.SuccessfulInteractions)
-		testutil.Check(t, "failed interactions", 0, scan.FailedInteractions)
+		testutil.Equal(t, "last scan", scan1.Timestamp.Unix(), scan.LastScan.Unix())
+		testutil.Equal(t, "last scan successful", scan1.Success, scan.LastScanSuccessful)
+		testutil.Equal(t, "total scans", 1, scan.TotalScans)
+		testutil.Equal(t, "successful interactions", 1, scan.SuccessfulInteractions)
+		testutil.Equal(t, "failed interactions", 0, scan.FailedInteractions)
 	}
 
 	{
@@ -1961,14 +1961,14 @@ func TestHostAnnouncement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "len(scans)", 1, len(scans))
+		testutil.Equal(t, "len(scans)", 1, len(scans))
 
 		scan := scans[0]
-		testutil.Check(t, "last scan", scan2.Timestamp.Unix(), scan.LastScan.Unix())
-		testutil.Check(t, "last scan successful", scan2.Success, scan.LastScanSuccessful)
-		testutil.Check(t, "total scans", 2, scan.TotalScans)
-		testutil.Check(t, "successful interactions", 1, scan.SuccessfulInteractions)
-		testutil.Check(t, "failed interactions", 1, scan.FailedInteractions)
+		testutil.Equal(t, "last scan", scan2.Timestamp.Unix(), scan.LastScan.Unix())
+		testutil.Equal(t, "last scan successful", scan2.Success, scan.LastScanSuccessful)
+		testutil.Equal(t, "total scans", 2, scan.TotalScans)
+		testutil.Equal(t, "successful interactions", 1, scan.SuccessfulInteractions)
+		testutil.Equal(t, "failed interactions", 1, scan.FailedInteractions)
 	}
 }
 
@@ -2018,9 +2018,9 @@ func TestMultipleReorg(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "siacoins", expectSC, sc)
-		testutil.Check(t, "immature siacoins", expectImmatureSC, immatureSC)
-		testutil.Check(t, "siafunds", expectSF, sf)
+		testutil.Equal(t, "siacoins", expectSC, sc)
+		testutil.Equal(t, "immature siacoins", expectImmatureSC, immatureSC)
+		testutil.Equal(t, "siafunds", expectSF, sf)
 	}
 
 	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
@@ -2053,7 +2053,7 @@ func TestMultipleReorg(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	testutil.CheckMetrics(t, db, cm, explorer.Metrics{
+	testutil.EqualMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -2069,37 +2069,37 @@ func TestMultipleReorg(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "addr1 sc utxos", 0, len(scUtxos1))
+		testutil.Equal(t, "addr1 sc utxos", 0, len(scUtxos1))
 
 		scUtxos2, err := db.UnspentSiacoinOutputs(addr2, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "addr2 sc utxos", 1, len(scUtxos2))
+		testutil.Equal(t, "addr2 sc utxos", 1, len(scUtxos2))
 
 		scUtxos3, err := db.UnspentSiacoinOutputs(addr3, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "addr3 sc utxos", 0, len(scUtxos3))
+		testutil.Equal(t, "addr3 sc utxos", 0, len(scUtxos3))
 
 		sfUtxos1, err := db.UnspentSiafundOutputs(addr1, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "addr1 sf utxos", 0, len(sfUtxos1))
+		testutil.Equal(t, "addr1 sf utxos", 0, len(sfUtxos1))
 
 		sfUtxos2, err := db.UnspentSiafundOutputs(addr2, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "addr2 sf utxos", 1, len(sfUtxos2))
+		testutil.Equal(t, "addr2 sf utxos", 1, len(sfUtxos2))
 
 		sfUtxos3, err := db.UnspentSiafundOutputs(addr3, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "addr3 sf utxos", 0, len(sfUtxos3))
+		testutil.Equal(t, "addr3 sf utxos", 0, len(sfUtxos3))
 	}
 
 	for i := 0; i < 10; i++ {
@@ -2151,37 +2151,37 @@ func TestMultipleReorg(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "addr1 sc utxos", 0, len(scUtxos1))
+		testutil.Equal(t, "addr1 sc utxos", 0, len(scUtxos1))
 
 		scUtxos2, err := db.UnspentSiacoinOutputs(addr2, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "addr2 sc utxos", 0, len(scUtxos2))
+		testutil.Equal(t, "addr2 sc utxos", 0, len(scUtxos2))
 
 		scUtxos3, err := db.UnspentSiacoinOutputs(addr3, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "addr3 sc utxos", 1, len(scUtxos3))
+		testutil.Equal(t, "addr3 sc utxos", 1, len(scUtxos3))
 
 		sfUtxos1, err := db.UnspentSiafundOutputs(addr1, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "addr1 sf utxos", 0, len(sfUtxos1))
+		testutil.Equal(t, "addr1 sf utxos", 0, len(sfUtxos1))
 
 		sfUtxos2, err := db.UnspentSiafundOutputs(addr2, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "addr2 sf utxos", 0, len(sfUtxos2))
+		testutil.Equal(t, "addr2 sf utxos", 0, len(sfUtxos2))
 
 		sfUtxos3, err := db.UnspentSiafundOutputs(addr3, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "addr3 sf utxos", 1, len(sfUtxos3))
+		testutil.Equal(t, "addr3 sf utxos", 1, len(sfUtxos3))
 	}
 
 	// revert block 12 with increasingly large reorgs and sanity check results
@@ -2216,37 +2216,37 @@ func TestMultipleReorg(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "addr1 sc utxos", 0, len(scUtxos1))
+			testutil.Equal(t, "addr1 sc utxos", 0, len(scUtxos1))
 
 			scUtxos2, err := db.UnspentSiacoinOutputs(addr2, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "addr2 sc utxos", 1, len(scUtxos2))
+			testutil.Equal(t, "addr2 sc utxos", 1, len(scUtxos2))
 
 			scUtxos3, err := db.UnspentSiacoinOutputs(addr3, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "addr3 sc utxos", 0, len(scUtxos3))
+			testutil.Equal(t, "addr3 sc utxos", 0, len(scUtxos3))
 
 			sfUtxos1, err := db.UnspentSiafundOutputs(addr1, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "addr1 sf utxos", 0, len(sfUtxos1))
+			testutil.Equal(t, "addr1 sf utxos", 0, len(sfUtxos1))
 
 			sfUtxos2, err := db.UnspentSiafundOutputs(addr2, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "addr2 sf utxos", 1, len(sfUtxos2))
+			testutil.Equal(t, "addr2 sf utxos", 1, len(sfUtxos2))
 
 			sfUtxos3, err := db.UnspentSiafundOutputs(addr3, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "addr3 sf utxos", 0, len(sfUtxos3))
+			testutil.Equal(t, "addr3 sf utxos", 0, len(sfUtxos3))
 		}
 	}
 
@@ -2282,37 +2282,37 @@ func TestMultipleReorg(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "addr1 sc utxos", 0, len(scUtxos1))
+			testutil.Equal(t, "addr1 sc utxos", 0, len(scUtxos1))
 
 			scUtxos2, err := db.UnspentSiacoinOutputs(addr2, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "addr2 sc utxos", 0, len(scUtxos2))
+			testutil.Equal(t, "addr2 sc utxos", 0, len(scUtxos2))
 
 			scUtxos3, err := db.UnspentSiacoinOutputs(addr3, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "addr3 sc utxos", 1, len(scUtxos3))
+			testutil.Equal(t, "addr3 sc utxos", 1, len(scUtxos3))
 
 			sfUtxos1, err := db.UnspentSiafundOutputs(addr1, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "addr1 sf utxos", 0, len(sfUtxos1))
+			testutil.Equal(t, "addr1 sf utxos", 0, len(sfUtxos1))
 
 			sfUtxos2, err := db.UnspentSiafundOutputs(addr2, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "addr2 sf utxos", 0, len(sfUtxos2))
+			testutil.Equal(t, "addr2 sf utxos", 0, len(sfUtxos2))
 
 			sfUtxos3, err := db.UnspentSiafundOutputs(addr3, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "addr3 sf utxos", 1, len(sfUtxos3))
+			testutil.Equal(t, "addr3 sf utxos", 1, len(sfUtxos3))
 		}
 	}
 }
@@ -2355,26 +2355,26 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
 
 	checkFC := func(resolved, valid bool, expected types.FileContract, got explorer.FileContract) {
-		testutil.Check(t, "resolved state", resolved, got.Resolved)
-		testutil.Check(t, "valid state", valid, got.Valid)
+		testutil.Equal(t, "resolved state", resolved, got.Resolved)
+		testutil.Equal(t, "valid state", valid, got.Valid)
 
 		gotFC := got.FileContract
-		testutil.Check(t, "filesize", expected.Filesize, gotFC.Filesize)
-		testutil.Check(t, "file merkle root", expected.FileMerkleRoot, gotFC.FileMerkleRoot)
-		testutil.Check(t, "window start", expected.WindowStart, gotFC.WindowStart)
-		testutil.Check(t, "window end", expected.WindowEnd, gotFC.WindowEnd)
-		testutil.Check(t, "payout", expected.Payout, gotFC.Payout)
-		testutil.Check(t, "unlock hash", expected.UnlockHash, gotFC.UnlockHash)
-		testutil.Check(t, "revision number", expected.RevisionNumber, gotFC.RevisionNumber)
-		testutil.Check(t, "valid proof outputs", len(expected.ValidProofOutputs), len(gotFC.ValidProofOutputs))
+		testutil.Equal(t, "filesize", expected.Filesize, gotFC.Filesize)
+		testutil.Equal(t, "file merkle root", expected.FileMerkleRoot, gotFC.FileMerkleRoot)
+		testutil.Equal(t, "window start", expected.WindowStart, gotFC.WindowStart)
+		testutil.Equal(t, "window end", expected.WindowEnd, gotFC.WindowEnd)
+		testutil.Equal(t, "payout", expected.Payout, gotFC.Payout)
+		testutil.Equal(t, "unlock hash", expected.UnlockHash, gotFC.UnlockHash)
+		testutil.Equal(t, "revision number", expected.RevisionNumber, gotFC.RevisionNumber)
+		testutil.Equal(t, "valid proof outputs", len(expected.ValidProofOutputs), len(gotFC.ValidProofOutputs))
 		for i := range expected.ValidProofOutputs {
-			testutil.Check(t, "valid proof output address", expected.ValidProofOutputs[i].Address, gotFC.ValidProofOutputs[i].Address)
-			testutil.Check(t, "valid proof output value", expected.ValidProofOutputs[i].Value, gotFC.ValidProofOutputs[i].Value)
+			testutil.Equal(t, "valid proof output address", expected.ValidProofOutputs[i].Address, gotFC.ValidProofOutputs[i].Address)
+			testutil.Equal(t, "valid proof output value", expected.ValidProofOutputs[i].Value, gotFC.ValidProofOutputs[i].Value)
 		}
-		testutil.Check(t, "missed proof outputs", len(expected.MissedProofOutputs), len(gotFC.MissedProofOutputs))
+		testutil.Equal(t, "missed proof outputs", len(expected.MissedProofOutputs), len(gotFC.MissedProofOutputs))
 		for i := range expected.MissedProofOutputs {
-			testutil.Check(t, "missed proof output address", expected.MissedProofOutputs[i].Address, gotFC.MissedProofOutputs[i].Address)
-			testutil.Check(t, "missed proof output value", expected.MissedProofOutputs[i].Value, gotFC.MissedProofOutputs[i].Value)
+			testutil.Equal(t, "missed proof output address", expected.MissedProofOutputs[i].Address, gotFC.MissedProofOutputs[i].Address)
+			testutil.Equal(t, "missed proof output value", expected.MissedProofOutputs[i].Value, gotFC.MissedProofOutputs[i].Value)
 		}
 	}
 
@@ -2400,7 +2400,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	testutil.CheckMetrics(t, db, cm, explorer.Metrics{
+	testutil.EqualMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
 		StorageUtilization: contractFilesize,
@@ -2411,11 +2411,11 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "fcs", 1, len(dbFCs))
+		testutil.Equal(t, "fcs", 1, len(dbFCs))
 		checkFC(false, false, fc, dbFCs[0])
 
-		testutil.Check(t, "confirmation index", cm.Tip(), *dbFCs[0].ConfirmationIndex)
-		testutil.Check(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
+		testutil.Equal(t, "confirmation index", cm.Tip(), *dbFCs[0].ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 	}
 
 	{
@@ -2423,7 +2423,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.CheckFCRevisions(t, []uint64{0}, dbFCs)
+		testutil.EqualFCRevisions(t, []uint64{0}, dbFCs)
 	}
 
 	{
@@ -2431,8 +2431,8 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "transactions", 1, len(txns))
-		testutil.Check(t, "file contracts", 1, len(txns[0].FileContracts))
+		testutil.Equal(t, "transactions", 1, len(txns))
+		testutil.Equal(t, "file contracts", 1, len(txns[0].FileContracts))
 		checkFC(false, false, fc, txns[0].FileContracts[0])
 	}
 
@@ -2464,7 +2464,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	syncDB(t, db, cm)
 	prevState2 := cm.TipState()
 
-	testutil.CheckMetrics(t, db, cm, explorer.Metrics{
+	testutil.EqualMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
 		StorageUtilization: contractFilesize + 10,
@@ -2476,11 +2476,11 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "fcs", 1, len(dbFCs))
+		testutil.Equal(t, "fcs", 1, len(dbFCs))
 		checkFC(false, false, revFC, dbFCs[0])
 
-		testutil.Check(t, "confirmation index", prevState1.Index, *dbFCs[0].ConfirmationIndex)
-		testutil.Check(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
+		testutil.Equal(t, "confirmation index", prevState1.Index, *dbFCs[0].ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 	}
 
 	{
@@ -2488,12 +2488,12 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "transactions", 1, len(txns))
-		testutil.Check(t, "file contracts", 1, len(txns[0].FileContractRevisions))
+		testutil.Equal(t, "transactions", 1, len(txns))
+		testutil.Equal(t, "file contracts", 1, len(txns[0].FileContractRevisions))
 
 		fcr := txns[0].FileContractRevisions[0]
-		testutil.Check(t, "parent id", txn.FileContractID(0), fcr.ParentID)
-		testutil.Check(t, "unlock conditions", uc, fcr.UnlockConditions)
+		testutil.Equal(t, "parent id", txn.FileContractID(0), fcr.ParentID)
+		testutil.Equal(t, "unlock conditions", uc, fcr.UnlockConditions)
 
 		checkFC(false, false, revFC, fcr.FileContract)
 	}
@@ -2503,7 +2503,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.CheckFCRevisions(t, []uint64{0, 1}, dbFCs)
+		testutil.EqualFCRevisions(t, []uint64{0, 1}, dbFCs)
 	}
 
 	{
@@ -2515,8 +2515,8 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Check(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
-		testutil.Check(t, "len(contracts)", 1, len(renterContracts))
+		testutil.Equal(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
+		testutil.Equal(t, "len(contracts)", 1, len(renterContracts))
 		checkFC(false, false, revFC, renterContracts[0])
 		checkFC(false, false, revFC, hostContracts[0])
 	}
@@ -2547,11 +2547,11 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "fcs", 1, len(dbFCs))
+			testutil.Equal(t, "fcs", 1, len(dbFCs))
 			checkFC(false, false, fc, dbFCs[0])
 
-			testutil.Check(t, "confirmation index", prevState1.Index, *dbFCs[0].ConfirmationIndex)
-			testutil.Check(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
+			testutil.Equal(t, "confirmation index", prevState1.Index, *dbFCs[0].ConfirmationIndex)
+			testutil.Equal(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 		}
 
 		{
@@ -2559,12 +2559,12 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.CheckFCRevisions(t, []uint64{0}, dbFCs)
+			testutil.EqualFCRevisions(t, []uint64{0}, dbFCs)
 		}
 
 		// storage utilization should be back to contractFilesize instead of
 		// contractFilesize + 10
-		testutil.CheckMetrics(t, db, cm, explorer.Metrics{
+		testutil.EqualMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    1,
 			StorageUtilization: contractFilesize,
@@ -2597,15 +2597,15 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "fcs", 1, len(dbFCs))
+			testutil.Equal(t, "fcs", 1, len(dbFCs))
 			checkFC(false, false, revFC, dbFCs[0])
 
-			testutil.Check(t, "confirmation index", prevState1.Index, *dbFCs[0].ConfirmationIndex)
-			testutil.Check(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
+			testutil.Equal(t, "confirmation index", prevState1.Index, *dbFCs[0].ConfirmationIndex)
+			testutil.Equal(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 		}
 
 		// should have revision filesize
-		testutil.CheckMetrics(t, db, cm, explorer.Metrics{
+		testutil.EqualMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    1,
 			StorageUtilization: contractFilesize + 10,
@@ -2637,7 +2637,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "fcs", 0, len(dbFCs))
+			testutil.Equal(t, "fcs", 0, len(dbFCs))
 		}
 
 		{
@@ -2649,8 +2649,8 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
-			testutil.Check(t, "len(contracts)", 0, len(renterContracts))
+			testutil.Equal(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
+			testutil.Equal(t, "len(contracts)", 0, len(renterContracts))
 		}
 
 		{
@@ -2661,7 +2661,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		}
 
 		// no more contracts or storage utilization
-		testutil.CheckMetrics(t, db, cm, explorer.Metrics{
+		testutil.EqualMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts: 0,
 		})
 	}
@@ -2719,7 +2719,7 @@ func TestMetricCirculatingSupply(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			testutil.Check(t, "circulating supply", circulatingSupply, metrics.CirculatingSupply)
+			testutil.Equal(t, "circulating supply", circulatingSupply, metrics.CirculatingSupply)
 		}
 	}
 
@@ -2757,6 +2757,6 @@ func TestMetricCirculatingSupply(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		testutil.Check(t, "circulating supply", circulatingSupply, metrics.CirculatingSupply)
+		testutil.Equal(t, "circulating supply", circulatingSupply, metrics.CirculatingSupply)
 	}
 }

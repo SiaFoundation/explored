@@ -9,8 +9,8 @@ import (
 	"go.sia.tech/explored/explorer"
 )
 
-// Check checks if two values of the same type are equal and fails otherwise.
-func Check[T any](t *testing.T, desc string, expect, got T) {
+// Equal checks if two values of the same type are equal and fails otherwise.
+func Equal[T any](t *testing.T, desc string, expect, got T) {
 	t.Helper()
 
 	if !reflect.DeepEqual(expect, got) {
@@ -18,28 +18,28 @@ func Check[T any](t *testing.T, desc string, expect, got T) {
 	}
 }
 
-// CheckBalance checks that an address has the balances we expect.
-func CheckBalance(t *testing.T, db explorer.Store, addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
+// EqualBalance checks that an address has the balances we expect.
+func EqualBalance(t *testing.T, db explorer.Store, addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
 	t.Helper()
 
 	sc, immatureSC, sf, err := db.Balance(addr)
 	if err != nil {
 		t.Fatal(err)
 	}
-	Check(t, "siacoins", expectSC, sc)
-	Check(t, "immature siacoins", expectImmatureSC, immatureSC)
-	Check(t, "siafunds", expectSF, sf)
+	Equal(t, "siacoins", expectSC, sc)
+	Equal(t, "immature siacoins", expectImmatureSC, immatureSC)
+	Equal(t, "siafunds", expectSF, sf)
 }
 
-// CheckTransaction checks the inputs and outputs of the retrieved transaction
+// EqualTransaction checks the inputs and outputs of the retrieved transaction
 // with the source transaction.
-func CheckTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer.Transaction) {
+func EqualTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer.Transaction) {
 	t.Helper()
 
-	Check(t, "siacoin inputs", len(expectTxn.SiacoinInputs), len(gotTxn.SiacoinInputs))
-	Check(t, "siacoin outputs", len(expectTxn.SiacoinOutputs), len(gotTxn.SiacoinOutputs))
-	Check(t, "siafund inputs", len(expectTxn.SiafundInputs), len(gotTxn.SiafundInputs))
-	Check(t, "siafund outputs", len(expectTxn.SiafundOutputs), len(gotTxn.SiafundOutputs))
+	Equal(t, "siacoin inputs", len(expectTxn.SiacoinInputs), len(gotTxn.SiacoinInputs))
+	Equal(t, "siacoin outputs", len(expectTxn.SiacoinOutputs), len(gotTxn.SiacoinOutputs))
+	Equal(t, "siafund inputs", len(expectTxn.SiafundInputs), len(gotTxn.SiafundInputs))
+	Equal(t, "siafund outputs", len(expectTxn.SiafundOutputs), len(gotTxn.SiafundOutputs))
 
 	for i := range expectTxn.SiacoinInputs {
 		expectSci := expectTxn.SiacoinInputs[i]
@@ -48,17 +48,17 @@ func CheckTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer
 		if gotSci.Value == types.ZeroCurrency {
 			t.Fatal("invalid value")
 		}
-		Check(t, "parent ID", expectSci.ParentID, gotSci.ParentID)
-		Check(t, "unlock conditions", expectSci.UnlockConditions, gotSci.UnlockConditions)
-		Check(t, "address", expectSci.UnlockConditions.UnlockHash(), gotSci.Address)
+		Equal(t, "parent ID", expectSci.ParentID, gotSci.ParentID)
+		Equal(t, "unlock conditions", expectSci.UnlockConditions, gotSci.UnlockConditions)
+		Equal(t, "address", expectSci.UnlockConditions.UnlockHash(), gotSci.Address)
 	}
 	for i := range expectTxn.SiacoinOutputs {
 		expectSco := expectTxn.SiacoinOutputs[i]
 		gotSco := gotTxn.SiacoinOutputs[i].SiacoinOutput
 
-		Check(t, "address", expectSco.Address, gotSco.Address)
-		Check(t, "value", expectSco.Value, gotSco.Value)
-		Check(t, "source", explorer.SourceTransaction, gotTxn.SiacoinOutputs[i].Source)
+		Equal(t, "address", expectSco.Address, gotSco.Address)
+		Equal(t, "value", expectSco.Value, gotSco.Value)
+		Equal(t, "source", explorer.SourceTransaction, gotTxn.SiacoinOutputs[i].Source)
 	}
 	for i := range expectTxn.SiafundInputs {
 		expectSfi := expectTxn.SiafundInputs[i]
@@ -67,72 +67,72 @@ func CheckTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer
 		if gotSfi.Value == 0 {
 			t.Fatal("invalid value")
 		}
-		Check(t, "parent ID", expectSfi.ParentID, gotSfi.ParentID)
-		Check(t, "claim address", expectSfi.ClaimAddress, gotSfi.ClaimAddress)
-		Check(t, "unlock conditions", expectSfi.UnlockConditions, gotSfi.UnlockConditions)
-		Check(t, "address", expectSfi.UnlockConditions.UnlockHash(), gotSfi.Address)
+		Equal(t, "parent ID", expectSfi.ParentID, gotSfi.ParentID)
+		Equal(t, "claim address", expectSfi.ClaimAddress, gotSfi.ClaimAddress)
+		Equal(t, "unlock conditions", expectSfi.UnlockConditions, gotSfi.UnlockConditions)
+		Equal(t, "address", expectSfi.UnlockConditions.UnlockHash(), gotSfi.Address)
 	}
 	for i := range expectTxn.SiafundOutputs {
 		expectSfo := expectTxn.SiafundOutputs[i]
 		gotSfo := gotTxn.SiafundOutputs[i].SiafundOutput
 
-		Check(t, "address", expectSfo.Address, gotSfo.Address)
-		Check(t, "value", expectSfo.Value, gotSfo.Value)
+		Equal(t, "address", expectSfo.Address, gotSfo.Address)
+		Equal(t, "value", expectSfo.Value, gotSfo.Value)
 	}
 	for i := range expectTxn.ArbitraryData {
-		Check(t, "miner fee", expectTxn.ArbitraryData[i], gotTxn.ArbitraryData[i])
+		Equal(t, "miner fee", expectTxn.ArbitraryData[i], gotTxn.ArbitraryData[i])
 	}
 	for i := range expectTxn.MinerFees {
-		Check(t, "miner fee", expectTxn.MinerFees[i], gotTxn.MinerFees[i])
+		Equal(t, "miner fee", expectTxn.MinerFees[i], gotTxn.MinerFees[i])
 	}
 	for i := range expectTxn.Signatures {
 		expectSig := expectTxn.Signatures[i]
 		gotSig := gotTxn.Signatures[i]
 
-		Check(t, "parent ID", expectSig.ParentID, gotSig.ParentID)
-		Check(t, "public key index", expectSig.PublicKeyIndex, gotSig.PublicKeyIndex)
-		Check(t, "timelock", expectSig.Timelock, gotSig.Timelock)
-		Check(t, "signature", expectSig.Signature, gotSig.Signature)
+		Equal(t, "parent ID", expectSig.ParentID, gotSig.ParentID)
+		Equal(t, "public key index", expectSig.PublicKeyIndex, gotSig.PublicKeyIndex)
+		Equal(t, "timelock", expectSig.Timelock, gotSig.Timelock)
+		Equal(t, "signature", expectSig.Signature, gotSig.Signature)
 
 		// reflect.DeepEqual treats empty slices as different from nil
 		// slices so these will differ because the decoder is doing
 		// cf.X = make([]uint64, d.ReadPrefix()) and the prefix is 0
-		// testutil.Check(t, "covered fields", expectSig.CoveredFields, gotSig.CoveredFields)
+		// testutil.Equal(t, "covered fields", expectSig.CoveredFields, gotSig.CoveredFields)
 	}
 }
 
-// CheckFC checks the retrieved file contract with the source file contract in
+// EqualFC checks the retrieved file contract with the source file contract in
 // addition to checking the resolved and valid fields.
-func CheckFC(t *testing.T, revision, resolved, valid bool, expected types.FileContract, got explorer.FileContract) {
+func EqualFC(t *testing.T, revision, resolved, valid bool, expected types.FileContract, got explorer.FileContract) {
 	t.Helper()
 
-	Check(t, "resolved state", resolved, got.Resolved)
-	Check(t, "valid state", valid, got.Valid)
+	Equal(t, "resolved state", resolved, got.Resolved)
+	Equal(t, "valid state", valid, got.Valid)
 
 	gotFC := got.FileContract
-	Check(t, "filesize", expected.Filesize, gotFC.Filesize)
-	Check(t, "file merkle root", expected.FileMerkleRoot, gotFC.FileMerkleRoot)
-	Check(t, "window start", expected.WindowStart, gotFC.WindowStart)
-	Check(t, "window end", expected.WindowEnd, gotFC.WindowEnd)
+	Equal(t, "filesize", expected.Filesize, gotFC.Filesize)
+	Equal(t, "file merkle root", expected.FileMerkleRoot, gotFC.FileMerkleRoot)
+	Equal(t, "window start", expected.WindowStart, gotFC.WindowStart)
+	Equal(t, "window end", expected.WindowEnd, gotFC.WindowEnd)
 	if !revision {
-		Check(t, "payout", expected.Payout, gotFC.Payout)
+		Equal(t, "payout", expected.Payout, gotFC.Payout)
 	}
-	Check(t, "unlock hash", expected.UnlockHash, gotFC.UnlockHash)
-	Check(t, "revision number", expected.RevisionNumber, gotFC.RevisionNumber)
-	Check(t, "valid proof outputs", len(expected.ValidProofOutputs), len(gotFC.ValidProofOutputs))
+	Equal(t, "unlock hash", expected.UnlockHash, gotFC.UnlockHash)
+	Equal(t, "revision number", expected.RevisionNumber, gotFC.RevisionNumber)
+	Equal(t, "valid proof outputs", len(expected.ValidProofOutputs), len(gotFC.ValidProofOutputs))
 	for i := range expected.ValidProofOutputs {
-		Check(t, "valid proof output address", expected.ValidProofOutputs[i].Address, gotFC.ValidProofOutputs[i].Address)
-		Check(t, "valid proof output value", expected.ValidProofOutputs[i].Value, gotFC.ValidProofOutputs[i].Value)
+		Equal(t, "valid proof output address", expected.ValidProofOutputs[i].Address, gotFC.ValidProofOutputs[i].Address)
+		Equal(t, "valid proof output value", expected.ValidProofOutputs[i].Value, gotFC.ValidProofOutputs[i].Value)
 	}
-	Check(t, "missed proof outputs", len(expected.MissedProofOutputs), len(gotFC.MissedProofOutputs))
+	Equal(t, "missed proof outputs", len(expected.MissedProofOutputs), len(gotFC.MissedProofOutputs))
 	for i := range expected.MissedProofOutputs {
-		Check(t, "missed proof output address", expected.MissedProofOutputs[i].Address, gotFC.MissedProofOutputs[i].Address)
-		Check(t, "missed proof output value", expected.MissedProofOutputs[i].Value, gotFC.MissedProofOutputs[i].Value)
+		Equal(t, "missed proof output address", expected.MissedProofOutputs[i].Address, gotFC.MissedProofOutputs[i].Address)
+		Equal(t, "missed proof output value", expected.MissedProofOutputs[i].Value, gotFC.MissedProofOutputs[i].Value)
 	}
 }
 
-// CheckMetrics checks the that the metrics from the DB match what we expect.
-func CheckMetrics(t *testing.T, db explorer.Store, cm *chain.Manager, expected explorer.Metrics) {
+// EqualMetrics checks the that the metrics from the DB match what we expect.
+func EqualMetrics(t *testing.T, db explorer.Store, cm *chain.Manager, expected explorer.Metrics) {
 	t.Helper()
 
 	tip, err := db.Tip()
@@ -144,20 +144,20 @@ func CheckMetrics(t *testing.T, db explorer.Store, cm *chain.Manager, expected e
 		t.Fatal(err)
 	}
 
-	Check(t, "index", cm.Tip(), got.Index)
-	Check(t, "difficulty", cm.TipState().Difficulty, got.Difficulty)
-	Check(t, "total hosts", expected.TotalHosts, got.TotalHosts)
-	Check(t, "active contracts", expected.ActiveContracts, got.ActiveContracts)
-	Check(t, "failed contracts", expected.FailedContracts, got.FailedContracts)
-	Check(t, "successful contracts", expected.SuccessfulContracts, got.SuccessfulContracts)
-	Check(t, "contract revenue", expected.ContractRevenue, got.ContractRevenue)
-	Check(t, "storage utilization", expected.StorageUtilization, got.StorageUtilization)
+	Equal(t, "index", cm.Tip(), got.Index)
+	Equal(t, "difficulty", cm.TipState().Difficulty, got.Difficulty)
+	Equal(t, "total hosts", expected.TotalHosts, got.TotalHosts)
+	Equal(t, "active contracts", expected.ActiveContracts, got.ActiveContracts)
+	Equal(t, "failed contracts", expected.FailedContracts, got.FailedContracts)
+	Equal(t, "successful contracts", expected.SuccessfulContracts, got.SuccessfulContracts)
+	Equal(t, "contract revenue", expected.ContractRevenue, got.ContractRevenue)
+	Equal(t, "storage utilization", expected.StorageUtilization, got.StorageUtilization)
 	// don't check circulating supply here because it requires a lot of accounting
 }
 
-// CheckChainIndices checks that the chain indices that a transaction was in
+// EqualChainIndices checks that the chain indices that a transaction was in
 // from the explorer match the expected chain indices.
-func CheckChainIndices(t *testing.T, db explorer.Store, txnID types.TransactionID, expected []types.ChainIndex) {
+func EqualChainIndices(t *testing.T, db explorer.Store, txnID types.TransactionID, expected []types.ChainIndex) {
 	t.Helper()
 
 	indices, err := db.TransactionChainIndices(txnID, 0, 100)
@@ -168,16 +168,16 @@ func CheckChainIndices(t *testing.T, db explorer.Store, txnID types.TransactionI
 		t.Fatalf("expected %d indices, got %d", len(expected), len(indices))
 	}
 	for i := range indices {
-		Check(t, "index", expected[i], indices[i])
+		Equal(t, "index", expected[i], indices[i])
 	}
 }
 
-// CheckFCRevisions checks that the revision numbers for the file contracts match.
-func CheckFCRevisions(t *testing.T, revisionNumbers []uint64, fcs []types.FileContractElement) {
+// EqualFCRevisions checks that the revision numbers for the file contracts match.
+func EqualFCRevisions(t *testing.T, revisionNumbers []uint64, fcs []types.FileContractElement) {
 	t.Helper()
 
-	Check(t, "number of revisions", len(revisionNumbers), len(fcs))
+	Equal(t, "number of revisions", len(revisionNumbers), len(fcs))
 	for i := range revisionNumbers {
-		Check(t, "revision number", revisionNumbers[i], fcs[i].FileContract.RevisionNumber)
+		Equal(t, "revision number", revisionNumbers[i], fcs[i].FileContract.RevisionNumber)
 	}
 }

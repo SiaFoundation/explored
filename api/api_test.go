@@ -192,7 +192,7 @@ func TestAPI(t *testing.T) {
 	}
 
 	// Ensure explorer has time to add blocks
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 
 	client := api.NewClient("http://"+listenAddr+"/api", "")
 
@@ -205,17 +205,17 @@ func TestAPI(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "Version", build.Version(), resp.Version)
-			testutil.Check(t, "Commit", build.Commit(), resp.Commit)
-			testutil.Check(t, "OS", runtime.GOOS, resp.OS)
-			testutil.Check(t, "BuildTime", build.Time().UTC(), resp.BuildTime.UTC())
+			testutil.Equal(t, "Version", build.Version(), resp.Version)
+			testutil.Equal(t, "Commit", build.Commit(), resp.Commit)
+			testutil.Equal(t, "OS", runtime.GOOS, resp.OS)
+			testutil.Equal(t, "BuildTime", build.Time().UTC(), resp.BuildTime.UTC())
 		}},
 		{"ConsensusTip", func(t *testing.T) {
 			resp, err := client.ConsensusTip()
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "tip", cm.Tip(), resp)
+			testutil.Equal(t, "tip", cm.Tip(), resp)
 		}},
 		{"BestIndex", func(t *testing.T) {
 			for i := uint64(0); i < cm.Tip().Height; i++ {
@@ -227,10 +227,9 @@ func TestAPI(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				testutil.Check(t, "tip", tip, resp)
+				testutil.Equal(t, "tip", tip, resp)
 			}
 		}},
-
 		{"ConsensusNetwork", func(t *testing.T) {
 			resp, err := client.ConsensusNetwork()
 			if err != nil {
@@ -242,16 +241,15 @@ func TestAPI(t *testing.T) {
 			n.HardforkOak.GenesisTimestamp = n.HardforkOak.GenesisTimestamp.UTC()
 			resp.HardforkOak.GenesisTimestamp = resp.HardforkOak.GenesisTimestamp.UTC()
 
-			testutil.Check(t, "network", n, resp)
+			testutil.Equal(t, "network", n, resp)
 		}},
-
 		{"ConsensusState", func(t *testing.T) {
 			resp, err := client.ConsensusState()
 			if err != nil {
 				t.Fatal(err)
 			}
 			cs := cm.TipState()
-			testutil.Check(t, "index", cs.Index, resp.Index)
+			testutil.Equal(t, "index", cs.Index, resp.Index)
 
 			// fix timestamps again
 			for i := range cs.PrevTimestamps {
@@ -261,12 +259,11 @@ func TestAPI(t *testing.T) {
 				resp.PrevTimestamps[i] = resp.PrevTimestamps[i].UTC()
 			}
 
-			testutil.Check(t, "previous timestamps", cs.PrevTimestamps, resp.PrevTimestamps)
-			testutil.Check(t, "depth", cs.Depth, resp.Depth)
-			testutil.Check(t, "child target", cs.ChildTarget, resp.ChildTarget)
-			testutil.Check(t, "siafund pool", cs.SiafundPool, resp.SiafundPool)
+			testutil.Equal(t, "previous timestamps", cs.PrevTimestamps, resp.PrevTimestamps)
+			testutil.Equal(t, "depth", cs.Depth, resp.Depth)
+			testutil.Equal(t, "child target", cs.ChildTarget, resp.ChildTarget)
+			testutil.Equal(t, "siafund pool", cs.SiafundPool, resp.SiafundPool)
 		}},
-
 		{"Tip", func(t *testing.T) {
 			resp, err := client.Tip()
 			if err != nil {
@@ -276,26 +273,24 @@ func TestAPI(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "tip", tip, resp)
+			testutil.Equal(t, "tip", tip, resp)
 		}},
-
 		{"BlockMetrics", func(t *testing.T) {
 			resp, err := client.BlockMetrics()
 			if err != nil {
 				t.Fatal(err)
 			}
 			cs := cm.TipState()
-			testutil.Check(t, "index", cs.Index, resp.Index)
-			testutil.Check(t, "difficulty", cs.Difficulty, resp.Difficulty)
-			testutil.Check(t, "siafund pool", cs.SiafundPool, resp.SiafundPool)
-			testutil.Check(t, "total hosts", 1, resp.TotalHosts)
-			testutil.Check(t, "active contracts", 1, resp.ActiveContracts)
-			testutil.Check(t, "failed contracts", 0, resp.FailedContracts)
-			testutil.Check(t, "failed contracts", 0, resp.SuccessfulContracts)
-			testutil.Check(t, "storage utilization", contractFilesize, resp.StorageUtilization)
-			testutil.Check(t, "contract revenue", types.ZeroCurrency, resp.ContractRevenue)
+			testutil.Equal(t, "index", cs.Index, resp.Index)
+			testutil.Equal(t, "difficulty", cs.Difficulty, resp.Difficulty)
+			testutil.Equal(t, "siafund pool", cs.SiafundPool, resp.SiafundPool)
+			testutil.Equal(t, "total hosts", 1, resp.TotalHosts)
+			testutil.Equal(t, "active contracts", 1, resp.ActiveContracts)
+			testutil.Equal(t, "failed contracts", 0, resp.FailedContracts)
+			testutil.Equal(t, "failed contracts", 0, resp.SuccessfulContracts)
+			testutil.Equal(t, "storage utilization", contractFilesize, resp.StorageUtilization)
+			testutil.Equal(t, "contract revenue", types.ZeroCurrency, resp.ContractRevenue)
 		}},
-
 		{"BlockMetricsID", func(t *testing.T) {
 			// block before revision and host announcement
 			tip, err := e.BestTip(1)
@@ -307,17 +302,16 @@ func TestAPI(t *testing.T) {
 				t.Fatal(err)
 			}
 			cs := cm.TipState()
-			testutil.Check(t, "index", tip, resp.Index)
-			testutil.Check(t, "difficulty", cs.Difficulty, resp.Difficulty)
-			testutil.Check(t, "siafund pool", cs.SiafundPool, resp.SiafundPool)
-			testutil.Check(t, "total hosts", 0, resp.TotalHosts)
-			testutil.Check(t, "active contracts", 1, resp.ActiveContracts)
-			testutil.Check(t, "failed contracts", 0, resp.FailedContracts)
-			testutil.Check(t, "failed contracts", 0, resp.SuccessfulContracts)
-			testutil.Check(t, "storage utilization", contractFilesize, resp.StorageUtilization)
-			testutil.Check(t, "contract revenue", types.ZeroCurrency, resp.ContractRevenue)
+			testutil.Equal(t, "index", tip, resp.Index)
+			testutil.Equal(t, "difficulty", cs.Difficulty, resp.Difficulty)
+			testutil.Equal(t, "siafund pool", cs.SiafundPool, resp.SiafundPool)
+			testutil.Equal(t, "total hosts", 0, resp.TotalHosts)
+			testutil.Equal(t, "active contracts", 1, resp.ActiveContracts)
+			testutil.Equal(t, "failed contracts", 0, resp.FailedContracts)
+			testutil.Equal(t, "failed contracts", 0, resp.SuccessfulContracts)
+			testutil.Equal(t, "storage utilization", contractFilesize, resp.StorageUtilization)
+			testutil.Equal(t, "contract revenue", types.ZeroCurrency, resp.ContractRevenue)
 		}},
-
 		{"Block", func(t *testing.T) {
 			tip := cm.Tip()
 			parentIndex, err := e.BestTip(tip.Height - 1)
@@ -329,95 +323,86 @@ func TestAPI(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "height", tip.Height, resp.Height)
-			testutil.Check(t, "parent ID", parentIndex.ID, resp.ParentID)
-			testutil.Check(t, "nonce", b2.Nonce, resp.Nonce)
-			testutil.Check(t, "timestamp", b2.Timestamp.UTC(), resp.Timestamp.UTC())
-			testutil.Check(t, "miner payout address", b2.MinerPayouts[0].Address, resp.MinerPayouts[0].SiacoinOutput.Address)
-			testutil.Check(t, "miner payout value", b2.MinerPayouts[0].Value, resp.MinerPayouts[0].SiacoinOutput.Value)
-			testutil.Check(t, "miner payout source", explorer.SourceMinerPayout, resp.MinerPayouts[0].Source)
-			testutil.Check(t, "miner payout spent index", nil, resp.MinerPayouts[0].SpentIndex)
+			testutil.Equal(t, "height", tip.Height, resp.Height)
+			testutil.Equal(t, "parent ID", parentIndex.ID, resp.ParentID)
+			testutil.Equal(t, "nonce", b2.Nonce, resp.Nonce)
+			testutil.Equal(t, "timestamp", b2.Timestamp.UTC(), resp.Timestamp.UTC())
+			testutil.Equal(t, "miner payout address", b2.MinerPayouts[0].Address, resp.MinerPayouts[0].SiacoinOutput.Address)
+			testutil.Equal(t, "miner payout value", b2.MinerPayouts[0].Value, resp.MinerPayouts[0].SiacoinOutput.Value)
+			testutil.Equal(t, "miner payout source", explorer.SourceMinerPayout, resp.MinerPayouts[0].Source)
+			testutil.Equal(t, "miner payout spent index", nil, resp.MinerPayouts[0].SpentIndex)
 
-			testutil.Check(t, "len(transactions)", len(b2.Transactions), len(resp.Transactions))
+			testutil.Equal(t, "len(transactions)", len(b2.Transactions), len(resp.Transactions))
 			for i := range b2.Transactions {
-				testutil.CheckTransaction(t, b2.Transactions[i], resp.Transactions[i])
+				testutil.EqualTransaction(t, b2.Transactions[i], resp.Transactions[i])
 			}
 		}},
-
 		{"Transaction", func(t *testing.T) {
 			resp, err := client.Transaction(txn1.ID())
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.CheckTransaction(t, txn1, resp)
+			testutil.EqualTransaction(t, txn1, resp)
 		}},
-
 		{"Transactions", func(t *testing.T) {
 			resp, err := client.Transactions([]types.TransactionID{txn2.ID()})
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.CheckTransaction(t, txn2, resp[0])
+			testutil.EqualTransaction(t, txn2, resp[0])
 		}},
-
 		{"TransactionChainIndices", func(t *testing.T) {
 			resp, err := client.TransactionChainIndices(txn2.ID(), 0, 500)
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "len(chainIndices)", 1, len(resp))
-			testutil.Check(t, "chain index", cm.Tip(), resp[0])
+			testutil.Equal(t, "len(chainIndices)", 1, len(resp))
+			testutil.Equal(t, "chain index", cm.Tip(), resp[0])
 		}},
-
 		{"AddressSiacoinUTXOs", func(t *testing.T) {
 			resp, err := client.AddressSiacoinUTXOs(addr1, 0, 500)
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "len(scos)", 1, len(resp))
-			testutil.Check(t, "output source", explorer.SourceTransaction, resp[0].Source)
-			testutil.Check(t, "output spent index", nil, resp[0].SpentIndex)
-			testutil.Check(t, "output address", txn1.SiacoinOutputs[0].Address, resp[0].SiacoinOutput.Address)
-			testutil.Check(t, "output value", txn1.SiacoinOutputs[0].Value, resp[0].SiacoinOutput.Value)
+			testutil.Equal(t, "len(scos)", 1, len(resp))
+			testutil.Equal(t, "output source", explorer.SourceTransaction, resp[0].Source)
+			testutil.Equal(t, "output spent index", nil, resp[0].SpentIndex)
+			testutil.Equal(t, "output address", txn1.SiacoinOutputs[0].Address, resp[0].SiacoinOutput.Address)
+			testutil.Equal(t, "output value", txn1.SiacoinOutputs[0].Value, resp[0].SiacoinOutput.Value)
 		}},
-
 		{"AddressSiacoinUTXOs offset", func(t *testing.T) {
 			resp, err := client.AddressSiacoinUTXOs(addr1, 1, 500)
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "len(scos)", 0, len(resp))
+			testutil.Equal(t, "len(scos)", 0, len(resp))
 		}},
-
 		{"AddressSiacoinUTXOs limit", func(t *testing.T) {
 			resp, err := client.AddressSiacoinUTXOs(addr1, 0, 0)
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "len(scos)", 0, len(resp))
+			testutil.Equal(t, "len(scos)", 0, len(resp))
 		}},
-
 		{"AddressSiafundUTXOs", func(t *testing.T) {
 			resp, err := client.AddressSiafundUTXOs(addr1, 0, 500)
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "len(sfos)", 1, len(resp))
-			testutil.Check(t, "output spent index", nil, resp[0].SpentIndex)
-			testutil.Check(t, "output address", txn2.SiafundOutputs[1].Address, resp[0].SiafundOutput.Address)
-			testutil.Check(t, "output value", txn2.SiafundOutputs[1].Value, resp[0].SiafundOutput.Value)
+			testutil.Equal(t, "len(sfos)", 1, len(resp))
+			testutil.Equal(t, "output spent index", nil, resp[0].SpentIndex)
+			testutil.Equal(t, "output address", txn2.SiafundOutputs[1].Address, resp[0].SiafundOutput.Address)
+			testutil.Equal(t, "output value", txn2.SiafundOutputs[1].Value, resp[0].SiafundOutput.Value)
 		}},
-
 		{"AddressBalance", func(t *testing.T) {
 			resp, err := client.AddressBalance(addr1)
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "unspent siacoins", txn1.SiacoinOutputs[0].Value, resp.UnspentSiacoins)
-			testutil.Check(t, "immature siacoins", types.ZeroCurrency, resp.ImmatureSiacoins)
-			testutil.Check(t, "unspent siafunds", txn2.SiafundOutputs[1].Value, resp.UnspentSiafunds)
+			testutil.Equal(t, "unspent siacoins", txn1.SiacoinOutputs[0].Value, resp.UnspentSiacoins)
+			testutil.Equal(t, "immature siacoins", types.ZeroCurrency, resp.ImmatureSiacoins)
+			testutil.Equal(t, "unspent siafunds", txn2.SiafundOutputs[1].Value, resp.UnspentSiafunds)
 		}},
-
 		// There is an issue with JSON unmarshaling of events.
 		// TODO: fix when explorer.Events are replaced with wallet.Events
 		// {
@@ -429,55 +414,49 @@ func TestAPI(t *testing.T) {
 		// 		t.Fatal("no events for addr1")
 		// 	}
 		// }
-
 		{"Contract", func(t *testing.T) {
 			resp, err := client.Contract(txn1.FileContractID(0))
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.CheckFC(t, true, false, false, revFC, resp)
+			testutil.EqualFC(t, true, false, false, revFC, resp)
 		}},
-
 		{"Contracts", func(t *testing.T) {
 			resp, err := client.Contracts([]types.FileContractID{txn1.FileContractID(0)})
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "len(contracts)", 1, len(resp))
-			testutil.CheckFC(t, true, false, false, revFC, resp[0])
+			testutil.Equal(t, "len(contracts)", 1, len(resp))
+			testutil.EqualFC(t, true, false, false, revFC, resp[0])
 		}},
-
 		{"ContractsKey", func(t *testing.T) {
 			resp, err := client.ContractsKey(renterPublicKey)
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "len(contracts)", 1, len(resp))
-			testutil.CheckFC(t, true, false, false, revFC, resp[0])
+			testutil.Equal(t, "len(contracts)", 1, len(resp))
+			testutil.EqualFC(t, true, false, false, revFC, resp[0])
 		}},
-
 		{"Search siacoin", func(t *testing.T) {
 			resp, err := client.Search(types.Hash256(txn1.SiacoinOutputID(0)))
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "search type", explorer.SearchTypeSiacoinElement, resp)
+			testutil.Equal(t, "search type", explorer.SearchTypeSiacoinElement, resp)
 		}},
-
 		{"Search siafund", func(t *testing.T) {
 			resp, err := client.Search(types.Hash256(txn2.SiafundOutputID(1)))
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "search type", explorer.SearchTypeSiafundElement, resp)
+			testutil.Equal(t, "search type", explorer.SearchTypeSiafundElement, resp)
 		}},
-
 		{"Search contract", func(t *testing.T) {
 			resp, err := client.Search(types.Hash256(txn1.FileContractID(0)))
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.Check(t, "search type", explorer.SearchTypeContract, resp)
+			testutil.Equal(t, "search type", explorer.SearchTypeContract, resp)
 		}},
 	}
 
