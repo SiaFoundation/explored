@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils"
 	"go.sia.tech/coreutils/chain"
@@ -23,7 +24,7 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
-func newExplorer(t *testing.T, addr types.Address, giftSC types.Currency, giftSF uint64) (types.Block, *coreutils.BoltChainDB, *chain.Manager, explorer.Store, *explorer.Explorer, error) {
+func newExplorer(t *testing.T, network *consensus.Network, genesisBlock types.Block) (*explorer.Explorer, *chain.Manager, func(), error) {
 	log := zaptest.NewLogger(t)
 	dir := t.TempDir()
 
@@ -36,8 +37,6 @@ func newExplorer(t *testing.T, addr types.Address, giftSC types.Currency, giftSF
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	network, genesisBlock := testutil.TestV1Network(addr, giftSC, giftSF)
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -56,7 +55,14 @@ func newExplorer(t *testing.T, addr types.Address, giftSC types.Currency, giftSF
 		t.Fatal(err)
 	}
 
-	return genesisBlock, bdb, cm, db, e, err
+	return e, cm, func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		e.Shutdown(ctx)
+
+		db.Close()
+		bdb.Close()
+	}, nil
 }
 
 func newServer(t *testing.T, cm *chain.Manager, e *explorer.Explorer, listenAddr string) (*http.Server, net.Listener, error) {
@@ -102,16 +108,13 @@ func TestAPI(t *testing.T) {
 	giftSF := uint64(1000)
 	contractFilesize := uint64(10)
 
-	genesisBlock, bdb, cm, db, e, err := newExplorer(t, addr1, giftSC, giftSF)
+	network, genesisBlock := testutil.TestV1Network(addr1, giftSC, giftSF)
+
+	e, cm, close, err := newExplorer(t, network, genesisBlock)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer bdb.Close()
-	defer db.Close()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	defer e.Shutdown(ctx)
+	defer close()
 
 	listenAddr := "127.0.0.1:9999"
 	server, listener, err := newServer(t, cm, e, listenAddr)
