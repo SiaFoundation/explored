@@ -139,7 +139,7 @@ func checkMetrics(t *testing.T, db explorer.Store, cm *chain.Manager, expected e
 	// don't check circulating supply here because it requires a lot of accounting
 }
 
-func checkFCRevisions(t *testing.T, revisionNumbers []uint64, fcs []types.FileContractElement) {
+func checkFCRevisions(t *testing.T, revisionNumbers []uint64, fcs []explorer.FileContract) {
 	t.Helper()
 
 	check(t, "number of revisions", len(revisionNumbers), len(fcs))
