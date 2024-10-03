@@ -30,6 +30,47 @@ const (
 	SourceMissedProofOutput
 )
 
+// MarshalJSON implements json.Marshaler.
+func (s Source) MarshalJSON() ([]byte, error) {
+	sourceToString := map[Source]string{
+		SourceInvalid:           "invalid",
+		SourceMinerPayout:       "miner_payout",
+		SourceTransaction:       "transaction",
+		SourceValidProofOutput:  "valid_proof_output",
+		SourceMissedProofOutput: "missed_proof_output",
+	}
+
+	str, ok := sourceToString[s]
+	if !ok {
+		str = "invalid" // "invalid" if source is unknown
+	}
+	return json.Marshal(str)
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (s *Source) UnmarshalJSON(data []byte) error {
+	stringToSource := map[string]Source{
+		"invalid":             SourceInvalid,
+		"miner_payout":        SourceMinerPayout,
+		"transaction":         SourceTransaction,
+		"valid_proof_output":  SourceValidProofOutput,
+		"missed_proof_output": SourceMissedProofOutput,
+	}
+
+	var str string
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
+	}
+
+	source, ok := stringToSource[str]
+	if !ok {
+		return errors.New("invalid source type")
+	}
+
+	*s = source
+	return nil
+}
+
 // A SearchType represents the type of element found during a search.
 type SearchType string
 
@@ -50,20 +91,6 @@ const (
 	// SearchTypeContract means we found a contract with the given ID.
 	SearchTypeContract SearchType = "contract"
 )
-
-// MarshalJSON implements json.Marshaler.
-func (d Source) MarshalJSON() ([]byte, error) {
-	switch d {
-	case SourceInvalid:
-		return json.Marshal("invalid")
-	case SourceMinerPayout:
-		return json.Marshal("miner_payout")
-	case SourceTransaction:
-		return json.Marshal("transaction")
-	default:
-		return nil, errors.New("invalid Source value")
-	}
-}
 
 // A SiacoinInput is a types.SiacoinInput with information about the parent
 // value.

@@ -39,6 +39,8 @@ type ChainManager interface {
 // A Store is a database that stores information about elements, contracts,
 // and blocks.
 type Store interface {
+	Close() error
+
 	UpdateChainState(reverted []chain.RevertUpdate, applied []chain.ApplyUpdate) error
 	AddHostScans(scans []HostScan) error
 
