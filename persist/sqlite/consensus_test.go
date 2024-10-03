@@ -492,7 +492,7 @@ func prepareContractFormation(renterPubKey types.PublicKey, hostKey types.Public
 	hostPayout := hostCollateral
 	payout := taxAdjustedPayout(renterPayout.Add(hostPayout))
 	return types.FileContract{
-		Filesize:       contractFilesize,
+		Filesize:       testutil.ContractFilesize,
 		FileMerkleRoot: types.Hash256{},
 		WindowStart:    startHeight,
 		WindowEnd:      endHeight,
@@ -648,7 +648,7 @@ func TestFileContract(t *testing.T) {
 	testutil.CheckMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
-		StorageUtilization: contractFilesize,
+		StorageUtilization: testutil.ContractFilesize,
 	})
 
 	// Explorer.Contracts should return latest revision
@@ -691,7 +691,7 @@ func TestFileContract(t *testing.T) {
 		testutil.CheckMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    1,
-			StorageUtilization: 1 * contractFilesize,
+			StorageUtilization: 1 * testutil.ContractFilesize,
 		})
 
 		if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
@@ -837,7 +837,7 @@ func TestEphemeralFileContract(t *testing.T) {
 	testutil.CheckMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
-		StorageUtilization: contractFilesize,
+		StorageUtilization: testutil.ContractFilesize,
 	})
 
 	{
@@ -932,7 +932,7 @@ func TestEphemeralFileContract(t *testing.T) {
 	testutil.CheckMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
-		StorageUtilization: contractFilesize,
+		StorageUtilization: testutil.ContractFilesize,
 	})
 
 	// Explorer.Contracts should return latest revision
@@ -2229,7 +2229,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	testutil.CheckMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
-		StorageUtilization: contractFilesize,
+		StorageUtilization: testutil.ContractFilesize,
 	})
 
 	{
@@ -2293,7 +2293,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	testutil.CheckMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
-		StorageUtilization: contractFilesize + 10,
+		StorageUtilization: testutil.ContractFilesize + 10,
 	})
 
 	// Explorer.Contracts should return latest revision
@@ -2388,12 +2388,12 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			testutil.CheckFCRevisions(t, []uint64{0}, dbFCs)
 		}
 
-		// storage utilization should be back to contractFilesize instead of
-		// contractFilesize + 10
+		// storage utilization should be back to testutil.ContractFilesize instead of
+		// testutil.ContractFilesize + 10
 		testutil.CheckMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    1,
-			StorageUtilization: contractFilesize,
+			StorageUtilization: testutil.ContractFilesize,
 		})
 	}
 
@@ -2434,7 +2434,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		testutil.CheckMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    1,
-			StorageUtilization: contractFilesize + 10,
+			StorageUtilization: testutil.ContractFilesize + 10,
 		})
 	}
 

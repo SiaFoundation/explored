@@ -10,6 +10,9 @@ import (
 	"go.sia.tech/coreutils/chain"
 )
 
+// ContractFilesize is the default file size of contracts formed with PrepareContractFormation.
+const ContractFilesize = 10
+
 // TestV1Network generates a test network that funds the giftAddr with `sc`
 // Siacoins and `sf` Siafunds.
 func TestV1Network(giftAddr types.Address, sc types.Currency, sf uint64) (*consensus.Network, types.Block) {
@@ -45,8 +48,6 @@ func TestV1Network(giftAddr types.Address, sc types.Currency, sf uint64) (*conse
 // use version of rhp2.PrepareContractFormation because it doesn't require
 // a host settings struct and sets a default file size.
 func PrepareContractFormation(renterPubKey types.PublicKey, hostKey types.PublicKey, renterPayout, hostCollateral types.Currency, startHeight uint64, endHeight uint64, refundAddr types.Address) types.FileContract {
-	const contractFilesize = 10
-
 	taxAdjustedPayout := func(target types.Currency) types.Currency {
 		guess := target.Mul64(1000).Div64(961)
 		mod64 := func(c types.Currency, v uint64) types.Currency {
@@ -77,7 +78,7 @@ func PrepareContractFormation(renterPubKey types.PublicKey, hostKey types.Public
 	hostPayout := hostCollateral
 	payout := taxAdjustedPayout(renterPayout.Add(hostPayout))
 	return types.FileContract{
-		Filesize:       contractFilesize,
+		Filesize:       ContractFilesize,
 		FileMerkleRoot: types.Hash256{},
 		WindowStart:    startHeight,
 		WindowEnd:      endHeight,

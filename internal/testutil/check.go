@@ -173,7 +173,7 @@ func CheckChainIndices(t *testing.T, db explorer.Store, txnID types.TransactionI
 }
 
 // CheckFCRevisions checks that the revision numbers for the file contracts match.
-func CheckFCRevisions(t *testing.T, revisionNumbers []uint64, fcs []types.FileContractElement) {
+func CheckFCRevisions(t *testing.T, revisionNumbers []uint64, fcs []explorer.FileContract) {
 	t.Helper()
 
 	Equal(t, "number of revisions", len(revisionNumbers), len(fcs))
