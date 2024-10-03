@@ -337,7 +337,7 @@ func TestAPI(t *testing.T) {
 
 			testutil.Equal(t, "len(transactions)", len(b2.Transactions), len(resp.Transactions))
 			for i := range b2.Transactions {
-				testutil.EqualTransaction(t, b2.Transactions[i], resp.Transactions[i])
+				testutil.CheckTransaction(t, b2.Transactions[i], resp.Transactions[i])
 			}
 		}},
 		{"Transaction", func(t *testing.T) {
@@ -345,14 +345,14 @@ func TestAPI(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.EqualTransaction(t, txn1, resp)
+			testutil.CheckTransaction(t, txn1, resp)
 		}},
 		{"Transactions", func(t *testing.T) {
 			resp, err := client.Transactions([]types.TransactionID{txn2.ID()})
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.EqualTransaction(t, txn2, resp[0])
+			testutil.CheckTransaction(t, txn2, resp[0])
 		}},
 		{"TransactionChainIndices", func(t *testing.T) {
 			resp, err := client.TransactionChainIndices(txn2.ID(), 0, 500)
@@ -422,7 +422,7 @@ func TestAPI(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.EqualFC(t, true, false, false, revFC, resp)
+			testutil.CheckFC(t, true, false, false, revFC, resp)
 		}},
 		{"Contracts", func(t *testing.T) {
 			resp, err := client.Contracts([]types.FileContractID{txn1.FileContractID(0)})
@@ -430,7 +430,7 @@ func TestAPI(t *testing.T) {
 				t.Fatal(err)
 			}
 			testutil.Equal(t, "len(contracts)", 1, len(resp))
-			testutil.EqualFC(t, true, false, false, revFC, resp[0])
+			testutil.CheckFC(t, true, false, false, revFC, resp[0])
 		}},
 		{"ContractsKey", func(t *testing.T) {
 			resp, err := client.ContractsKey(renterPublicKey)
@@ -438,7 +438,7 @@ func TestAPI(t *testing.T) {
 				t.Fatal(err)
 			}
 			testutil.Equal(t, "len(contracts)", 1, len(resp))
-			testutil.EqualFC(t, true, false, false, revFC, resp[0])
+			testutil.CheckFC(t, true, false, false, revFC, resp[0])
 		}},
 		{"Search siacoin", func(t *testing.T) {
 			resp, err := client.Search(types.Hash256(txn1.SiacoinOutputID(0)))

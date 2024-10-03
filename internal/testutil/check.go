@@ -9,7 +9,7 @@ import (
 	"go.sia.tech/explored/explorer"
 )
 
-// Equal checks if two values of the same type are equal and fails otherwise.
+// Check checks if two values of the same type are equal and fails otherwise.
 func Equal[T any](t *testing.T, desc string, expect, got T) {
 	t.Helper()
 
@@ -18,8 +18,8 @@ func Equal[T any](t *testing.T, desc string, expect, got T) {
 	}
 }
 
-// EqualBalance checks that an address has the balances we expect.
-func EqualBalance(t *testing.T, db explorer.Store, addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
+// CheckBalance checks that an address has the balances we expect.
+func CheckBalance(t *testing.T, db explorer.Store, addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
 	t.Helper()
 
 	sc, immatureSC, sf, err := db.Balance(addr)
@@ -31,9 +31,9 @@ func EqualBalance(t *testing.T, db explorer.Store, addr types.Address, expectSC,
 	Equal(t, "siafunds", expectSF, sf)
 }
 
-// EqualTransaction checks the inputs and outputs of the retrieved transaction
+// CheckTransaction checks the inputs and outputs of the retrieved transaction
 // with the source transaction.
-func EqualTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer.Transaction) {
+func CheckTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer.Transaction) {
 	t.Helper()
 
 	Equal(t, "siacoin inputs", len(expectTxn.SiacoinInputs), len(gotTxn.SiacoinInputs))
@@ -94,16 +94,16 @@ func EqualTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer
 		Equal(t, "timelock", expectSig.Timelock, gotSig.Timelock)
 		Equal(t, "signature", expectSig.Signature, gotSig.Signature)
 
-		// reflect.DeepEqual treats empty slices as different from nil
+		// reflect.DeepCheck treats empty slices as different from nil
 		// slices so these will differ because the decoder is doing
 		// cf.X = make([]uint64, d.ReadPrefix()) and the prefix is 0
 		// testutil.Equal(t, "covered fields", expectSig.CoveredFields, gotSig.CoveredFields)
 	}
 }
 
-// EqualFC checks the retrieved file contract with the source file contract in
+// CheckFC checks the retrieved file contract with the source file contract in
 // addition to checking the resolved and valid fields.
-func EqualFC(t *testing.T, revision, resolved, valid bool, expected types.FileContract, got explorer.FileContract) {
+func CheckFC(t *testing.T, revision, resolved, valid bool, expected types.FileContract, got explorer.FileContract) {
 	t.Helper()
 
 	Equal(t, "resolved state", resolved, got.Resolved)
@@ -131,8 +131,8 @@ func EqualFC(t *testing.T, revision, resolved, valid bool, expected types.FileCo
 	}
 }
 
-// EqualMetrics checks the that the metrics from the DB match what we expect.
-func EqualMetrics(t *testing.T, db explorer.Store, cm *chain.Manager, expected explorer.Metrics) {
+// CheckMetrics checks the that the metrics from the DB match what we expect.
+func CheckMetrics(t *testing.T, db explorer.Store, cm *chain.Manager, expected explorer.Metrics) {
 	t.Helper()
 
 	tip, err := db.Tip()
@@ -155,9 +155,9 @@ func EqualMetrics(t *testing.T, db explorer.Store, cm *chain.Manager, expected e
 	// don't check circulating supply here because it requires a lot of accounting
 }
 
-// EqualChainIndices checks that the chain indices that a transaction was in
+// CheckChainIndices checks that the chain indices that a transaction was in
 // from the explorer match the expected chain indices.
-func EqualChainIndices(t *testing.T, db explorer.Store, txnID types.TransactionID, expected []types.ChainIndex) {
+func CheckChainIndices(t *testing.T, db explorer.Store, txnID types.TransactionID, expected []types.ChainIndex) {
 	t.Helper()
 
 	indices, err := db.TransactionChainIndices(txnID, 0, 100)
@@ -172,8 +172,8 @@ func EqualChainIndices(t *testing.T, db explorer.Store, txnID types.TransactionI
 	}
 }
 
-// EqualFCRevisions checks that the revision numbers for the file contracts match.
-func EqualFCRevisions(t *testing.T, revisionNumbers []uint64, fcs []types.FileContractElement) {
+// CheckFCRevisions checks that the revision numbers for the file contracts match.
+func CheckFCRevisions(t *testing.T, revisionNumbers []uint64, fcs []types.FileContractElement) {
 	t.Helper()
 
 	Equal(t, "number of revisions", len(revisionNumbers), len(fcs))
