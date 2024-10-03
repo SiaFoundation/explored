@@ -18,8 +18,6 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
-const contractFilesize = 10
-
 func syncDB(t *testing.T, db *sqlite.Store, cm *chain.Manager) {
 	index, err := db.Tip()
 	if err != nil && !errors.Is(err, explorer.ErrNoTip) {

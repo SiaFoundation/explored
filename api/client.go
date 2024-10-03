@@ -186,7 +186,7 @@ func (c *Client) ContractsKey(key types.PublicKey) (resp []explorer.FileContract
 
 // ContractRevisions returns all the revisions of the contract with the
 // specified ID.
-func (c *Client) ContractRevisions(id types.FileContractID) (resp []types.FileContractElement, err error) {
+func (c *Client) ContractRevisions(id types.FileContractID) (resp []explorer.FileContract, err error) {
 	err = c.c.GET(fmt.Sprintf("/contracts/%s/revisions", id), &resp)
 	return
 }
