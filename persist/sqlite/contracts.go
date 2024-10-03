@@ -82,7 +82,7 @@ func (s *Store) Contracts(ids []types.FileContractID) (result []explorer.FileCon
 }
 
 // ContractRevisions implements explorer.Store.
-func (s *Store) ContractRevisions(id types.FileContractID) (revisions []types.FileContractElement, err error) {
+func (s *Store) ContractRevisions(id types.FileContractID) (revisions []explorer.FileContract, err error) {
 	err = s.transaction(func(tx *txn) error {
 		query := `SELECT fc.id, fc.contract_id, fc.leaf_index, fc.resolved, fc.valid, rev.confirmation_index, rev.confirmation_transaction_id, rev.proof_index, rev.proof_transaction_id, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
 			FROM file_contract_elements fc
@@ -97,8 +97,8 @@ func (s *Store) ContractRevisions(id types.FileContractID) (revisions []types.Fi
 
 		// fetch revisions
 		type fce struct {
-			ID int64
-			types.FileContractElement
+			ID           int64
+			FileContract explorer.FileContract
 		}
 		var fces []fce
 		var contractIDs []int64
@@ -108,7 +108,7 @@ func (s *Store) ContractRevisions(id types.FileContractID) (revisions []types.Fi
 				return fmt.Errorf("failed to scan file contract: %w", err)
 			}
 
-			fces = append(fces, fce{ID: contractID, FileContractElement: fc.FileContractElement})
+			fces = append(fces, fce{ID: contractID, FileContract: fc})
 			contractIDs = append(contractIDs, contractID)
 		}
 
@@ -119,7 +119,7 @@ func (s *Store) ContractRevisions(id types.FileContractID) (revisions []types.Fi
 		}
 
 		// merge outputs into revisions
-		revisions = make([]types.FileContractElement, len(fces))
+		revisions = make([]explorer.FileContract, len(fces))
 		for i, revision := range fces {
 			output, found := proofOutputs[revision.ID]
 			if !found {
@@ -131,7 +131,7 @@ func (s *Store) ContractRevisions(id types.FileContractID) (revisions []types.Fi
 		}
 
 		for i, fce := range fces {
-			revisions[i] = fce.FileContractElement
+			revisions[i] = fce.FileContract
 		}
 
 		if len(revisions) == 0 {

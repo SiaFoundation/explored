@@ -62,7 +62,7 @@ type (
 		AddressEvents(address types.Address, offset, limit uint64) (events []explorer.Event, err error)
 		Contracts(ids []types.FileContractID) (result []explorer.FileContract, err error)
 		ContractsKey(key types.PublicKey) (result []explorer.FileContract, err error)
-		ContractRevisions(id types.FileContractID) (result []types.FileContractElement, err error)
+		ContractRevisions(id types.FileContractID) (result []explorer.FileContract, err error)
 		Search(id types.Hash256) (explorer.SearchType, error)
 
 		Hosts(pks []types.PublicKey) ([]explorer.Host, error)

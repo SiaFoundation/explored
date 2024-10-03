@@ -56,7 +56,7 @@ type Store interface {
 	Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 	Contracts(ids []types.FileContractID) (result []FileContract, err error)
 	ContractsKey(key types.PublicKey) (result []FileContract, err error)
-	ContractRevisions(id types.FileContractID) (result []types.FileContractElement, err error)
+	ContractRevisions(id types.FileContractID) (result []FileContract, err error)
 	SiacoinElements(ids []types.SiacoinOutputID) (result []SiacoinOutput, err error)
 	SiafundElements(ids []types.SiafundOutputID) (result []SiafundOutput, err error)
 
@@ -243,7 +243,7 @@ func (e *Explorer) ContractsKey(key types.PublicKey) (result []FileContract, err
 
 // ContractRevisions returns all the revisions of the contract with the
 // specified ID.
-func (e *Explorer) ContractRevisions(id types.FileContractID) (result []types.FileContractElement, err error) {
+func (e *Explorer) ContractRevisions(id types.FileContractID) (result []FileContract, err error) {
 	return e.s.ContractRevisions(id)
 }
 
