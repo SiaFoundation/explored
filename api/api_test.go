@@ -65,7 +65,7 @@ func newExplorer(t *testing.T, network *consensus.Network, genesisBlock types.Bl
 	}, nil
 }
 
-func newServer(t *testing.T, cm *chain.Manager, e *explorer.Explorer, listenAddr string) (*http.Server, net.Listener, error) {
+func newServer(t *testing.T, cm *chain.Manager, e *explorer.Explorer, listenAddr string) (*http.Server, func(), error) {
 	api := api.NewServer(e, cm, &syncer.Syncer{})
 	server := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -88,7 +88,10 @@ func newServer(t *testing.T, cm *chain.Manager, e *explorer.Explorer, listenAddr
 		server.Serve(httpListener)
 	}()
 
-	return server, httpListener, nil
+	return server, func() {
+		server.Close()
+		httpListener.Close()
+	}, nil
 }
 
 func TestAPI(t *testing.T) {
@@ -117,12 +120,11 @@ func TestAPI(t *testing.T) {
 	defer closer()
 
 	listenAddr := "127.0.0.1:9999"
-	server, listener, err := newServer(t, cm, e, listenAddr)
+	_, closer, err = newServer(t, cm, e, listenAddr)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer server.Close()
-	defer listener.Close()
+	defer closer()
 
 	scOutputID := genesisBlock.Transactions[0].SiacoinOutputID(0)
 	sfOutputID := genesisBlock.Transactions[0].SiafundOutputID(0)
