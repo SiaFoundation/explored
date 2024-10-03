@@ -2,7 +2,6 @@ package api_test
 
 import (
 	"context"
-	"errors"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -24,7 +23,7 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
-func newExplorer(t *testing.T, addr1 types.Address, giftSC types.Currency, giftSF uint64) (types.Block, *coreutils.BoltChainDB, *chain.Manager, explorer.Store, *explorer.Explorer, error) {
+func newExplorer(t *testing.T, addr types.Address, giftSC types.Currency, giftSF uint64) (types.Block, *coreutils.BoltChainDB, *chain.Manager, explorer.Store, *explorer.Explorer, error) {
 	log := zaptest.NewLogger(t)
 	dir := t.TempDir()
 
@@ -38,7 +37,7 @@ func newExplorer(t *testing.T, addr1 types.Address, giftSC types.Currency, giftS
 		t.Fatal(err)
 	}
 
-	network, genesisBlock := testutil.TestV1Network(addr1, giftSC, giftSF)
+	network, genesisBlock := testutil.TestV1Network(addr, giftSC, giftSF)
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -80,20 +79,13 @@ func newServer(t *testing.T, cm *chain.Manager, e *explorer.Explorer, listenAddr
 	}
 
 	go func() {
-		if err := server.Serve(httpListener); err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, net.ErrClosed) {
-			return
-		}
+		server.Serve(httpListener)
 	}()
 
 	return server, httpListener, nil
 }
 
 func TestAPI(t *testing.T) {
-	const (
-		contractFilesize = 10
-		listenAddr       = "127.0.0.1:9999"
-	)
-
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
 
@@ -107,7 +99,8 @@ func TestAPI(t *testing.T) {
 	hostPublicKey := hostPrivateKey.PublicKey()
 
 	giftSC := types.Siacoins(1000)
-	const giftSF = 1000
+	giftSF := 1000
+	contractFilesize := 10
 
 	genesisBlock, bdb, cm, db, e, err := newExplorer(t, addr1, giftSC, giftSF)
 	if err != nil {
@@ -120,6 +113,7 @@ func TestAPI(t *testing.T) {
 	defer cancel()
 	defer e.Shutdown(ctx)
 
+	listenAddr := "127.0.0.1:9999"
 	server, listener, err := newServer(t, cm, e, listenAddr)
 	if err != nil {
 		t.Fatal(err)
