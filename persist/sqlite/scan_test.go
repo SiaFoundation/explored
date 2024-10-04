@@ -11,9 +11,11 @@ import (
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils"
 	"go.sia.tech/coreutils/chain"
+	ctestutil "go.sia.tech/coreutils/testutil"
 	"go.sia.tech/explored/config"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/testutil"
+
 	"go.uber.org/zap/zaptest"
 )
 
@@ -60,7 +62,7 @@ func TestScan(t *testing.T) {
 	}
 	defer bdb.Close()
 
-	network, genesisBlock := testutil.TestV1Network(types.VoidAddress, types.ZeroCurrency, 0)
+	network, genesisBlock := ctestutil.Network()
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {

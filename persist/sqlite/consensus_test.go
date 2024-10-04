@@ -12,6 +12,7 @@ import (
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils"
 	"go.sia.tech/coreutils/chain"
+	ctestutil "go.sia.tech/coreutils/testutil"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/testutil"
 	"go.sia.tech/explored/persist/sqlite"
@@ -57,7 +58,7 @@ func TestBalance(t *testing.T) {
 	}
 	defer bdb.Close()
 
-	network, genesisBlock := testutil.TestV1Network(types.VoidAddress, types.ZeroCurrency, 0)
+	network, genesisBlock := ctestutil.Network()
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -171,8 +172,9 @@ func TestSiafundBalance(t *testing.T) {
 	pk3 := types.GeneratePrivateKey()
 	addr3 := types.StandardUnlockHash(pk3.PublicKey())
 
-	const giftSF = 10000
-	network, genesisBlock := testutil.TestV1Network(addr1, types.ZeroCurrency, giftSF)
+	network, genesisBlock := ctestutil.Network()
+	genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	giftSF := genesisBlock.Transactions[0].SiafundOutputs[0].Value
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -248,8 +250,9 @@ func TestSendTransactions(t *testing.T) {
 	pk3 := types.GeneratePrivateKey()
 	addr3 := types.StandardUnlockHash(pk3.PublicKey())
 
-	const giftSF = 10000
-	network, genesisBlock := testutil.TestV1Network(addr1, types.ZeroCurrency, giftSF)
+	network, genesisBlock := ctestutil.Network()
+	genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	giftSF := genesisBlock.Transactions[0].SiafundOutputs[0].Value
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -426,7 +429,7 @@ func TestTip(t *testing.T) {
 	}
 	defer bdb.Close()
 
-	network, genesisBlock := testutil.TestV1Network(types.VoidAddress, types.ZeroCurrency, 0)
+	network, genesisBlock := ctestutil.Network()
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -536,8 +539,10 @@ func TestFileContract(t *testing.T) {
 	hostPrivateKey := types.GeneratePrivateKey()
 	hostPublicKey := hostPrivateKey.PublicKey()
 
-	giftSC := types.Siacoins(1000)
-	network, genesisBlock := testutil.TestV1Network(addr1, giftSC, 0)
+	network, genesisBlock := ctestutil.Network()
+	genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
+
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
 		t.Fatal(err)
@@ -781,8 +786,10 @@ func TestEphemeralFileContract(t *testing.T) {
 	hostPrivateKey := types.GeneratePrivateKey()
 	hostPublicKey := hostPrivateKey.PublicKey()
 
-	giftSC := types.Siacoins(1000)
-	network, genesisBlock := testutil.TestV1Network(addr1, giftSC, 0)
+	network, genesisBlock := ctestutil.Network()
+	genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
+
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
 		t.Fatal(err)
@@ -1012,7 +1019,7 @@ func TestRevertTip(t *testing.T) {
 	}
 	defer bdb.Close()
 
-	network, genesisBlock := testutil.TestV1Network(types.VoidAddress, types.ZeroCurrency, 0)
+	network, genesisBlock := ctestutil.Network()
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -1100,7 +1107,7 @@ func TestRevertBalance(t *testing.T) {
 	}
 	defer bdb.Close()
 
-	network, genesisBlock := testutil.TestV1Network(types.VoidAddress, types.ZeroCurrency, 0)
+	network, genesisBlock := ctestutil.Network()
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -1333,8 +1340,9 @@ func TestRevertSendTransactions(t *testing.T) {
 	// t.Log("addr2:", addr2)
 	// t.Log("addr3:", addr3)
 
-	const giftSF = 10000
-	network, genesisBlock := testutil.TestV1Network(addr1, types.ZeroCurrency, giftSF)
+	network, genesisBlock := ctestutil.Network()
+	genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	giftSF := genesisBlock.Transactions[0].SiafundOutputs[0].Value
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -1641,7 +1649,7 @@ func TestHostAnnouncement(t *testing.T) {
 	}
 	defer bdb.Close()
 
-	network, genesisBlock := testutil.TestV1Network(types.VoidAddress, types.ZeroCurrency, 0)
+	network, genesisBlock := ctestutil.Network()
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -1862,9 +1870,11 @@ func TestMultipleReorg(t *testing.T) {
 	// t.Log("addr2:", addr2)
 	// t.Log("addr3:", addr3)
 
-	const giftSF = 500
-	giftSC := types.Siacoins(500)
-	network, genesisBlock := testutil.TestV1Network(addr1, giftSC, giftSF)
+	network, genesisBlock := ctestutil.Network()
+	genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
+	giftSF := genesisBlock.Transactions[0].SiafundOutputs[0].Value
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -2192,8 +2202,10 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	hostPrivateKey := types.GeneratePrivateKey()
 	hostPublicKey := hostPrivateKey.PublicKey()
 
-	giftSC := types.Siacoins(1000)
-	network, genesisBlock := testutil.TestV1Network(addr1, giftSC, 0)
+	network, genesisBlock := ctestutil.Network()
+	genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
+
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
 		t.Fatal(err)
@@ -2512,8 +2524,9 @@ func TestMetricCirculatingSupply(t *testing.T) {
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
 
-	giftSC := types.Siacoins(1000)
-	network, genesisBlock := testutil.TestV1Network(addr1, giftSC, 0)
+	network, genesisBlock := ctestutil.Network()
+	genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
 		t.Fatal(err)

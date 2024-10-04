@@ -15,6 +15,7 @@ import (
 	"go.sia.tech/coreutils"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/coreutils/syncer"
+	ctestutil "go.sia.tech/coreutils/testutil"
 	"go.sia.tech/explored/api"
 	"go.sia.tech/explored/build"
 	"go.sia.tech/explored/config"
@@ -107,11 +108,13 @@ func TestAPI(t *testing.T) {
 	hostPrivateKey := types.GeneratePrivateKey()
 	hostPublicKey := hostPrivateKey.PublicKey()
 
-	giftSC := types.Siacoins(1000)
-	giftSF := uint64(1000)
 	contractFilesize := uint64(10)
 
-	network, genesisBlock := testutil.TestV1Network(addr1, giftSC, giftSF)
+	network, genesisBlock := ctestutil.Network()
+	genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
+	giftSF := genesisBlock.Transactions[0].SiafundOutputs[0].Value
 
 	e, cm, closer, err := newExplorer(t, network, genesisBlock)
 	if err != nil {

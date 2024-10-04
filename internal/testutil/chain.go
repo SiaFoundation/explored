@@ -13,36 +13,6 @@ import (
 // ContractFilesize is the default file size of contracts formed with PrepareContractFormation.
 const ContractFilesize = 10
 
-// TestV1Network generates a test network that funds the giftAddr with `sc`
-// Siacoins and `sf` Siafunds.
-func TestV1Network(giftAddr types.Address, sc types.Currency, sf uint64) (*consensus.Network, types.Block) {
-	// use a modified version of Zen
-	n, genesisBlock := chain.TestnetZen()
-	n.InitialTarget = types.BlockID{0xFF}
-	n.HardforkDevAddr.Height = 1
-	n.HardforkTax.Height = 1
-	n.HardforkStorageProof.Height = 1
-	n.HardforkOak.Height = 1
-	n.HardforkASIC.Height = 1
-	n.HardforkFoundation.Height = 1
-	n.HardforkV2.AllowHeight = 1000
-	n.HardforkV2.RequireHeight = 1000
-	genesisBlock.Transactions = []types.Transaction{{}}
-	if sf > 0 {
-		genesisBlock.Transactions[0].SiafundOutputs = []types.SiafundOutput{{
-			Address: giftAddr,
-			Value:   sf,
-		}}
-	}
-	if sc.Cmp(types.ZeroCurrency) == 1 {
-		genesisBlock.Transactions[0].SiacoinOutputs = []types.SiacoinOutput{{
-			Address: giftAddr,
-			Value:   sc,
-		}}
-	}
-	return n, genesisBlock
-}
-
 // PrepareContractFormation creates a file contract using the specified
 // renter/host keys, payouts, and start/end window.  It is an easier to
 // use version of rhp2.PrepareContractFormation because it doesn't require
