@@ -25,7 +25,7 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
-func newExplorer(t *testing.T, network *consensus.Network, genesisBlock types.Block) (*explorer.Explorer, *chain.Manager, func(), error) {
+func newExplorer(t *testing.T, network *consensus.Network, genesisBlock types.Block) (*explorer.Explorer, *chain.Manager, error) {
 	log := zaptest.NewLogger(t)
 	dir := t.TempDir()
 
@@ -56,17 +56,19 @@ func newExplorer(t *testing.T, network *consensus.Network, genesisBlock types.Bl
 		t.Fatal(err)
 	}
 
-	return e, cm, func() {
+	t.Cleanup(func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		e.Shutdown(ctx)
 
 		db.Close()
 		bdb.Close()
-	}, nil
+	})
+
+	return e, cm, nil
 }
 
-func newServer(t *testing.T, cm *chain.Manager, e *explorer.Explorer, listenAddr string) (*http.Server, func(), error) {
+func newServer(t *testing.T, cm *chain.Manager, e *explorer.Explorer, listenAddr string) (*http.Server, error) {
 	api := api.NewServer(e, cm, &syncer.Syncer{})
 	server := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -85,14 +87,15 @@ func newServer(t *testing.T, cm *chain.Manager, e *explorer.Explorer, listenAddr
 		t.Fatal(err)
 	}
 
+	t.Cleanup(func() {
+		server.Close()
+		httpListener.Close()
+	})
 	go func() {
 		server.Serve(httpListener)
 	}()
 
-	return server, func() {
-		server.Close()
-		httpListener.Close()
-	}, nil
+	return server, nil
 }
 
 func TestAPI(t *testing.T) {
@@ -116,18 +119,16 @@ func TestAPI(t *testing.T) {
 	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
 	giftSF := genesisBlock.Transactions[0].SiafundOutputs[0].Value
 
-	e, cm, closer, err := newExplorer(t, network, genesisBlock)
+	e, cm, err := newExplorer(t, network, genesisBlock)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer closer()
 
 	listenAddr := "127.0.0.1:9999"
-	_, closer, err = newServer(t, cm, e, listenAddr)
+	_, err = newServer(t, cm, e, listenAddr)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer closer()
 
 	scOutputID := genesisBlock.Transactions[0].SiacoinOutputID(0)
 	sfOutputID := genesisBlock.Transactions[0].SiafundOutputID(0)
