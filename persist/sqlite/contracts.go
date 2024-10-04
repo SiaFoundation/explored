@@ -86,7 +86,7 @@ func (s *Store) ContractRevisions(id types.FileContractID) (revisions []explorer
 	err = s.transaction(func(tx *txn) error {
 		query := `SELECT fc.id, fc.contract_id, fc.leaf_index, fc.resolved, fc.valid, rev.confirmation_index, rev.confirmation_transaction_id, rev.proof_index, rev.proof_transaction_id, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
 			FROM file_contract_elements fc
-			LEFT JOIN last_contract_revision rev ON (rev.contract_element_id = fc.id)
+			JOIN last_contract_revision rev ON (rev.contract_id = fc.contract_id)
 			WHERE fc.contract_id = ?
 			ORDER BY fc.revision_number ASC`
 		rows, err := tx.Query(query, encode(id))
