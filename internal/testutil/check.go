@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"go.sia.tech/core/types"
-	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
 )
 
@@ -128,56 +127,5 @@ func CheckFC(t *testing.T, revision, resolved, valid bool, expected types.FileCo
 	for i := range expected.MissedProofOutputs {
 		Equal(t, "missed proof output address", expected.MissedProofOutputs[i].Address, gotFC.MissedProofOutputs[i].Address)
 		Equal(t, "missed proof output value", expected.MissedProofOutputs[i].Value, gotFC.MissedProofOutputs[i].Value)
-	}
-}
-
-// CheckMetrics checks the that the metrics from the DB match what we expect.
-func CheckMetrics(t *testing.T, db explorer.Store, cm *chain.Manager, expected explorer.Metrics) {
-	t.Helper()
-
-	tip, err := db.Tip()
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err := db.Metrics(tip.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	Equal(t, "index", cm.Tip(), got.Index)
-	Equal(t, "difficulty", cm.TipState().Difficulty, got.Difficulty)
-	Equal(t, "total hosts", expected.TotalHosts, got.TotalHosts)
-	Equal(t, "active contracts", expected.ActiveContracts, got.ActiveContracts)
-	Equal(t, "failed contracts", expected.FailedContracts, got.FailedContracts)
-	Equal(t, "successful contracts", expected.SuccessfulContracts, got.SuccessfulContracts)
-	Equal(t, "contract revenue", expected.ContractRevenue, got.ContractRevenue)
-	Equal(t, "storage utilization", expected.StorageUtilization, got.StorageUtilization)
-	// don't check circulating supply here because it requires a lot of accounting
-}
-
-// CheckChainIndices checks that the chain indices that a transaction was in
-// from the explorer match the expected chain indices.
-func CheckChainIndices(t *testing.T, db explorer.Store, txnID types.TransactionID, expected []types.ChainIndex) {
-	t.Helper()
-
-	indices, err := db.TransactionChainIndices(txnID, 0, 100)
-	switch {
-	case err != nil:
-		t.Fatal(err)
-	case len(indices) != len(expected):
-		t.Fatalf("expected %d indices, got %d", len(expected), len(indices))
-	}
-	for i := range indices {
-		Equal(t, "index", expected[i], indices[i])
-	}
-}
-
-// CheckFCRevisions checks that the revision numbers for the file contracts match.
-func CheckFCRevisions(t *testing.T, revisionNumbers []uint64, fcs []explorer.FileContract) {
-	t.Helper()
-
-	Equal(t, "number of revisions", len(revisionNumbers), len(fcs))
-	for i := range revisionNumbers {
-		Equal(t, "revision number", revisionNumbers[i], fcs[i].FileContract.RevisionNumber)
 	}
 }

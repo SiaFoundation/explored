@@ -68,7 +68,6 @@ func PrepareContractFormation(renterPubKey types.PublicKey, hostKey types.Public
 }
 
 // CreateAnnouncement creates a host announcement.
-// TODO: use .ToArbitraryData
 func CreateAnnouncement(priv types.PrivateKey, netAddress string) []byte {
 	return chain.HostAnnouncement{
 		PublicKey:  priv.PublicKey(),
