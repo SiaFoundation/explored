@@ -1,219 +1,20 @@
 package sqlite_test
 
 import (
-	"bytes"
 	"errors"
-	"math/bits"
 	"path/filepath"
-	"reflect"
 	"testing"
 	"time"
 
-	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils"
 	"go.sia.tech/coreutils/chain"
+	ctestutil "go.sia.tech/coreutils/testutil"
 	"go.sia.tech/explored/explorer"
+	"go.sia.tech/explored/internal/testutil"
 	"go.sia.tech/explored/persist/sqlite"
 	"go.uber.org/zap/zaptest"
 )
-
-const contractFilesize = 10
-
-func testV1Network(giftAddr types.Address, sc types.Currency, sf uint64) (*consensus.Network, types.Block) {
-	// use a modified version of Zen
-	n, genesisBlock := chain.TestnetZen()
-	n.InitialTarget = types.BlockID{0xFF}
-	n.HardforkDevAddr.Height = 1
-	n.HardforkTax.Height = 1
-	n.HardforkStorageProof.Height = 1
-	n.HardforkOak.Height = 1
-	n.HardforkASIC.Height = 1
-	n.HardforkFoundation.Height = 1
-	n.HardforkV2.AllowHeight = 1000
-	n.HardforkV2.RequireHeight = 1000
-	genesisBlock.Transactions = []types.Transaction{{}}
-	if sf > 0 {
-		genesisBlock.Transactions[0].SiafundOutputs = []types.SiafundOutput{{
-			Address: giftAddr,
-			Value:   sf,
-		}}
-	}
-	if sc.Cmp(types.ZeroCurrency) == 1 {
-		genesisBlock.Transactions[0].SiacoinOutputs = []types.SiacoinOutput{{
-			Address: giftAddr,
-			Value:   sc,
-		}}
-	}
-	return n, genesisBlock
-}
-
-func testV2Network() (*consensus.Network, types.Block) {
-	// use a modified version of Zen
-	n, genesisBlock := chain.TestnetZen()
-	n.InitialTarget = types.BlockID{0xFF}
-	n.HardforkDevAddr.Height = 1
-	n.HardforkTax.Height = 1
-	n.HardforkStorageProof.Height = 1
-	n.HardforkOak.Height = 1
-	n.HardforkASIC.Height = 1
-	n.HardforkFoundation.Height = 1
-	n.HardforkV2.AllowHeight = 100
-	n.HardforkV2.RequireHeight = 110
-	return n, genesisBlock
-}
-
-func mineBlock(state consensus.State, txns []types.Transaction, minerAddr types.Address) types.Block {
-	b := types.Block{
-		ParentID:     state.Index.ID,
-		Timestamp:    types.CurrentTimestamp(),
-		Transactions: txns,
-		MinerPayouts: []types.SiacoinOutput{{Address: minerAddr, Value: state.BlockReward()}},
-	}
-	for b.ID().CmpWork(state.ChildTarget) < 0 {
-		b.Nonce += state.NonceFactor()
-	}
-	return b
-}
-
-func mineV2Block(state consensus.State, txns []types.V2Transaction, minerAddr types.Address) types.Block {
-	b := types.Block{
-		ParentID:     state.Index.ID,
-		Timestamp:    types.CurrentTimestamp(),
-		MinerPayouts: []types.SiacoinOutput{{Address: minerAddr, Value: state.BlockReward()}},
-
-		V2: &types.V2BlockData{
-			Transactions: txns,
-			Height:       state.Index.Height + 1,
-		},
-	}
-	b.V2.Commitment = state.Commitment(state.TransactionsCommitment(b.Transactions, b.V2Transactions()), b.MinerPayouts[0].Address)
-	for b.ID().CmpWork(state.ChildTarget) < 0 {
-		b.Nonce += state.NonceFactor()
-	}
-	return b
-}
-
-func signTxn(cs consensus.State, pk types.PrivateKey, txn *types.Transaction) {
-	appendSig := func(key types.PrivateKey, pubkeyIndex uint64, parentID types.Hash256) {
-		sig := key.SignHash(cs.WholeSigHash(*txn, parentID, pubkeyIndex, 0, nil))
-		txn.Signatures = append(txn.Signatures, types.TransactionSignature{
-			ParentID:       parentID,
-			CoveredFields:  types.CoveredFields{WholeTransaction: true},
-			PublicKeyIndex: pubkeyIndex,
-			Signature:      sig[:],
-		})
-	}
-	for i := range txn.SiacoinInputs {
-		appendSig(pk, 0, types.Hash256(txn.SiacoinInputs[i].ParentID))
-	}
-	for i := range txn.SiafundInputs {
-		appendSig(pk, 0, types.Hash256(txn.SiafundInputs[i].ParentID))
-	}
-}
-
-func check[T any](t *testing.T, desc string, expect, got T) {
-	if !reflect.DeepEqual(expect, got) {
-		t.Fatalf("expected %v %s, got %v", expect, desc, got)
-	}
-}
-
-func checkMetrics(t *testing.T, db explorer.Store, cm *chain.Manager, expected explorer.Metrics) {
-	tip, err := db.Tip()
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err := db.Metrics(tip.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	check(t, "index", cm.Tip(), got.Index)
-	check(t, "difficulty", cm.TipState().Difficulty, got.Difficulty)
-	check(t, "total hosts", expected.TotalHosts, got.TotalHosts)
-	check(t, "active contracts", expected.ActiveContracts, got.ActiveContracts)
-	check(t, "failed contracts", expected.FailedContracts, got.FailedContracts)
-	check(t, "successful contracts", expected.SuccessfulContracts, got.SuccessfulContracts)
-	check(t, "contract revenue", expected.ContractRevenue, got.ContractRevenue)
-	check(t, "storage utilization", expected.StorageUtilization, got.StorageUtilization)
-	// don't check circulating supply here because it requires a lot of accounting
-}
-
-func checkFCRevisions(t *testing.T, revisionNumbers []uint64, fcs []explorer.FileContract) {
-	t.Helper()
-
-	check(t, "number of revisions", len(revisionNumbers), len(fcs))
-	for i := range revisionNumbers {
-		check(t, "revision number", revisionNumbers[i], fcs[i].FileContract.RevisionNumber)
-	}
-}
-
-func checkTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer.Transaction) {
-	t.Helper()
-
-	check(t, "siacoin inputs", len(expectTxn.SiacoinInputs), len(gotTxn.SiacoinInputs))
-	check(t, "siacoin outputs", len(expectTxn.SiacoinOutputs), len(gotTxn.SiacoinOutputs))
-	check(t, "siafund inputs", len(expectTxn.SiafundInputs), len(gotTxn.SiafundInputs))
-	check(t, "siafund outputs", len(expectTxn.SiafundOutputs), len(gotTxn.SiafundOutputs))
-	check(t, "miner fees", len(expectTxn.MinerFees), len(gotTxn.MinerFees))
-	check(t, "signatures", len(expectTxn.Signatures), len(gotTxn.Signatures))
-
-	for i := range expectTxn.SiacoinInputs {
-		expectSci := expectTxn.SiacoinInputs[i]
-		gotSci := gotTxn.SiacoinInputs[i]
-
-		if gotSci.Value == types.ZeroCurrency {
-			t.Fatal("invalid value")
-		}
-		check(t, "parent ID", expectSci.ParentID, gotSci.ParentID)
-		check(t, "unlock conditions", expectSci.UnlockConditions, gotSci.UnlockConditions)
-		check(t, "address", expectSci.UnlockConditions.UnlockHash(), gotSci.Address)
-	}
-	for i := range expectTxn.SiacoinOutputs {
-		expectSco := expectTxn.SiacoinOutputs[i]
-		gotSco := gotTxn.SiacoinOutputs[i].SiacoinOutput
-
-		check(t, "address", expectSco.Address, gotSco.Address)
-		check(t, "value", expectSco.Value, gotSco.Value)
-		check(t, "source", explorer.SourceTransaction, gotTxn.SiacoinOutputs[i].Source)
-	}
-	for i := range expectTxn.SiafundInputs {
-		expectSfi := expectTxn.SiafundInputs[i]
-		gotSfi := gotTxn.SiafundInputs[i]
-
-		if gotSfi.Value == 0 {
-			t.Fatal("invalid value")
-		}
-		check(t, "parent ID", expectSfi.ParentID, gotSfi.ParentID)
-		check(t, "claim address", expectSfi.ClaimAddress, gotSfi.ClaimAddress)
-		check(t, "unlock conditions", expectSfi.UnlockConditions, gotSfi.UnlockConditions)
-		check(t, "address", expectSfi.UnlockConditions.UnlockHash(), gotSfi.Address)
-	}
-	for i := range expectTxn.SiafundOutputs {
-		expectSfo := expectTxn.SiafundOutputs[i]
-		gotSfo := gotTxn.SiafundOutputs[i].SiafundOutput
-
-		check(t, "address", expectSfo.Address, gotSfo.Address)
-		check(t, "value", expectSfo.Value, gotSfo.Value)
-	}
-	for i := range expectTxn.MinerFees {
-		check(t, "miner fee", expectTxn.MinerFees[i], gotTxn.MinerFees[i])
-	}
-	for i := range expectTxn.Signatures {
-		expectSig := expectTxn.Signatures[i]
-		gotSig := gotTxn.Signatures[i]
-
-		check(t, "parent ID", expectSig.ParentID, gotSig.ParentID)
-		check(t, "public key index", expectSig.PublicKeyIndex, gotSig.PublicKeyIndex)
-		check(t, "timelock", expectSig.Timelock, gotSig.Timelock)
-		check(t, "signature", expectSig.Signature, gotSig.Signature)
-
-		// reflect.DeepEqual treats empty slices as different from nil
-		// slices so these will differ because the decoder is doing
-		// cf.X = make([]uint64, d.ReadPrefix()) and the prefix is 0
-		// check(t, "covered fields", expectSig.CoveredFields, gotSig.CoveredFields)
-	}
-}
 
 func syncDB(t *testing.T, db *sqlite.Store, cm *chain.Manager) {
 	index, err := db.Tip()
@@ -239,6 +40,57 @@ func syncDB(t *testing.T, db *sqlite.Store, cm *chain.Manager) {
 	}
 }
 
+// CheckMetrics checks the that the metrics from the DB match what we expect.
+func CheckMetrics(t *testing.T, db explorer.Store, cm *chain.Manager, expected explorer.Metrics) {
+	t.Helper()
+
+	tip, err := db.Tip()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := db.Metrics(tip.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testutil.Equal(t, "index", cm.Tip(), got.Index)
+	testutil.Equal(t, "difficulty", cm.TipState().Difficulty, got.Difficulty)
+	testutil.Equal(t, "total hosts", expected.TotalHosts, got.TotalHosts)
+	testutil.Equal(t, "active contracts", expected.ActiveContracts, got.ActiveContracts)
+	testutil.Equal(t, "failed contracts", expected.FailedContracts, got.FailedContracts)
+	testutil.Equal(t, "successful contracts", expected.SuccessfulContracts, got.SuccessfulContracts)
+	testutil.Equal(t, "contract revenue", expected.ContractRevenue, got.ContractRevenue)
+	testutil.Equal(t, "storage utilization", expected.StorageUtilization, got.StorageUtilization)
+	// don't check circulating supply here because it requires a lot of accounting
+}
+
+// CheckChainIndices checks that the chain indices that a transaction was in
+// from the explorer match the expected chain indices.
+func CheckChainIndices(t *testing.T, db explorer.Store, txnID types.TransactionID, expected []types.ChainIndex) {
+	t.Helper()
+
+	indices, err := db.TransactionChainIndices(txnID, 0, 100)
+	switch {
+	case err != nil:
+		t.Fatal(err)
+	case len(indices) != len(expected):
+		t.Fatalf("expected %d indices, got %d", len(expected), len(indices))
+	}
+	for i := range indices {
+		testutil.Equal(t, "index", expected[i], indices[i])
+	}
+}
+
+// CheckFCRevisions checks that the revision numbers for the file contracts match.
+func CheckFCRevisions(t *testing.T, revisionNumbers []uint64, fcs []explorer.FileContract) {
+	t.Helper()
+
+	testutil.Equal(t, "number of revisions", len(revisionNumbers), len(fcs))
+	for i := range revisionNumbers {
+		testutil.Equal(t, "revision number", revisionNumbers[i], fcs[i].FileContract.RevisionNumber)
+	}
+}
+
 func TestBalance(t *testing.T) {
 	log := zaptest.NewLogger(t)
 	dir := t.TempDir()
@@ -254,7 +106,7 @@ func TestBalance(t *testing.T) {
 	}
 	defer bdb.Close()
 
-	network, genesisBlock := testV1Network(types.VoidAddress, types.ZeroCurrency, 0)
+	network, genesisBlock := ctestutil.Network()
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -262,17 +114,6 @@ func TestBalance(t *testing.T) {
 	}
 
 	cm := chain.NewManager(store, genesisState)
-
-	// checkBalance checks that an address has the balances we expect
-	checkBalance := func(addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
-		sc, immatureSC, sf, err := db.Balance(addr)
-		if err != nil {
-			t.Fatal(err)
-		}
-		check(t, "siacoins", expectSC, sc)
-		check(t, "immature siacoins", expectImmatureSC, immatureSC)
-		check(t, "siafunds", expectSF, sf)
-	}
 
 	// Generate three addresses: addr1, addr2, addr3
 	pk1 := types.GeneratePrivateKey()
@@ -288,7 +129,7 @@ func TestBalance(t *testing.T) {
 	maturityHeight := cm.TipState().MaturityHeight()
 
 	// Mine a block sending the payout to addr1
-	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, addr1)}); err != nil {
+	if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), nil, addr1)}); err != nil {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
@@ -298,20 +139,20 @@ func TestBalance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	check(t, "utxos", 1, len(utxos))
-	check(t, "value", expectedPayout, utxos[0].SiacoinOutput.Value)
-	check(t, "source", explorer.SourceMinerPayout, utxos[0].Source)
+	testutil.Equal(t, "utxos", 1, len(utxos))
+	testutil.Equal(t, "value", expectedPayout, utxos[0].SiacoinOutput.Value)
+	testutil.Equal(t, "source", explorer.SourceMinerPayout, utxos[0].Source)
 
 	// Mine until the payout matures
 	for i := cm.Tip().Height; i < maturityHeight; i++ {
-		checkBalance(addr1, types.ZeroCurrency, expectedPayout, 0)
-		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
+		testutil.CheckBalance(t, db, addr1, types.ZeroCurrency, expectedPayout, 0)
+		if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
 			t.Fatal(err)
 		}
 		syncDB(t, db, cm)
 	}
 
-	checkBalance(addr1, expectedPayout, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr1, expectedPayout, types.ZeroCurrency, 0)
 
 	// Send all of the payout except 100 SC to addr2
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
@@ -327,7 +168,7 @@ func TestBalance(t *testing.T) {
 			{Address: addr2, Value: utxos[0].SiacoinOutput.Value.Sub(types.Siacoins(100))},
 		},
 	}
-	signTxn(cm.TipState(), pk1, &parentTxn)
+	testutil.SignTransaction(cm.TipState(), pk1, &parentTxn)
 
 	// In the same block, have addr1 send the 100 SC it still has left to
 	// addr3
@@ -343,15 +184,15 @@ func TestBalance(t *testing.T) {
 			{Address: addr3, Value: types.Siacoins(100)},
 		},
 	}
-	signTxn(cm.TipState(), pk1, &txn)
+	testutil.SignTransaction(cm.TipState(), pk1, &txn)
 
-	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{parentTxn, txn}, types.VoidAddress)}); err != nil {
+	if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), []types.Transaction{parentTxn, txn}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
 
-	checkBalance(addr2, utxos[0].SiacoinOutput.Value.Sub(types.Siacoins(100)), types.ZeroCurrency, 0)
-	checkBalance(addr3, types.Siacoins(100), types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr2, utxos[0].SiacoinOutput.Value.Sub(types.Siacoins(100)), types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr3, types.Siacoins(100), types.ZeroCurrency, 0)
 }
 
 func TestSiafundBalance(t *testing.T) {
@@ -379,8 +220,9 @@ func TestSiafundBalance(t *testing.T) {
 	pk3 := types.GeneratePrivateKey()
 	addr3 := types.StandardUnlockHash(pk3.PublicKey())
 
-	const giftSF = 10000
-	network, genesisBlock := testV1Network(addr1, types.ZeroCurrency, giftSF)
+	network, genesisBlock := ctestutil.Network()
+	genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	giftSF := genesisBlock.Transactions[0].SiafundOutputs[0].Value
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -388,17 +230,6 @@ func TestSiafundBalance(t *testing.T) {
 	}
 
 	cm := chain.NewManager(store, genesisState)
-
-	// checkBalance checks that an address has the balances we expect
-	checkBalance := func(addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
-		sc, immatureSC, sf, err := db.Balance(addr)
-		if err != nil {
-			t.Fatal(err)
-		}
-		check(t, "siacoins", expectSC, sc)
-		check(t, "immature siacoins", expectImmatureSC, immatureSC)
-		check(t, "siafunds", expectSF, sf)
-	}
 
 	// Send all of the payout except 100 SF to addr2
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
@@ -414,7 +245,7 @@ func TestSiafundBalance(t *testing.T) {
 			{Address: addr2, Value: genesisBlock.Transactions[0].SiafundOutputs[0].Value - 100},
 		},
 	}
-	signTxn(cm.TipState(), pk1, &parentTxn)
+	testutil.SignTransaction(cm.TipState(), pk1, &parentTxn)
 
 	// In the same block, have addr1 send the 100 SF it still has left to
 	// addr3
@@ -430,16 +261,16 @@ func TestSiafundBalance(t *testing.T) {
 			{Address: addr3, Value: 100},
 		},
 	}
-	signTxn(cm.TipState(), pk1, &txn)
+	testutil.SignTransaction(cm.TipState(), pk1, &txn)
 
-	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{parentTxn, txn}, types.VoidAddress)}); err != nil {
+	if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), []types.Transaction{parentTxn, txn}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
 
-	checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
-	checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency, giftSF-100)
-	checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 100)
+	testutil.CheckBalance(t, db, addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr2, types.ZeroCurrency, types.ZeroCurrency, giftSF-100)
+	testutil.CheckBalance(t, db, addr3, types.ZeroCurrency, types.ZeroCurrency, 100)
 }
 
 func TestSendTransactions(t *testing.T) {
@@ -467,8 +298,9 @@ func TestSendTransactions(t *testing.T) {
 	pk3 := types.GeneratePrivateKey()
 	addr3 := types.StandardUnlockHash(pk3.PublicKey())
 
-	const giftSF = 10000
-	network, genesisBlock := testV1Network(addr1, types.ZeroCurrency, giftSF)
+	network, genesisBlock := ctestutil.Network()
+	genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	giftSF := genesisBlock.Transactions[0].SiafundOutputs[0].Value
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -477,50 +309,26 @@ func TestSendTransactions(t *testing.T) {
 
 	cm := chain.NewManager(store, genesisState)
 
-	// checkBalance checks that an address has the balances we expect
-	checkBalance := func(addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
-		sc, immatureSC, sf, err := db.Balance(addr)
-		if err != nil {
-			t.Fatal(err)
-		}
-		check(t, "siacoins", expectSC, sc)
-		check(t, "immature siacoins", expectImmatureSC, immatureSC)
-		check(t, "siafunds", expectSF, sf)
-	}
-
-	checkChainIndices := func(t *testing.T, txnID types.TransactionID, expected []types.ChainIndex) {
-		indices, err := db.TransactionChainIndices(txnID, 0, 100)
-		switch {
-		case err != nil:
-			t.Fatal(err)
-		case len(indices) != len(expected):
-			t.Fatalf("expected %d indices, got %d", len(expected), len(indices))
-		}
-		for i := range indices {
-			check(t, "index", expected[i], indices[i])
-		}
-	}
-
 	expectedPayout := cm.TipState().BlockReward()
 	maturityHeight := cm.TipState().MaturityHeight()
 
 	// Mine a block sending the payout to the addr1
-	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, addr1)}); err != nil {
+	if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), nil, addr1)}); err != nil {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
 
 	// Mine until the payout matures
 	for i := cm.Tip().Height; i < maturityHeight; i++ {
-		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
+		if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
 			t.Fatal(err)
 		}
 		syncDB(t, db, cm)
 	}
 
-	checkBalance(addr1, expectedPayout, types.ZeroCurrency, giftSF)
-	checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
-	checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr1, expectedPayout, types.ZeroCurrency, giftSF)
+	testutil.CheckBalance(t, db, addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
 
 	const n = 100
 
@@ -529,9 +337,9 @@ func TestSendTransactions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	check(t, "utxos", 1, len(utxos))
-	check(t, "value", expectedPayout, utxos[0].SiacoinOutput.Value)
-	check(t, "source", explorer.SourceMinerPayout, utxos[0].Source)
+	testutil.Equal(t, "utxos", 1, len(utxos))
+	testutil.Equal(t, "value", expectedPayout, utxos[0].SiacoinOutput.Value)
+	testutil.Equal(t, "source", explorer.SourceMinerPayout, utxos[0].Source)
 
 	sfOutputID := genesisBlock.Transactions[0].SiafundOutputID(0)
 	scOutputID := utxos[0].ID
@@ -566,22 +374,22 @@ func TestSendTransactions(t *testing.T) {
 			},
 		}
 
-		signTxn(cm.TipState(), pk1, &parentTxn)
+		testutil.SignTransaction(cm.TipState(), pk1, &parentTxn)
 		scOutputID = types.Hash256(parentTxn.SiacoinOutputID(2))
 		sfOutputID = parentTxn.SiafundOutputID(2)
 
 		// Mine a block with the above transaction
-		b := mineBlock(cm.TipState(), []types.Transaction{parentTxn}, types.VoidAddress)
+		b := testutil.MineBlock(cm.TipState(), []types.Transaction{parentTxn}, types.VoidAddress)
 		if err := cm.AddBlocks([]types.Block{b}); err != nil {
 			t.Fatal(err)
 		}
 		syncDB(t, db, cm)
 
-		checkMetrics(t, db, cm, explorer.Metrics{})
+		CheckMetrics(t, db, cm, explorer.Metrics{})
 
-		checkBalance(addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
-		checkBalance(addr2, types.Siacoins(1).Mul64(uint64(i+1)), types.ZeroCurrency, 1*uint64(i+1))
-		checkBalance(addr3, types.Siacoins(2).Mul64(uint64(i+1)), types.ZeroCurrency, 2*uint64(i+1))
+		testutil.CheckBalance(t, db, addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
+		testutil.CheckBalance(t, db, addr2, types.Siacoins(1).Mul64(uint64(i+1)), types.ZeroCurrency, 1*uint64(i+1))
+		testutil.CheckBalance(t, db, addr3, types.Siacoins(2).Mul64(uint64(i+1)), types.ZeroCurrency, 2*uint64(i+1))
 
 		// Ensure the block we retrieved from the database is the same as the
 		// actual block
@@ -589,29 +397,29 @@ func TestSendTransactions(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "transactions", len(b.Transactions), len(block.Transactions))
-		check(t, "miner payouts", len(b.MinerPayouts), len(block.MinerPayouts))
-		check(t, "nonce", b.Nonce, block.Nonce)
-		check(t, "timestamp", b.Timestamp, block.Timestamp)
+		testutil.Equal(t, "transactions", len(b.Transactions), len(block.Transactions))
+		testutil.Equal(t, "miner payouts", len(b.MinerPayouts), len(block.MinerPayouts))
+		testutil.Equal(t, "nonce", b.Nonce, block.Nonce)
+		testutil.Equal(t, "timestamp", b.Timestamp, block.Timestamp)
 
 		// Ensure the miner payouts in the block match
 		for i := range b.MinerPayouts {
-			check(t, "address", b.MinerPayouts[i].Address, b.MinerPayouts[i].Address)
-			check(t, "value", b.MinerPayouts[i].Value, b.MinerPayouts[i].Value)
+			testutil.Equal(t, "address", b.MinerPayouts[i].Address, b.MinerPayouts[i].Address)
+			testutil.Equal(t, "value", b.MinerPayouts[i].Value, b.MinerPayouts[i].Value)
 		}
 
 		// Ensure the transactions in the block and retrieved separately match
 		// with the actual transactions
 		for i := range b.Transactions {
-			checkTransaction(t, b.Transactions[i], block.Transactions[i])
-			checkChainIndices(t, b.Transactions[i].ID(), []types.ChainIndex{cm.Tip()})
+			testutil.CheckTransaction(t, b.Transactions[i], block.Transactions[i])
+			CheckChainIndices(t, db, b.Transactions[i].ID(), []types.ChainIndex{cm.Tip()})
 
 			txns, err := db.Transactions([]types.TransactionID{b.Transactions[i].ID()})
 			if err != nil {
 				t.Fatal(err)
 			}
-			check(t, "transactions", 1, len(txns))
-			checkTransaction(t, b.Transactions[i], txns[0])
+			testutil.Equal(t, "transactions", 1, len(txns))
+			testutil.CheckTransaction(t, b.Transactions[i], txns[0])
 		}
 
 		type expectedUTXOs struct {
@@ -638,17 +446,17 @@ func TestSendTransactions(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			check(t, "sc utxos", e.sc, len(sc))
-			check(t, "sf utxos", e.sf, len(sf))
+			testutil.Equal(t, "sc utxos", e.sc, len(sc))
+			testutil.Equal(t, "sf utxos", e.sf, len(sf))
 
 			for _, sco := range sc {
-				check(t, "address", e.addr, sco.SiacoinOutput.Address)
-				check(t, "value", e.scValue, sco.SiacoinOutput.Value)
-				check(t, "source", explorer.SourceTransaction, sco.Source)
+				testutil.Equal(t, "address", e.addr, sco.SiacoinOutput.Address)
+				testutil.Equal(t, "value", e.scValue, sco.SiacoinOutput.Value)
+				testutil.Equal(t, "source", explorer.SourceTransaction, sco.Source)
 			}
 			for _, sfo := range sf {
-				check(t, "address", e.addr, sfo.SiafundOutput.Address)
-				check(t, "value", e.sfValue, sfo.SiafundOutput.Value)
+				testutil.Equal(t, "address", e.addr, sfo.SiafundOutput.Address)
+				testutil.Equal(t, "value", e.sfValue, sfo.SiafundOutput.Value)
 			}
 		}
 	}
@@ -669,7 +477,7 @@ func TestTip(t *testing.T) {
 	}
 	defer bdb.Close()
 
-	network, genesisBlock := testV1Network(types.VoidAddress, types.ZeroCurrency, 0)
+	network, genesisBlock := ctestutil.Network()
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -680,7 +488,7 @@ func TestTip(t *testing.T) {
 
 	const n = 100
 	for i := cm.Tip().Height; i < n; i++ {
-		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
+		if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
 			t.Fatal(err)
 		}
 		syncDB(t, db, cm)
@@ -689,7 +497,7 @@ func TestTip(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "tip", cm.Tip(), tip)
+		testutil.Equal(t, "tip", cm.Tip(), tip)
 	}
 
 	for i := 0; i < n; i++ {
@@ -700,57 +508,6 @@ func TestTip(t *testing.T) {
 		if cmBest, ok := cm.BestIndex(uint64(i)); !ok || cmBest != best {
 			t.Fatal("best tip mismatch")
 		}
-	}
-}
-
-// copied from rhp/v2 to avoid import cycle
-func prepareContractFormation(renterPubKey types.PublicKey, hostKey types.PublicKey, renterPayout, hostCollateral types.Currency, startHeight uint64, endHeight uint64, refundAddr types.Address) types.FileContract {
-	taxAdjustedPayout := func(target types.Currency) types.Currency {
-		guess := target.Mul64(1000).Div64(961)
-		mod64 := func(c types.Currency, v uint64) types.Currency {
-			var r uint64
-			if c.Hi < v {
-				_, r = bits.Div64(c.Hi, c.Lo, v)
-			} else {
-				_, r = bits.Div64(0, c.Hi, v)
-				_, r = bits.Div64(r, c.Lo, v)
-			}
-			return types.NewCurrency64(r)
-		}
-		sfc := (consensus.State{}).SiafundCount()
-		tm := mod64(target, sfc)
-		gm := mod64(guess, sfc)
-		if gm.Cmp(tm) < 0 {
-			guess = guess.Sub(types.NewCurrency64(sfc))
-		}
-		return guess.Add(tm).Sub(gm)
-	}
-	uc := types.UnlockConditions{
-		PublicKeys: []types.UnlockKey{
-			renterPubKey.UnlockKey(),
-			hostKey.UnlockKey(),
-		},
-		SignaturesRequired: 2,
-	}
-	hostPayout := hostCollateral
-	payout := taxAdjustedPayout(renterPayout.Add(hostPayout))
-	return types.FileContract{
-		Filesize:       contractFilesize,
-		FileMerkleRoot: types.Hash256{},
-		WindowStart:    startHeight,
-		WindowEnd:      endHeight,
-		Payout:         payout,
-		UnlockHash:     types.Hash256(uc.UnlockHash()),
-		RevisionNumber: 0,
-		ValidProofOutputs: []types.SiacoinOutput{
-			{Value: renterPayout, Address: refundAddr},
-			{Value: hostPayout, Address: types.VoidAddress},
-		},
-		MissedProofOutputs: []types.SiacoinOutput{
-			{Value: renterPayout, Address: refundAddr},
-			{Value: hostPayout, Address: types.VoidAddress},
-			{Value: types.ZeroCurrency, Address: types.VoidAddress},
-		},
 	}
 }
 
@@ -779,8 +536,10 @@ func TestFileContract(t *testing.T) {
 	hostPrivateKey := types.GeneratePrivateKey()
 	hostPublicKey := hostPrivateKey.PublicKey()
 
-	giftSC := types.Siacoins(1000)
-	network, genesisBlock := testV1Network(addr1, giftSC, 0)
+	network, genesisBlock := ctestutil.Network()
+	genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
+
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
 		t.Fatal(err)
@@ -791,55 +550,9 @@ func TestFileContract(t *testing.T) {
 	scOutputID := genesisBlock.Transactions[0].SiacoinOutputID(0)
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
 
-	signTxn := func(txn *types.Transaction) {
-		appendSig := func(key types.PrivateKey, pubkeyIndex uint64, parentID types.Hash256) {
-			sig := key.SignHash(cm.TipState().WholeSigHash(*txn, parentID, pubkeyIndex, 0, nil))
-			txn.Signatures = append(txn.Signatures, types.TransactionSignature{
-				ParentID:       parentID,
-				CoveredFields:  types.CoveredFields{WholeTransaction: true},
-				PublicKeyIndex: pubkeyIndex,
-				Signature:      sig[:],
-			})
-		}
-		for i := range txn.SiacoinInputs {
-			appendSig(pk1, 0, types.Hash256(txn.SiacoinInputs[i].ParentID))
-		}
-		for i := range txn.SiafundInputs {
-			appendSig(pk1, 0, types.Hash256(txn.SiafundInputs[i].ParentID))
-		}
-		for i := range txn.FileContractRevisions {
-			appendSig(renterPrivateKey, 0, types.Hash256(txn.FileContractRevisions[i].ParentID))
-			appendSig(hostPrivateKey, 1, types.Hash256(txn.FileContractRevisions[i].ParentID))
-		}
-	}
-
-	checkFC := func(resolved, valid bool, expected types.FileContract, got explorer.FileContract) {
-		check(t, "resolved state", resolved, got.Resolved)
-		check(t, "valid state", valid, got.Valid)
-
-		gotFC := got.FileContract
-		check(t, "filesize", expected.Filesize, gotFC.Filesize)
-		check(t, "file merkle root", expected.FileMerkleRoot, gotFC.FileMerkleRoot)
-		check(t, "window start", expected.WindowStart, gotFC.WindowStart)
-		check(t, "window end", expected.WindowEnd, gotFC.WindowEnd)
-		check(t, "payout", expected.Payout, gotFC.Payout)
-		check(t, "unlock hash", expected.UnlockHash, gotFC.UnlockHash)
-		check(t, "revision number", expected.RevisionNumber, gotFC.RevisionNumber)
-		check(t, "valid proof outputs", len(expected.ValidProofOutputs), len(gotFC.ValidProofOutputs))
-		for i := range expected.ValidProofOutputs {
-			check(t, "valid proof output address", expected.ValidProofOutputs[i].Address, gotFC.ValidProofOutputs[i].Address)
-			check(t, "valid proof output value", expected.ValidProofOutputs[i].Value, gotFC.ValidProofOutputs[i].Value)
-		}
-		check(t, "missed proof outputs", len(expected.MissedProofOutputs), len(gotFC.MissedProofOutputs))
-		for i := range expected.MissedProofOutputs {
-			check(t, "missed proof output address", expected.MissedProofOutputs[i].Address, gotFC.MissedProofOutputs[i].Address)
-			check(t, "missed proof output value", expected.MissedProofOutputs[i].Value, gotFC.MissedProofOutputs[i].Value)
-		}
-	}
-
 	windowStart := cm.Tip().Height + 10
 	windowEnd := windowStart + 10
-	fc := prepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), windowStart, windowEnd, types.VoidAddress)
+	fc := testutil.PrepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), windowStart, windowEnd, types.VoidAddress)
 	txn := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
 			ParentID:         scOutputID,
@@ -852,9 +565,9 @@ func TestFileContract(t *testing.T) {
 		FileContracts: []types.FileContract{fc},
 	}
 	fcID := txn.FileContractID(0)
-	signTxn(&txn)
+	testutil.SignTransaction(cm.TipState(), pk1, &txn)
 
-	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn}, types.VoidAddress)}); err != nil {
+	if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), []types.Transaction{txn}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
@@ -864,10 +577,10 @@ func TestFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "fcs", 1, len(dbFCs))
-		checkFC(false, false, fc, dbFCs[0])
-		check(t, "confirmation index", cm.Tip(), *dbFCs[0].ConfirmationIndex)
-		check(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
+		testutil.Equal(t, "fcs", 1, len(dbFCs))
+		testutil.CheckFC(t, false, false, false, fc, dbFCs[0])
+		testutil.Equal(t, "confirmation index", cm.Tip(), *dbFCs[0].ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 	}
 
 	{
@@ -875,7 +588,7 @@ func TestFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		checkFCRevisions(t, []uint64{0}, dbFCs)
+		CheckFCRevisions(t, []uint64{0}, dbFCs)
 	}
 
 	{
@@ -883,12 +596,12 @@ func TestFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "transactions", 1, len(txns))
-		check(t, "file contracts", 1, len(txns[0].FileContracts))
-		checkFC(false, false, fc, txns[0].FileContracts[0])
+		testutil.Equal(t, "transactions", 1, len(txns))
+		testutil.Equal(t, "file contracts", 1, len(txns[0].FileContracts))
+		testutil.CheckFC(t, false, false, false, fc, txns[0].FileContracts[0])
 
-		check(t, "confirmation index", cm.Tip(), *txns[0].FileContracts[0].ConfirmationIndex)
-		check(t, "confirmation transaction ID", txn.ID(), *txns[0].FileContracts[0].ConfirmationTransactionID)
+		testutil.Equal(t, "confirmation index", cm.Tip(), *txns[0].FileContracts[0].ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *txns[0].FileContracts[0].ConfirmationTransactionID)
 	}
 
 	uc := types.UnlockConditions{
@@ -906,10 +619,10 @@ func TestFileContract(t *testing.T) {
 			FileContract:     fc,
 		}},
 	}
-	signTxn(&reviseTxn)
+	testutil.SignTransactionWithContracts(cm.TipState(), pk1, renterPrivateKey, hostPrivateKey, &reviseTxn)
 
 	prevTip := cm.Tip()
-	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{reviseTxn}, types.VoidAddress)}); err != nil {
+	if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), []types.Transaction{reviseTxn}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
@@ -923,21 +636,21 @@ func TestFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
-		check(t, "len(contracts)", 1, len(renterContracts))
-		checkFC(false, false, fc, renterContracts[0])
-		checkFC(false, false, fc, hostContracts[0])
+		testutil.Equal(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
+		testutil.Equal(t, "len(contracts)", 1, len(renterContracts))
+		testutil.CheckFC(t, false, false, false, fc, renterContracts[0])
+		testutil.CheckFC(t, false, false, false, fc, hostContracts[0])
 
-		check(t, "confirmation index", prevTip, *renterContracts[0].ConfirmationIndex)
-		check(t, "confirmation transaction ID", txn.ID(), *renterContracts[0].ConfirmationTransactionID)
-		check(t, "confirmation index", prevTip, *hostContracts[0].ConfirmationIndex)
-		check(t, "confirmation transaction ID", txn.ID(), *hostContracts[0].ConfirmationTransactionID)
+		testutil.Equal(t, "confirmation index", prevTip, *renterContracts[0].ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *renterContracts[0].ConfirmationTransactionID)
+		testutil.Equal(t, "confirmation index", prevTip, *hostContracts[0].ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *hostContracts[0].ConfirmationTransactionID)
 	}
 
-	checkMetrics(t, db, cm, explorer.Metrics{
+	CheckMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
-		StorageUtilization: contractFilesize,
+		StorageUtilization: testutil.ContractFilesize,
 	})
 
 	// Explorer.Contracts should return latest revision
@@ -946,8 +659,8 @@ func TestFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "fcs", 1, len(dbFCs))
-		checkFC(false, false, fc, dbFCs[0])
+		testutil.Equal(t, "fcs", 1, len(dbFCs))
+		testutil.CheckFC(t, false, false, false, fc, dbFCs[0])
 	}
 
 	{
@@ -955,7 +668,7 @@ func TestFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		checkFCRevisions(t, []uint64{0, 1}, dbFCs)
+		CheckFCRevisions(t, []uint64{0, 1}, dbFCs)
 	}
 
 	{
@@ -963,33 +676,33 @@ func TestFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "transactions", 1, len(txns))
-		check(t, "file contracts", 1, len(txns[0].FileContractRevisions))
+		testutil.Equal(t, "transactions", 1, len(txns))
+		testutil.Equal(t, "file contracts", 1, len(txns[0].FileContractRevisions))
 
 		fcr := txns[0].FileContractRevisions[0]
-		check(t, "parent id", txn.FileContractID(0), fcr.ParentID)
-		check(t, "unlock conditions", uc, fcr.UnlockConditions)
+		testutil.Equal(t, "parent id", txn.FileContractID(0), fcr.ParentID)
+		testutil.Equal(t, "unlock conditions", uc, fcr.UnlockConditions)
 
-		check(t, "confirmation index", prevTip, *fcr.ConfirmationIndex)
-		check(t, "confirmation transaction ID", txn.ID(), *fcr.ConfirmationTransactionID)
+		testutil.Equal(t, "confirmation index", prevTip, *fcr.ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *fcr.ConfirmationTransactionID)
 
-		checkFC(false, false, fc, fcr.FileContract)
+		testutil.CheckFC(t, false, false, false, fc, fcr.FileContract)
 	}
 
 	for i := cm.Tip().Height; i < windowEnd; i++ {
-		checkMetrics(t, db, cm, explorer.Metrics{
+		CheckMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    1,
-			StorageUtilization: 1 * contractFilesize,
+			StorageUtilization: 1 * testutil.ContractFilesize,
 		})
 
-		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
+		if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
 			t.Fatal(err)
 		}
 		syncDB(t, db, cm)
 	}
 
-	checkMetrics(t, db, cm, explorer.Metrics{
+	CheckMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:          0,
 		ActiveContracts:     0,
 		FailedContracts:     1,
@@ -1002,15 +715,15 @@ func TestFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "fcs", 1, len(dbFCs))
-		checkFC(true, false, fc, dbFCs[0])
+		testutil.Equal(t, "fcs", 1, len(dbFCs))
+		testutil.CheckFC(t, false, true, false, fc, dbFCs[0])
 
-		check(t, "confirmation index", prevTip, *dbFCs[0].ConfirmationIndex)
-		check(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
+		testutil.Equal(t, "confirmation index", prevTip, *dbFCs[0].ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 	}
 
 	for i := 0; i < 100; i++ {
-		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
+		if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
 			t.Fatal(err)
 		}
 		syncDB(t, db, cm)
@@ -1025,18 +738,18 @@ func TestFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
-		check(t, "len(contracts)", 1, len(renterContracts))
-		checkFC(true, false, fc, renterContracts[0])
-		checkFC(true, false, fc, hostContracts[0])
+		testutil.Equal(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
+		testutil.Equal(t, "len(contracts)", 1, len(renterContracts))
+		testutil.CheckFC(t, false, true, false, fc, renterContracts[0])
+		testutil.CheckFC(t, false, true, false, fc, hostContracts[0])
 
-		check(t, "confirmation index", prevTip, *renterContracts[0].ConfirmationIndex)
-		check(t, "confirmation transaction ID", txn.ID(), *renterContracts[0].ConfirmationTransactionID)
-		check(t, "confirmation index", prevTip, *hostContracts[0].ConfirmationIndex)
-		check(t, "confirmation transaction ID", txn.ID(), *hostContracts[0].ConfirmationTransactionID)
+		testutil.Equal(t, "confirmation index", prevTip, *renterContracts[0].ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *renterContracts[0].ConfirmationTransactionID)
+		testutil.Equal(t, "confirmation index", prevTip, *hostContracts[0].ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *hostContracts[0].ConfirmationTransactionID)
 	}
 
-	checkMetrics(t, db, cm, explorer.Metrics{
+	CheckMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:          0,
 		ActiveContracts:     0,
 		FailedContracts:     1,
@@ -1070,8 +783,10 @@ func TestEphemeralFileContract(t *testing.T) {
 	hostPrivateKey := types.GeneratePrivateKey()
 	hostPublicKey := hostPrivateKey.PublicKey()
 
-	giftSC := types.Siacoins(1000)
-	network, genesisBlock := testV1Network(addr1, giftSC, 0)
+	network, genesisBlock := ctestutil.Network()
+	genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
+
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
 		t.Fatal(err)
@@ -1082,63 +797,9 @@ func TestEphemeralFileContract(t *testing.T) {
 	scOutputID := genesisBlock.Transactions[0].SiacoinOutputID(0)
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
 
-	signTxn := func(txn *types.Transaction) {
-		appendSig := func(key types.PrivateKey, pubkeyIndex uint64, parentID types.Hash256) {
-			sig := key.SignHash(cm.TipState().WholeSigHash(*txn, parentID, pubkeyIndex, 0, nil))
-			txn.Signatures = append(txn.Signatures, types.TransactionSignature{
-				ParentID:       parentID,
-				CoveredFields:  types.CoveredFields{WholeTransaction: true},
-				PublicKeyIndex: pubkeyIndex,
-				Signature:      sig[:],
-			})
-		}
-		for i := range txn.SiacoinInputs {
-			appendSig(pk1, 0, types.Hash256(txn.SiacoinInputs[i].ParentID))
-		}
-		for i := range txn.SiafundInputs {
-			appendSig(pk1, 0, types.Hash256(txn.SiafundInputs[i].ParentID))
-		}
-		for i := range txn.FileContractRevisions {
-			appendSig(renterPrivateKey, 0, types.Hash256(txn.FileContractRevisions[i].ParentID))
-			appendSig(hostPrivateKey, 1, types.Hash256(txn.FileContractRevisions[i].ParentID))
-		}
-	}
-
-	checkFC := func(revision, resolved, valid bool, expected types.FileContract, got explorer.FileContract) {
-		check(t, "resolved state", resolved, got.Resolved)
-		check(t, "valid state", valid, got.Valid)
-
-		gotFC := got.FileContract
-		check(t, "filesize", expected.Filesize, gotFC.Filesize)
-		check(t, "file merkle root", expected.FileMerkleRoot, gotFC.FileMerkleRoot)
-		check(t, "window start", expected.WindowStart, gotFC.WindowStart)
-		check(t, "window end", expected.WindowEnd, gotFC.WindowEnd)
-
-		// See core/types.FileContractRevision
-		// Essentially, a revision cannot change the total payout, so this value
-		// is replaced with a sentinel value of types.MaxCurrency in revisions
-		// if it is decoded.
-		if !revision {
-			check(t, "payout", expected.Payout, gotFC.Payout)
-		}
-
-		check(t, "unlock hash", expected.UnlockHash, gotFC.UnlockHash)
-		check(t, "revision number", expected.RevisionNumber, gotFC.RevisionNumber)
-		check(t, "valid proof outputs", len(expected.ValidProofOutputs), len(gotFC.ValidProofOutputs))
-		for i := range expected.ValidProofOutputs {
-			check(t, "valid proof output address", expected.ValidProofOutputs[i].Address, gotFC.ValidProofOutputs[i].Address)
-			check(t, "valid proof output value", expected.ValidProofOutputs[i].Value, gotFC.ValidProofOutputs[i].Value)
-		}
-		check(t, "missed proof outputs", len(expected.MissedProofOutputs), len(gotFC.MissedProofOutputs))
-		for i := range expected.MissedProofOutputs {
-			check(t, "missed proof output address", expected.MissedProofOutputs[i].Address, gotFC.MissedProofOutputs[i].Address)
-			check(t, "missed proof output value", expected.MissedProofOutputs[i].Value, gotFC.MissedProofOutputs[i].Value)
-		}
-	}
-
 	windowStart := cm.Tip().Height + 10
 	windowEnd := windowStart + 10
-	fc := prepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), windowStart, windowEnd, types.VoidAddress)
+	fc := testutil.PrepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), windowStart, windowEnd, types.VoidAddress)
 	txn := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
 			ParentID:         scOutputID,
@@ -1151,7 +812,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		FileContracts: []types.FileContract{fc},
 	}
 	fcID := txn.FileContractID(0)
-	signTxn(&txn)
+	testutil.SignTransaction(cm.TipState(), pk1, &txn)
 
 	uc := types.UnlockConditions{
 		PublicKeys: []types.UnlockKey{
@@ -1169,18 +830,18 @@ func TestEphemeralFileContract(t *testing.T) {
 			FileContract:     revisedFC1,
 		}},
 	}
-	signTxn(&reviseTxn1)
+	testutil.SignTransactionWithContracts(cm.TipState(), pk1, renterPrivateKey, hostPrivateKey, &reviseTxn1)
 
 	// Create a contract and revise it in the same block
-	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn, reviseTxn1}, types.VoidAddress)}); err != nil {
+	if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), []types.Transaction{txn, reviseTxn1}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
 
-	checkMetrics(t, db, cm, explorer.Metrics{
+	CheckMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
-		StorageUtilization: contractFilesize,
+		StorageUtilization: testutil.ContractFilesize,
 	})
 
 	{
@@ -1192,10 +853,10 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
-		check(t, "len(contracts)", 1, len(renterContracts))
-		checkFC(true, false, false, revisedFC1, renterContracts[0])
-		checkFC(true, false, false, revisedFC1, hostContracts[0])
+		testutil.Equal(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
+		testutil.Equal(t, "len(contracts)", 1, len(renterContracts))
+		testutil.CheckFC(t, true, false, false, revisedFC1, renterContracts[0])
+		testutil.CheckFC(t, true, false, false, revisedFC1, hostContracts[0])
 	}
 
 	// Explorer.Contracts should return latest revision
@@ -1204,8 +865,8 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "fcs", 1, len(dbFCs))
-		checkFC(true, false, false, revisedFC1, dbFCs[0])
+		testutil.Equal(t, "fcs", 1, len(dbFCs))
+		testutil.CheckFC(t, true, false, false, revisedFC1, dbFCs[0])
 	}
 
 	{
@@ -1213,7 +874,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		checkFCRevisions(t, []uint64{0, 1}, dbFCs)
+		CheckFCRevisions(t, []uint64{0, 1}, dbFCs)
 	}
 
 	{
@@ -1221,12 +882,12 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "transactions", 1, len(txns))
-		check(t, "file contracts", 1, len(txns[0].FileContracts))
-		checkFC(true, false, false, fc, txns[0].FileContracts[0])
+		testutil.Equal(t, "transactions", 1, len(txns))
+		testutil.Equal(t, "file contracts", 1, len(txns[0].FileContracts))
+		testutil.CheckFC(t, true, false, false, fc, txns[0].FileContracts[0])
 
-		check(t, "confirmation index", cm.Tip(), *txns[0].FileContracts[0].ConfirmationIndex)
-		check(t, "confirmation transaction ID", txn.ID(), *txns[0].FileContracts[0].ConfirmationTransactionID)
+		testutil.Equal(t, "confirmation index", cm.Tip(), *txns[0].FileContracts[0].ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *txns[0].FileContracts[0].ConfirmationTransactionID)
 	}
 
 	{
@@ -1234,14 +895,14 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "transactions", 1, len(txns))
-		check(t, "file contracts", 1, len(txns[0].FileContractRevisions))
+		testutil.Equal(t, "transactions", 1, len(txns))
+		testutil.Equal(t, "file contracts", 1, len(txns[0].FileContractRevisions))
 
 		fcr := txns[0].FileContractRevisions[0]
-		check(t, "parent id", txn.FileContractID(0), fcr.ParentID)
-		check(t, "unlock conditions", uc, fcr.UnlockConditions)
+		testutil.Equal(t, "parent id", txn.FileContractID(0), fcr.ParentID)
+		testutil.Equal(t, "unlock conditions", uc, fcr.UnlockConditions)
 
-		checkFC(true, false, false, revisedFC1, fcr.FileContract)
+		testutil.CheckFC(t, true, false, false, revisedFC1, fcr.FileContract)
 	}
 
 	revisedFC2 := revisedFC1
@@ -1253,7 +914,7 @@ func TestEphemeralFileContract(t *testing.T) {
 			FileContract:     revisedFC2,
 		}},
 	}
-	signTxn(&reviseTxn2)
+	testutil.SignTransactionWithContracts(cm.TipState(), pk1, renterPrivateKey, hostPrivateKey, &reviseTxn2)
 
 	revisedFC3 := revisedFC2
 	revisedFC3.RevisionNumber++
@@ -1264,18 +925,18 @@ func TestEphemeralFileContract(t *testing.T) {
 			FileContract:     revisedFC3,
 		}},
 	}
-	signTxn(&reviseTxn3)
+	testutil.SignTransactionWithContracts(cm.TipState(), pk1, renterPrivateKey, hostPrivateKey, &reviseTxn3)
 
 	// Two more revisions of the same contract in the next block
-	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{reviseTxn2, reviseTxn3}, types.VoidAddress)}); err != nil {
+	if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), []types.Transaction{reviseTxn2, reviseTxn3}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
 
-	checkMetrics(t, db, cm, explorer.Metrics{
+	CheckMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
-		StorageUtilization: contractFilesize,
+		StorageUtilization: testutil.ContractFilesize,
 	})
 
 	// Explorer.Contracts should return latest revision
@@ -1284,8 +945,8 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "fcs", 1, len(dbFCs))
-		checkFC(true, false, false, revisedFC3, dbFCs[0])
+		testutil.Equal(t, "fcs", 1, len(dbFCs))
+		testutil.CheckFC(t, true, false, false, revisedFC3, dbFCs[0])
 	}
 
 	{
@@ -1293,7 +954,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		checkFCRevisions(t, []uint64{0, 1, 2, 3}, dbFCs)
+		CheckFCRevisions(t, []uint64{0, 1, 2, 3}, dbFCs)
 	}
 
 	{
@@ -1305,10 +966,10 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
-		check(t, "len(contracts)", 1, len(renterContracts))
-		checkFC(true, false, false, revisedFC3, renterContracts[0])
-		checkFC(true, false, false, revisedFC3, hostContracts[0])
+		testutil.Equal(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
+		testutil.Equal(t, "len(contracts)", 1, len(renterContracts))
+		testutil.CheckFC(t, true, false, false, revisedFC3, renterContracts[0])
+		testutil.CheckFC(t, true, false, false, revisedFC3, hostContracts[0])
 	}
 
 	{
@@ -1316,13 +977,13 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "transactions", 1, len(txns))
-		check(t, "file contracts", 1, len(txns[0].FileContractRevisions))
+		testutil.Equal(t, "transactions", 1, len(txns))
+		testutil.Equal(t, "file contracts", 1, len(txns[0].FileContractRevisions))
 
 		fcr := txns[0].FileContractRevisions[0]
-		check(t, "parent id", txn.FileContractID(0), fcr.ParentID)
-		check(t, "unlock conditions", uc, fcr.UnlockConditions)
-		checkFC(true, false, false, revisedFC2, fcr.FileContract)
+		testutil.Equal(t, "parent id", txn.FileContractID(0), fcr.ParentID)
+		testutil.Equal(t, "unlock conditions", uc, fcr.UnlockConditions)
+		testutil.CheckFC(t, true, false, false, revisedFC2, fcr.FileContract)
 	}
 
 	{
@@ -1330,13 +991,13 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "transactions", 1, len(txns))
-		check(t, "file contracts", 1, len(txns[0].FileContractRevisions))
+		testutil.Equal(t, "transactions", 1, len(txns))
+		testutil.Equal(t, "file contracts", 1, len(txns[0].FileContractRevisions))
 
 		fcr := txns[0].FileContractRevisions[0]
-		check(t, "parent id", txn.FileContractID(0), fcr.ParentID)
-		check(t, "unlock conditions", uc, fcr.UnlockConditions)
-		checkFC(true, false, false, revisedFC3, fcr.FileContract)
+		testutil.Equal(t, "parent id", txn.FileContractID(0), fcr.ParentID)
+		testutil.Equal(t, "unlock conditions", uc, fcr.UnlockConditions)
+		testutil.CheckFC(t, true, false, false, revisedFC3, fcr.FileContract)
 	}
 }
 
@@ -1355,7 +1016,7 @@ func TestRevertTip(t *testing.T) {
 	}
 	defer bdb.Close()
 
-	network, genesisBlock := testV1Network(types.VoidAddress, types.ZeroCurrency, 0)
+	network, genesisBlock := ctestutil.Network()
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -1372,7 +1033,7 @@ func TestRevertTip(t *testing.T) {
 
 	const n = 100
 	for i := cm.Tip().Height; i < n; i++ {
-		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, addr1)}); err != nil {
+		if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), nil, addr1)}); err != nil {
 			t.Fatal(err)
 		}
 		syncDB(t, db, cm)
@@ -1381,10 +1042,10 @@ func TestRevertTip(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "tip", cm.Tip(), tip)
+		testutil.Equal(t, "tip", cm.Tip(), tip)
 	}
 
-	checkMetrics(t, db, cm, explorer.Metrics{
+	CheckMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -1395,7 +1056,7 @@ func TestRevertTip(t *testing.T) {
 		var blocks []types.Block
 		state := genesisState
 		for i := uint64(0); i < n+5; i++ {
-			blocks = append(blocks, mineBlock(state, nil, addr2))
+			blocks = append(blocks, testutil.MineBlock(state, nil, addr2))
 			state.Index.ID = blocks[len(blocks)-1].ID()
 			state.Index.Height++
 		}
@@ -1408,10 +1069,10 @@ func TestRevertTip(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "tip", cm.Tip(), tip)
+		testutil.Equal(t, "tip", cm.Tip(), tip)
 	}
 
-	checkMetrics(t, db, cm, explorer.Metrics{
+	CheckMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -1443,7 +1104,7 @@ func TestRevertBalance(t *testing.T) {
 	}
 	defer bdb.Close()
 
-	network, genesisBlock := testV1Network(types.VoidAddress, types.ZeroCurrency, 0)
+	network, genesisBlock := ctestutil.Network()
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -1451,17 +1112,6 @@ func TestRevertBalance(t *testing.T) {
 	}
 
 	cm := chain.NewManager(store, genesisState)
-
-	// checkBalance checks that an address has the balances we expect
-	checkBalance := func(addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
-		sc, immatureSC, sf, err := db.Balance(addr)
-		if err != nil {
-			t.Fatal(err)
-		}
-		check(t, "siacoins", expectSC, sc)
-		check(t, "immature siacoins", expectImmatureSC, immatureSC)
-		check(t, "siafunds", expectSF, sf)
-	}
 
 	// Generate three addresses: addr1, addr2, addr3
 	pk1 := types.GeneratePrivateKey()
@@ -1481,7 +1131,7 @@ func TestRevertBalance(t *testing.T) {
 	maturityHeight := cm.TipState().MaturityHeight()
 
 	// Mine a block sending the payout to addr1
-	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, addr1)}); err != nil {
+	if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), nil, addr1)}); err != nil {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
@@ -1491,9 +1141,9 @@ func TestRevertBalance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	check(t, "utxos", 1, len(utxos))
-	check(t, "value", expectedPayout, utxos[0].SiacoinOutput.Value)
-	check(t, "source", explorer.SourceMinerPayout, utxos[0].Source)
+	testutil.Equal(t, "utxos", 1, len(utxos))
+	testutil.Equal(t, "value", expectedPayout, utxos[0].SiacoinOutput.Value)
+	testutil.Equal(t, "source", explorer.SourceMinerPayout, utxos[0].Source)
 
 	{
 		// Mine to trigger a reorg
@@ -1501,7 +1151,7 @@ func TestRevertBalance(t *testing.T) {
 		var blocks []types.Block
 		state := genesisState
 		for i := uint64(0); i < 2; i++ {
-			blocks = append(blocks, mineBlock(state, nil, addr2))
+			blocks = append(blocks, testutil.MineBlock(state, nil, addr2))
 			state.Index.ID = blocks[len(blocks)-1].ID()
 			state.Index.Height++
 		}
@@ -1513,36 +1163,36 @@ func TestRevertBalance(t *testing.T) {
 
 	// Mine until the payout matures
 	for i := cm.Tip().Height; i < maturityHeight; i++ {
-		checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
-		checkBalance(addr2, types.ZeroCurrency, expectedPayout.Mul64(2), 0)
-		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
+		testutil.CheckBalance(t, db, addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+		testutil.CheckBalance(t, db, addr2, types.ZeroCurrency, expectedPayout.Mul64(2), 0)
+		if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
 			t.Fatal(err)
 		}
 		syncDB(t, db, cm)
 
-		checkMetrics(t, db, cm, explorer.Metrics{
+		CheckMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    0,
 			StorageUtilization: 0,
 		})
 	}
-	checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
-	checkBalance(addr2, expectedPayout.Mul64(1), expectedPayout.Mul64(1), 0)
+	testutil.CheckBalance(t, db, addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr2, expectedPayout.Mul64(1), expectedPayout.Mul64(1), 0)
 
 	utxos1, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
-	check(t, "addr1 utxos", 0, len(utxos1))
+	testutil.Equal(t, "addr1 utxos", 0, len(utxos1))
 
 	utxos2, err := db.UnspentSiacoinOutputs(addr2, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
-	check(t, "addr2 utxos", 2, len(utxos2))
+	testutil.Equal(t, "addr2 utxos", 2, len(utxos2))
 	for _, utxo := range utxos2 {
-		check(t, "value", expectedPayout, utxo.SiacoinOutput.Value)
-		check(t, "source", explorer.SourceMinerPayout, utxo.Source)
+		testutil.Equal(t, "value", expectedPayout, utxo.SiacoinOutput.Value)
+		testutil.Equal(t, "source", explorer.SourceMinerPayout, utxo.Source)
 	}
 
 	// Send all of the payout except 100 SC to addr3
@@ -1560,7 +1210,7 @@ func TestRevertBalance(t *testing.T) {
 			{Address: addr3, Value: utxos2[0].SiacoinOutput.Value.Sub(hundredSC)},
 		},
 	}
-	signTxn(cm.TipState(), pk2, &parentTxn)
+	testutil.SignTransaction(cm.TipState(), pk2, &parentTxn)
 
 	// In the same block, have addr2 send the 100 SC it still has left to
 	// addr1
@@ -1576,9 +1226,9 @@ func TestRevertBalance(t *testing.T) {
 			{Address: addr1, Value: hundredSC},
 		},
 	}
-	signTxn(cm.TipState(), pk2, &txn)
+	testutil.SignTransaction(cm.TipState(), pk2, &txn)
 
-	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{parentTxn, txn}, types.VoidAddress)}); err != nil {
+	if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), []types.Transaction{parentTxn, txn}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
@@ -1588,20 +1238,20 @@ func TestRevertBalance(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "spent_index", *b.Transactions[0].SiacoinOutputs[0].SpentIndex, cm.Tip())
-		check(t, "spent_index", b.Transactions[1].SiacoinOutputs[0].SpentIndex, (*types.ChainIndex)(nil))
+		testutil.Equal(t, "spent_index", *b.Transactions[0].SiacoinOutputs[0].SpentIndex, cm.Tip())
+		testutil.Equal(t, "spent_index", b.Transactions[1].SiacoinOutputs[0].SpentIndex, (*types.ChainIndex)(nil))
 	}
 
-	checkMetrics(t, db, cm, explorer.Metrics{
+	CheckMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
 	})
 
-	checkBalance(addr1, hundredSC, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr1, hundredSC, types.ZeroCurrency, 0)
 	// second block added in reorg has now matured
-	checkBalance(addr2, utxos2[1].SiacoinOutput.Value, types.ZeroCurrency, 0)
-	checkBalance(addr3, utxos2[0].SiacoinOutput.Value.Sub(hundredSC), types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr2, utxos2[1].SiacoinOutput.Value, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr3, utxos2[0].SiacoinOutput.Value.Sub(hundredSC), types.ZeroCurrency, 0)
 
 	{
 		// Reorg everything from before
@@ -1617,7 +1267,7 @@ func TestRevertBalance(t *testing.T) {
 			} else if i == 1 {
 				addr = addr2
 			}
-			blocks = append(blocks, mineBlock(state, nil, addr))
+			blocks = append(blocks, testutil.MineBlock(state, nil, addr))
 			state.Index.ID = blocks[len(blocks)-1].ID()
 			state.Index.Height++
 		}
@@ -1627,35 +1277,35 @@ func TestRevertBalance(t *testing.T) {
 		syncDB(t, db, cm)
 	}
 
-	checkBalance(addr1, expectedPayout, types.ZeroCurrency, 0)
-	checkBalance(addr2, expectedPayout, types.ZeroCurrency, 0)
-	checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr1, expectedPayout, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr2, expectedPayout, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
 
 	utxos1, err = db.UnspentSiacoinOutputs(addr1, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
-	check(t, "addr1 utxos", 1, len(utxos1))
+	testutil.Equal(t, "addr1 utxos", 1, len(utxos1))
 	for _, utxo := range utxos1 {
-		check(t, "value", expectedPayout, utxo.SiacoinOutput.Value)
-		check(t, "source", explorer.SourceMinerPayout, utxo.Source)
+		testutil.Equal(t, "value", expectedPayout, utxo.SiacoinOutput.Value)
+		testutil.Equal(t, "source", explorer.SourceMinerPayout, utxo.Source)
 	}
 
 	utxos2, err = db.UnspentSiacoinOutputs(addr2, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
-	check(t, "addr2 utxos", 1, len(utxos2))
+	testutil.Equal(t, "addr2 utxos", 1, len(utxos2))
 	for _, utxo := range utxos2 {
-		check(t, "value", expectedPayout, utxo.SiacoinOutput.Value)
-		check(t, "source", explorer.SourceMinerPayout, utxo.Source)
+		testutil.Equal(t, "value", expectedPayout, utxo.SiacoinOutput.Value)
+		testutil.Equal(t, "source", explorer.SourceMinerPayout, utxo.Source)
 	}
 
 	utxos3, err := db.UnspentSiacoinOutputs(addr3, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
-	check(t, "addr3 utxos", 0, len(utxos3))
+	testutil.Equal(t, "addr3 utxos", 0, len(utxos3))
 }
 
 func TestRevertSendTransactions(t *testing.T) {
@@ -1687,8 +1337,9 @@ func TestRevertSendTransactions(t *testing.T) {
 	// t.Log("addr2:", addr2)
 	// t.Log("addr3:", addr3)
 
-	const giftSF = 10000
-	network, genesisBlock := testV1Network(addr1, types.ZeroCurrency, giftSF)
+	network, genesisBlock := ctestutil.Network()
+	genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	giftSF := genesisBlock.Transactions[0].SiafundOutputs[0].Value
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -1697,35 +1348,11 @@ func TestRevertSendTransactions(t *testing.T) {
 
 	cm := chain.NewManager(store, genesisState)
 
-	// checkBalance checks that an address has the balances we expect
-	checkBalance := func(addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
-		sc, immatureSC, sf, err := db.Balance(addr)
-		if err != nil {
-			t.Fatal(err)
-		}
-		check(t, "siacoins", expectSC, sc)
-		check(t, "immature siacoins", expectImmatureSC, immatureSC)
-		check(t, "siafunds", expectSF, sf)
-	}
-
-	checkChainIndices := func(t *testing.T, txnID types.TransactionID, expected []types.ChainIndex) {
-		indices, err := db.TransactionChainIndices(txnID, 0, 100)
-		switch {
-		case err != nil:
-			t.Fatal(err)
-		case len(indices) != len(expected):
-			t.Fatalf("expected %d indices, got %d", len(expected), len(indices))
-		}
-		for i := range indices {
-			check(t, "index", expected[i], indices[i])
-		}
-	}
-
 	expectedPayout := cm.TipState().BlockReward()
 	maturityHeight := cm.TipState().MaturityHeight()
 
 	var blocks []types.Block
-	b1 := mineBlock(cm.TipState(), nil, addr1)
+	b1 := testutil.MineBlock(cm.TipState(), nil, addr1)
 	// Mine a block sending the payout to the addr1
 	if err := cm.AddBlocks([]types.Block{b1}); err != nil {
 		t.Fatal(err)
@@ -1735,7 +1362,7 @@ func TestRevertSendTransactions(t *testing.T) {
 
 	// Mine until the payout matures
 	for i := cm.Tip().Height; i < maturityHeight; i++ {
-		b := mineBlock(cm.TipState(), nil, types.VoidAddress)
+		b := testutil.MineBlock(cm.TipState(), nil, types.VoidAddress)
 		if err := cm.AddBlocks([]types.Block{b}); err != nil {
 			t.Fatal(err)
 		}
@@ -1743,9 +1370,9 @@ func TestRevertSendTransactions(t *testing.T) {
 		syncDB(t, db, cm)
 	}
 
-	checkBalance(addr1, expectedPayout, types.ZeroCurrency, giftSF)
-	checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
-	checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr1, expectedPayout, types.ZeroCurrency, giftSF)
+	testutil.CheckBalance(t, db, addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
 
 	const n = 26
 
@@ -1754,9 +1381,9 @@ func TestRevertSendTransactions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	check(t, "utxos", 1, len(utxos))
-	check(t, "value", expectedPayout, utxos[0].SiacoinOutput.Value)
-	check(t, "source", explorer.SourceMinerPayout, utxos[0].Source)
+	testutil.Equal(t, "utxos", 1, len(utxos))
+	testutil.Equal(t, "value", expectedPayout, utxos[0].SiacoinOutput.Value)
+	testutil.Equal(t, "source", explorer.SourceMinerPayout, utxos[0].Source)
 
 	sfOutputID := genesisBlock.Transactions[0].SiafundOutputID(0)
 	scOutputID := utxos[0].ID
@@ -1791,27 +1418,27 @@ func TestRevertSendTransactions(t *testing.T) {
 			},
 		}
 
-		signTxn(cm.TipState(), pk1, &parentTxn)
+		testutil.SignTransaction(cm.TipState(), pk1, &parentTxn)
 		scOutputID = types.Hash256(parentTxn.SiacoinOutputID(2))
 		sfOutputID = parentTxn.SiafundOutputID(2)
 
 		// Mine a block with the above transaction
-		b := mineBlock(cm.TipState(), []types.Transaction{parentTxn}, types.VoidAddress)
+		b := testutil.MineBlock(cm.TipState(), []types.Transaction{parentTxn}, types.VoidAddress)
 		if err := cm.AddBlocks([]types.Block{b}); err != nil {
 			t.Fatal(err)
 		}
 		blocks = append(blocks, b)
 		syncDB(t, db, cm)
 
-		checkMetrics(t, db, cm, explorer.Metrics{
+		CheckMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    0,
 			StorageUtilization: 0,
 		})
 
-		checkBalance(addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
-		checkBalance(addr2, types.Siacoins(1).Mul64(uint64(i+1)), types.ZeroCurrency, 1*uint64(i+1))
-		checkBalance(addr3, types.Siacoins(2).Mul64(uint64(i+1)), types.ZeroCurrency, 2*uint64(i+1))
+		testutil.CheckBalance(t, db, addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
+		testutil.CheckBalance(t, db, addr2, types.Siacoins(1).Mul64(uint64(i+1)), types.ZeroCurrency, 1*uint64(i+1))
+		testutil.CheckBalance(t, db, addr3, types.Siacoins(2).Mul64(uint64(i+1)), types.ZeroCurrency, 2*uint64(i+1))
 
 		// Ensure the block we retrieved from the database is the same as the
 		// actual block
@@ -1819,29 +1446,29 @@ func TestRevertSendTransactions(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "transactions", len(b.Transactions), len(block.Transactions))
-		check(t, "miner payouts", len(b.MinerPayouts), len(block.MinerPayouts))
-		check(t, "nonce", b.Nonce, block.Nonce)
-		check(t, "timestamp", b.Timestamp, block.Timestamp)
+		testutil.Equal(t, "transactions", len(b.Transactions), len(block.Transactions))
+		testutil.Equal(t, "miner payouts", len(b.MinerPayouts), len(block.MinerPayouts))
+		testutil.Equal(t, "nonce", b.Nonce, block.Nonce)
+		testutil.Equal(t, "timestamp", b.Timestamp, block.Timestamp)
 
 		// Ensure the miner payouts in the block match
 		for i := range b.MinerPayouts {
-			check(t, "address", b.MinerPayouts[i].Address, b.MinerPayouts[i].Address)
-			check(t, "value", b.MinerPayouts[i].Value, b.MinerPayouts[i].Value)
+			testutil.Equal(t, "address", b.MinerPayouts[i].Address, b.MinerPayouts[i].Address)
+			testutil.Equal(t, "value", b.MinerPayouts[i].Value, b.MinerPayouts[i].Value)
 		}
 
 		// Ensure the transactions in the block and retrieved separately match
 		// with the actual transactions
 		for i := range b.Transactions {
-			checkTransaction(t, b.Transactions[i], block.Transactions[i])
-			checkChainIndices(t, b.Transactions[i].ID(), []types.ChainIndex{cm.Tip()})
+			testutil.CheckTransaction(t, b.Transactions[i], block.Transactions[i])
+			CheckChainIndices(t, db, b.Transactions[i].ID(), []types.ChainIndex{cm.Tip()})
 
 			txns, err := db.Transactions([]types.TransactionID{b.Transactions[i].ID()})
 			if err != nil {
 				t.Fatal(err)
 			}
-			check(t, "transactions", 1, len(txns))
-			checkTransaction(t, b.Transactions[i], txns[0])
+			testutil.Equal(t, "transactions", 1, len(txns))
+			testutil.CheckTransaction(t, b.Transactions[i], txns[0])
 		}
 
 		type expectedUTXOs struct {
@@ -1868,17 +1495,17 @@ func TestRevertSendTransactions(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			check(t, "sc utxos", e.sc, len(sc))
-			check(t, "sf utxos", e.sf, len(sf))
+			testutil.Equal(t, "sc utxos", e.sc, len(sc))
+			testutil.Equal(t, "sf utxos", e.sf, len(sf))
 
 			for _, sco := range sc {
-				check(t, "address", e.addr, sco.SiacoinOutput.Address)
-				check(t, "value", e.scValue, sco.SiacoinOutput.Value)
-				check(t, "source", explorer.SourceTransaction, sco.Source)
+				testutil.Equal(t, "address", e.addr, sco.SiacoinOutput.Address)
+				testutil.Equal(t, "value", e.scValue, sco.SiacoinOutput.Value)
+				testutil.Equal(t, "source", explorer.SourceTransaction, sco.Source)
 			}
 			for _, sfo := range sf {
-				check(t, "address", e.addr, sfo.SiafundOutput.Address)
-				check(t, "value", e.sfValue, sfo.SiafundOutput.Value)
+				testutil.Equal(t, "address", e.addr, sfo.SiafundOutput.Address)
+				testutil.Equal(t, "value", e.sfValue, sfo.SiafundOutput.Value)
 			}
 		}
 	}
@@ -1893,7 +1520,7 @@ func TestRevertSendTransactions(t *testing.T) {
 			t.Fatal("no such block")
 		}
 		for i := 0; i < 3+1; i++ {
-			newBlocks = append(newBlocks, mineBlock(state, nil, types.VoidAddress))
+			newBlocks = append(newBlocks, testutil.MineBlock(state, nil, types.VoidAddress))
 			state.Index.ID = newBlocks[len(newBlocks)-1].ID()
 			state.Index.Height++
 		}
@@ -1906,102 +1533,79 @@ func TestRevertSendTransactions(t *testing.T) {
 		addr1SCs := expectedPayout.Sub(types.Siacoins(1 + 2).Mul64(uint64(n - 3)))
 		addr1SFs := giftSF - (1+2)*uint64(n-3)
 
-		checkBalance(addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
-		checkBalance(addr2, types.Siacoins(1).Mul64(uint64(n-3)), types.ZeroCurrency, 1*uint64(n-3))
-		checkBalance(addr3, types.Siacoins(2).Mul64(uint64(n-3)), types.ZeroCurrency, 2*uint64(n-3))
+		testutil.CheckBalance(t, db, addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
+		testutil.CheckBalance(t, db, addr2, types.Siacoins(1).Mul64(uint64(n-3)), types.ZeroCurrency, 1*uint64(n-3))
+		testutil.CheckBalance(t, db, addr3, types.Siacoins(2).Mul64(uint64(n-3)), types.ZeroCurrency, 2*uint64(n-3))
 
 		scUtxos1, err := db.UnspentSiacoinOutputs(addr1, 0, n)
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "addr1 sc utxos", 1, len(scUtxos1))
+		testutil.Equal(t, "addr1 sc utxos", 1, len(scUtxos1))
 		for _, sce := range scUtxos1 {
-			check(t, "address", addr1, sce.SiacoinOutput.Address)
-			check(t, "value", addr1SCs, sce.SiacoinOutput.Value)
-			check(t, "source", explorer.SourceTransaction, sce.Source)
+			testutil.Equal(t, "address", addr1, sce.SiacoinOutput.Address)
+			testutil.Equal(t, "value", addr1SCs, sce.SiacoinOutput.Value)
+			testutil.Equal(t, "source", explorer.SourceTransaction, sce.Source)
 		}
 
 		scUtxos2, err := db.UnspentSiacoinOutputs(addr2, 0, n)
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "addr2 sc utxos", n-3, len(scUtxos2))
+		testutil.Equal(t, "addr2 sc utxos", n-3, len(scUtxos2))
 		for _, sce := range scUtxos2 {
-			check(t, "address", addr2, sce.SiacoinOutput.Address)
-			check(t, "value", types.Siacoins(1), sce.SiacoinOutput.Value)
-			check(t, "source", explorer.SourceTransaction, sce.Source)
+			testutil.Equal(t, "address", addr2, sce.SiacoinOutput.Address)
+			testutil.Equal(t, "value", types.Siacoins(1), sce.SiacoinOutput.Value)
+			testutil.Equal(t, "source", explorer.SourceTransaction, sce.Source)
 		}
 
 		scUtxos3, err := db.UnspentSiacoinOutputs(addr3, 0, n)
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "addr3 sc utxos", n-3, len(scUtxos3))
+		testutil.Equal(t, "addr3 sc utxos", n-3, len(scUtxos3))
 		for _, sce := range scUtxos3 {
-			check(t, "address", addr3, sce.SiacoinOutput.Address)
-			check(t, "value", types.Siacoins(2), sce.SiacoinOutput.Value)
-			check(t, "source", explorer.SourceTransaction, sce.Source)
+			testutil.Equal(t, "address", addr3, sce.SiacoinOutput.Address)
+			testutil.Equal(t, "value", types.Siacoins(2), sce.SiacoinOutput.Value)
+			testutil.Equal(t, "source", explorer.SourceTransaction, sce.Source)
 		}
 
 		sfUtxos1, err := db.UnspentSiafundOutputs(addr1, 0, n)
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "addr1 sf utxos", 1, len(sfUtxos1))
+		testutil.Equal(t, "addr1 sf utxos", 1, len(sfUtxos1))
 		for _, sfe := range sfUtxos1 {
-			check(t, "address", addr1, sfe.SiafundOutput.Address)
-			check(t, "value", addr1SFs, sfe.SiafundOutput.Value)
+			testutil.Equal(t, "address", addr1, sfe.SiafundOutput.Address)
+			testutil.Equal(t, "value", addr1SFs, sfe.SiafundOutput.Value)
 		}
 
 		sfUtxos2, err := db.UnspentSiafundOutputs(addr2, 0, n)
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "addr2 sf utxos", n-3, len(sfUtxos2))
+		testutil.Equal(t, "addr2 sf utxos", n-3, len(sfUtxos2))
 		for _, sfe := range sfUtxos2 {
-			check(t, "address", addr2, sfe.SiafundOutput.Address)
-			check(t, "value", uint64(1), sfe.SiafundOutput.Value)
+			testutil.Equal(t, "address", addr2, sfe.SiafundOutput.Address)
+			testutil.Equal(t, "value", uint64(1), sfe.SiafundOutput.Value)
 		}
 
 		sfUtxos3, err := db.UnspentSiafundOutputs(addr3, 0, n)
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "addr3 sf utxos", n-3, len(sfUtxos3))
+		testutil.Equal(t, "addr3 sf utxos", n-3, len(sfUtxos3))
 		for _, sfe := range sfUtxos3 {
-			check(t, "address", addr3, sfe.SiafundOutput.Address)
-			check(t, "value", uint64(2), sfe.SiafundOutput.Value)
+			testutil.Equal(t, "address", addr3, sfe.SiafundOutput.Address)
+			testutil.Equal(t, "value", uint64(2), sfe.SiafundOutput.Value)
 		}
 	}
 
-	checkMetrics(t, db, cm, explorer.Metrics{
+	CheckMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
 	})
-}
-
-// from hostd
-func createAnnouncement(priv types.PrivateKey, netaddress string) []byte {
-	// encode the announcement
-	var buf bytes.Buffer
-	pub := priv.PublicKey()
-	enc := types.NewEncoder(&buf)
-	explorer.SpecifierAnnouncement.EncodeTo(enc)
-	enc.WriteString(netaddress)
-	pub.UnlockKey().EncodeTo(enc)
-	if err := enc.Flush(); err != nil {
-		panic(err)
-	}
-	// hash without the signature
-	sigHash := types.HashBytes(buf.Bytes())
-	// sign
-	sig := priv.SignHash(sigHash)
-	sig.EncodeTo(enc)
-	if err := enc.Flush(); err != nil {
-		panic(err)
-	}
-	return buf.Bytes()
 }
 
 func TestHostAnnouncement(t *testing.T) {
@@ -2019,7 +1623,7 @@ func TestHostAnnouncement(t *testing.T) {
 	}
 	defer bdb.Close()
 
-	network, genesisBlock := testV1Network(types.VoidAddress, types.ZeroCurrency, 0)
+	network, genesisBlock := ctestutil.Network()
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -2042,27 +1646,27 @@ func TestHostAnnouncement(t *testing.T) {
 				expected = append(expected, ha)
 			}
 		}
-		check(t, "len(hostAnnouncements)", len(expected), len(got))
+		testutil.Equal(t, "len(hostAnnouncements)", len(expected), len(got))
 		for i := range expected {
-			check(t, "host public key", expected[i].PublicKey, got[i].PublicKey)
-			check(t, "host net address", expected[i].NetAddress, got[i].NetAddress)
+			testutil.Equal(t, "host public key", expected[i].PublicKey, got[i].PublicKey)
+			testutil.Equal(t, "host net address", expected[i].NetAddress, got[i].NetAddress)
 		}
 	}
 
 	txn1 := types.Transaction{
 		ArbitraryData: [][]byte{
-			createAnnouncement(pk1, "127.0.0.1:1234"),
+			testutil.CreateAnnouncement(pk1, "127.0.0.1:1234"),
 		},
 	}
-	signTxn(cm.TipState(), pk1, &txn1)
+	testutil.SignTransaction(cm.TipState(), pk1, &txn1)
 
 	// Mine a block containing host announcement
-	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn1}, types.VoidAddress)}); err != nil {
+	if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), []types.Transaction{txn1}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
 
-	checkMetrics(t, db, cm, explorer.Metrics{
+	CheckMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         1,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -2070,27 +1674,27 @@ func TestHostAnnouncement(t *testing.T) {
 
 	txn2 := types.Transaction{
 		ArbitraryData: [][]byte{
-			createAnnouncement(pk1, "127.0.0.1:5678"),
+			testutil.CreateAnnouncement(pk1, "127.0.0.1:5678"),
 		},
 	}
 	txn3 := types.Transaction{
 		ArbitraryData: [][]byte{
-			createAnnouncement(pk2, "127.0.0.1:9999"),
+			testutil.CreateAnnouncement(pk2, "127.0.0.1:9999"),
 		},
 	}
 	txn4 := types.Transaction{
 		ArbitraryData: [][]byte{
-			createAnnouncement(pk3, "127.0.0.1:9999"),
+			testutil.CreateAnnouncement(pk3, "127.0.0.1:9999"),
 		},
 	}
 
 	// Mine a block containing host announcement
-	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn2, txn3, txn4}, types.VoidAddress)}); err != nil {
+	if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), []types.Transaction{txn2, txn3, txn4}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
 
-	checkMetrics(t, db, cm, explorer.Metrics{
+	CheckMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         3,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -2101,10 +1705,10 @@ func TestHostAnnouncement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "len(txns)", 3, len(b.Transactions))
-		check(t, "txns[0].ID", txn2.ID(), b.Transactions[0].ID)
-		check(t, "txns[1].ID", txn3.ID(), b.Transactions[1].ID)
-		check(t, "txns[2].ID", txn4.ID(), b.Transactions[2].ID)
+		testutil.Equal(t, "len(txns)", 3, len(b.Transactions))
+		testutil.Equal(t, "txns[0].ID", txn2.ID(), b.Transactions[0].ID)
+		testutil.Equal(t, "txns[1].ID", txn3.ID(), b.Transactions[1].ID)
+		testutil.Equal(t, "txns[2].ID", txn4.ID(), b.Transactions[2].ID)
 	}
 
 	{
@@ -2112,11 +1716,11 @@ func TestHostAnnouncement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "len(txns)", 4, len(dbTxns))
-		check(t, "txns[0].ID", txn1.ID(), dbTxns[0].ID)
-		check(t, "txns[1].ID", txn2.ID(), dbTxns[1].ID)
-		check(t, "txns[2].ID", txn3.ID(), dbTxns[2].ID)
-		check(t, "txns[3].ID", txn4.ID(), dbTxns[3].ID)
+		testutil.Equal(t, "len(txns)", 4, len(dbTxns))
+		testutil.Equal(t, "txns[0].ID", txn1.ID(), dbTxns[0].ID)
+		testutil.Equal(t, "txns[1].ID", txn2.ID(), dbTxns[1].ID)
+		testutil.Equal(t, "txns[2].ID", txn3.ID(), dbTxns[2].ID)
+		testutil.Equal(t, "txns[3].ID", txn4.ID(), dbTxns[3].ID)
 	}
 
 	{
@@ -2124,7 +1728,7 @@ func TestHostAnnouncement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "len(txns)", 1, len(dbTxns))
+		testutil.Equal(t, "len(txns)", 1, len(dbTxns))
 		checkHostAnnouncements(txn1.ArbitraryData, dbTxns[0].HostAnnouncements)
 	}
 
@@ -2133,7 +1737,7 @@ func TestHostAnnouncement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "len(txns)", 1, len(dbTxns))
+		testutil.Equal(t, "len(txns)", 1, len(dbTxns))
 		checkHostAnnouncements(txn2.ArbitraryData, dbTxns[0].HostAnnouncements)
 	}
 
@@ -2142,7 +1746,7 @@ func TestHostAnnouncement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "len(txns)", 1, len(dbTxns))
+		testutil.Equal(t, "len(txns)", 1, len(dbTxns))
 		checkHostAnnouncements(txn3.ArbitraryData, dbTxns[0].HostAnnouncements)
 	}
 
@@ -2151,14 +1755,14 @@ func TestHostAnnouncement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	check(t, "len(hosts)", 3, len(hosts))
+	testutil.Equal(t, "len(hosts)", 3, len(hosts))
 
 	{
 		scans, err := db.Hosts([]types.PublicKey{hosts[0].PublicKey})
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "len(scans)", 1, len(scans))
+		testutil.Equal(t, "len(scans)", 1, len(scans))
 	}
 
 	scan1 := explorer.HostScan{
@@ -2181,14 +1785,14 @@ func TestHostAnnouncement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "len(scans)", 1, len(scans))
+		testutil.Equal(t, "len(scans)", 1, len(scans))
 
 		scan := scans[0]
-		check(t, "last scan", scan1.Timestamp.Unix(), scan.LastScan.Unix())
-		check(t, "last scan successful", scan1.Success, scan.LastScanSuccessful)
-		check(t, "total scans", 1, scan.TotalScans)
-		check(t, "successful interactions", 1, scan.SuccessfulInteractions)
-		check(t, "failed interactions", 0, scan.FailedInteractions)
+		testutil.Equal(t, "last scan", scan1.Timestamp.Unix(), scan.LastScan.Unix())
+		testutil.Equal(t, "last scan successful", scan1.Success, scan.LastScanSuccessful)
+		testutil.Equal(t, "total scans", 1, scan.TotalScans)
+		testutil.Equal(t, "successful interactions", 1, scan.SuccessfulInteractions)
+		testutil.Equal(t, "failed interactions", 0, scan.FailedInteractions)
 	}
 
 	{
@@ -2200,14 +1804,14 @@ func TestHostAnnouncement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "len(scans)", 1, len(scans))
+		testutil.Equal(t, "len(scans)", 1, len(scans))
 
 		scan := scans[0]
-		check(t, "last scan", scan2.Timestamp.Unix(), scan.LastScan.Unix())
-		check(t, "last scan successful", scan2.Success, scan.LastScanSuccessful)
-		check(t, "total scans", 2, scan.TotalScans)
-		check(t, "successful interactions", 1, scan.SuccessfulInteractions)
-		check(t, "failed interactions", 1, scan.FailedInteractions)
+		testutil.Equal(t, "last scan", scan2.Timestamp.Unix(), scan.LastScan.Unix())
+		testutil.Equal(t, "last scan successful", scan2.Success, scan.LastScanSuccessful)
+		testutil.Equal(t, "total scans", 2, scan.TotalScans)
+		testutil.Equal(t, "successful interactions", 1, scan.SuccessfulInteractions)
+		testutil.Equal(t, "failed interactions", 1, scan.FailedInteractions)
 	}
 }
 
@@ -2240,9 +1844,11 @@ func TestMultipleReorg(t *testing.T) {
 	// t.Log("addr2:", addr2)
 	// t.Log("addr3:", addr3)
 
-	const giftSF = 500
-	giftSC := types.Siacoins(500)
-	network, genesisBlock := testV1Network(addr1, giftSC, giftSF)
+	network, genesisBlock := ctestutil.Network()
+	genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
+	giftSF := genesisBlock.Transactions[0].SiafundOutputs[0].Value
 
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
@@ -2250,17 +1856,6 @@ func TestMultipleReorg(t *testing.T) {
 	}
 
 	cm := chain.NewManager(store, genesisState)
-
-	// checkBalance checks that an address has the balances we expect
-	checkBalance := func(addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
-		sc, immatureSC, sf, err := db.Balance(addr)
-		if err != nil {
-			t.Fatal(err)
-		}
-		check(t, "siacoins", expectSC, sc)
-		check(t, "immature siacoins", expectImmatureSC, immatureSC)
-		check(t, "siafunds", expectSF, sf)
-	}
 
 	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
 	// transfer gift from addr1 to addr2
@@ -2285,14 +1880,14 @@ func TestMultipleReorg(t *testing.T) {
 			{Address: addr2, Value: giftSF},
 		},
 	}
-	signTxn(cm.TipState(), pk1, &txn1)
+	testutil.SignTransaction(cm.TipState(), pk1, &txn1)
 
-	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn1}, types.VoidAddress)}); err != nil {
+	if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), []types.Transaction{txn1}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
 
-	checkMetrics(t, db, cm, explorer.Metrics{
+	CheckMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -2300,49 +1895,49 @@ func TestMultipleReorg(t *testing.T) {
 
 	{
 		// addr2 should have all the SC
-		checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
-		checkBalance(addr2, giftSC, types.ZeroCurrency, giftSF)
-		checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
+		testutil.CheckBalance(t, db, addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+		testutil.CheckBalance(t, db, addr2, giftSC, types.ZeroCurrency, giftSF)
+		testutil.CheckBalance(t, db, addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
 
 		scUtxos1, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "addr1 sc utxos", 0, len(scUtxos1))
+		testutil.Equal(t, "addr1 sc utxos", 0, len(scUtxos1))
 
 		scUtxos2, err := db.UnspentSiacoinOutputs(addr2, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "addr2 sc utxos", 1, len(scUtxos2))
+		testutil.Equal(t, "addr2 sc utxos", 1, len(scUtxos2))
 
 		scUtxos3, err := db.UnspentSiacoinOutputs(addr3, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "addr3 sc utxos", 0, len(scUtxos3))
+		testutil.Equal(t, "addr3 sc utxos", 0, len(scUtxos3))
 
 		sfUtxos1, err := db.UnspentSiafundOutputs(addr1, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "addr1 sf utxos", 0, len(sfUtxos1))
+		testutil.Equal(t, "addr1 sf utxos", 0, len(sfUtxos1))
 
 		sfUtxos2, err := db.UnspentSiafundOutputs(addr2, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "addr2 sf utxos", 1, len(sfUtxos2))
+		testutil.Equal(t, "addr2 sf utxos", 1, len(sfUtxos2))
 
 		sfUtxos3, err := db.UnspentSiafundOutputs(addr3, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "addr3 sf utxos", 0, len(sfUtxos3))
+		testutil.Equal(t, "addr3 sf utxos", 0, len(sfUtxos3))
 	}
 
 	for i := 0; i < 10; i++ {
-		if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
+		if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
 			t.Fatal(err)
 		}
 		syncDB(t, db, cm)
@@ -2371,10 +1966,10 @@ func TestMultipleReorg(t *testing.T) {
 			{Address: addr3, Value: giftSF},
 		},
 	}
-	signTxn(cm.TipState(), pk2, &txn2)
+	testutil.SignTransaction(cm.TipState(), pk2, &txn2)
 
 	prevState1 := cm.TipState()
-	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn2}, types.VoidAddress)}); err != nil {
+	if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), []types.Transaction{txn2}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
@@ -2382,45 +1977,45 @@ func TestMultipleReorg(t *testing.T) {
 
 	{
 		// addr3 should have all the SC
-		checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
-		checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
-		checkBalance(addr3, giftSC, types.ZeroCurrency, giftSF)
+		testutil.CheckBalance(t, db, addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+		testutil.CheckBalance(t, db, addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
+		testutil.CheckBalance(t, db, addr3, giftSC, types.ZeroCurrency, giftSF)
 
 		scUtxos1, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "addr1 sc utxos", 0, len(scUtxos1))
+		testutil.Equal(t, "addr1 sc utxos", 0, len(scUtxos1))
 
 		scUtxos2, err := db.UnspentSiacoinOutputs(addr2, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "addr2 sc utxos", 0, len(scUtxos2))
+		testutil.Equal(t, "addr2 sc utxos", 0, len(scUtxos2))
 
 		scUtxos3, err := db.UnspentSiacoinOutputs(addr3, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "addr3 sc utxos", 1, len(scUtxos3))
+		testutil.Equal(t, "addr3 sc utxos", 1, len(scUtxos3))
 
 		sfUtxos1, err := db.UnspentSiafundOutputs(addr1, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "addr1 sf utxos", 0, len(sfUtxos1))
+		testutil.Equal(t, "addr1 sf utxos", 0, len(sfUtxos1))
 
 		sfUtxos2, err := db.UnspentSiafundOutputs(addr2, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "addr2 sf utxos", 0, len(sfUtxos2))
+		testutil.Equal(t, "addr2 sf utxos", 0, len(sfUtxos2))
 
 		sfUtxos3, err := db.UnspentSiafundOutputs(addr3, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "addr3 sf utxos", 1, len(sfUtxos3))
+		testutil.Equal(t, "addr3 sf utxos", 1, len(sfUtxos3))
 	}
 
 	// revert block 12 with increasingly large reorgs and sanity check results
@@ -2434,7 +2029,7 @@ func TestMultipleReorg(t *testing.T) {
 				pk := types.GeneratePrivateKey()
 				addr := types.StandardUnlockHash(pk.PublicKey())
 
-				blocks = append(blocks, mineBlock(state, nil, addr))
+				blocks = append(blocks, testutil.MineBlock(state, nil, addr))
 				state.Index.ID = blocks[len(blocks)-1].ID()
 				state.Index.Height++
 			}
@@ -2447,45 +2042,45 @@ func TestMultipleReorg(t *testing.T) {
 		// we should be back in state before block 12 (addr2 has all the SC
 		// instead of addr3)
 		{
-			checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
-			checkBalance(addr2, giftSC, types.ZeroCurrency, giftSF)
-			checkBalance(addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
+			testutil.CheckBalance(t, db, addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+			testutil.CheckBalance(t, db, addr2, giftSC, types.ZeroCurrency, giftSF)
+			testutil.CheckBalance(t, db, addr3, types.ZeroCurrency, types.ZeroCurrency, 0)
 
 			scUtxos1, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
-			check(t, "addr1 sc utxos", 0, len(scUtxos1))
+			testutil.Equal(t, "addr1 sc utxos", 0, len(scUtxos1))
 
 			scUtxos2, err := db.UnspentSiacoinOutputs(addr2, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
-			check(t, "addr2 sc utxos", 1, len(scUtxos2))
+			testutil.Equal(t, "addr2 sc utxos", 1, len(scUtxos2))
 
 			scUtxos3, err := db.UnspentSiacoinOutputs(addr3, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
-			check(t, "addr3 sc utxos", 0, len(scUtxos3))
+			testutil.Equal(t, "addr3 sc utxos", 0, len(scUtxos3))
 
 			sfUtxos1, err := db.UnspentSiafundOutputs(addr1, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
-			check(t, "addr1 sf utxos", 0, len(sfUtxos1))
+			testutil.Equal(t, "addr1 sf utxos", 0, len(sfUtxos1))
 
 			sfUtxos2, err := db.UnspentSiafundOutputs(addr2, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
-			check(t, "addr2 sf utxos", 1, len(sfUtxos2))
+			testutil.Equal(t, "addr2 sf utxos", 1, len(sfUtxos2))
 
 			sfUtxos3, err := db.UnspentSiafundOutputs(addr3, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
-			check(t, "addr3 sf utxos", 0, len(sfUtxos3))
+			testutil.Equal(t, "addr3 sf utxos", 0, len(sfUtxos3))
 		}
 	}
 
@@ -2500,7 +2095,7 @@ func TestMultipleReorg(t *testing.T) {
 				pk := types.GeneratePrivateKey()
 				addr := types.StandardUnlockHash(pk.PublicKey())
 
-				blocks = append(blocks, mineBlock(state, nil, addr))
+				blocks = append(blocks, testutil.MineBlock(state, nil, addr))
 				state.Index.ID = blocks[len(blocks)-1].ID()
 				state.Index.Height++
 			}
@@ -2513,45 +2108,45 @@ func TestMultipleReorg(t *testing.T) {
 		// we should be back in state before the reverts (addr3 has all the SC
 		// instead of addr2)
 		{
-			checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
-			checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
-			checkBalance(addr3, giftSC, types.ZeroCurrency, giftSF)
+			testutil.CheckBalance(t, db, addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
+			testutil.CheckBalance(t, db, addr2, types.ZeroCurrency, types.ZeroCurrency, 0)
+			testutil.CheckBalance(t, db, addr3, giftSC, types.ZeroCurrency, giftSF)
 
 			scUtxos1, err := db.UnspentSiacoinOutputs(addr1, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
-			check(t, "addr1 sc utxos", 0, len(scUtxos1))
+			testutil.Equal(t, "addr1 sc utxos", 0, len(scUtxos1))
 
 			scUtxos2, err := db.UnspentSiacoinOutputs(addr2, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
-			check(t, "addr2 sc utxos", 0, len(scUtxos2))
+			testutil.Equal(t, "addr2 sc utxos", 0, len(scUtxos2))
 
 			scUtxos3, err := db.UnspentSiacoinOutputs(addr3, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
-			check(t, "addr3 sc utxos", 1, len(scUtxos3))
+			testutil.Equal(t, "addr3 sc utxos", 1, len(scUtxos3))
 
 			sfUtxos1, err := db.UnspentSiafundOutputs(addr1, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
-			check(t, "addr1 sf utxos", 0, len(sfUtxos1))
+			testutil.Equal(t, "addr1 sf utxos", 0, len(sfUtxos1))
 
 			sfUtxos2, err := db.UnspentSiafundOutputs(addr2, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
-			check(t, "addr2 sf utxos", 0, len(sfUtxos2))
+			testutil.Equal(t, "addr2 sf utxos", 0, len(sfUtxos2))
 
 			sfUtxos3, err := db.UnspentSiafundOutputs(addr3, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
-			check(t, "addr3 sf utxos", 1, len(sfUtxos3))
+			testutil.Equal(t, "addr3 sf utxos", 1, len(sfUtxos3))
 		}
 	}
 }
@@ -2581,8 +2176,10 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	hostPrivateKey := types.GeneratePrivateKey()
 	hostPublicKey := hostPrivateKey.PublicKey()
 
-	giftSC := types.Siacoins(1000)
-	network, genesisBlock := testV1Network(addr1, giftSC, 0)
+	network, genesisBlock := ctestutil.Network()
+	genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
+
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
 		t.Fatal(err)
@@ -2593,55 +2190,9 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	scOutputID := genesisBlock.Transactions[0].SiacoinOutputID(0)
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
 
-	signTxn := func(txn *types.Transaction) {
-		appendSig := func(key types.PrivateKey, pubkeyIndex uint64, parentID types.Hash256) {
-			sig := key.SignHash(cm.TipState().WholeSigHash(*txn, parentID, pubkeyIndex, 0, nil))
-			txn.Signatures = append(txn.Signatures, types.TransactionSignature{
-				ParentID:       parentID,
-				CoveredFields:  types.CoveredFields{WholeTransaction: true},
-				PublicKeyIndex: pubkeyIndex,
-				Signature:      sig[:],
-			})
-		}
-		for i := range txn.SiacoinInputs {
-			appendSig(pk1, 0, types.Hash256(txn.SiacoinInputs[i].ParentID))
-		}
-		for i := range txn.SiafundInputs {
-			appendSig(pk1, 0, types.Hash256(txn.SiafundInputs[i].ParentID))
-		}
-		for i := range txn.FileContractRevisions {
-			appendSig(renterPrivateKey, 0, types.Hash256(txn.FileContractRevisions[i].ParentID))
-			appendSig(hostPrivateKey, 1, types.Hash256(txn.FileContractRevisions[i].ParentID))
-		}
-	}
-
-	checkFC := func(resolved, valid bool, expected types.FileContract, got explorer.FileContract) {
-		check(t, "resolved state", resolved, got.Resolved)
-		check(t, "valid state", valid, got.Valid)
-
-		gotFC := got.FileContract
-		check(t, "filesize", expected.Filesize, gotFC.Filesize)
-		check(t, "file merkle root", expected.FileMerkleRoot, gotFC.FileMerkleRoot)
-		check(t, "window start", expected.WindowStart, gotFC.WindowStart)
-		check(t, "window end", expected.WindowEnd, gotFC.WindowEnd)
-		check(t, "payout", expected.Payout, gotFC.Payout)
-		check(t, "unlock hash", expected.UnlockHash, gotFC.UnlockHash)
-		check(t, "revision number", expected.RevisionNumber, gotFC.RevisionNumber)
-		check(t, "valid proof outputs", len(expected.ValidProofOutputs), len(gotFC.ValidProofOutputs))
-		for i := range expected.ValidProofOutputs {
-			check(t, "valid proof output address", expected.ValidProofOutputs[i].Address, gotFC.ValidProofOutputs[i].Address)
-			check(t, "valid proof output value", expected.ValidProofOutputs[i].Value, gotFC.ValidProofOutputs[i].Value)
-		}
-		check(t, "missed proof outputs", len(expected.MissedProofOutputs), len(gotFC.MissedProofOutputs))
-		for i := range expected.MissedProofOutputs {
-			check(t, "missed proof output address", expected.MissedProofOutputs[i].Address, gotFC.MissedProofOutputs[i].Address)
-			check(t, "missed proof output value", expected.MissedProofOutputs[i].Value, gotFC.MissedProofOutputs[i].Value)
-		}
-	}
-
 	windowStart := cm.Tip().Height + 10
 	windowEnd := windowStart + 10
-	fc := prepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), windowStart, windowEnd, types.VoidAddress)
+	fc := testutil.PrepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), windowStart, windowEnd, types.VoidAddress)
 	txn := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
 			ParentID:         scOutputID,
@@ -2654,17 +2205,17 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		FileContracts: []types.FileContract{fc},
 	}
 	fcID := txn.FileContractID(0)
-	signTxn(&txn)
+	testutil.SignTransaction(cm.TipState(), pk1, &txn)
 
-	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{txn}, types.VoidAddress)}); err != nil {
+	if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), []types.Transaction{txn}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
 
-	checkMetrics(t, db, cm, explorer.Metrics{
+	CheckMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
-		StorageUtilization: contractFilesize,
+		StorageUtilization: testutil.ContractFilesize,
 	})
 
 	{
@@ -2672,11 +2223,11 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "fcs", 1, len(dbFCs))
-		checkFC(false, false, fc, dbFCs[0])
+		testutil.Equal(t, "fcs", 1, len(dbFCs))
+		testutil.CheckFC(t, false, false, false, fc, dbFCs[0])
 
-		check(t, "confirmation index", cm.Tip(), *dbFCs[0].ConfirmationIndex)
-		check(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
+		testutil.Equal(t, "confirmation index", cm.Tip(), *dbFCs[0].ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 	}
 
 	{
@@ -2684,7 +2235,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		checkFCRevisions(t, []uint64{0}, dbFCs)
+		CheckFCRevisions(t, []uint64{0}, dbFCs)
 	}
 
 	{
@@ -2692,9 +2243,9 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "transactions", 1, len(txns))
-		check(t, "file contracts", 1, len(txns[0].FileContracts))
-		checkFC(false, false, fc, txns[0].FileContracts[0])
+		testutil.Equal(t, "transactions", 1, len(txns))
+		testutil.Equal(t, "file contracts", 1, len(txns[0].FileContracts))
+		testutil.CheckFC(t, false, false, false, fc, txns[0].FileContracts[0])
 	}
 
 	uc := types.UnlockConditions{
@@ -2715,20 +2266,20 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			FileContract:     revFC,
 		}},
 	}
-	signTxn(&reviseTxn)
+	testutil.SignTransactionWithContracts(cm.TipState(), pk1, renterPrivateKey, hostPrivateKey, &reviseTxn)
 
 	// state before revision
 	prevState1 := cm.TipState()
-	if err := cm.AddBlocks([]types.Block{mineBlock(cm.TipState(), []types.Transaction{reviseTxn}, types.VoidAddress)}); err != nil {
+	if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), []types.Transaction{reviseTxn}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
 	prevState2 := cm.TipState()
 
-	checkMetrics(t, db, cm, explorer.Metrics{
+	CheckMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
-		StorageUtilization: contractFilesize + 10,
+		StorageUtilization: testutil.ContractFilesize + 10,
 	})
 
 	// Explorer.Contracts should return latest revision
@@ -2737,11 +2288,11 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "fcs", 1, len(dbFCs))
-		checkFC(false, false, revFC, dbFCs[0])
+		testutil.Equal(t, "fcs", 1, len(dbFCs))
+		testutil.CheckFC(t, false, false, false, revFC, dbFCs[0])
 
-		check(t, "confirmation index", prevState1.Index, *dbFCs[0].ConfirmationIndex)
-		check(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
+		testutil.Equal(t, "confirmation index", prevState1.Index, *dbFCs[0].ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 	}
 
 	{
@@ -2749,14 +2300,14 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "transactions", 1, len(txns))
-		check(t, "file contracts", 1, len(txns[0].FileContractRevisions))
+		testutil.Equal(t, "transactions", 1, len(txns))
+		testutil.Equal(t, "file contracts", 1, len(txns[0].FileContractRevisions))
 
 		fcr := txns[0].FileContractRevisions[0]
-		check(t, "parent id", txn.FileContractID(0), fcr.ParentID)
-		check(t, "unlock conditions", uc, fcr.UnlockConditions)
+		testutil.Equal(t, "parent id", txn.FileContractID(0), fcr.ParentID)
+		testutil.Equal(t, "unlock conditions", uc, fcr.UnlockConditions)
 
-		checkFC(false, false, revFC, fcr.FileContract)
+		testutil.CheckFC(t, false, false, false, revFC, fcr.FileContract)
 	}
 
 	{
@@ -2764,7 +2315,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		checkFCRevisions(t, []uint64{0, 1}, dbFCs)
+		CheckFCRevisions(t, []uint64{0, 1}, dbFCs)
 	}
 
 	{
@@ -2776,10 +2327,10 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		check(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
-		check(t, "len(contracts)", 1, len(renterContracts))
-		checkFC(false, false, revFC, renterContracts[0])
-		checkFC(false, false, revFC, hostContracts[0])
+		testutil.Equal(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
+		testutil.Equal(t, "len(contracts)", 1, len(renterContracts))
+		testutil.CheckFC(t, false, false, false, revFC, renterContracts[0])
+		testutil.CheckFC(t, false, false, false, revFC, hostContracts[0])
 	}
 
 	extra := cm.Tip().Height - prevState1.Index.Height + 1
@@ -2792,7 +2343,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 				pk := types.GeneratePrivateKey()
 				addr := types.StandardUnlockHash(pk.PublicKey())
 
-				blocks = append(blocks, mineBlock(state, nil, addr))
+				blocks = append(blocks, testutil.MineBlock(state, nil, addr))
 				state.Index.ID = blocks[len(blocks)-1].ID()
 				state.Index.Height++
 			}
@@ -2808,11 +2359,11 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			check(t, "fcs", 1, len(dbFCs))
-			checkFC(false, false, fc, dbFCs[0])
+			testutil.Equal(t, "fcs", 1, len(dbFCs))
+			testutil.CheckFC(t, false, false, false, fc, dbFCs[0])
 
-			check(t, "confirmation index", prevState1.Index, *dbFCs[0].ConfirmationIndex)
-			check(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
+			testutil.Equal(t, "confirmation index", prevState1.Index, *dbFCs[0].ConfirmationIndex)
+			testutil.Equal(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 		}
 
 		{
@@ -2820,15 +2371,15 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			checkFCRevisions(t, []uint64{0}, dbFCs)
+			CheckFCRevisions(t, []uint64{0}, dbFCs)
 		}
 
-		// storage utilization should be back to contractFilesize instead of
-		// contractFilesize + 10
-		checkMetrics(t, db, cm, explorer.Metrics{
+		// storage utilization should be back to testutil.ContractFilesize instead of
+		// testutil.ContractFilesize + 10
+		CheckMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    1,
-			StorageUtilization: contractFilesize,
+			StorageUtilization: testutil.ContractFilesize,
 		})
 	}
 
@@ -2842,7 +2393,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 				pk := types.GeneratePrivateKey()
 				addr := types.StandardUnlockHash(pk.PublicKey())
 
-				blocks = append(blocks, mineBlock(state, nil, addr))
+				blocks = append(blocks, testutil.MineBlock(state, nil, addr))
 				state.Index.ID = blocks[len(blocks)-1].ID()
 				state.Index.Height++
 			}
@@ -2858,18 +2409,18 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			check(t, "fcs", 1, len(dbFCs))
-			checkFC(false, false, revFC, dbFCs[0])
+			testutil.Equal(t, "fcs", 1, len(dbFCs))
+			testutil.CheckFC(t, false, false, false, revFC, dbFCs[0])
 
-			check(t, "confirmation index", prevState1.Index, *dbFCs[0].ConfirmationIndex)
-			check(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
+			testutil.Equal(t, "confirmation index", prevState1.Index, *dbFCs[0].ConfirmationIndex)
+			testutil.Equal(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 		}
 
 		// should have revision filesize
-		checkMetrics(t, db, cm, explorer.Metrics{
+		CheckMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    1,
-			StorageUtilization: contractFilesize + 10,
+			StorageUtilization: testutil.ContractFilesize + 10,
 		})
 	}
 
@@ -2882,7 +2433,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 				pk := types.GeneratePrivateKey()
 				addr := types.StandardUnlockHash(pk.PublicKey())
 
-				blocks = append(blocks, mineBlock(state, nil, addr))
+				blocks = append(blocks, testutil.MineBlock(state, nil, addr))
 				state.Index.ID = blocks[len(blocks)-1].ID()
 				state.Index.Height++
 			}
@@ -2898,7 +2449,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			check(t, "fcs", 0, len(dbFCs))
+			testutil.Equal(t, "fcs", 0, len(dbFCs))
 		}
 
 		{
@@ -2910,8 +2461,8 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			check(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
-			check(t, "len(contracts)", 0, len(renterContracts))
+			testutil.Equal(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
+			testutil.Equal(t, "len(contracts)", 0, len(renterContracts))
 		}
 
 		{
@@ -2922,7 +2473,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		}
 
 		// no more contracts or storage utilization
-		checkMetrics(t, db, cm, explorer.Metrics{
+		CheckMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts: 0,
 		})
 	}
@@ -2947,8 +2498,9 @@ func TestMetricCirculatingSupply(t *testing.T) {
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
 
-	giftSC := types.Siacoins(1000)
-	network, genesisBlock := testV1Network(addr1, giftSC, 0)
+	network, genesisBlock := ctestutil.Network()
+	genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
 		t.Fatal(err)
@@ -2969,7 +2521,7 @@ func TestMetricCirculatingSupply(t *testing.T) {
 		state := cm.TipState()
 		rewards = append(rewards, state.BlockReward())
 		circulatingSupply = circulatingSupply.Add(state.BlockReward())
-		if err := cm.AddBlocks([]types.Block{mineBlock(state, nil, addr1)}); err != nil {
+		if err := cm.AddBlocks([]types.Block{testutil.MineBlock(state, nil, addr1)}); err != nil {
 			t.Fatal(err)
 		}
 		syncDB(t, db, cm)
@@ -2980,7 +2532,7 @@ func TestMetricCirculatingSupply(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			check(t, "circulating supply", circulatingSupply, metrics.CirculatingSupply)
+			testutil.Equal(t, "circulating supply", circulatingSupply, metrics.CirculatingSupply)
 		}
 	}
 
@@ -2998,7 +2550,7 @@ func TestMetricCirculatingSupply(t *testing.T) {
 			pk := types.GeneratePrivateKey()
 			addr := types.StandardUnlockHash(pk.PublicKey())
 
-			blocks = append(blocks, mineBlock(state, nil, addr))
+			blocks = append(blocks, testutil.MineBlock(state, nil, addr))
 			state.Index.ID = blocks[len(blocks)-1].ID()
 			state.Index.Height++
 
@@ -3018,6 +2570,6 @@ func TestMetricCirculatingSupply(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		check(t, "circulating supply", circulatingSupply, metrics.CirculatingSupply)
+		testutil.Equal(t, "circulating supply", circulatingSupply, metrics.CirculatingSupply)
 	}
 }
