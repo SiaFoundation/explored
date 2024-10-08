@@ -584,6 +584,7 @@ func TestFileContract(t *testing.T) {
 		}
 		testutil.Equal(t, "fcs", 1, len(dbFCs))
 		testutil.CheckFC(t, false, false, false, fc, dbFCs[0])
+		testutil.Equal(t, "transaction ID", txn.ID(), dbFCs[0].TransactionID)
 		testutil.Equal(t, "confirmation index", cm.Tip(), *dbFCs[0].ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 	}
@@ -605,6 +606,7 @@ func TestFileContract(t *testing.T) {
 		testutil.Equal(t, "file contracts", 1, len(txns[0].FileContracts))
 		testutil.CheckFC(t, false, false, false, fc, txns[0].FileContracts[0])
 
+		testutil.Equal(t, "transaction ID", txn.ID(), txns[0].FileContracts[0].TransactionID)
 		testutil.Equal(t, "confirmation index", cm.Tip(), *txns[0].FileContracts[0].ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *txns[0].FileContracts[0].ConfirmationTransactionID)
 	}
@@ -646,6 +648,8 @@ func TestFileContract(t *testing.T) {
 		testutil.CheckFC(t, false, false, false, fc, renterContracts[0])
 		testutil.CheckFC(t, false, false, false, fc, hostContracts[0])
 
+		testutil.Equal(t, "transaction ID", reviseTxn.ID(), renterContracts[0].TransactionID)
+		testutil.Equal(t, "transaction ID", reviseTxn.ID(), hostContracts[0].TransactionID)
 		testutil.Equal(t, "confirmation index", prevTip, *renterContracts[0].ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *renterContracts[0].ConfirmationTransactionID)
 		testutil.Equal(t, "confirmation index", prevTip, *hostContracts[0].ConfirmationIndex)
@@ -748,6 +752,8 @@ func TestFileContract(t *testing.T) {
 		testutil.CheckFC(t, false, true, false, fc, renterContracts[0])
 		testutil.CheckFC(t, false, true, false, fc, hostContracts[0])
 
+		testutil.Equal(t, "transaction ID", reviseTxn.ID(), renterContracts[0].TransactionID)
+		testutil.Equal(t, "transaction ID", reviseTxn.ID(), hostContracts[0].TransactionID)
 		testutil.Equal(t, "confirmation index", prevTip, *renterContracts[0].ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *renterContracts[0].ConfirmationTransactionID)
 		testutil.Equal(t, "confirmation index", prevTip, *hostContracts[0].ConfirmationIndex)
@@ -875,6 +881,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		}
 		testutil.Equal(t, "fcs", 1, len(dbFCs))
 		testutil.CheckFC(t, true, false, false, revisedFC1, dbFCs[0])
+		testutil.Equal(t, "transaction ID", reviseTxn1.ID(), dbFCs[0].TransactionID)
 	}
 
 	{
@@ -894,6 +901,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		testutil.Equal(t, "file contracts", 1, len(txns[0].FileContracts))
 		testutil.CheckFC(t, true, false, false, fc, txns[0].FileContracts[0])
 
+		testutil.Equal(t, "transaction ID", txn.ID(), txns[0].FileContracts[0].TransactionID)
 		testutil.Equal(t, "confirmation index", cm.Tip(), *txns[0].FileContracts[0].ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *txns[0].FileContracts[0].ConfirmationTransactionID)
 	}
@@ -955,6 +963,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		}
 		testutil.Equal(t, "fcs", 1, len(dbFCs))
 		testutil.CheckFC(t, true, false, false, revisedFC3, dbFCs[0])
+		testutil.Equal(t, "transaction ID", reviseTxn3.ID(), dbFCs[0].TransactionID)
 	}
 
 	{
@@ -2302,6 +2311,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		testutil.Equal(t, "fcs", 1, len(dbFCs))
 		testutil.CheckFC(t, false, false, false, revFC, dbFCs[0])
 
+		testutil.Equal(t, "transaction ID", reviseTxn.ID(), dbFCs[0].TransactionID)
 		testutil.Equal(t, "confirmation index", prevState1.Index, *dbFCs[0].ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 	}
@@ -2340,6 +2350,8 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		}
 		testutil.Equal(t, "renter contracts and host contracts", len(renterContracts), len(hostContracts))
 		testutil.Equal(t, "len(contracts)", 1, len(renterContracts))
+		testutil.Equal(t, "transaction ID", reviseTxn.ID(), renterContracts[0].TransactionID)
+		testutil.Equal(t, "transaction ID", reviseTxn.ID(), hostContracts[0].TransactionID)
 		testutil.CheckFC(t, false, false, false, revFC, renterContracts[0])
 		testutil.CheckFC(t, false, false, false, revFC, hostContracts[0])
 	}
@@ -2373,6 +2385,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			testutil.Equal(t, "fcs", 1, len(dbFCs))
 			testutil.CheckFC(t, false, false, false, fc, dbFCs[0])
 
+			testutil.Equal(t, "transaction ID", txn.ID(), dbFCs[0].TransactionID)
 			testutil.Equal(t, "confirmation index", prevState1.Index, *dbFCs[0].ConfirmationIndex)
 			testutil.Equal(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 		}
@@ -2423,6 +2436,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			testutil.Equal(t, "fcs", 1, len(dbFCs))
 			testutil.CheckFC(t, false, false, false, revFC, dbFCs[0])
 
+			testutil.Equal(t, "transaction ID", reviseTxn.ID(), dbFCs[0].TransactionID)
 			testutil.Equal(t, "confirmation index", prevState1.Index, *dbFCs[0].ConfirmationIndex)
 			testutil.Equal(t, "confirmation transaction ID", txn.ID(), *dbFCs[0].ConfirmationTransactionID)
 		}

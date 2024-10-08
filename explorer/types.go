@@ -129,6 +129,8 @@ type FileContract struct {
 	Resolved bool `json:"resolved"`
 	Valid    bool `json:"valid"`
 
+	TransactionID types.TransactionID `json:"transactionID"`
+
 	ConfirmationIndex         *types.ChainIndex    `json:"confirmationIndex"`
 	ConfirmationTransactionID *types.TransactionID `json:"confirmationTransactionID"`
 
