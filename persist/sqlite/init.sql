@@ -78,6 +78,7 @@ CREATE TABLE file_contract_elements (
 	block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
 
 	contract_id BLOB NOT NULL,
+	transaction_id BLOB NOT NULL,
 	leaf_index BLOB NOT NULL,
 
 	resolved INTEGER NOT NULL,

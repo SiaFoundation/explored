@@ -713,8 +713,8 @@ func deleteBlock(tx *txn, bid types.BlockID) error {
 }
 
 func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []explorer.FileContractUpdate) (map[explorer.DBFileContract]int64, error) {
-	stmt, err := tx.Prepare(`INSERT INTO file_contract_elements(contract_id, block_id, leaf_index, resolved, valid, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number)
-		VALUES (?, ?, ?, FALSE, FALSE, ?, ?, ?, ?, ?, ?, ?)
+	stmt, err := tx.Prepare(`INSERT INTO file_contract_elements(contract_id, block_id, transaction_id, leaf_index, resolved, valid, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number)
+		VALUES (?, ?, ?, ?, FALSE, FALSE, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (contract_id, revision_number)
 		DO UPDATE SET resolved = ?, valid = ?, leaf_index = ?
 		RETURNING id;`)
@@ -775,11 +775,29 @@ func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []expl
 		}
 	}
 
+	fcTxns := make(map[explorer.DBFileContract]types.TransactionID)
+	for _, txn := range b.Transactions {
+		id := txn.ID()
+
+		for i, fc := range txn.FileContracts {
+			fcTxns[explorer.DBFileContract{
+				ID:             txn.FileContractID(i),
+				RevisionNumber: fc.RevisionNumber,
+			}] = id
+		}
+		for _, fcr := range txn.FileContractRevisions {
+			fcTxns[explorer.DBFileContract{
+				ID:             fcr.ParentID,
+				RevisionNumber: fcr.FileContract.RevisionNumber,
+			}] = id
+		}
+	}
+
 	fcDBIds := make(map[explorer.DBFileContract]int64)
 	addFC := func(fcID types.FileContractID, leafIndex uint64, fc types.FileContract, resolved, valid, lastRevision bool) error {
 		var dbID int64
 		dbFC := explorer.DBFileContract{ID: fcID, RevisionNumber: fc.RevisionNumber}
-		err := stmt.QueryRow(encode(fcID), encode(b.ID()), encode(leafIndex), encode(fc.Filesize), encode(fc.FileMerkleRoot), encode(fc.WindowStart), encode(fc.WindowEnd), encode(fc.Payout), encode(fc.UnlockHash), encode(fc.RevisionNumber), resolved, valid, encode(leafIndex)).Scan(&dbID)
+		err := stmt.QueryRow(encode(fcID), encode(b.ID()), encode(fcTxns[dbFC]), encode(leafIndex), encode(fc.Filesize), encode(fc.FileMerkleRoot), encode(fc.WindowStart), encode(fc.WindowEnd), encode(fc.Payout), encode(fc.UnlockHash), encode(fc.RevisionNumber), resolved, valid, encode(leafIndex)).Scan(&dbID)
 		if err != nil {
 			return fmt.Errorf("failed to execute file_contract_elements statement: %w", err)
 		}
