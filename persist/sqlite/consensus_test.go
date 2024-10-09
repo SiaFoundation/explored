@@ -82,11 +82,13 @@ func CheckChainIndices(t *testing.T, db explorer.Store, txnID types.TransactionI
 }
 
 // CheckFCRevisions checks that the revision numbers for the file contracts match.
-func CheckFCRevisions(t *testing.T, revisionNumbers []uint64, fcs []explorer.FileContract) {
+func CheckFCRevisions(t *testing.T, confirmationIndex types.ChainIndex, confirmationTransactionID types.TransactionID, revisionNumbers []uint64, fcs []explorer.FileContract) {
 	t.Helper()
 
 	testutil.Equal(t, "number of revisions", len(revisionNumbers), len(fcs))
 	for i := range revisionNumbers {
+		testutil.Equal(t, "confirmation index", confirmationIndex, *fcs[i].ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", confirmationTransactionID, *fcs[i].ConfirmationTransactionID)
 		testutil.Equal(t, "revision number", revisionNumbers[i], fcs[i].FileContract.RevisionNumber)
 	}
 }
@@ -572,6 +574,9 @@ func TestFileContract(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
+	confirmationIndex := cm.Tip()
+	confirmationTransactionID := txn.ID()
+
 	{
 		dbFCs, err := db.Contracts([]types.FileContractID{fcID})
 		if err != nil {
@@ -588,7 +593,7 @@ func TestFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		CheckFCRevisions(t, []uint64{0}, dbFCs)
+		CheckFCRevisions(t, confirmationIndex, confirmationTransactionID, []uint64{0}, dbFCs)
 	}
 
 	{
@@ -668,7 +673,7 @@ func TestFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		CheckFCRevisions(t, []uint64{0, 1}, dbFCs)
+		CheckFCRevisions(t, confirmationIndex, confirmationTransactionID, []uint64{0, 1}, dbFCs)
 	}
 
 	{
@@ -838,6 +843,9 @@ func TestEphemeralFileContract(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
+	confirmationIndex := cm.Tip()
+	confirmationTransactionID := txn.ID()
+
 	CheckMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
@@ -874,7 +882,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		CheckFCRevisions(t, []uint64{0, 1}, dbFCs)
+		CheckFCRevisions(t, confirmationIndex, confirmationTransactionID, []uint64{0, 1}, dbFCs)
 	}
 
 	{
@@ -954,7 +962,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		CheckFCRevisions(t, []uint64{0, 1, 2, 3}, dbFCs)
+		CheckFCRevisions(t, confirmationIndex, confirmationTransactionID, []uint64{0, 1, 2, 3}, dbFCs)
 	}
 
 	{
@@ -2212,6 +2220,9 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
+	confirmationIndex := cm.Tip()
+	confirmationTransactionID := txn.ID()
+
 	CheckMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
@@ -2235,7 +2246,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		CheckFCRevisions(t, []uint64{0}, dbFCs)
+		CheckFCRevisions(t, confirmationIndex, confirmationTransactionID, []uint64{0}, dbFCs)
 	}
 
 	{
@@ -2315,7 +2326,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		CheckFCRevisions(t, []uint64{0, 1}, dbFCs)
+		CheckFCRevisions(t, confirmationIndex, confirmationTransactionID, []uint64{0, 1}, dbFCs)
 	}
 
 	{
@@ -2371,7 +2382,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			CheckFCRevisions(t, []uint64{0}, dbFCs)
+			CheckFCRevisions(t, confirmationIndex, confirmationTransactionID, []uint64{0}, dbFCs)
 		}
 
 		// storage utilization should be back to testutil.ContractFilesize instead of
