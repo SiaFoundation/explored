@@ -76,8 +76,7 @@ CREATE INDEX siafund_elements_address_spent_index ON siafund_elements(address, s
 CREATE TABLE file_contract_elements (
 	id INTEGER PRIMARY KEY,
 	block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
-	-- We need to defer because transactions are inserted after file contracts
-	transaction_id BLOB NOT NULL REFERENCES transactions(transaction_id) ON DELETE CASCADE NOT NULL DEFERRABLE INITIALLY DEFERRED,
+	transaction_id BLOB REFERENCES transactions(transaction_id) ON DELETE CASCADE NOT NULL,
 
 	contract_id BLOB NOT NULL,
 	leaf_index BLOB NOT NULL,
@@ -94,7 +93,7 @@ CREATE TABLE file_contract_elements (
 	revision_number BLOB NOT NULL,
 	UNIQUE(contract_id, revision_number)
 );
-CREATE INDEX file_contract_elements_contract_id_revision_number,index ON file_contract_elements(contract_id, revision_number);
+CREATE INDEX file_contract_elements_contract_id_revision_number_index ON file_contract_elements(contract_id, revision_number);
 
 CREATE TABLE last_contract_revision (
 	contract_id BLOB PRIMARY KEY NOT NULL,

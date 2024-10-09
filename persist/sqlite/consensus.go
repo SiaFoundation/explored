@@ -215,7 +215,12 @@ func addStorageProofs(tx *txn, id int64, txn types.Transaction) error {
 	return nil
 }
 
-func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction, scDBIds map[types.SiacoinOutputID]int64, sfDBIds map[types.SiafundOutputID]int64, fcDBIds map[explorer.DBFileContract]int64) (map[types.TransactionID]int64, error) {
+type txnDBId struct {
+	id    int64
+	exist bool
+}
+
+func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction) (map[types.TransactionID]txnDBId, error) {
 	checkTransactionStmt, err := tx.Prepare(`SELECT id FROM transactions WHERE transaction_id = ?`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare check transaction statement: %v", err)
@@ -234,7 +239,7 @@ func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction, scDBI
 	}
 	defer blockTransactionsStmt.Close()
 
-	txnDBIds := make(map[types.TransactionID]int64)
+	txnDBIds := make(map[types.TransactionID]txnDBId)
 	for i, txn := range txns {
 		var exist bool
 		var txnID int64
@@ -254,40 +259,52 @@ func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction, scDBI
 				return nil, fmt.Errorf("failed to get transaction ID: %w", err)
 			}
 		}
-		txnDBIds[txn.ID()] = txnID
+		txnDBIds[txn.ID()] = txnDBId{id: txnID, exist: exist}
 
 		if _, err := blockTransactionsStmt.Exec(encode(bid), txnID, i); err != nil {
 			return nil, fmt.Errorf("failed to insert into block_transactions: %w", err)
 		}
 
+	}
+	return txnDBIds, nil
+}
+
+func addTransactionFields(tx *txn, txns []types.Transaction, scDBIds map[types.SiacoinOutputID]int64, sfDBIds map[types.SiafundOutputID]int64, fcDBIds map[explorer.DBFileContract]int64, txnDBIds map[types.TransactionID]txnDBId) error {
+	for _, txn := range txns {
+		dbID, ok := txnDBIds[txn.ID()]
+		if !ok {
+			panic(fmt.Errorf("txn %v should be in txnDBIds", txn.ID()))
+		}
+
 		// transaction already exists, don't reinsert its fields
-		if exist {
+		if dbID.exist {
 			continue
 		}
 
-		if err := addMinerFees(tx, txnID, txn); err != nil {
-			return nil, fmt.Errorf("failed to add miner fees: %w", err)
-		} else if err := addArbitraryData(tx, txnID, txn); err != nil {
-			return nil, fmt.Errorf("failed to add arbitrary data: %w", err)
-		} else if err := addSignatures(tx, txnID, txn); err != nil {
-			return nil, fmt.Errorf("failed to add signatures: %w", err)
-		} else if err := addSiacoinInputs(tx, txnID, txn); err != nil {
-			return nil, fmt.Errorf("failed to add siacoin inputs: %w", err)
-		} else if err := addSiacoinOutputs(tx, txnID, txn, scDBIds); err != nil {
-			return nil, fmt.Errorf("failed to add siacoin outputs: %w", err)
-		} else if err := addSiafundInputs(tx, txnID, txn); err != nil {
-			return nil, fmt.Errorf("failed to add siafund inputs: %w", err)
-		} else if err := addSiafundOutputs(tx, txnID, txn, sfDBIds); err != nil {
-			return nil, fmt.Errorf("failed to add siafund outputs: %w", err)
-		} else if err := addFileContracts(tx, txnID, txn, fcDBIds); err != nil {
-			return nil, fmt.Errorf("failed to add file contract: %w", err)
-		} else if err := addFileContractRevisions(tx, txnID, txn, fcDBIds); err != nil {
-			return nil, fmt.Errorf("failed to add file contract revisions: %w", err)
-		} else if err := addStorageProofs(tx, txnID, txn); err != nil {
-			return nil, fmt.Errorf("failed to add storage proofs: %w", err)
+		if err := addMinerFees(tx, dbID.id, txn); err != nil {
+			return fmt.Errorf("failed to add miner fees: %w", err)
+		} else if err := addArbitraryData(tx, dbID.id, txn); err != nil {
+			return fmt.Errorf("failed to add arbitrary data: %w", err)
+		} else if err := addSignatures(tx, dbID.id, txn); err != nil {
+			return fmt.Errorf("failed to add signatures: %w", err)
+		} else if err := addSiacoinInputs(tx, dbID.id, txn); err != nil {
+			return fmt.Errorf("failed to add siacoin inputs: %w", err)
+		} else if err := addSiacoinOutputs(tx, dbID.id, txn, scDBIds); err != nil {
+			return fmt.Errorf("failed to add siacoin outputs: %w", err)
+		} else if err := addSiafundInputs(tx, dbID.id, txn); err != nil {
+			return fmt.Errorf("failed to add siafund inputs: %w", err)
+		} else if err := addSiafundOutputs(tx, dbID.id, txn, sfDBIds); err != nil {
+			return fmt.Errorf("failed to add siafund outputs: %w", err)
+		} else if err := addFileContracts(tx, dbID.id, txn, fcDBIds); err != nil {
+			return fmt.Errorf("failed to add file contract: %w", err)
+		} else if err := addFileContractRevisions(tx, dbID.id, txn, fcDBIds); err != nil {
+			return fmt.Errorf("failed to add file contract revisions: %w", err)
+		} else if err := addStorageProofs(tx, dbID.id, txn); err != nil {
+			return fmt.Errorf("failed to add storage proofs: %w", err)
 		}
 	}
-	return txnDBIds, nil
+
+	return nil
 }
 
 type balance struct {
@@ -578,7 +595,7 @@ func addSiafundElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 	return sfDBIds, nil
 }
 
-func addEvents(tx *txn, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[explorer.DBFileContract]int64, txnDBIds map[types.TransactionID]int64, events []explorer.Event) error {
+func addEvents(tx *txn, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[explorer.DBFileContract]int64, txnDBIds map[types.TransactionID]txnDBId, events []explorer.Event) error {
 	if len(events) == 0 {
 		return nil
 	}
@@ -649,7 +666,7 @@ func addEvents(tx *txn, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[exp
 
 		switch v := event.Data.(type) {
 		case *explorer.EventTransaction:
-			dbID := txnDBIds[types.TransactionID(event.ID)]
+			dbID := txnDBIds[types.TransactionID(event.ID)].id
 			if _, err = transactionEventStmt.Exec(eventID, dbID, encode(v.Fee)); err != nil {
 				return fmt.Errorf("failed to insert transaction event: %w", err)
 			}
@@ -984,6 +1001,11 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to update matured balances: %w", err)
 	}
 
+	txnDBIds, err := addTransactions(ut.tx, state.Block.ID(), state.Block.Transactions)
+	if err != nil {
+		return fmt.Errorf("ApplyIndex: failed to add transactions: %w", err)
+	}
+
 	scDBIds, err := addSiacoinElements(
 		ut.tx,
 		state.Metrics.Index,
@@ -1002,19 +1024,17 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 	if err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add siafund outputs: %w", err)
 	}
-	if err := updateBalances(ut.tx, state.Metrics.Index.Height, state.SpentSiacoinElements, state.NewSiacoinElements, state.SpentSiafundElements, state.NewSiafundElements); err != nil {
-		return fmt.Errorf("ApplyIndex: failed to update balances: %w", err)
-	}
-
 	fcDBIds, err := updateFileContractElements(ut.tx, false, state.Block, state.FileContractElements)
 	if err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add file contracts: %w", err)
 	}
 
-	if err := addMinerPayouts(ut.tx, state.Block.ID(), state.Block.MinerPayouts, scDBIds); err != nil {
+	if err := addTransactionFields(ut.tx, state.Block.Transactions, scDBIds, sfDBIds, fcDBIds, txnDBIds); err != nil {
+		return fmt.Errorf("ApplyIndex: failed to add transaction fields: %w", err)
+	} else if err := updateBalances(ut.tx, state.Metrics.Index.Height, state.SpentSiacoinElements, state.NewSiacoinElements, state.SpentSiafundElements, state.NewSiafundElements); err != nil {
+		return fmt.Errorf("ApplyIndex: failed to update balances: %w", err)
+	} else if err := addMinerPayouts(ut.tx, state.Block.ID(), state.Block.MinerPayouts, scDBIds); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add miner payouts: %w", err)
-	} else if txnDBIds, err := addTransactions(ut.tx, state.Block.ID(), state.Block.Transactions, scDBIds, sfDBIds, fcDBIds); err != nil {
-		return fmt.Errorf("ApplyIndex: failed to add transactions: addTransactions: %w", err)
 	} else if err := updateStateTree(ut.tx, state.TreeUpdates); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update state tree: %w", err)
 	} else if err := addMetrics(ut.tx, state); err != nil {
