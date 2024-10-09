@@ -94,7 +94,7 @@ CREATE TABLE file_contract_elements (
 	revision_number BLOB NOT NULL,
 	UNIQUE(contract_id, revision_number)
 );
-CREATE INDEX file_contract_elements_contract_id_index ON file_contract_elements(contract_id);
+CREATE INDEX file_contract_elements_contract_id_revision_number,index ON file_contract_elements(contract_id, revision_number);
 
 CREATE TABLE last_contract_revision (
 	contract_id BLOB PRIMARY KEY NOT NULL,
