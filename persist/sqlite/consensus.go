@@ -264,8 +264,8 @@ func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction) (map[
 		if _, err := blockTransactionsStmt.Exec(encode(bid), txnID, i); err != nil {
 			return nil, fmt.Errorf("failed to insert into block_transactions: %w", err)
 		}
-
 	}
+
 	return txnDBIds, nil
 }
 
