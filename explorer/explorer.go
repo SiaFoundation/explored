@@ -213,6 +213,18 @@ func (e *Explorer) TransactionChainIndices(id types.TransactionID, offset, limit
 	return e.s.TransactionChainIndices(id, offset, limit)
 }
 
+// V2Transactions returns the v2 transactions with the specified IDs.
+func (e *Explorer) V2Transactions(ids []types.TransactionID) ([]V2Transaction, error) {
+	return e.s.V2Transactions(ids)
+}
+
+// V2TransactionChainIndices returns the chain indices of the blocks the
+// transaction was included in. If the transaction has not been included in
+// any blocks, the result will be nil,nil.
+func (e *Explorer) V2TransactionChainIndices(id types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error) {
+	return e.s.V2TransactionChainIndices(id, offset, limit)
+}
+
 // UnspentSiacoinOutputs returns the unspent siacoin outputs owned by the
 // specified address.
 func (e *Explorer) UnspentSiacoinOutputs(address types.Address, offset, limit uint64) ([]SiacoinOutput, error) {

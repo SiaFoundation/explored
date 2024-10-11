@@ -54,6 +54,8 @@ type (
 		HostMetrics() (explorer.HostMetrics, error)
 		Transactions(ids []types.TransactionID) ([]explorer.Transaction, error)
 		TransactionChainIndices(id types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error)
+		V2Transactions(ids []types.TransactionID) ([]explorer.V2Transaction, error)
+		V2TransactionChainIndices(id types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error)
 		Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 		SiacoinElements(ids []types.SiacoinOutputID) (result []explorer.SiacoinOutput, err error)
 		SiafundElements(ids []types.SiafundOutputID) (result []explorer.SiafundOutput, err error)
@@ -320,6 +322,60 @@ func (s *server) transactionsBatchHandler(jc jape.Context) {
 	jc.Encode(txns)
 }
 
+func (s *server) v2TransactionsIDHandler(jc jape.Context) {
+	var id types.TransactionID
+	if jc.DecodeParam("id", &id) != nil {
+		return
+	}
+	txns, err := s.e.V2Transactions([]types.TransactionID{id})
+	if jc.Check("failed to get transaction", err) != nil {
+		return
+	} else if len(txns) == 0 {
+		jc.Error(ErrTransactionNotFound, http.StatusNotFound)
+		return
+	}
+	jc.Encode(txns[0])
+}
+
+func (s *server) v2TransactionsIDIndicesHandler(jc jape.Context) {
+	var id types.TransactionID
+	if jc.DecodeParam("id", &id) != nil {
+		return
+	}
+
+	limit := uint64(100)
+	offset := uint64(0)
+	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
+		return
+	}
+
+	if limit > 500 {
+		limit = 500
+	}
+
+	indices, err := s.e.V2TransactionChainIndices(id, offset, limit)
+	if jc.Check("failed to get transaction indices", err) != nil {
+		return
+	}
+	jc.Encode(indices)
+}
+
+func (s *server) v2TransactionsBatchHandler(jc jape.Context) {
+	var ids []types.TransactionID
+	if jc.Decode(&ids) != nil {
+		return
+	} else if len(ids) > maxIDs {
+		jc.Error(ErrTooManyIDs, http.StatusBadRequest)
+		return
+	}
+
+	txns, err := s.e.V2Transactions(ids)
+	if jc.Check("failed to get transactions", err) != nil {
+		return
+	}
+	jc.Encode(txns)
+}
+
 func (s *server) addressessAddressUtxosSiacoinHandler(jc jape.Context) {
 	var address types.Address
 	if jc.DecodeParam("address", &address) != nil {
@@ -554,9 +610,13 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 
 		"GET    /blocks/:id": srv.blocksIDHandler,
 
-		"GET    /transactions/:id":      srv.transactionsIDHandler,
-		"POST   /transactions":          srv.transactionsBatchHandler,
-		"GET /transactions/:id/indices": srv.transactionsIDIndicesHandler,
+		"GET    /transactions/:id":         srv.transactionsIDHandler,
+		"POST   /transactions":             srv.transactionsBatchHandler,
+		"GET    /transactions/:id/indices": srv.transactionsIDIndicesHandler,
+
+		"GET    /v2/transactions/:id":         srv.v2TransactionsIDHandler,
+		"POST   /v2/transactions":             srv.v2TransactionsBatchHandler,
+		"GET    /v2/transactions/:id/indices": srv.v2TransactionsIDIndicesHandler,
 
 		"GET    /addresses/:address/utxos/siacoin": srv.addressessAddressUtxosSiacoinHandler,
 		"GET    /addresses/:address/utxos/siafund": srv.addressessAddressUtxosSiafundHandler,
