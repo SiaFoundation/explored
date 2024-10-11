@@ -52,6 +52,8 @@ type Store interface {
 	HostMetrics() (HostMetrics, error)
 	Transactions(ids []types.TransactionID) ([]Transaction, error)
 	TransactionChainIndices(txid types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error)
+	V2Transactions(ids []types.TransactionID) ([]V2Transaction, error)
+	V2TransactionChainIndices(txid types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error)
 	UnspentSiacoinOutputs(address types.Address, offset, limit uint64) ([]SiacoinOutput, error)
 	UnspentSiafundOutputs(address types.Address, offset, limit uint64) ([]SiafundOutput, error)
 	AddressEvents(address types.Address, offset, limit uint64) (events []Event, err error)

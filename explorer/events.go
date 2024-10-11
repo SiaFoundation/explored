@@ -11,6 +11,7 @@ import (
 // event type constants
 const (
 	EventTypeTransaction       = "transaction"
+	EventTypeV2Transaction     = "v2transaction"
 	EventTypeMinerPayout       = "miner payout"
 	EventTypeContractPayout    = "contract payout"
 	EventTypeSiafundClaim      = "siafund claim"
@@ -38,6 +39,9 @@ type Event struct {
 
 // EventType implements Event.
 func (*EventTransaction) EventType() string { return EventTypeTransaction }
+
+// EventType implements Event.
+func (*EventV2Transaction) EventType() string { return EventTypeV2Transaction }
 
 // EventType implements Event.
 func (*EventMinerPayout) EventType() string { return EventTypeMinerPayout }
@@ -76,6 +80,13 @@ type EventV2FileContract struct {
 // An EventTransaction represents a transaction that affects the wallet.
 type EventTransaction struct {
 	Transaction       Transaction              `json:"transaction"`
+	HostAnnouncements []chain.HostAnnouncement `json:"hostAnnouncements"`
+	Fee               types.Currency           `json:"fee"`
+}
+
+// An EventV2Transaction represents a v2 transaction that affects the wallet.
+type EventV2Transaction struct {
+	Transaction       V2Transaction            `json:"transaction"`
 	HostAnnouncements []chain.HostAnnouncement `json:"hostAnnouncements"`
 	Fee               types.Currency           `json:"fee"`
 }
@@ -206,7 +217,7 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 	for _, txn := range b.V2Transactions() {
 		relevant := relevantV2Txn(txn)
 
-		var e EventTransaction
+		var e EventV2Transaction
 		for _, a := range txn.Attestations {
 			var ha chain.HostAnnouncement
 			if ha.FromAttestation(a) {
