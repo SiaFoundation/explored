@@ -18,13 +18,13 @@ type updateTx struct {
 
 func addBlock(tx *txn, b types.Block, height uint64) error {
 	// nonce is encoded because database/sql doesn't support uint64 with high bit set
-	var v2Height uint64
-	var v2Commitment types.Hash256
+	var v2Height any
+	var v2Commitment any
 	if b.V2 != nil {
-		v2Height = b.V2.Height
-		v2Commitment = b.V2.Commitment
+		v2Height = encode(b.V2.Height)
+		v2Commitment = encode(b.V2.Commitment)
 	}
-	_, err := tx.Exec("INSERT INTO blocks(id, height, parent_id, nonce, timestamp, v2_height, v2_commitment) VALUES (?, ?, ?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encode(b.Nonce), encode(b.Timestamp), v2Height, encode(v2Commitment))
+	_, err := tx.Exec("INSERT INTO blocks(id, height, parent_id, nonce, timestamp, v2_height, v2_commitment) VALUES (?, ?, ?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encode(b.Nonce), encode(b.Timestamp), v2Height, v2Commitment)
 	return err
 }
 

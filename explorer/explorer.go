@@ -289,7 +289,7 @@ func (e *Explorer) Search(id types.Hash256) (SearchType, error) {
 	}
 
 	_, err = e.Block(types.BlockID(id))
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return SearchTypeInvalid, err
 	} else if err == nil {
 		return SearchTypeBlock, nil
