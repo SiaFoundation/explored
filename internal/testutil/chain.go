@@ -90,6 +90,26 @@ func MineBlock(state consensus.State, txns []types.Transaction, minerAddr types.
 	return b
 }
 
+// MineV2Block mines sets the metadata fields of the block along with the
+// transactions and then generates a valid nonce for the block.
+func MineV2Block(state consensus.State, txns []types.V2Transaction, minerAddr types.Address) types.Block {
+	b := types.Block{
+		ParentID:     state.Index.ID,
+		Timestamp:    types.CurrentTimestamp(),
+		MinerPayouts: []types.SiacoinOutput{{Address: minerAddr, Value: state.BlockReward()}},
+
+		V2: &types.V2BlockData{
+			Transactions: txns,
+			Height:       state.Index.Height + 1,
+		},
+	}
+	b.V2.Commitment = state.Commitment(state.TransactionsCommitment(b.Transactions, b.V2Transactions()), b.MinerPayouts[0].Address)
+	for b.ID().CmpWork(state.ChildTarget) < 0 {
+		b.Nonce += state.NonceFactor()
+	}
+	return b
+}
+
 // SignTransactionWithContracts signs a transaction using the specified private
 // keys, including contract revisions.
 func SignTransactionWithContracts(cs consensus.State, pk, renterPK, hostPK types.PrivateKey, txn *types.Transaction) {
