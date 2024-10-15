@@ -46,6 +46,23 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 			eventTx.HostAnnouncements = append(eventTx.HostAnnouncements, announcement)
 		}
 		ev.Data = &eventTx
+	case explorer.EventTypeV2Transaction:
+		var txnID int64
+		var eventTx explorer.EventV2Transaction
+		err = tx.QueryRow(`SELECT transaction_id, fee FROM v2_transaction_events WHERE event_id = ?`, eventID).Scan(&txnID, decode(&eventTx.Fee))
+		if err != nil {
+			return explorer.Event{}, 0, fmt.Errorf("failed to fetch v2 transaction ID: %w", err)
+		}
+		txns, err := getV2Transactions(tx, map[int64]transactionID{txnID: {id: types.TransactionID(ev.ID)}})
+		if err != nil || len(txns) == 0 {
+			return explorer.Event{}, 0, fmt.Errorf("failed to fetch v2 transaction: %w", err)
+		}
+
+		rows, err := tx.Query(`SELECT public_key, net_address FROM v2_host_announcements WHERE transaction_id = ? ORDER BY transaction_order ASC`, txnID)
+		if err != nil {
+			return explorer.Event{}, 0, fmt.Errorf("failed to get host announcements: %w", err)
+		}
+		defer rows.Close()
 	case explorer.EventTypeContractPayout:
 		var m explorer.EventContractPayout
 		err = tx.QueryRow(`SELECT sce.output_id, sce.leaf_index, sce.maturity_height, sce.address, sce.value, fce.contract_id, fce.leaf_index, fce.filesize, fce.file_merkle_root, fce.window_start, fce.window_end, fce.payout, fce.unlock_hash, fce.revision_number, ev.missed

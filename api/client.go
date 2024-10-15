@@ -130,6 +130,25 @@ func (c *Client) TransactionChainIndices(id types.TransactionID, offset, limit u
 	return
 }
 
+// V2Transaction returns the v2 transaction with the specified ID.
+func (c *Client) V2Transaction(id types.TransactionID) (resp explorer.V2Transaction, err error) {
+	err = c.c.GET(fmt.Sprintf("/v2/transactions/%s", id), &resp)
+	return
+}
+
+// V2Transactions returns the v2 transactions with the specified IDs.
+func (c *Client) V2Transactions(ids []types.TransactionID) (resp []explorer.V2Transaction, err error) {
+	err = c.c.POST("/v2/transactions", ids, &resp)
+	return
+}
+
+// V2TransactionChainIndices returns chain indices a v2 transaction was
+// included in.
+func (c *Client) V2TransactionChainIndices(id types.TransactionID, offset, limit uint64) (resp []types.ChainIndex, err error) {
+	err = c.c.GET(fmt.Sprintf("/v2/transactions/%s/indices?offset=%d&limit=%d", id, offset, limit), &resp)
+	return
+}
+
 // AddressSiacoinUTXOs returns the specified address' unspent outputs.
 func (c *Client) AddressSiacoinUTXOs(address types.Address, offset, limit uint64) (resp []explorer.SiacoinOutput, err error) {
 	err = c.c.GET(fmt.Sprintf("/addresses/%s/utxos/siacoin?offset=%d&limit=%d", address, offset, limit), &resp)
