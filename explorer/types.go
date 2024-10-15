@@ -166,6 +166,22 @@ type Transaction struct {
 	HostAnnouncements []chain.HostAnnouncement `json:"hostAnnouncements,omitempty"`
 }
 
+// A V2Transaction is a v2 transaction that uses the wrapped types above.
+type V2Transaction struct {
+	ID            types.TransactionID `json:"id"`
+	ArbitraryData []byte              `json:"arbitraryData,omitempty"`
+
+	HostAnnouncements []chain.HostAnnouncement `json:"hostAnnouncements,omitempty"`
+}
+
+// V2BlockData is a struct containing the fields from types.V2BlockData and our
+// modified explorer.V2Transaction type.
+type V2BlockData struct {
+	Height       uint64          `json:"height"`
+	Commitment   types.Hash256   `json:"commitment"`
+	Transactions []V2Transaction `json:"transactions"`
+}
+
 // A Block is a block containing wrapped transactions and siacoin
 // outputs for the miner payouts.
 type Block struct {
@@ -175,6 +191,8 @@ type Block struct {
 	Timestamp    time.Time       `json:"timestamp"`
 	MinerPayouts []SiacoinOutput `json:"minerPayouts"`
 	Transactions []Transaction   `json:"transactions"`
+
+	V2 *V2BlockData `json:"v2,omitempty"`
 }
 
 // Metrics contains various statistics relevant to the health of the Sia network.

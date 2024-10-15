@@ -52,6 +52,8 @@ type Store interface {
 	HostMetrics() (HostMetrics, error)
 	Transactions(ids []types.TransactionID) ([]Transaction, error)
 	TransactionChainIndices(txid types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error)
+	V2Transactions(ids []types.TransactionID) ([]V2Transaction, error)
+	V2TransactionChainIndices(txid types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error)
 	UnspentSiacoinOutputs(address types.Address, offset, limit uint64) ([]SiacoinOutput, error)
 	UnspentSiafundOutputs(address types.Address, offset, limit uint64) ([]SiafundOutput, error)
 	AddressEvents(address types.Address, offset, limit uint64) (events []Event, err error)
@@ -211,6 +213,18 @@ func (e *Explorer) TransactionChainIndices(id types.TransactionID, offset, limit
 	return e.s.TransactionChainIndices(id, offset, limit)
 }
 
+// V2Transactions returns the v2 transactions with the specified IDs.
+func (e *Explorer) V2Transactions(ids []types.TransactionID) ([]V2Transaction, error) {
+	return e.s.V2Transactions(ids)
+}
+
+// V2TransactionChainIndices returns the chain indices of the blocks the
+// transaction was included in. If the transaction has not been included in
+// any blocks, the result will be nil,nil.
+func (e *Explorer) V2TransactionChainIndices(id types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error) {
+	return e.s.V2TransactionChainIndices(id, offset, limit)
+}
+
 // UnspentSiacoinOutputs returns the unspent siacoin outputs owned by the
 // specified address.
 func (e *Explorer) UnspentSiacoinOutputs(address types.Address, offset, limit uint64) ([]SiacoinOutput, error) {
@@ -275,7 +289,7 @@ func (e *Explorer) Search(id types.Hash256) (SearchType, error) {
 	}
 
 	_, err = e.Block(types.BlockID(id))
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return SearchTypeInvalid, err
 	} else if err == nil {
 		return SearchTypeBlock, nil

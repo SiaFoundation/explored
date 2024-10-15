@@ -39,6 +39,9 @@ func CheckTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer
 	Equal(t, "siacoin outputs", len(expectTxn.SiacoinOutputs), len(gotTxn.SiacoinOutputs))
 	Equal(t, "siafund inputs", len(expectTxn.SiafundInputs), len(gotTxn.SiafundInputs))
 	Equal(t, "siafund outputs", len(expectTxn.SiafundOutputs), len(gotTxn.SiafundOutputs))
+	Equal(t, "arbitrary data", len(expectTxn.ArbitraryData), len(gotTxn.ArbitraryData))
+	Equal(t, "miner fees", len(expectTxn.MinerFees), len(gotTxn.MinerFees))
+	Equal(t, "signatures", len(expectTxn.Signatures), len(gotTxn.Signatures))
 
 	for i := range expectTxn.SiacoinInputs {
 		expectSci := expectTxn.SiacoinInputs[i]
@@ -97,6 +100,35 @@ func CheckTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer
 		// slices so these will differ because the decoder is doing
 		// cf.X = make([]uint64, d.ReadPrefix()) and the prefix is 0
 		// testutil.Equal(t, "covered fields", expectSig.CoveredFields, gotSig.CoveredFields)
+	}
+}
+
+// CheckV2Transaction checks the inputs and outputs of the retrieved transaction
+// with the source transaction.
+func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn explorer.V2Transaction) {
+	t.Helper()
+
+	Equal(t, "arbitrary data", len(expectTxn.ArbitraryData), len(gotTxn.ArbitraryData))
+
+	for i := range expectTxn.ArbitraryData {
+		Equal(t, "arbitrary data value", expectTxn.ArbitraryData[i], gotTxn.ArbitraryData[i])
+	}
+}
+
+// CheckV2ChainIndices checks that the chain indices that a v2 transaction was
+// in from the explorer match the expected chain indices.
+func CheckV2ChainIndices(t *testing.T, db explorer.Store, txnID types.TransactionID, expected []types.ChainIndex) {
+	t.Helper()
+
+	indices, err := db.V2TransactionChainIndices(txnID, 0, 100)
+	switch {
+	case err != nil:
+		t.Fatal(err)
+	case len(indices) != len(expected):
+		t.Fatalf("expected %d indices, got %d", len(expected), len(indices))
+	}
+	for i := range indices {
+		Equal(t, "index", expected[i], indices[i])
 	}
 }
 

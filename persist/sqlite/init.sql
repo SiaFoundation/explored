@@ -8,7 +8,10 @@ CREATE TABLE blocks (
 	height INTEGER NOT NULL,
 	parent_id BLOB NOT NULL,
 	nonce BLOB NOT NULL,
-	timestamp INTEGER NOT NULL
+	timestamp INTEGER NOT NULL,
+
+	v2_height INTEGER,
+	v2_commitment BLOB
 );
 CREATE INDEX blocks_height_index ON blocks(height);
 
@@ -250,6 +253,30 @@ CREATE TABLE transaction_file_contract_revisions (
 );
 CREATE INDEX transaction_file_contract_revisions_transaction_id_index ON transaction_file_contract_revisions(transaction_id);
 
+CREATE TABLE v2_transactions (
+	id INTEGER PRIMARY KEY,
+	transaction_id BLOB UNIQUE NOT NULL
+);
+CREATE INDEX v2_transactions_transaction_id_index ON v2_transactions(transaction_id);
+
+CREATE TABLE v2_block_transactions (
+	block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
+	transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
+	block_order INTEGER NOT NULL,
+	UNIQUE(block_id, block_order)
+);
+CREATE INDEX v2_block_transactions_block_id_index ON v2_block_transactions(block_id);
+CREATE INDEX v2_block_transactions_transaction_id_index ON v2_block_transactions(transaction_id);
+CREATE INDEX v2_block_transactions_transaction_id_block_id ON v2_block_transactions(transaction_id, block_id);
+
+CREATE TABLE v2_transaction_arbitrary_data (
+	transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
+	data BLOB NOT NULL,
+	UNIQUE(transaction_id)
+);
+
+CREATE INDEX v2_transaction_arbitrary_data_transaction_id_index ON v2_transaction_arbitrary_data(transaction_id);
+
 CREATE TABLE state_tree (
 	row INTEGER NOT NULL,
 	column INTEGER NOT NULL,
@@ -307,6 +334,22 @@ CREATE TABLE miner_payout_events (
 CREATE TABLE foundation_subsidy_events (
     event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
     output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL
+);
+
+CREATE TABLE v2_host_announcements (
+	transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
+	transaction_order INTEGER NOT NULL,
+	public_key BLOB NOT NULL,
+	net_address BLOB NOT NULL,
+	UNIQUE(transaction_id, transaction_order)
+);
+CREATE INDEX v2_host_announcements_transaction_id_index ON v2_host_announcements(transaction_id);
+CREATE INDEX v2_host_announcements_public_key_index ON v2_host_announcements(public_key);
+
+CREATE TABLE v2_transaction_events (
+    event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
+    transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
+    fee BLOB NOT NULL
 );
 
 CREATE TABLE host_info (
