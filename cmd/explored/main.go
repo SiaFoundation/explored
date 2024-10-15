@@ -69,9 +69,12 @@ var cfg = config.Config{
 	},
 }
 
-// stdoutFatalError prints an error message to stdout and exits with a 1 exit code.
-func stdoutFatalError(msg string) {
-	fmt.Println(msg)
+// checkFatalError prints an error message to stderr and exits with a 1 exit code. If err is nil, this is a no-op.
+func checkFatalError(context string, err error) {
+	if err == nil {
+		return
+	}
+	os.Stderr.WriteString(fmt.Sprintf("%s: %s\n", context, err))
 	os.Exit(1)
 }
 
@@ -90,7 +93,7 @@ func tryLoadConfig() {
 
 	f, err := os.Open(configPath)
 	if err != nil {
-		stdoutFatalError("failed to open config file: " + err.Error())
+		checkFatalError("failed to open config file", err)
 		return
 	}
 	defer f.Close()
@@ -98,10 +101,7 @@ func tryLoadConfig() {
 	dec := yaml.NewDecoder(f)
 	dec.KnownFields(true)
 
-	if err := dec.Decode(&cfg); err != nil {
-		fmt.Println("failed to decode config file:", err)
-		os.Exit(1)
-	}
+	checkFatalError("failed to decode config file", dec.Decode(&cfg))
 }
 
 // jsonEncoder returns a zapcore.Encoder that encodes logs as JSON intended for
@@ -196,7 +196,7 @@ func main() {
 	}
 
 	if err := os.MkdirAll(cfg.Directory, 0700); err != nil {
-		stdoutFatalError("failed to open log file: " + err.Error())
+		checkFatalError("failed to open log file", err)
 		return
 	}
 
@@ -242,7 +242,7 @@ func main() {
 
 		fileWriter, closeFn, err := zap.Open(cfg.Log.File.Path)
 		if err != nil {
-			stdoutFatalError("failed to open log file: " + err.Error())
+			checkFatalError("failed to open log file", err)
 			return
 		}
 		defer closeFn()
