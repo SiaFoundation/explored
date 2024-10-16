@@ -269,12 +269,11 @@ CREATE TABLE v2_block_transactions (
 	UNIQUE(block_id, block_order)
 );
 CREATE INDEX v2_block_transactions_block_id_index ON v2_block_transactions(block_id);
-CREATE INDEX v2_block_transactions_transaction_id_index ON v2_block_transactions(transaction_id);
 CREATE INDEX v2_block_transactions_transaction_id_block_id ON v2_block_transactions(transaction_id, block_id);
 
 CREATE TABLE v2_transaction_arbitrary_data (
 	transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
-	data BLOB NOT NULL,
+	data BLOB,
 	UNIQUE(transaction_id)
 );
 
