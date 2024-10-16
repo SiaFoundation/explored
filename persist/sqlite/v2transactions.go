@@ -104,9 +104,15 @@ WHERE id IN (` + queryPlaceHolders(len(txnIDs)) + `)`
 	for rows.Next() {
 		var txnID int64
 		var fields v2OtherFields
-		if err := rows.Scan(&txnID, decodeNull(&fields.newFoundationAddress), decode(&fields.minerFee)); err != nil {
+		var newFoundationAddress types.Address
+		if err := rows.Scan(&txnID, decodeNull(&newFoundationAddress), decode(&fields.minerFee)); err != nil {
 			return nil, fmt.Errorf("failed to scan new foundation address and miner fee: %w", err)
 		}
+
+		if (newFoundationAddress != types.Address{}) {
+			fields.newFoundationAddress = &newFoundationAddress
+		}
+
 		result[txnID] = fields
 	}
 	return result, nil
