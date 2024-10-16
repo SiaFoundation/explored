@@ -83,10 +83,44 @@ WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)`
 	return result, nil
 }
 
+type v2OtherFields struct {
+	newFoundationAddress *types.Address
+	minerFee             types.Currency
+}
+
+// v2TransactionOtherFields returns the new foundation address and miner fee of a v2
+// transaction.
+func v2TransactionOtherFields(tx *txn, txnIDs []int64) (map[int64]v2OtherFields, error) {
+	query := `SELECT id, new_foundation_address, miner_fee
+FROM v2_transactions
+WHERE id IN (` + queryPlaceHolders(len(txnIDs)) + `)`
+	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64]v2OtherFields)
+	for rows.Next() {
+		var txnID int64
+		var fields v2OtherFields
+		if err := rows.Scan(&txnID, decodeNull(&fields.newFoundationAddress), decode(&fields.minerFee)); err != nil {
+			return nil, fmt.Errorf("failed to scan new foundation address and miner fee: %w", err)
+		}
+		result[txnID] = fields
+	}
+	return result, nil
+}
+
 func getV2Transactions(tx *txn, idMap map[int64]transactionID) ([]explorer.V2Transaction, error) {
 	dbIDs := make([]int64, len(idMap))
 	for order, id := range idMap {
 		dbIDs[order] = id.dbID
+	}
+
+	txnOtherFields, err := v2TransactionOtherFields(tx, dbIDs)
+	if err != nil {
+		return nil, fmt.Errorf("getV2Transactions: failed to get other fields: %w", err)
 	}
 
 	txnArbitraryData, err := v2TransactionArbitraryData(tx, dbIDs)
@@ -96,9 +130,13 @@ func getV2Transactions(tx *txn, idMap map[int64]transactionID) ([]explorer.V2Tra
 
 	var results []explorer.V2Transaction
 	for order, dbID := range dbIDs {
+		otherFields := txnOtherFields[dbID]
+
 		txn := explorer.V2Transaction{
-			ID:            idMap[int64(order)].id,
-			ArbitraryData: txnArbitraryData[dbID],
+			ID:                   idMap[int64(order)].id,
+			ArbitraryData:        txnArbitraryData[dbID],
+			NewFoundationAddress: otherFields.newFoundationAddress,
+			MinerFee:             otherFields.minerFee,
 		}
 
 		// for _, attestation := range txn.Attestations {
