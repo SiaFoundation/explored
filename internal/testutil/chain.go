@@ -78,11 +78,18 @@ func CreateAnnouncement(priv types.PrivateKey, netAddress string) []byte {
 // MineBlock mines sets the metadata fields of the block along with the
 // transactions and then generates a valid nonce for the block.
 func MineBlock(state consensus.State, txns []types.Transaction, minerAddr types.Address) types.Block {
+	reward := state.BlockReward()
+	for _, txn := range txns {
+		for _, fee := range txn.MinerFees {
+			reward = reward.Add(fee)
+		}
+	}
+
 	b := types.Block{
 		ParentID:     state.Index.ID,
 		Timestamp:    types.CurrentTimestamp(),
 		Transactions: txns,
-		MinerPayouts: []types.SiacoinOutput{{Address: minerAddr, Value: state.BlockReward()}},
+		MinerPayouts: []types.SiacoinOutput{{Address: minerAddr, Value: reward}},
 	}
 	if !coreutils.FindBlockNonce(state, &b, time.Minute) {
 		panic("failed to mine test block quickly enough")
@@ -93,10 +100,15 @@ func MineBlock(state consensus.State, txns []types.Transaction, minerAddr types.
 // MineV2Block mines sets the metadata fields of the block along with the
 // transactions and then generates a valid nonce for the block.
 func MineV2Block(state consensus.State, txns []types.V2Transaction, minerAddr types.Address) types.Block {
+	reward := state.BlockReward()
+	for _, txn := range txns {
+		reward = reward.Add(txn.MinerFee)
+	}
+
 	b := types.Block{
 		ParentID:     state.Index.ID,
 		Timestamp:    types.CurrentTimestamp(),
-		MinerPayouts: []types.SiacoinOutput{{Address: minerAddr, Value: state.BlockReward()}},
+		MinerPayouts: []types.SiacoinOutput{{Address: minerAddr, Value: reward}},
 
 		V2: &types.V2BlockData{
 			Transactions: txns,
@@ -141,4 +153,41 @@ func SignTransaction(cs consensus.State, pk types.PrivateKey, txn *types.Transac
 		panic("use SignTransactionWithContracts instead")
 	}
 	SignTransactionWithContracts(cs, pk, types.PrivateKey{}, types.PrivateKey{}, txn)
+}
+
+// SignTransactionWithContracts signs a transaction using the specified private
+// keys, including contracts and revisions.
+func SignV2TransactionWithContracts(cs consensus.State, pk, renterPK, hostPK types.PrivateKey, txn *types.V2Transaction) {
+	for i := range txn.SiacoinInputs {
+		txn.SiacoinInputs[i].SatisfiedPolicy.Signatures = []types.Signature{pk.SignHash(cs.InputSigHash(*txn))}
+	}
+	for i := range txn.SiafundInputs {
+		txn.SiafundInputs[i].SatisfiedPolicy.Signatures = []types.Signature{pk.SignHash(cs.InputSigHash(*txn))}
+	}
+	for i := range txn.FileContracts {
+		txn.FileContracts[i].RenterSignature = renterPK.SignHash(cs.ContractSigHash(txn.FileContracts[i]))
+		txn.FileContracts[i].HostSignature = hostPK.SignHash(cs.ContractSigHash(txn.FileContracts[i]))
+	}
+	for i := range txn.FileContractRevisions {
+		txn.FileContractRevisions[i].Revision.RenterSignature = renterPK.SignHash(cs.ContractSigHash(txn.FileContractRevisions[i].Revision))
+		txn.FileContractRevisions[i].Revision.HostSignature = hostPK.SignHash(cs.ContractSigHash(txn.FileContractRevisions[i].Revision))
+	}
+	for i := range txn.FileContractResolutions {
+		switch r := txn.FileContractResolutions[i].Resolution.(type) {
+		case *types.V2FileContractRenewal:
+			r.RenterSignature = renterPK.SignHash(cs.RenewalSigHash(*r))
+			r.HostSignature = hostPK.SignHash(cs.RenewalSigHash(*r))
+		case *types.V2FileContractFinalization:
+			*r = types.V2FileContractFinalization(renterPK.SignHash(cs.ContractSigHash(txn.FileContractResolutions[i].Parent.V2FileContract)))
+		}
+	}
+}
+
+// SignV2Transaction signs a transaction that does not have any contracts with
+// the specified private key.
+func SignV2Transaction(cs consensus.State, pk types.PrivateKey, txn *types.V2Transaction) {
+	if len(txn.FileContracts) > 0 || len(txn.FileContractRevisions) > 0 {
+		panic("use SignV2TransactionWithContracts instead")
+	}
+	SignV2TransactionWithContracts(cs, pk, types.PrivateKey{}, types.PrivateKey{}, txn)
 }

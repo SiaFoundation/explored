@@ -108,6 +108,9 @@ func CheckTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer
 func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn explorer.V2Transaction) {
 	t.Helper()
 
+	Equal(t, "new foundation address", expectTxn.NewFoundationAddress, gotTxn.NewFoundationAddress)
+	Equal(t, "miner fee", expectTxn.MinerFee, gotTxn.MinerFee)
+
 	Equal(t, "arbitrary data", len(expectTxn.ArbitraryData), len(gotTxn.ArbitraryData))
 
 	for i := range expectTxn.ArbitraryData {
