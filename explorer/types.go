@@ -171,6 +171,9 @@ type V2Transaction struct {
 	ID            types.TransactionID `json:"id"`
 	ArbitraryData []byte              `json:"arbitraryData,omitempty"`
 
+	NewFoundationAddress *types.Address `json:"newFoundationAddress,omitempty"`
+	MinerFee             types.Currency `json:"minerFee"`
+
 	HostAnnouncements []chain.HostAnnouncement `json:"hostAnnouncements,omitempty"`
 }
 

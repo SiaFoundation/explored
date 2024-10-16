@@ -255,7 +255,10 @@ CREATE INDEX transaction_file_contract_revisions_transaction_id_index ON transac
 
 CREATE TABLE v2_transactions (
 	id INTEGER PRIMARY KEY,
-	transaction_id BLOB UNIQUE NOT NULL
+	transaction_id BLOB UNIQUE NOT NULL,
+
+	new_foundation_address BLOB,
+	miner_fee BLOB NOT NULL
 );
 CREATE INDEX v2_transactions_transaction_id_index ON v2_transactions(transaction_id);
 
