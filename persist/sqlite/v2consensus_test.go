@@ -354,3 +354,65 @@ func TestV2MinerFee(t *testing.T) {
 		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
 	}
 }
+
+func TestV2FoundationAddress(t *testing.T) {
+	log := zaptest.NewLogger(t)
+	dir := t.TempDir()
+	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bdb.Close()
+
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+	addr1Policy := types.SpendPolicy{types.PolicyTypeUnlockConditions(types.StandardUnlockConditions(pk1.PublicKey()))}
+
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
+	network, genesisBlock := ctestutil.V2Network()
+	network.HardforkFoundation.PrimaryAddress = addr1
+	network.HardforkV2.AllowHeight = 1
+	network.HardforkV2.RequireHeight = 2
+
+	genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
+
+	edb, _ := newConsensusDB(network, genesisBlock)
+	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cm := chain.NewManager(store, genesisState)
+
+	txn1 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          edb.sces[genesisBlock.Transactions[0].SiacoinOutputID(0)],
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		MinerFee:             giftSC,
+		NewFoundationAddress: &addr2,
+	}
+	testutil.SignV2Transaction(cm.TipState(), pk1, &txn1)
+
+	if err := cm.AddBlocks([]types.Block{testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn1}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	v2SyncDB(t, edb, db, cm)
+
+	{
+		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
+	}
+}
