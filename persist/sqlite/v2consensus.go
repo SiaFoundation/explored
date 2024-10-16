@@ -29,7 +29,7 @@ func addV2Transactions(tx *txn, bid types.BlockID, txns []types.V2Transaction) (
 	}
 	defer checkTransactionStmt.Close()
 
-	insertTransactionStmt, err := tx.Prepare(`INSERT INTO v2_transactions (transaction_id) VALUES (?)`)
+	insertTransactionStmt, err := tx.Prepare(`INSERT INTO v2_transactions (transaction_id, new_foundation_address, miner_fee) VALUES (?, ?, ?)`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare insert v2_transaction statement: %v", err)
 	}
@@ -52,7 +52,12 @@ func addV2Transactions(tx *txn, bid types.BlockID, txns []types.V2Transaction) (
 		}
 
 		if !exist {
-			result, err := insertTransactionStmt.Exec(encode(txn.ID()))
+			var newFoundationAddress any
+			if txn.NewFoundationAddress != nil {
+				newFoundationAddress = encode(txn.NewFoundationAddress)
+			}
+
+			result, err := insertTransactionStmt.Exec(encode(txn.ID()), newFoundationAddress, encode(txn.MinerFee))
 			if err != nil {
 				return nil, fmt.Errorf("failed to insert into v2_transactions: %w", err)
 			}
