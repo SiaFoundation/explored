@@ -126,12 +126,9 @@ func (s *Store) ContractRevisions(id types.FileContractID) (revisions []explorer
 				// contracts always have outputs
 				return fmt.Errorf("missing proof outputs for contract %v", contractIDs[i])
 			}
+			revisions[i] = revision.FileContract
 			revisions[i].FileContract.ValidProofOutputs = output.valid
 			revisions[i].FileContract.MissedProofOutputs = output.missed
-		}
-
-		for i, fce := range fces {
-			revisions[i] = fce.FileContract
 		}
 
 		if len(revisions) == 0 {
