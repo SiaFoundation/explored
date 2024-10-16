@@ -314,7 +314,7 @@ func TestV2MinerFee(t *testing.T) {
 
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
-	addr1Policy := types.SpendPolicy{types.PolicyTypeUnlockConditions(types.StandardUnlockConditions(pk1.PublicKey()))}
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(types.StandardUnlockConditions(pk1.PublicKey()))}
 
 	network, genesisBlock := ctestutil.V2Network()
 	network.HardforkV2.AllowHeight = 1
@@ -372,7 +372,7 @@ func TestV2FoundationAddress(t *testing.T) {
 
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
-	addr1Policy := types.SpendPolicy{types.PolicyTypeUnlockConditions(types.StandardUnlockConditions(pk1.PublicKey()))}
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(types.StandardUnlockConditions(pk1.PublicKey()))}
 
 	pk2 := types.GeneratePrivateKey()
 	addr2 := types.StandardUnlockHash(pk2.PublicKey())

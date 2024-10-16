@@ -155,8 +155,8 @@ func SignTransaction(cs consensus.State, pk types.PrivateKey, txn *types.Transac
 	SignTransactionWithContracts(cs, pk, types.PrivateKey{}, types.PrivateKey{}, txn)
 }
 
-// SignTransactionWithContracts signs a transaction using the specified private
-// keys, including contracts and revisions.
+// SignV2TransactionWithContracts signs a transaction using the specified
+// private keys, including contracts and revisions.
 func SignV2TransactionWithContracts(cs consensus.State, pk, renterPK, hostPK types.PrivateKey, txn *types.V2Transaction) {
 	for i := range txn.SiacoinInputs {
 		txn.SiacoinInputs[i].SatisfiedPolicy.Signatures = []types.Signature{pk.SignHash(cs.InputSigHash(*txn))}
