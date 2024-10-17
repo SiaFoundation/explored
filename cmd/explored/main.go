@@ -69,9 +69,12 @@ var cfg = config.Config{
 	},
 }
 
-// stdoutFatalError prints an error message to stdout and exits with a 1 exit code.
-func stdoutFatalError(msg string) {
-	fmt.Println(msg)
+// checkFatalError prints an error message to stderr and exits with a 1 exit code. If err is nil, this is a no-op.
+func checkFatalError(context string, err error) {
+	if err == nil {
+		return
+	}
+	os.Stderr.WriteString(fmt.Sprintf("%s: %s\n", context, err))
 	os.Exit(1)
 }
 
@@ -89,19 +92,13 @@ func tryLoadConfig() {
 	}
 
 	f, err := os.Open(configPath)
-	if err != nil {
-		stdoutFatalError("failed to open config file: " + err.Error())
-		return
-	}
+	checkFatalError("failed to open config file", err)
 	defer f.Close()
 
 	dec := yaml.NewDecoder(f)
 	dec.KnownFields(true)
 
-	if err := dec.Decode(&cfg); err != nil {
-		fmt.Println("failed to decode config file:", err)
-		os.Exit(1)
-	}
+	checkFatalError("failed to decode config file", dec.Decode(&cfg))
 }
 
 // jsonEncoder returns a zapcore.Encoder that encodes logs as JSON intended for
@@ -178,6 +175,124 @@ func forwardUPNP(ctx context.Context, addr string, log *zap.Logger) string {
 	return net.JoinHostPort(ip, portStr)
 }
 
+func runRootCmd(ctx context.Context, log *zap.Logger) error {
+	var network *consensus.Network
+	var genesisBlock types.Block
+
+	switch cfg.Consensus.Network {
+	case "mainnet":
+		network, genesisBlock = chain.Mainnet()
+		cfg.Syncer.Peers = append(cfg.Syncer.Peers, syncer.MainnetBootstrapPeers...)
+	case "zen":
+		network, genesisBlock = chain.TestnetZen()
+		cfg.Syncer.Peers = append(cfg.Syncer.Peers, syncer.ZenBootstrapPeers...)
+	case "anagami":
+		network, genesisBlock = chain.TestnetAnagami()
+		cfg.Syncer.Peers = append(cfg.Syncer.Peers, syncer.AnagamiBootstrapPeers...)
+	default:
+		log.Fatal("network must be 'mainnet', 'zen', or 'anagami'", zap.String("network", cfg.Consensus.Network))
+	}
+
+	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(cfg.Directory, "consensus.db"))
+	if err != nil {
+		return fmt.Errorf("failed to open bolt database: %w", err)
+	}
+	defer bdb.Close()
+
+	dbstore, tipState, err := chain.NewDBStore(bdb, network, genesisBlock)
+	if err != nil {
+		return fmt.Errorf("failed to create chain store: %w", err)
+	}
+	cm := chain.NewManager(dbstore, tipState)
+
+	store, err := sqlite.OpenDatabase(filepath.Join(cfg.Directory, "explored.sqlite3"), log.Named("sqlite3"))
+	if err != nil {
+		return fmt.Errorf("failed to open sqlite database: %w", err)
+	}
+	defer store.Close()
+
+	syncerListener, err := net.Listen("tcp", cfg.Syncer.Address)
+	if err != nil {
+		return fmt.Errorf("failed to create listener: %w", err)
+	}
+	defer syncerListener.Close()
+
+	httpListener, err := net.Listen("tcp", cfg.HTTP.Address)
+	if err != nil {
+		return fmt.Errorf("failed to create listener: %w", err)
+	}
+	defer httpListener.Close()
+
+	syncerAddr := syncerListener.Addr().String()
+	if cfg.Syncer.EnableUPNP {
+		remoteIP := forwardUPNP(ctx, cfg.Syncer.Address, log)
+		if remoteIP != "" {
+			syncerAddr = remoteIP
+		}
+	}
+
+	// peers will reject us if our hostname is empty or unspecified, so use loopback
+	host, port, _ := net.SplitHostPort(syncerAddr)
+	if ip := net.ParseIP(host); ip == nil || ip.IsUnspecified() {
+		syncerAddr = net.JoinHostPort("127.0.0.1", port)
+	}
+
+	ps, err := syncerutil.NewJSONPeerStore(filepath.Join(cfg.Directory, "peers.json"))
+	if err != nil {
+		return fmt.Errorf("failed to open peer store: %w", err)
+	}
+	for _, peer := range cfg.Syncer.Peers {
+		ps.AddPeer(peer)
+	}
+
+	header := gateway.Header{
+		GenesisID:  genesisBlock.ID(),
+		UniqueID:   gateway.GenerateUniqueID(),
+		NetAddress: syncerAddr,
+	}
+	s := syncer.New(syncerListener, cm, ps, header, syncer.WithLogger(log.Named("syncer")))
+	defer s.Close()
+	go s.Run(ctx)
+
+	e, err := explorer.NewExplorer(cm, store, cfg.Index.BatchSize, cfg.Scanner, log.Named("explorer"))
+	if err != nil {
+		return fmt.Errorf("failed to create explorer: %w", err)
+	}
+	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer timeoutCancel()
+	defer e.Shutdown(timeoutCtx)
+
+	api := api.NewServer(e, cm, s)
+	server := &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, "/api") {
+				r.URL.Path = strings.TrimPrefix(r.URL.Path, "/api")
+				api.ServeHTTP(w, r)
+				return
+			}
+			http.NotFound(w, r)
+		}),
+		ReadTimeout: 15 * time.Second,
+	}
+	defer server.Close()
+
+	go func() {
+		if err := server.Serve(httpListener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatal("http server failed", zap.Error(err))
+		}
+	}()
+
+	log.Info("explored started", zap.String("network", cfg.Consensus.Network), zap.String("version", build.Version()), zap.String("http", cfg.HTTP.Address), zap.String("syncer", syncerAddr))
+
+	<-ctx.Done()
+	log.Info("shutting down")
+	time.AfterFunc(3*time.Minute, func() {
+		log.Fatal("failed to shut down within 3 minutes")
+	})
+
+	return nil
+}
+
 func main() {
 	tryLoadConfig()
 
@@ -195,10 +310,7 @@ func main() {
 		return
 	}
 
-	if err := os.MkdirAll(cfg.Directory, 0700); err != nil {
-		stdoutFatalError("failed to open log file: " + err.Error())
-		return
-	}
+	checkFatalError("failed to open log file", os.MkdirAll(cfg.Directory, 0700))
 
 	var logCores []zapcore.Core
 	if cfg.Log.StdOut.Enabled {
@@ -241,10 +353,7 @@ func main() {
 		}
 
 		fileWriter, closeFn, err := zap.Open(cfg.Log.File.Path)
-		if err != nil {
-			stdoutFatalError("failed to open log file: " + err.Error())
-			return
-		}
+		checkFatalError("failed to open log file", err)
 		defer closeFn()
 
 		// create the file logger
@@ -266,125 +375,5 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	var network *consensus.Network
-	var genesisBlock types.Block
-
-	switch cfg.Consensus.Network {
-	case "mainnet":
-		network, genesisBlock = chain.Mainnet()
-		cfg.Syncer.Peers = append(cfg.Syncer.Peers, syncer.MainnetBootstrapPeers...)
-	case "zen":
-		network, genesisBlock = chain.TestnetZen()
-		cfg.Syncer.Peers = append(cfg.Syncer.Peers, syncer.ZenBootstrapPeers...)
-	case "anagami":
-		network, genesisBlock = chain.TestnetAnagami()
-		cfg.Syncer.Peers = append(cfg.Syncer.Peers, syncer.AnagamiBootstrapPeers...)
-	default:
-		log.Fatal("network must be 'mainnet', 'zen', or 'anagami'", zap.String("network", cfg.Consensus.Network))
-	}
-
-	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(cfg.Directory, "consensus.db"))
-	if err != nil {
-		log.Error("failed to open bolt database", zap.Error(err))
-		return
-	}
-	defer bdb.Close()
-
-	dbstore, tipState, err := chain.NewDBStore(bdb, network, genesisBlock)
-	if err != nil {
-		log.Error("failed to create chain store", zap.Error(err))
-		return
-	}
-	cm := chain.NewManager(dbstore, tipState)
-
-	store, err := sqlite.OpenDatabase(filepath.Join(cfg.Directory, "explored.sqlite3"), log.Named("sqlite3"))
-	if err != nil {
-		log.Error("failed to open sqlite database", zap.Error(err))
-		return
-	}
-	defer store.Close()
-
-	syncerListener, err := net.Listen("tcp", cfg.Syncer.Address)
-	if err != nil {
-		log.Error("failed to create listener", zap.Error(err))
-		return
-	}
-	defer syncerListener.Close()
-
-	httpListener, err := net.Listen("tcp", cfg.HTTP.Address)
-	if err != nil {
-		log.Error("failed to create listener", zap.Error(err))
-		return
-	}
-	defer httpListener.Close()
-
-	syncerAddr := syncerListener.Addr().String()
-	if cfg.Syncer.EnableUPNP {
-		remoteIP := forwardUPNP(ctx, cfg.Syncer.Address, log)
-		if remoteIP != "" {
-			syncerAddr = remoteIP
-		}
-	}
-
-	// peers will reject us if our hostname is empty or unspecified, so use loopback
-	host, port, _ := net.SplitHostPort(syncerAddr)
-	if ip := net.ParseIP(host); ip == nil || ip.IsUnspecified() {
-		syncerAddr = net.JoinHostPort("127.0.0.1", port)
-	}
-
-	ps, err := syncerutil.NewJSONPeerStore(filepath.Join(cfg.Directory, "peers.json"))
-	if err != nil {
-		log.Error("failed to open peer store", zap.Error(err))
-		return
-	}
-	for _, peer := range cfg.Syncer.Peers {
-		ps.AddPeer(peer)
-	}
-
-	header := gateway.Header{
-		GenesisID:  genesisBlock.ID(),
-		UniqueID:   gateway.GenerateUniqueID(),
-		NetAddress: syncerAddr,
-	}
-	s := syncer.New(syncerListener, cm, ps, header, syncer.WithLogger(log.Named("syncer")))
-	defer s.Close()
-	go s.Run(ctx)
-
-	e, err := explorer.NewExplorer(cm, store, cfg.Index.BatchSize, cfg.Scanner, log.Named("explorer"))
-	if err != nil {
-		log.Error("failed to create explorer", zap.Error(err))
-		return
-	}
-	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer timeoutCancel()
-	defer e.Shutdown(timeoutCtx)
-
-	api := api.NewServer(e, cm, s)
-	server := &http.Server{
-		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if strings.HasPrefix(r.URL.Path, "/api") {
-				r.URL.Path = strings.TrimPrefix(r.URL.Path, "/api")
-				api.ServeHTTP(w, r)
-				return
-			}
-			http.NotFound(w, r)
-		}),
-		ReadTimeout: 15 * time.Second,
-	}
-	defer server.Close()
-
-	go func() {
-		if err := server.Serve(httpListener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatal("http server failed", zap.Error(err))
-		}
-	}()
-
-	log.Info("explored started", zap.String("network", cfg.Consensus.Network), zap.String("version", build.Version()), zap.String("http", cfg.HTTP.Address), zap.String("syncer", syncerAddr))
-
-	<-ctx.Done()
-	log.Info("shutting down")
-	go func() {
-		<-time.After(time.Minute)
-		log.Fatal("shutdown timed out")
-	}()
+	checkFatalError("daemon startup failed", runRootCmd(ctx, log))
 }
