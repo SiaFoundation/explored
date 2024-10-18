@@ -103,17 +103,17 @@ WHERE id IN (` + queryPlaceHolders(len(txnIDs)) + `)`
 	result := make(map[int64]v2Metadata)
 	for rows.Next() {
 		var txnID int64
-		var fields v2Metadata
+		var minerFee types.Currency
 		var newFoundationAddress types.Address
-		if err := rows.Scan(&txnID, decodeNull(&newFoundationAddress), decode(&fields.minerFee)); err != nil {
+		if err := rows.Scan(&txnID, decodeNull(&newFoundationAddress), decode(&minerFee)); err != nil {
 			return nil, fmt.Errorf("failed to scan new foundation address and miner fee: %w", err)
 		}
 
+		metadata := v2Metadata{minerFee: minerFee}
 		if (newFoundationAddress != types.Address{}) {
-			fields.newFoundationAddress = &newFoundationAddress
+			metadata.newFoundationAddress = &newFoundationAddress
 		}
-
-		result[txnID] = fields
+		result[txnID] = metadata
 	}
 	return result, nil
 }
