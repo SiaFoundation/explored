@@ -151,13 +151,9 @@ func (db *consensusDB) supplementTipBlock(b types.Block) (bs consensus.V1BlockSu
 	return bs
 }
 
-func (db *consensusDB) ancestorTimestamp(types.BlockID) time.Time {
-	return time.Time{}
-}
-
-// v2SyncDB is the same as syncDB but it updates the consensusDB `edb` to keep
-// track of elements and update their proofs to make teseting easier.
-func v2SyncDB(t *testing.T, edb *consensusDB, db *sqlite.Store, cm *chain.Manager) {
+// v2SyncDB is the same as syncDB but it updates the consensusDB `elementDB` to
+// keep track of elements and update their proofs to facilitate testing.
+func v2SyncDB(t *testing.T, elementDB *consensusDB, db *sqlite.Store, cm *chain.Manager) {
 	index, err := db.Tip()
 	if err != nil && !errors.Is(err, explorer.ErrNoTip) {
 		t.Fatal(err)
@@ -173,12 +169,12 @@ func v2SyncDB(t *testing.T, edb *consensusDB, db *sqlite.Store, cm *chain.Manage
 			t.Fatal("failed to process updates:", err)
 		}
 
-		if edb != nil {
+		if elementDB != nil {
 			for _, cru := range crus {
-				edb.revertBlock(cru.RevertUpdate)
+				elementDB.revertBlock(cru.RevertUpdate)
 			}
 			for _, cau := range caus {
-				edb.applyBlock(cau.ApplyUpdate)
+				elementDB.applyBlock(cau.ApplyUpdate)
 			}
 		}
 
@@ -323,7 +319,7 @@ func TestV2MinerFee(t *testing.T) {
 	genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
 
-	edb, _ := newConsensusDB(network, genesisBlock)
+	elementDB, _ := newConsensusDB(network, genesisBlock)
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
 		t.Fatal(err)
@@ -335,7 +331,7 @@ func TestV2MinerFee(t *testing.T) {
 		ArbitraryData: []byte("hello"),
 		MinerFee:      giftSC,
 		SiacoinInputs: []types.V2SiacoinInput{{
-			Parent:          edb.sces[genesisBlock.Transactions[0].SiacoinOutputID(0)],
+			Parent:          elementDB.sces[genesisBlock.Transactions[0].SiacoinOutputID(0)],
 			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
 		}},
 	}
@@ -344,7 +340,7 @@ func TestV2MinerFee(t *testing.T) {
 	if err := cm.AddBlocks([]types.Block{testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn1}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
-	v2SyncDB(t, edb, db, cm)
+	v2SyncDB(t, elementDB, db, cm)
 
 	{
 		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
@@ -385,7 +381,7 @@ func TestV2FoundationAddress(t *testing.T) {
 	genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
 
-	edb, _ := newConsensusDB(network, genesisBlock)
+	elementDB, _ := newConsensusDB(network, genesisBlock)
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
 		t.Fatal(err)
@@ -395,7 +391,7 @@ func TestV2FoundationAddress(t *testing.T) {
 
 	txn1 := types.V2Transaction{
 		SiacoinInputs: []types.V2SiacoinInput{{
-			Parent:          edb.sces[genesisBlock.Transactions[0].SiacoinOutputID(0)],
+			Parent:          elementDB.sces[genesisBlock.Transactions[0].SiacoinOutputID(0)],
 			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
 		}},
 		MinerFee:             giftSC,
@@ -406,7 +402,7 @@ func TestV2FoundationAddress(t *testing.T) {
 	if err := cm.AddBlocks([]types.Block{testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn1}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
-	v2SyncDB(t, edb, db, cm)
+	v2SyncDB(t, elementDB, db, cm)
 
 	{
 		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
