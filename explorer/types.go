@@ -208,6 +208,8 @@ type Metrics struct {
 	SiafundPool types.Currency `json:"siafundPool"`
 	// Total announced hosts
 	TotalHosts uint64 `json:"totalHosts"`
+	// Number of leaves in the accumulator
+	NumLeaves uint64 `json:"numLeaves"`
 	// Number of active contracts
 	ActiveContracts uint64 `json:"activeContracts"`
 	// Number of failed contracts

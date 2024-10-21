@@ -10,7 +10,7 @@ import (
 func (s *Store) MerkleProof(leafIndex uint64) (proof []types.Hash256, err error) {
 	err = s.transaction(func(tx *txn) error {
 		var numLeaves uint64
-		if err := tx.QueryRow("SELECT COUNT(*) FROM state_tree WHERE row = 0").Scan(&numLeaves); err != nil {
+		if err := tx.QueryRow("SELECT num_leaves FROM network_metrics ORDER BY height DESC LIMIT 1").Scan(decode(&numLeaves)); err != nil {
 			return err
 		}
 
