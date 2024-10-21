@@ -264,8 +264,8 @@ CREATE INDEX v2_transactions_transaction_id_index ON v2_transactions(transaction
 
 CREATE TABLE v2_block_transactions (
 	block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
-	transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
 	block_order INTEGER NOT NULL,
+	transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
 	UNIQUE(block_id, block_order)
 );
 CREATE INDEX v2_block_transactions_block_id_index ON v2_block_transactions(block_id);
