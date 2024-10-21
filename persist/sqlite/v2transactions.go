@@ -35,8 +35,8 @@ LIMIT ? OFFSET ?`, encode(txnID), limit, offset)
 	return
 }
 
-// blockV2TransactionIDs returns the types.TransactionID for each v2
-// transaction in the block.
+// blockV2TransactionIDs returns the transaction id as a types.TransactionID
+// for each v2 transaction in the block.
 func blockV2TransactionIDs(tx *txn, blockID types.BlockID) (ids []types.TransactionID, err error) {
 	rows, err := tx.Query(`SELECT t.transaction_id
 FROM v2_block_transactions bt
