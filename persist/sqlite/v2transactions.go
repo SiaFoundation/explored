@@ -35,10 +35,10 @@ LIMIT ? OFFSET ?`, encode(txnID), limit, offset)
 	return
 }
 
-// blockV2TransactionIDs returns the database ID for each v2 transaction in the
-// block.
-func blockV2TransactionIDs(tx *txn, blockID types.BlockID) (idMap map[int64]transactionID, err error) {
-	rows, err := tx.Query(`SELECT bt.transaction_id, block_order, t.transaction_id
+// blockV2TransactionIDs returns the types.TransactionID for each v2
+// transaction in the block.
+func blockV2TransactionIDs(tx *txn, blockID types.BlockID) (ids []types.TransactionID, err error) {
+	rows, err := tx.Query(`SELECT t.transaction_id
 FROM v2_block_transactions bt
 INNER JOIN v2_transactions t ON (t.id = bt.transaction_id)
 WHERE block_id = ? ORDER BY block_order ASC`, encode(blockID))
@@ -47,154 +47,80 @@ WHERE block_id = ? ORDER BY block_order ASC`, encode(blockID))
 	}
 	defer rows.Close()
 
-	idMap = make(map[int64]transactionID)
 	for rows.Next() {
-		var dbID int64
-		var blockOrder int64
-		var txnID types.TransactionID
-		if err := rows.Scan(&dbID, &blockOrder, decode(&txnID)); err != nil {
+		var id types.TransactionID
+		if err := rows.Scan(decode(&id)); err != nil {
 			return nil, fmt.Errorf("failed to scan block transaction: %w", err)
 		}
-		idMap[blockOrder] = transactionID{id: txnID, dbID: dbID}
+		ids = append(ids, id)
 	}
 	return
 }
 
-// v2TransactionArbitraryData returns the arbitrary data for each v2 transaction.
-func v2TransactionArbitraryData(tx *txn, txnIDs []int64) (map[int64][]byte, error) {
-	query := `SELECT transaction_id, data
-FROM v2_transaction_arbitrary_data
-WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)`
-	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+// getV2Transactions fetches v2 transactions in the correct order using
+// prepared statements.
+func getV2Transactions(tx *txn, ids []types.TransactionID) ([]explorer.V2Transaction, error) {
+	dbIDs, txns, err := getV2TransactionBase(tx, ids)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("getV2Transactions: failed to get base transactions: %w", err)
 	}
-	defer rows.Close()
-
-	result := make(map[int64][]byte)
-	for rows.Next() {
-		var txnID int64
-		var data []byte
-		if err := rows.Scan(&txnID, &data); err != nil {
-			return nil, fmt.Errorf("failed to scan arbitrary data: %w", err)
-		}
-		result[txnID] = data
-	}
-	return result, nil
-}
-
-type v2Metadata struct {
-	newFoundationAddress *types.Address
-	minerFee             types.Currency
-}
-
-// v2TransactionMetadata returns the new foundation address and miner fee of a v2
-// transaction.
-func v2TransactionMetadata(tx *txn, txnIDs []int64) (map[int64]v2Metadata, error) {
-	query := `SELECT id, new_foundation_address, miner_fee
-FROM v2_transactions
-WHERE id IN (` + queryPlaceHolders(len(txnIDs)) + `)`
-	rows, err := tx.Query(query, queryArgs(txnIDs)...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	result := make(map[int64]v2Metadata)
-	for rows.Next() {
-		var txnID int64
-		var minerFee types.Currency
-		var newFoundationAddress types.Address
-		if err := rows.Scan(&txnID, decodeNull(&newFoundationAddress), decode(&minerFee)); err != nil {
-			return nil, fmt.Errorf("failed to scan new foundation address and miner fee: %w", err)
-		}
-
-		metadata := v2Metadata{minerFee: minerFee}
-		if (newFoundationAddress != types.Address{}) {
-			metadata.newFoundationAddress = &newFoundationAddress
-		}
-		result[txnID] = metadata
-	}
-	return result, nil
-}
-
-func getV2Transactions(tx *txn, idMap map[int64]transactionID) ([]explorer.V2Transaction, error) {
-	dbIDs := make([]int64, len(idMap))
-	for order, id := range idMap {
-		dbIDs[order] = id.dbID
-	}
-
-	txnMetadata, err := v2TransactionMetadata(tx, dbIDs)
-	if err != nil {
-		return nil, fmt.Errorf("getV2Transactions: failed to get metadata fields: %w", err)
-	}
-
-	txnArbitraryData, err := v2TransactionArbitraryData(tx, dbIDs)
-	if err != nil {
+	if err := fillV2TransactionArbitraryData(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getV2Transactions: failed to get arbitrary data: %w", err)
 	}
 
-	var results []explorer.V2Transaction
-	for order, dbID := range dbIDs {
-		metadata := txnMetadata[dbID]
-		txn := explorer.V2Transaction{
-			ID:                   idMap[int64(order)].id,
-			ArbitraryData:        txnArbitraryData[dbID],
-			NewFoundationAddress: metadata.newFoundationAddress,
-			MinerFee:             metadata.minerFee,
-		}
-
-		// for _, attestation := range txn.Attestations {
-		// 	var ha chain.HostAnnouncement
-		// 	if ha.FromAttestation(attestation) {
-		// 		txn.HostAnnouncements = append(txn.HostAnnouncements, ha)
-		// 	}
-		// }
-
-		results = append(results, txn)
-	}
-	return results, nil
+	return txns, nil
 }
 
-// v2TransactionDatabaseIDs returns the database ID for each transaction.
-func v2TransactionDatabaseIDs(tx *txn, txnIDs []types.TransactionID) (dbIDs map[int64]transactionID, err error) {
-	encodedIDs := func(ids []types.TransactionID) []any {
-		result := make([]any, len(ids))
-		for i, id := range ids {
-			result[i] = encode(id)
-		}
-		return result
-	}
-
-	query := `SELECT id, transaction_id FROM v2_transactions WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `) ORDER BY id`
-	rows, err := tx.Query(query, encodedIDs(txnIDs)...)
+// getV2TransactionBase fetches the base transaction data for a given list of
+// transaction IDs.
+func getV2TransactionBase(tx *txn, txnIDs []types.TransactionID) (dbIDs []int64, txns []explorer.V2Transaction, err error) {
+	stmt, err := tx.Prepare(`SELECT id, transaction_id, new_foundation_address, miner_fee FROM v2_transactions WHERE transaction_id = ?`)
 	if err != nil {
-		return nil, err
+		return nil, nil, fmt.Errorf("getV2TransactionBase: failed to prepare statement: %w", err)
 	}
-	defer rows.Close()
+	defer stmt.Close()
 
-	var i int64
-	dbIDs = make(map[int64]transactionID)
-	for rows.Next() {
-		var dbID int64
-		var txnID types.TransactionID
-		if err := rows.Scan(&dbID, decode(&txnID)); err != nil {
-			return nil, fmt.Errorf("failed to scan transaction: %w", err)
+	var dbID int64
+	dbIDs = make([]int64, 0, len(txnIDs))
+	txns = make([]explorer.V2Transaction, 0, len(txnIDs))
+	for _, id := range txnIDs {
+		var txn explorer.V2Transaction
+		var newFoundationAddress types.Address
+		if err := stmt.QueryRow(encode(id)).Scan(&dbID, decode(&txn.ID), decodeNull(&newFoundationAddress), decode(&txn.MinerFee)); err != nil {
+			return nil, nil, fmt.Errorf("failed to scan base transaction: %w", err)
 		}
-		dbIDs[i] = transactionID{id: txnID, dbID: dbID}
-		i++
+		if (newFoundationAddress != types.Address{}) {
+			txn.NewFoundationAddress = &newFoundationAddress
+		}
+
+		dbIDs = append(dbIDs, dbID)
+		txns = append(txns, txn)
 	}
-	return
+	return dbIDs, txns, nil
+}
+
+// fillV2TransactionArbitraryData fills in the arbitrary data for each transaction using prepared statements.
+func fillV2TransactionArbitraryData(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
+	stmt, err := tx.Prepare(`SELECT data FROM v2_transaction_arbitrary_data WHERE transaction_id = ?`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare arbitrary data statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for i, dbID := range dbIDs {
+		var data []byte
+		if err := stmt.QueryRow(dbID).Scan(&data); err != nil {
+			return fmt.Errorf("failed to scan arbitrary data for txn %d: %w", dbID, err)
+		}
+		txns[i].ArbitraryData = data
+	}
+	return nil
 }
 
 // V2Transactions implements explorer.Store.
 func (s *Store) V2Transactions(ids []types.TransactionID) (results []explorer.V2Transaction, err error) {
 	err = s.transaction(func(tx *txn) error {
-		dbIDs, err := v2TransactionDatabaseIDs(tx, ids)
-		if err != nil {
-			return fmt.Errorf("failed to get transaction IDs: %w", err)
-		}
-		results, err = getV2Transactions(tx, dbIDs)
+		results, err = getV2Transactions(tx, ids)
 		if err != nil {
 			return fmt.Errorf("failed to get transactions: %w", err)
 		}
