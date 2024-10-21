@@ -60,12 +60,9 @@ WHERE block_id = ? ORDER BY block_order ASC`, encode(blockID))
 // getV2Transactions fetches v2 transactions in the correct order using
 // prepared statements.
 func getV2Transactions(tx *txn, ids []types.TransactionID) ([]explorer.V2Transaction, error) {
-	dbIDs, txns, err := getV2TransactionBase(tx, ids)
+	_, txns, err := getV2TransactionBase(tx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("getV2Transactions: failed to get base transactions: %w", err)
-	}
-	if err := fillV2TransactionArbitraryData(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getV2Transactions: failed to get arbitrary data: %w", err)
 	}
 
 	return txns, nil
@@ -74,7 +71,7 @@ func getV2Transactions(tx *txn, ids []types.TransactionID) ([]explorer.V2Transac
 // getV2TransactionBase fetches the base transaction data for a given list of
 // transaction IDs.
 func getV2TransactionBase(tx *txn, txnIDs []types.TransactionID) (dbIDs []int64, txns []explorer.V2Transaction, err error) {
-	stmt, err := tx.Prepare(`SELECT id, transaction_id, new_foundation_address, miner_fee FROM v2_transactions WHERE transaction_id = ?`)
+	stmt, err := tx.Prepare(`SELECT id, transaction_id, new_foundation_address, miner_fee, arbitrary_data FROM v2_transactions WHERE transaction_id = ?`)
 	if err != nil {
 		return nil, nil, fmt.Errorf("getV2TransactionBase: failed to prepare statement: %w", err)
 	}
@@ -86,7 +83,7 @@ func getV2TransactionBase(tx *txn, txnIDs []types.TransactionID) (dbIDs []int64,
 	for _, id := range txnIDs {
 		var txn explorer.V2Transaction
 		var newFoundationAddress types.Address
-		if err := stmt.QueryRow(encode(id)).Scan(&dbID, decode(&txn.ID), decodeNull(&newFoundationAddress), decode(&txn.MinerFee)); err != nil {
+		if err := stmt.QueryRow(encode(id)).Scan(&dbID, decode(&txn.ID), decodeNull(&newFoundationAddress), decode(&txn.MinerFee), &txn.ArbitraryData); err != nil {
 			return nil, nil, fmt.Errorf("failed to scan base transaction: %w", err)
 		}
 		if (newFoundationAddress != types.Address{}) {
@@ -97,24 +94,6 @@ func getV2TransactionBase(tx *txn, txnIDs []types.TransactionID) (dbIDs []int64,
 		txns = append(txns, txn)
 	}
 	return dbIDs, txns, nil
-}
-
-// fillV2TransactionArbitraryData fills in the arbitrary data for each transaction using prepared statements.
-func fillV2TransactionArbitraryData(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
-	stmt, err := tx.Prepare(`SELECT data FROM v2_transaction_arbitrary_data WHERE transaction_id = ?`)
-	if err != nil {
-		return fmt.Errorf("failed to prepare arbitrary data statement: %w", err)
-	}
-	defer stmt.Close()
-
-	for i, dbID := range dbIDs {
-		var data []byte
-		if err := stmt.QueryRow(dbID).Scan(&data); err != nil {
-			return fmt.Errorf("failed to scan arbitrary data for txn %d: %w", dbID, err)
-		}
-		txns[i].ArbitraryData = data
-	}
-	return nil
 }
 
 // V2Transactions implements explorer.Store.
