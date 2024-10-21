@@ -21,6 +21,7 @@ CREATE TABLE network_metrics (
 	height INTEGER NOT NULL,
 	difficulty BLOB NOT NULL,
 	siafund_pool BLOB NOT NULL,
+	num_leaves BLOB NOT NULL,
 	total_hosts INTEGER NOT NULL,
 	active_contracts INTEGER NOT NULL,
 	failed_contracts INTEGER NOT NULL,
