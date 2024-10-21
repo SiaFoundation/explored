@@ -1,12 +1,9 @@
 package sqlite_test
 
 import (
-	"errors"
 	"path/filepath"
 	"testing"
-	"time"
 
-	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils"
 	"go.sia.tech/coreutils/chain"
@@ -17,186 +14,21 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
-type consensusDB struct {
-	sces   map[types.SiacoinOutputID]types.SiacoinElement
-	sfes   map[types.SiafundOutputID]types.SiafundElement
-	fces   map[types.FileContractID]types.FileContractElement
-	v2fces map[types.FileContractID]types.V2FileContractElement
-}
+func getSCE(t *testing.T, db explorer.Store, scid types.SiacoinOutputID) types.SiacoinElement {
+	sces, err := db.SiacoinElements([]types.SiacoinOutputID{scid})
+	if err != nil {
+		t.Fatal(err)
+	} else if len(sces) == 0 {
+		t.Fatal("can't find sce")
+	}
+	sce := sces[0]
 
-func (db *consensusDB) applyBlock(au consensus.ApplyUpdate) {
-	for id, sce := range db.sces {
-		au.UpdateElementProof(&sce.StateElement)
-		db.sces[id] = sce
-	}
-	for id, sfe := range db.sfes {
-		au.UpdateElementProof(&sfe.StateElement)
-		db.sfes[id] = sfe
-	}
-	for id, fce := range db.fces {
-		au.UpdateElementProof(&fce.StateElement)
-		db.fces[id] = fce
-	}
-	for id, fce := range db.v2fces {
-		au.UpdateElementProof(&fce.StateElement)
-		db.v2fces[id] = fce
-	}
-	au.ForEachSiacoinElement(func(sce types.SiacoinElement, created, spent bool) {
-		if spent {
-			delete(db.sces, types.SiacoinOutputID(sce.ID))
-		} else {
-			db.sces[types.SiacoinOutputID(sce.ID)] = sce
-		}
-	})
-	au.ForEachSiafundElement(func(sfe types.SiafundElement, created, spent bool) {
-		if spent {
-			delete(db.sfes, types.SiafundOutputID(sfe.ID))
-		} else {
-			db.sfes[types.SiafundOutputID(sfe.ID)] = sfe
-		}
-	})
-	au.ForEachFileContractElement(func(fce types.FileContractElement, created bool, rev *types.FileContractElement, resolved, valid bool) {
-		if created {
-			db.fces[types.FileContractID(fce.ID)] = fce
-		} else if rev != nil {
-			db.fces[types.FileContractID(fce.ID)] = *rev
-		} else if resolved {
-			delete(db.fces, types.FileContractID(fce.ID))
-		}
-	})
-	au.ForEachV2FileContractElement(func(fce types.V2FileContractElement, created bool, rev *types.V2FileContractElement, res types.V2FileContractResolutionType) {
-		if created {
-			db.v2fces[types.FileContractID(fce.ID)] = fce
-		} else if rev != nil {
-			db.v2fces[types.FileContractID(fce.ID)] = *rev
-		} else if res != nil {
-			delete(db.v2fces, types.FileContractID(fce.ID))
-		}
-	})
-}
-
-func (db *consensusDB) revertBlock(ru consensus.RevertUpdate) {
-	ru.ForEachSiacoinElement(func(sce types.SiacoinElement, created, spent bool) {
-		if spent {
-			db.sces[types.SiacoinOutputID(sce.ID)] = sce
-		} else {
-			delete(db.sces, types.SiacoinOutputID(sce.ID))
-		}
-	})
-	ru.ForEachSiafundElement(func(sfe types.SiafundElement, created, spent bool) {
-		if spent {
-			db.sfes[types.SiafundOutputID(sfe.ID)] = sfe
-		} else {
-			delete(db.sfes, types.SiafundOutputID(sfe.ID))
-		}
-	})
-	ru.ForEachFileContractElement(func(fce types.FileContractElement, created bool, rev *types.FileContractElement, resolved, valid bool) {
-		if created {
-			delete(db.fces, types.FileContractID(fce.ID))
-		} else if rev != nil {
-			db.fces[types.FileContractID(fce.ID)] = fce
-		} else if resolved {
-			db.fces[types.FileContractID(fce.ID)] = fce
-		}
-	})
-	ru.ForEachV2FileContractElement(func(fce types.V2FileContractElement, created bool, rev *types.V2FileContractElement, res types.V2FileContractResolutionType) {
-		if created {
-			delete(db.v2fces, types.FileContractID(fce.ID))
-		} else if rev != nil {
-			db.v2fces[types.FileContractID(fce.ID)] = fce
-		} else if res != nil {
-			db.v2fces[types.FileContractID(fce.ID)] = fce
-		}
-	})
-	for id, sce := range db.sces {
-		ru.UpdateElementProof(&sce.StateElement)
-		db.sces[id] = sce
-	}
-	for id, sfe := range db.sfes {
-		ru.UpdateElementProof(&sfe.StateElement)
-		db.sfes[id] = sfe
-	}
-	for id, fce := range db.fces {
-		ru.UpdateElementProof(&fce.StateElement)
-		db.fces[id] = fce
-	}
-	for id, fce := range db.v2fces {
-		ru.UpdateElementProof(&fce.StateElement)
-		db.v2fces[id] = fce
-	}
-}
-
-func (db *consensusDB) supplementTipBlock(b types.Block) (bs consensus.V1BlockSupplement) {
-	bs = consensus.V1BlockSupplement{
-		Transactions: make([]consensus.V1TransactionSupplement, len(b.Transactions)),
-	}
-	for i, txn := range b.Transactions {
-		ts := &bs.Transactions[i]
-		for _, sci := range txn.SiacoinInputs {
-			if sce, ok := db.sces[sci.ParentID]; ok {
-				ts.SiacoinInputs = append(ts.SiacoinInputs, sce)
-			}
-		}
-		for _, sfi := range txn.SiafundInputs {
-			if sfe, ok := db.sfes[sfi.ParentID]; ok {
-				ts.SiafundInputs = append(ts.SiafundInputs, sfe)
-			}
-		}
-		for _, fcr := range txn.FileContractRevisions {
-			if fce, ok := db.fces[fcr.ParentID]; ok {
-				ts.RevisedFileContracts = append(ts.RevisedFileContracts, fce)
-			}
-		}
-	}
-	return bs
-}
-
-// v2SyncDB is the same as syncDB but it updates the consensusDB `elementDB` to
-// keep track of elements and update their proofs to facilitate testing.
-func v2SyncDB(t *testing.T, elementDB *consensusDB, db *sqlite.Store, cm *chain.Manager) {
-	index, err := db.Tip()
-	if err != nil && !errors.Is(err, explorer.ErrNoTip) {
+	sce.SiacoinElement.MerkleProof, err = db.MerkleProof(sce.StateElement.LeafIndex)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	for index != cm.Tip() {
-		crus, caus, err := cm.UpdatesSince(index, 1000)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if err := db.UpdateChainState(crus, caus); err != nil {
-			t.Fatal("failed to process updates:", err)
-		}
-
-		if elementDB != nil {
-			for _, cru := range crus {
-				elementDB.revertBlock(cru.RevertUpdate)
-			}
-			for _, cau := range caus {
-				elementDB.applyBlock(cau.ApplyUpdate)
-			}
-		}
-
-		if len(crus) > 0 {
-			index = crus[len(crus)-1].State.Index
-		}
-		if len(caus) > 0 {
-			index = caus[len(caus)-1].State.Index
-		}
-	}
-}
-
-func newConsensusDB(n *consensus.Network, genesisBlock types.Block) (*consensusDB, consensus.State) {
-	db := &consensusDB{
-		sces:   make(map[types.SiacoinOutputID]types.SiacoinElement),
-		sfes:   make(map[types.SiafundOutputID]types.SiafundElement),
-		fces:   make(map[types.FileContractID]types.FileContractElement),
-		v2fces: make(map[types.FileContractID]types.V2FileContractElement),
-	}
-	cs, au := consensus.ApplyBlock(n.GenesisState(), genesisBlock, db.supplementTipBlock(genesisBlock), time.Time{})
-	db.applyBlock(au)
-	return db, cs
+	return sce.SiacoinElement
 }
 
 func TestV2ArbitraryData(t *testing.T) {
@@ -222,8 +54,8 @@ func TestV2ArbitraryData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	cm := chain.NewManager(store, genesisState)
+	syncDB(t, db, cm)
 
 	txn1 := types.V2Transaction{
 		ArbitraryData: []byte("hello"),
@@ -236,7 +68,7 @@ func TestV2ArbitraryData(t *testing.T) {
 	if err := cm.AddBlocks([]types.Block{testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn1, txn2}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
-	v2SyncDB(t, nil, db, cm)
+	syncDB(t, db, cm)
 	prev := cm.Tip()
 
 	{
@@ -319,19 +151,18 @@ func TestV2MinerFee(t *testing.T) {
 	genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
 
-	elementDB, _ := newConsensusDB(network, genesisBlock)
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	cm := chain.NewManager(store, genesisState)
+	syncDB(t, db, cm)
 
 	txn1 := types.V2Transaction{
 		ArbitraryData: []byte("hello"),
 		MinerFee:      giftSC,
 		SiacoinInputs: []types.V2SiacoinInput{{
-			Parent:          elementDB.sces[genesisBlock.Transactions[0].SiacoinOutputID(0)],
+			Parent:          getSCE(t, db, genesisBlock.Transactions[0].SiacoinOutputID(0)),
 			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
 		}},
 	}
@@ -340,7 +171,7 @@ func TestV2MinerFee(t *testing.T) {
 	if err := cm.AddBlocks([]types.Block{testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn1}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
-	v2SyncDB(t, elementDB, db, cm)
+	syncDB(t, db, cm)
 
 	{
 		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
@@ -381,17 +212,16 @@ func TestV2FoundationAddress(t *testing.T) {
 	genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
 
-	elementDB, _ := newConsensusDB(network, genesisBlock)
 	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	cm := chain.NewManager(store, genesisState)
+	syncDB(t, db, cm)
 
 	txn1 := types.V2Transaction{
 		SiacoinInputs: []types.V2SiacoinInput{{
-			Parent:          elementDB.sces[genesisBlock.Transactions[0].SiacoinOutputID(0)],
+			Parent:          getSCE(t, db, genesisBlock.Transactions[0].SiacoinOutputID(0)),
 			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
 		}},
 		MinerFee:             giftSC,
@@ -402,7 +232,7 @@ func TestV2FoundationAddress(t *testing.T) {
 	if err := cm.AddBlocks([]types.Block{testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn1}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
-	v2SyncDB(t, elementDB, db, cm)
+	syncDB(t, db, cm)
 
 	{
 		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
