@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
 )
 
@@ -60,11 +61,22 @@ WHERE block_id = ? ORDER BY block_order ASC`, encode(blockID))
 // getV2Transactions fetches v2 transactions in the correct order using
 // prepared statements.
 func getV2Transactions(tx *txn, ids []types.TransactionID) ([]explorer.V2Transaction, error) {
-	_, txns, err := getV2TransactionBase(tx, ids)
+	dbIDs, txns, err := getV2TransactionBase(tx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("getV2Transactions: failed to get base transactions: %w", err)
+	} else if err := fillV2TransactionAttestations(tx, dbIDs, txns); err != nil {
+		return nil, fmt.Errorf("getV2Transactions: failed to get attestations: %w", err)
 	}
 
+	// add host announcements if we have any
+	for i := range txns {
+		for _, attestation := range txns[i].Attestations {
+			var ha chain.HostAnnouncement
+			if ha.FromAttestation(attestation) {
+				txns[i].HostAnnouncements = append(txns[i].HostAnnouncements, ha)
+			}
+		}
+	}
 	return txns, nil
 }
 
@@ -94,6 +106,39 @@ func getV2TransactionBase(tx *txn, txnIDs []types.TransactionID) ([]int64, []exp
 		txns = append(txns, txn)
 	}
 	return dbIDs, txns, nil
+}
+
+// fillV2TransactionAttestations fills in the attestations for each
+// transaction.
+func fillV2TransactionAttestations(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
+	stmt, err := tx.Prepare(`SELECT public_key, key, value, signature FROM v2_transaction_attestations WHERE transaction_id = ? ORDER BY transaction_order`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare attestations statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := stmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query attestations: %w", err)
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var attestation types.Attestation
+				if err := rows.Scan(decode(&attestation.PublicKey), &attestation.Key, &attestation.Value, decode(&attestation.Signature)); err != nil {
+					return fmt.Errorf("failed to scan attestation: %w", err)
+				}
+				txns[i].Attestations = append(txns[i].Attestations, attestation)
+			}
+			return nil
+		}()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // V2Transactions implements explorer.Store.
