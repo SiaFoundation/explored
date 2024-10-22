@@ -5,6 +5,7 @@ import (
 
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/testutil"
 )
@@ -163,6 +164,50 @@ func TestV2FoundationAddress(t *testing.T) {
 	testutil.SignV2Transaction(cm.TipState(), pk1, &txn1)
 
 	if err := cm.AddBlocks([]types.Block{testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn1}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	{
+		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
+	}
+}
+
+func TestV2Attestations(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	pk2 := types.GeneratePrivateKey()
+
+	_, _, cm, db := newStore(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		network.HardforkV2.AllowHeight = 1
+		network.HardforkV2.RequireHeight = 2
+	})
+	cs := cm.TipState()
+
+	ha1 := chain.HostAnnouncement{
+		PublicKey:  pk1.PublicKey(),
+		NetAddress: "127.0.0.1:4444",
+	}
+	ha2 := chain.HostAnnouncement{
+		PublicKey:  pk2.PublicKey(),
+		NetAddress: "127.0.0.1:8888",
+	}
+
+	otherAttestation := types.Attestation{
+		PublicKey: pk1.PublicKey(),
+		Key:       "hello",
+		Value:     []byte("world"),
+	}
+	otherAttestation.Signature = pk1.SignHash(cs.AttestationSigHash(otherAttestation))
+
+	txn1 := types.V2Transaction{
+		Attestations: []types.Attestation{ha1.ToAttestation(cs, pk1), otherAttestation, ha2.ToAttestation(cs, pk2)},
+	}
+
+	if err := cm.AddBlocks([]types.Block{testutil.MineV2Block(cs, []types.V2Transaction{txn1}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)

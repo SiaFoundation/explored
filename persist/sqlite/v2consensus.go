@@ -61,6 +61,21 @@ func addV2Transactions(tx *txn, bid types.BlockID, txns []types.V2Transaction) (
 	return txnDBIds, nil
 }
 
+func addV2Attestations(tx *txn, id int64, txn types.V2Transaction) error {
+	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_attestations(transaction_id, transaction_order, public_key, key, value, signature) VALUES (?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addV2Attestations: failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for i, attestation := range txn.Attestations {
+		if _, err := stmt.Exec(id, i, encode(attestation.PublicKey), attestation.Key, attestation.Value, encode(attestation.Signature)); err != nil {
+			return fmt.Errorf("addV2Attestations: failed to execute statement: %w", err)
+		}
+	}
+	return nil
+}
+
 func addV2TransactionFields(tx *txn, txns []types.V2Transaction, scDBIds map[types.SiacoinOutputID]int64, sfDBIds map[types.SiafundOutputID]int64, fcDBIds map[explorer.DBFileContract]int64, v2TxnDBIds map[types.TransactionID]txnDBId) error {
 	for _, txn := range txns {
 		dbID, ok := v2TxnDBIds[txn.ID()]
@@ -71,6 +86,10 @@ func addV2TransactionFields(tx *txn, txns []types.V2Transaction, scDBIds map[typ
 		// transaction already exists, don't reinsert its fields
 		if dbID.exist {
 			continue
+		}
+
+		if err := addV2Attestations(tx, dbID.id, txn); err != nil {
+			return fmt.Errorf("addV2TransactionFields: failed to add attestations: %w", err)
 		}
 	}
 
