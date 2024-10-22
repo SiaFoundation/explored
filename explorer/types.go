@@ -183,9 +183,11 @@ type Transaction struct {
 
 // A V2Transaction is a v2 transaction that uses the wrapped types above.
 type V2Transaction struct {
-	ID            types.TransactionID `json:"id"`
-	Attestations  []types.Attestation `json:"attestations,omitempty"`
-	ArbitraryData []byte              `json:"arbitraryData,omitempty"`
+	ID             types.TransactionID `json:"id"`
+	SiacoinOutputs []SiacoinOutput     `json:"siacoinOutputs,omitempty"`
+	SiafundOutputs []SiafundOutput     `json:"siafundOutputs,omitempty"`
+	Attestations   []types.Attestation `json:"attestations,omitempty"`
+	ArbitraryData  []byte              `json:"arbitraryData,omitempty"`
 
 	NewFoundationAddress *types.Address `json:"newFoundationAddress,omitempty"`
 	MinerFee             types.Currency `json:"minerFee"`
