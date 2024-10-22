@@ -184,6 +184,7 @@ type Transaction struct {
 // A V2Transaction is a v2 transaction that uses the wrapped types above.
 type V2Transaction struct {
 	ID            types.TransactionID `json:"id"`
+	Attestations  []types.Attestation `json:"attestations,omitempty"`
 	ArbitraryData []byte              `json:"arbitraryData,omitempty"`
 
 	NewFoundationAddress *types.Address `json:"newFoundationAddress,omitempty"`
