@@ -66,6 +66,10 @@ func getV2Transactions(tx *txn, ids []types.TransactionID) ([]explorer.V2Transac
 		return nil, fmt.Errorf("getV2Transactions: failed to get base transactions: %w", err)
 	} else if err := fillV2TransactionAttestations(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getV2Transactions: failed to get attestations: %w", err)
+	} else if err := fillV2TransactionSiacoinOutputs(tx, dbIDs, txns); err != nil {
+		return nil, fmt.Errorf("getV2Transactions: failed to get siacoin outputs: %w", err)
+	} else if err := fillV2TransactionSiafundOutputs(tx, dbIDs, txns); err != nil {
+		return nil, fmt.Errorf("getV2Transactions: failed to get siafund outputs: %w", err)
 	}
 
 	// add host announcements if we have any
@@ -131,6 +135,90 @@ func fillV2TransactionAttestations(tx *txn, dbIDs []int64, txns []explorer.V2Tra
 					return fmt.Errorf("failed to scan attestation: %w", err)
 				}
 				txns[i].Attestations = append(txns[i].Attestations, attestation)
+			}
+			return nil
+		}()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// fillV2TransactionSiacoinOutputs fills in the siacoin outputs for each
+// transaction.
+func fillV2TransactionSiacoinOutputs(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
+	stmt, err := tx.Prepare(`SELECT sc.output_id, sc.leaf_index, sc.spent_index, sc.source, sc.maturity_height, sc.address, sc.value
+FROM siacoin_elements sc
+INNER JOIN v2_transaction_siacoin_outputs ts ON (ts.output_id = sc.id)
+WHERE ts.transaction_id = ?
+ORDER BY ts.transaction_order ASC`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare siacoin outputs statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := stmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query siacoin outputs: %w", err)
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var spentIndex types.ChainIndex
+				var sco explorer.SiacoinOutput
+				if err := rows.Scan(decode(&sco.StateElement.ID), decode(&sco.LeafIndex), decodeNull(&spentIndex), &sco.Source, &sco.MaturityHeight, decode(&sco.SiacoinOutput.Address), decode(&sco.SiacoinOutput.Value)); err != nil {
+					return fmt.Errorf("failed to scan siacoin output: %w", err)
+				}
+
+				if spentIndex != (types.ChainIndex{}) {
+					sco.SpentIndex = &spentIndex
+				}
+				txns[i].SiacoinOutputs = append(txns[i].SiacoinOutputs, sco)
+			}
+			return nil
+		}()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// fillV2TransactionSiafundOutputs fills in the siacoin outputs for each
+// transaction.
+func fillV2TransactionSiafundOutputs(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
+	stmt, err := tx.Prepare(`SELECT sf.output_id, sf.leaf_index, sf.spent_index, sf.claim_start, sf.address, sf.value
+FROM siafund_elements sf
+INNER JOIN v2_transaction_siafund_outputs ts ON (ts.output_id = sf.id)
+WHERE ts.transaction_id = ?
+ORDER BY ts.transaction_order ASC`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare siafund outputs statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := stmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query siafund outputs: %w", err)
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var spentIndex types.ChainIndex
+				var sfo explorer.SiafundOutput
+				if err := rows.Scan(decode(&sfo.StateElement.ID), decode(&sfo.StateElement.LeafIndex), decodeNull(&spentIndex), decode(&sfo.ClaimStart), decode(&sfo.SiafundOutput.Address), decode(&sfo.SiafundOutput.Value)); err != nil {
+					return fmt.Errorf("failed to scan siafund output: %w", err)
+				}
+				if spentIndex != (types.ChainIndex{}) {
+					sfo.SpentIndex = &spentIndex
+				}
+
+				txns[i].SiafundOutputs = append(txns[i].SiafundOutputs, sfo)
 			}
 			return nil
 		}()
