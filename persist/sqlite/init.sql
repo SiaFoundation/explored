@@ -275,6 +275,17 @@ CREATE TABLE v2_block_transactions (
 CREATE INDEX v2_block_transactions_block_id_index ON v2_block_transactions(block_id);
 CREATE INDEX v2_block_transactions_transaction_id_block_id ON v2_block_transactions(transaction_id, block_id);
 
+CREATE TABLE v2_transaction_attestations (
+	transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
+	transaction_order INTEGER NOT NULL,
+	public_key BLOB NOT NULL,
+	key TEXT NOT NULL,
+	value BLOB NOT NULL,
+	signature BLOB NOT NULL,
+	UNIQUE(transaction_id, transaction_order)
+);
+CREATE INDEX v2_transaction_attestations_transaction_id_index ON v2_transaction_attestations(transaction_id);
+
 CREATE TABLE state_tree (
 	row INTEGER NOT NULL,
 	column INTEGER NOT NULL,
