@@ -21,6 +21,7 @@ CREATE TABLE network_metrics (
 	height INTEGER NOT NULL,
 	difficulty BLOB NOT NULL,
 	siafund_pool BLOB NOT NULL,
+	num_leaves BLOB NOT NULL,
 	total_hosts INTEGER NOT NULL,
 	active_contracts INTEGER NOT NULL,
 	failed_contracts INTEGER NOT NULL,
@@ -255,27 +256,22 @@ CREATE INDEX transaction_file_contract_revisions_transaction_id_index ON transac
 
 CREATE TABLE v2_transactions (
 	id INTEGER PRIMARY KEY,
-	transaction_id BLOB UNIQUE NOT NULL
+	transaction_id BLOB UNIQUE NOT NULL,
+
+	new_foundation_address BLOB,
+	miner_fee BLOB NOT NULL,
+	arbitrary_data BLOB
 );
 CREATE INDEX v2_transactions_transaction_id_index ON v2_transactions(transaction_id);
 
 CREATE TABLE v2_block_transactions (
 	block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
-	transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
 	block_order INTEGER NOT NULL,
+	transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
 	UNIQUE(block_id, block_order)
 );
 CREATE INDEX v2_block_transactions_block_id_index ON v2_block_transactions(block_id);
-CREATE INDEX v2_block_transactions_transaction_id_index ON v2_block_transactions(transaction_id);
 CREATE INDEX v2_block_transactions_transaction_id_block_id ON v2_block_transactions(transaction_id, block_id);
-
-CREATE TABLE v2_transaction_arbitrary_data (
-	transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
-	data BLOB NOT NULL,
-	UNIQUE(transaction_id)
-);
-
-CREATE INDEX v2_transaction_arbitrary_data_transaction_id_index ON v2_transaction_arbitrary_data(transaction_id);
 
 CREATE TABLE state_tree (
 	row INTEGER NOT NULL,

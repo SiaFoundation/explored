@@ -1,43 +1,36 @@
 package sqlite_test
 
 import (
-	"path/filepath"
 	"testing"
 
+	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
-	"go.sia.tech/coreutils"
-	"go.sia.tech/coreutils/chain"
-	ctestutil "go.sia.tech/coreutils/testutil"
+	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/testutil"
-	"go.sia.tech/explored/persist/sqlite"
-	"go.uber.org/zap/zaptest"
 )
 
+func getSCE(t *testing.T, db explorer.Store, scid types.SiacoinOutputID) types.SiacoinElement {
+	sces, err := db.SiacoinElements([]types.SiacoinOutputID{scid})
+	if err != nil {
+		t.Fatal(err)
+	} else if len(sces) == 0 {
+		t.Fatal("can't find sce")
+	}
+	sce := sces[0]
+
+	sce.SiacoinElement.MerkleProof, err = db.MerkleProof(sce.StateElement.LeafIndex)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return sce.SiacoinElement
+}
+
 func TestV2ArbitraryData(t *testing.T) {
-	log := zaptest.NewLogger(t)
-	dir := t.TempDir()
-	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer bdb.Close()
-
-	network, genesisBlock := ctestutil.V2Network()
-	network.HardforkV2.AllowHeight = 1
-	network.HardforkV2.RequireHeight = 2
-
-	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cm := chain.NewManager(store, genesisState)
+	_, _, cm, db := newStore(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		network.HardforkV2.AllowHeight = 1
+		network.HardforkV2.RequireHeight = 2
+	})
 
 	txn1 := types.V2Transaction{
 		ArbitraryData: []byte("hello"),
@@ -105,4 +98,80 @@ func TestV2ArbitraryData(t *testing.T) {
 	testutil.CheckV2ChainIndices(t, db, txn1.ID(), []types.ChainIndex{cm.Tip(), prev})
 	testutil.CheckV2ChainIndices(t, db, txn2.ID(), []types.ChainIndex{cm.Tip(), prev})
 	testutil.CheckV2ChainIndices(t, db, txn3.ID(), []types.ChainIndex{cm.Tip()})
+}
+
+func TestV2MinerFee(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(types.StandardUnlockConditions(pk1.PublicKey()))}
+
+	_, genesisBlock, cm, db := newStore(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		network.HardforkV2.AllowHeight = 1
+		network.HardforkV2.RequireHeight = 2
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
+
+	txn1 := types.V2Transaction{
+		ArbitraryData: []byte("hello"),
+		MinerFee:      giftSC,
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, db, genesisBlock.Transactions[0].SiacoinOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+	}
+	testutil.SignV2Transaction(cm.TipState(), pk1, &txn1)
+
+	if err := cm.AddBlocks([]types.Block{testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn1}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	{
+		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
+	}
+}
+
+func TestV2FoundationAddress(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(types.StandardUnlockConditions(pk1.PublicKey()))}
+
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
+	_, genesisBlock, cm, db := newStore(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		network.HardforkV2.AllowHeight = 1
+		network.HardforkV2.RequireHeight = 2
+		network.HardforkFoundation.PrimaryAddress = addr1
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
+
+	txn1 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, db, genesisBlock.Transactions[0].SiacoinOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		MinerFee:             giftSC,
+		NewFoundationAddress: &addr2,
+	}
+	testutil.SignV2Transaction(cm.TipState(), pk1, &txn1)
+
+	if err := cm.AddBlocks([]types.Block{testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn1}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	{
+		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
+	}
 }

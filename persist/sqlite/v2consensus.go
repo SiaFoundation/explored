@@ -8,20 +8,6 @@ import (
 	"go.sia.tech/explored/explorer"
 )
 
-func addV2ArbitraryData(tx *txn, id int64, txn types.V2Transaction) error {
-	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_arbitrary_data(transaction_id, data) VALUES (?, ?)`)
-
-	if err != nil {
-		return fmt.Errorf("addV2ArbitraryData: failed to prepare statement: %w", err)
-	}
-	defer stmt.Close()
-
-	if _, err := stmt.Exec(id, txn.ArbitraryData); err != nil {
-		return fmt.Errorf("addV2ArbitraryData: failed to execute statement: %w", err)
-	}
-	return nil
-}
-
 func addV2Transactions(tx *txn, bid types.BlockID, txns []types.V2Transaction) (map[types.TransactionID]txnDBId, error) {
 	checkTransactionStmt, err := tx.Prepare(`SELECT id FROM v2_transactions WHERE transaction_id = ?`)
 	if err != nil {
@@ -29,7 +15,7 @@ func addV2Transactions(tx *txn, bid types.BlockID, txns []types.V2Transaction) (
 	}
 	defer checkTransactionStmt.Close()
 
-	insertTransactionStmt, err := tx.Prepare(`INSERT INTO v2_transactions (transaction_id) VALUES (?)`)
+	insertTransactionStmt, err := tx.Prepare(`INSERT INTO v2_transactions (transaction_id, new_foundation_address, miner_fee, arbitrary_data) VALUES (?, ?, ?, ?)`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare insert v2_transaction statement: %v", err)
 	}
@@ -52,7 +38,12 @@ func addV2Transactions(tx *txn, bid types.BlockID, txns []types.V2Transaction) (
 		}
 
 		if !exist {
-			result, err := insertTransactionStmt.Exec(encode(txn.ID()))
+			var newFoundationAddress any
+			if txn.NewFoundationAddress != nil {
+				newFoundationAddress = encode(txn.NewFoundationAddress)
+			}
+
+			result, err := insertTransactionStmt.Exec(encode(txn.ID()), newFoundationAddress, encode(txn.MinerFee), txn.ArbitraryData)
 			if err != nil {
 				return nil, fmt.Errorf("failed to insert into v2_transactions: %w", err)
 			}
@@ -80,10 +71,6 @@ func addV2TransactionFields(tx *txn, txns []types.V2Transaction, scDBIds map[typ
 		// transaction already exists, don't reinsert its fields
 		if dbID.exist {
 			continue
-		}
-
-		if err := addV2ArbitraryData(tx, dbID.id, txn); err != nil {
-			return fmt.Errorf("failed to add arbitrary data: %w", err)
 		}
 	}
 
