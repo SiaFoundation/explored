@@ -27,6 +27,23 @@ func getSCE(t *testing.T, db explorer.Store, scid types.SiacoinOutputID) types.S
 	return sce.SiacoinElement
 }
 
+func getSFE(t *testing.T, db explorer.Store, sfid types.SiafundOutputID) types.SiafundElement {
+	sfes, err := db.SiafundElements([]types.SiafundOutputID{sfid})
+	if err != nil {
+		t.Fatal(err)
+	} else if len(sfes) == 0 {
+		t.Fatal("can't find sfe")
+	}
+	sfe := sfes[0]
+
+	sfe.SiafundElement.MerkleProof, err = db.MerkleProof(sfe.StateElement.LeafIndex)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return sfe.SiafundElement
+}
+
 func TestV2ArbitraryData(t *testing.T) {
 	_, _, cm, db := newStore(t, true, func(network *consensus.Network, genesisBlock types.Block) {
 		network.HardforkV2.AllowHeight = 1
@@ -219,4 +236,106 @@ func TestV2Attestations(t *testing.T) {
 		}
 		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
 	}
+}
+
+func TestV2SiacoinOutput(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(types.StandardUnlockConditions(pk1.PublicKey()))}
+
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
+	_, genesisBlock, cm, db := newStore(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		network.HardforkV2.AllowHeight = 1
+		network.HardforkV2.RequireHeight = 2
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
+
+	txn1 := types.V2Transaction{
+		ArbitraryData: []byte("hello"),
+		SiacoinOutputs: []types.SiacoinOutput{
+			{
+				Value:   giftSC.Div64(2),
+				Address: addr1,
+			},
+			{
+				Value:   giftSC.Div64(2),
+				Address: addr2,
+			},
+		},
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, db, genesisBlock.Transactions[0].SiacoinOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+	}
+	testutil.SignV2Transaction(cm.TipState(), pk1, &txn1)
+
+	if err := cm.AddBlocks([]types.Block{testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn1}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	{
+		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
+	}
+
+	testutil.CheckBalance(t, db, addr1, giftSC.Div64(2), types.ZeroCurrency, 0)
+	testutil.CheckBalance(t, db, addr2, giftSC.Div64(2), types.ZeroCurrency, 0)
+}
+
+func TestV2SiafundOutput(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(types.StandardUnlockConditions(pk1.PublicKey()))}
+
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
+	_, genesisBlock, cm, db := newStore(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		network.HardforkV2.AllowHeight = 1
+		network.HardforkV2.RequireHeight = 2
+		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	})
+	giftSF := genesisBlock.Transactions[0].SiafundOutputs[0].Value
+
+	txn1 := types.V2Transaction{
+		ArbitraryData: []byte("hello"),
+		SiafundOutputs: []types.SiafundOutput{
+			{
+				Value:   giftSF / 2,
+				Address: addr1,
+			},
+			{
+				Value:   giftSF / 2,
+				Address: addr2,
+			},
+		},
+		SiafundInputs: []types.V2SiafundInput{{
+			Parent:          getSFE(t, db, genesisBlock.Transactions[0].SiafundOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+	}
+	testutil.SignV2Transaction(cm.TipState(), pk1, &txn1)
+
+	if err := cm.AddBlocks([]types.Block{testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn1}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	{
+		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
+	}
+
+	testutil.CheckBalance(t, db, addr1, types.ZeroCurrency, types.ZeroCurrency, giftSF/2)
+	testutil.CheckBalance(t, db, addr2, types.ZeroCurrency, types.ZeroCurrency, giftSF/2)
 }
