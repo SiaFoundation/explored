@@ -70,7 +70,7 @@ func getV2Transactions(tx *txn, ids []types.TransactionID) ([]explorer.V2Transac
 
 // getV2TransactionBase fetches the base transaction data for a given list of
 // transaction IDs.
-func getV2TransactionBase(tx *txn, txnIDs []types.TransactionID) (dbIDs []int64, txns []explorer.V2Transaction, err error) {
+func getV2TransactionBase(tx *txn, txnIDs []types.TransactionID) ([]int64, []explorer.V2Transaction, error) {
 	stmt, err := tx.Prepare(`SELECT id, transaction_id, new_foundation_address, miner_fee, arbitrary_data FROM v2_transactions WHERE transaction_id = ?`)
 	if err != nil {
 		return nil, nil, fmt.Errorf("getV2TransactionBase: failed to prepare statement: %w", err)
@@ -78,8 +78,8 @@ func getV2TransactionBase(tx *txn, txnIDs []types.TransactionID) (dbIDs []int64,
 	defer stmt.Close()
 
 	var dbID int64
-	dbIDs = make([]int64, 0, len(txnIDs))
-	txns = make([]explorer.V2Transaction, 0, len(txnIDs))
+	dbIDs := make([]int64, 0, len(txnIDs))
+	txns := make([]explorer.V2Transaction, 0, len(txnIDs))
 	for _, id := range txnIDs {
 		var txn explorer.V2Transaction
 		var newFoundationAddress types.Address
