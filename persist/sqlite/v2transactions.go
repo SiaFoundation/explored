@@ -118,18 +118,24 @@ func fillV2TransactionAttestations(tx *txn, dbIDs []int64, txns []explorer.V2Tra
 	defer stmt.Close()
 
 	for i, dbID := range dbIDs {
-		rows, err := stmt.Query(dbID)
-		if err != nil {
-			return fmt.Errorf("failed to query attestations: %w", err)
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var attestation types.Attestation
-			if err := rows.Scan(decode(&attestation.PublicKey), &attestation.Key, &attestation.Value, decode(&attestation.Signature)); err != nil {
-				return fmt.Errorf("failed to scan attestation: %w", err)
+		err := func() error {
+			rows, err := stmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query attestations: %w", err)
 			}
-			txns[i].Attestations = append(txns[i].Attestations, attestation)
+			defer rows.Close()
+
+			for rows.Next() {
+				var attestation types.Attestation
+				if err := rows.Scan(decode(&attestation.PublicKey), &attestation.Key, &attestation.Value, decode(&attestation.Signature)); err != nil {
+					return fmt.Errorf("failed to scan attestation: %w", err)
+				}
+				txns[i].Attestations = append(txns[i].Attestations, attestation)
+			}
+			return nil
+		}()
+		if err != nil {
+			return err
 		}
 	}
 	return nil
