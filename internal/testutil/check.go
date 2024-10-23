@@ -117,6 +117,19 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 	Equal(t, "new foundation address", expectTxn.NewFoundationAddress, gotTxn.NewFoundationAddress)
 	Equal(t, "miner fee", expectTxn.MinerFee, gotTxn.MinerFee)
 
+	Equal(t, "siacoin inputs", len(expectTxn.SiacoinInputs), len(gotTxn.SiacoinInputs))
+	for i := range expectTxn.SiacoinInputs {
+		expected := expectTxn.SiacoinInputs[i]
+		got := gotTxn.SiacoinInputs[i]
+
+		// Equal(t, "address", expected.Parent.SiacoinOutput.Address, got.Parent.SiacoinOutput.Address)
+		Equal(t, "value", expected.Parent.SiacoinOutput.Value, got.Parent.SiacoinOutput.Value)
+		Equal(t, "maturity height", expected.Parent.MaturityHeight, got.Parent.MaturityHeight)
+		Equal(t, "id", expected.Parent.ID, got.Parent.ID)
+		Equal(t, "leaf index", expected.Parent.LeafIndex, got.Parent.LeafIndex)
+		Equal(t, "satisfied policy", expected.SatisfiedPolicy, got.SatisfiedPolicy)
+	}
+
 	Equal(t, "siacoin outputs", len(expectTxn.SiacoinOutputs), len(gotTxn.SiacoinOutputs))
 	for i := range expectTxn.SiacoinOutputs {
 		expected := expectTxn.SiacoinOutputs[i]
@@ -124,6 +137,19 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 
 		Equal(t, "address", expected.Address, got.Address)
 		Equal(t, "value", expected.Value, got.Value)
+	}
+
+	Equal(t, "siafund inputs", len(expectTxn.SiafundInputs), len(gotTxn.SiafundInputs))
+	for i := range expectTxn.SiafundInputs {
+		expected := expectTxn.SiafundInputs[i]
+		got := gotTxn.SiafundInputs[i]
+
+		Equal(t, "address", expected.Parent.SiafundOutput.Address, got.Parent.SiafundOutput.Address)
+		Equal(t, "value", expected.Parent.SiafundOutput.Value, got.Parent.SiafundOutput.Value)
+		Equal(t, "claim address", expected.ClaimAddress, got.ClaimAddress)
+		Equal(t, "id", expected.Parent.ID, got.Parent.ID)
+		Equal(t, "leaf index", expected.Parent.LeafIndex, got.Parent.LeafIndex)
+		Equal(t, "satisfied policy", expected.SatisfiedPolicy, got.SatisfiedPolicy)
 	}
 
 	Equal(t, "siafund outputs", len(expectTxn.SiafundOutputs), len(gotTxn.SiafundOutputs))
