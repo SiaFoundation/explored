@@ -166,7 +166,8 @@ type FileContractRevision struct {
 
 // A Transaction is a transaction that uses the wrapped types above.
 type Transaction struct {
-	ID                    types.TransactionID          `json:"id"`
+	ID types.TransactionID `json:"id"`
+
 	SiacoinInputs         []SiacoinInput               `json:"siacoinInputs,omitempty"`
 	SiacoinOutputs        []SiacoinOutput              `json:"siacoinOutputs,omitempty"`
 	SiafundInputs         []SiafundInput               `json:"siafundInputs,omitempty"`
@@ -183,11 +184,14 @@ type Transaction struct {
 
 // A V2Transaction is a v2 transaction that uses the wrapped types above.
 type V2Transaction struct {
-	ID             types.TransactionID `json:"id"`
-	SiacoinOutputs []SiacoinOutput     `json:"siacoinOutputs,omitempty"`
-	SiafundOutputs []SiafundOutput     `json:"siafundOutputs,omitempty"`
-	Attestations   []types.Attestation `json:"attestations,omitempty"`
-	ArbitraryData  []byte              `json:"arbitraryData,omitempty"`
+	ID types.TransactionID `json:"id"`
+
+	SiacoinInputs  []types.V2SiacoinInput `json:"siacoinInputs,omitempty"`
+	SiacoinOutputs []SiacoinOutput        `json:"siacoinOutputs,omitempty"`
+	SiafundInputs  []types.V2SiafundInput `json:"siacoinInputs,omitempty"`
+	SiafundOutputs []SiafundOutput        `json:"siafundOutputs,omitempty"`
+	Attestations   []types.Attestation    `json:"attestations,omitempty"`
+	ArbitraryData  []byte                 `json:"arbitraryData,omitempty"`
 
 	NewFoundationAddress *types.Address `json:"newFoundationAddress,omitempty"`
 	MinerFee             types.Currency `json:"minerFee"`
