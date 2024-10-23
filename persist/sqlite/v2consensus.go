@@ -62,6 +62,26 @@ func addV2Transactions(tx *txn, bid types.BlockID, txns []types.V2Transaction) (
 	return txnDBIds, nil
 }
 
+func addV2SiacoinInputs(tx *txn, txnID int64, txn types.V2Transaction, dbIDs map[types.SiacoinOutputID]int64) error {
+	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_siacoin_inputs(transaction_id, transaction_order, parent_id, satisfied_policy) VALUES (?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addV2SiacoinInputs: failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for i, sci := range txn.SiacoinInputs {
+		dbID, ok := dbIDs[types.SiacoinOutputID(sci.Parent.ID)]
+		if !ok {
+			return errors.New("addV2SiacoinInputs: dbID not in map")
+		}
+
+		if _, err := stmt.Exec(txnID, i, dbID, encode(sci.SatisfiedPolicy)); err != nil {
+			return fmt.Errorf("addV2SiacoinInputs: failed to execute statement: %w", err)
+		}
+	}
+	return nil
+}
+
 func addV2SiacoinOutputs(tx *txn, txnID int64, txn types.V2Transaction, dbIDs map[types.SiacoinOutputID]int64) error {
 	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_siacoin_outputs(transaction_id, transaction_order, output_id) VALUES (?, ?, ?)`)
 	if err != nil {
@@ -78,6 +98,26 @@ func addV2SiacoinOutputs(tx *txn, txnID int64, txn types.V2Transaction, dbIDs ma
 
 		if _, err := stmt.Exec(txnID, i, dbID); err != nil {
 			return fmt.Errorf("addV2SiacoinOutputs: failed to execute statement: %w", err)
+		}
+	}
+	return nil
+}
+
+func addV2SiafundInputs(tx *txn, txnID int64, txn types.V2Transaction, dbIDs map[types.SiafundOutputID]int64) error {
+	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_siafund_inputs(transaction_id, transaction_order, parent_id, claim_address, satisfied_policy) VALUES (?, ?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addV2SiafundInputs: failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for i, sfi := range txn.SiafundInputs {
+		dbID, ok := dbIDs[types.SiafundOutputID(sfi.Parent.ID)]
+		if !ok {
+			return errors.New("addV2SiafundInputs: dbID not in map")
+		}
+
+		if _, err := stmt.Exec(txnID, i, dbID, encode(sfi.ClaimAddress), encode(sfi.SatisfiedPolicy)); err != nil {
+			return fmt.Errorf("addV2SiafundInputs: failed to execute statement: %w", err)
 		}
 	}
 	return nil
@@ -133,8 +173,12 @@ func addV2TransactionFields(tx *txn, txns []types.V2Transaction, scDBIds map[typ
 
 		if err := addV2Attestations(tx, dbID.id, txn); err != nil {
 			return fmt.Errorf("addV2TransactionFields: failed to add attestations: %w", err)
+		} else if err := addV2SiacoinInputs(tx, dbID.id, txn, scDBIds); err != nil {
+			return fmt.Errorf("failed to add siacoin inputs: %w", err)
 		} else if err := addV2SiacoinOutputs(tx, dbID.id, txn, scDBIds); err != nil {
 			return fmt.Errorf("failed to add siacoin outputs: %w", err)
+		} else if err := addV2SiafundInputs(tx, dbID.id, txn, sfDBIds); err != nil {
+			return fmt.Errorf("failed to add siafund inputs: %w", err)
 		} else if err := addV2SiafundOutputs(tx, dbID.id, txn, sfDBIds); err != nil {
 			return fmt.Errorf("failed to add siafund outputs: %w", err)
 		}

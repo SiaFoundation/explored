@@ -66,8 +66,12 @@ func getV2Transactions(tx *txn, ids []types.TransactionID) ([]explorer.V2Transac
 		return nil, fmt.Errorf("getV2Transactions: failed to get base transactions: %w", err)
 	} else if err := fillV2TransactionAttestations(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getV2Transactions: failed to get attestations: %w", err)
+	} else if err := fillV2TransactionSiacoinInputs(tx, dbIDs, txns); err != nil {
+		return nil, fmt.Errorf("getV2Transactions: failed to get siacoin inputs: %w", err)
 	} else if err := fillV2TransactionSiacoinOutputs(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getV2Transactions: failed to get siacoin outputs: %w", err)
+	} else if err := fillV2TransactionSiafundInputs(tx, dbIDs, txns); err != nil {
+		return nil, fmt.Errorf("getV2Transactions: failed to get siafund inputs: %w", err)
 	} else if err := fillV2TransactionSiafundOutputs(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getV2Transactions: failed to get siafund outputs: %w", err)
 	}
@@ -145,6 +149,44 @@ func fillV2TransactionAttestations(tx *txn, dbIDs []int64, txns []explorer.V2Tra
 	return nil
 }
 
+// fillV2TransactionSiacoinInputs fills in the siacoin outputs for each
+// transaction.
+func fillV2TransactionSiacoinInputs(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
+	stmt, err := tx.Prepare(`SELECT ts.satisfied_policy, sc.output_id, sc.leaf_index, sc.maturity_height, sc.address, sc.value
+FROM siacoin_elements sc
+INNER JOIN v2_transaction_siacoin_inputs ts ON (ts.parent_id = sc.id)
+WHERE ts.transaction_id = ?
+ORDER BY ts.transaction_order ASC`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare siacoin inputs statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := stmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query siacoin inputs: %w", err)
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var sci types.V2SiacoinInput
+				if err := rows.Scan(decode(&sci.SatisfiedPolicy), decode(&sci.Parent.ID), decode(&sci.Parent.LeafIndex), &sci.Parent.MaturityHeight, decode(&sci.Parent.SiacoinOutput.Address), decode(&sci.Parent.SiacoinOutput.Value)); err != nil {
+					return fmt.Errorf("failed to scan siacoin inputs: %w", err)
+				}
+
+				txns[i].SiacoinInputs = append(txns[i].SiacoinInputs, sci)
+			}
+			return nil
+		}()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // fillV2TransactionSiacoinOutputs fills in the siacoin outputs for each
 // transaction.
 func fillV2TransactionSiacoinOutputs(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
@@ -177,6 +219,44 @@ ORDER BY ts.transaction_order ASC`)
 					sco.SpentIndex = &spentIndex
 				}
 				txns[i].SiacoinOutputs = append(txns[i].SiacoinOutputs, sco)
+			}
+			return nil
+		}()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// fillV2TransactionSiafundInputs fills in the siacoin outputs for each
+// transaction.
+func fillV2TransactionSiafundInputs(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
+	stmt, err := tx.Prepare(`SELECT ts.satisfied_policy, ts.claim_address, sf.output_id, sf.leaf_index, sf.address, sf.value
+FROM siafund_elements sf
+INNER JOIN v2_transaction_siafund_inputs ts ON (ts.parent_id = sf.id)
+WHERE ts.transaction_id = ?
+ORDER BY ts.transaction_order ASC`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare siacoin inputs statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := stmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query siacoin inputs: %w", err)
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var sfi types.V2SiafundInput
+				if err := rows.Scan(decode(&sfi.SatisfiedPolicy), decode(&sfi.ClaimAddress), decode(&sfi.Parent.ID), decode(&sfi.Parent.LeafIndex), decode(&sfi.Parent.SiafundOutput.Address), decode(&sfi.Parent.SiafundOutput.Value)); err != nil {
+					return fmt.Errorf("failed to scan siacoin inputs: %w", err)
+				}
+
+				txns[i].SiafundInputs = append(txns[i].SiafundInputs, sfi)
 			}
 			return nil
 		}()
