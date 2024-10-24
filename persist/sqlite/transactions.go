@@ -140,9 +140,9 @@ ORDER BY ts.transaction_order ASC`
 
 // transactionSiacoinInputs returns the siacoin inputs for each transaction.
 func transactionSiacoinInputs(tx *txn, txnIDs []int64) (map[int64][]explorer.SiacoinInput, error) {
-	query := `SELECT ts.transaction_id, ts.parent_id, ts.unlock_conditions, sc.value
+	query := `SELECT sc.id, ts.transaction_id, sc.output_id, ts.unlock_conditions, sc.value
 FROM siacoin_elements sc
-INNER JOIN transaction_siacoin_inputs ts ON (ts.parent_id = sc.output_id)
+INNER JOIN transaction_siacoin_inputs ts ON (ts.parent_id = sc.id)
 WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
 ORDER BY ts.transaction_order ASC`
 	rows, err := tx.Query(query, queryArgs(txnIDs)...)
@@ -153,9 +153,9 @@ ORDER BY ts.transaction_order ASC`
 
 	result := make(map[int64][]explorer.SiacoinInput)
 	for rows.Next() {
-		var txnID int64
+		var dbID, txnID int64
 		var sci explorer.SiacoinInput
-		if err := rows.Scan(&txnID, decode(&sci.ParentID), decode(&sci.UnlockConditions), decode(&sci.Value)); err != nil {
+		if err := rows.Scan(&dbID, &txnID, decode(&sci.ParentID), decode(&sci.UnlockConditions), decode(&sci.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan siacoin input: %w", err)
 		}
 		sci.Address = sci.UnlockConditions.UnlockHash()
@@ -166,9 +166,9 @@ ORDER BY ts.transaction_order ASC`
 
 // transactionSiafundInputs returns the siafund inputs for each transaction.
 func transactionSiafundInputs(tx *txn, txnIDs []int64) (map[int64][]explorer.SiafundInput, error) {
-	query := `SELECT ts.transaction_id, ts.parent_id, ts.unlock_conditions, ts.claim_address, sf.value
+	query := `SELECT ts.transaction_id, sf.output_id, ts.unlock_conditions, ts.claim_address, sf.value
 FROM siafund_elements sf
-INNER JOIN transaction_siafund_inputs ts ON (ts.parent_id = sf.output_id)
+INNER JOIN transaction_siafund_inputs ts ON (ts.parent_id = sf.id)
 WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
 ORDER BY ts.transaction_order ASC`
 	rows, err := tx.Query(query, queryArgs(txnIDs)...)
@@ -184,6 +184,7 @@ ORDER BY ts.transaction_order ASC`
 		if err := rows.Scan(&txnID, decode(&sfi.ParentID), decode(&sfi.UnlockConditions), decode(&sfi.ClaimAddress), decode(&sfi.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan siafund input: %w", err)
 		}
+
 		sfi.Address = sfi.UnlockConditions.UnlockHash()
 		result[txnID] = append(result[txnID], sfi)
 	}
@@ -212,6 +213,7 @@ ORDER BY ts.transaction_order ASC`
 		if err := rows.Scan(&txnID, decode(&sfo.StateElement.ID), decode(&sfo.StateElement.LeafIndex), decodeNull(&spentIndex), decode(&sfo.ClaimStart), decode(&sfo.SiafundOutput.Address), decode(&sfo.SiafundOutput.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan siafund output: %w", err)
 		}
+
 		if spentIndex != (types.ChainIndex{}) {
 			sfo.SpentIndex = &spentIndex
 		}

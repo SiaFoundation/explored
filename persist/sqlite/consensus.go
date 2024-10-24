@@ -94,7 +94,7 @@ func addSignatures(tx *txn, id int64, txn types.Transaction) error {
 	return nil
 }
 
-func addSiacoinInputs(tx *txn, id int64, txn types.Transaction) error {
+func addSiacoinInputs(tx *txn, id int64, txn types.Transaction, dbIDs map[types.SiacoinOutputID]int64) error {
 	stmt, err := tx.Prepare(`INSERT INTO transaction_siacoin_inputs(transaction_id, transaction_order, parent_id, unlock_conditions) VALUES (?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("addSiacoinInputs: failed to prepare statement: %w", err)
@@ -102,7 +102,12 @@ func addSiacoinInputs(tx *txn, id int64, txn types.Transaction) error {
 	defer stmt.Close()
 
 	for i, sci := range txn.SiacoinInputs {
-		if _, err := stmt.Exec(id, i, encode(sci.ParentID), encode(sci.UnlockConditions)); err != nil {
+		dbID, ok := dbIDs[sci.ParentID]
+		if !ok {
+			return errors.New("addSiacoinOutputs: dbID not in map")
+		}
+
+		if _, err := stmt.Exec(id, i, dbID, encode(sci.UnlockConditions)); err != nil {
 			return fmt.Errorf("addSiacoinInputs: failed to execute statement: %w", err)
 		}
 	}
@@ -129,18 +134,24 @@ func addSiacoinOutputs(tx *txn, id int64, txn types.Transaction, dbIDs map[types
 	return nil
 }
 
-func addSiafundInputs(tx *txn, id int64, txn types.Transaction) error {
+func addSiafundInputs(tx *txn, id int64, txn types.Transaction, dbIDs map[types.SiafundOutputID]int64) error {
 	stmt, err := tx.Prepare(`INSERT INTO transaction_siafund_inputs(transaction_id, transaction_order, parent_id, unlock_conditions, claim_address) VALUES (?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("addSiafundInputs: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
-	for i, sci := range txn.SiafundInputs {
-		if _, err := stmt.Exec(id, i, encode(sci.ParentID), encode(sci.UnlockConditions), encode(sci.ClaimAddress)); err != nil {
+	for i, sfi := range txn.SiafundInputs {
+		dbID, ok := dbIDs[sfi.ParentID]
+		if !ok {
+			return errors.New("addSiafundOutputs: dbID not in map")
+		}
+
+		if _, err := stmt.Exec(id, i, dbID, encode(sfi.UnlockConditions), encode(sfi.ClaimAddress)); err != nil {
 			return fmt.Errorf("addSiafundInputs: failed to execute statement: %w", err)
 		}
 	}
+
 	return nil
 }
 
@@ -293,11 +304,11 @@ func addTransactionFields(tx *txn, txns []types.Transaction, scDBIds map[types.S
 			return fmt.Errorf("failed to add arbitrary data: %w", err)
 		} else if err := addSignatures(tx, dbID.id, txn); err != nil {
 			return fmt.Errorf("failed to add signatures: %w", err)
-		} else if err := addSiacoinInputs(tx, dbID.id, txn); err != nil {
+		} else if err := addSiacoinInputs(tx, dbID.id, txn, scDBIds); err != nil {
 			return fmt.Errorf("failed to add siacoin inputs: %w", err)
 		} else if err := addSiacoinOutputs(tx, dbID.id, txn, scDBIds); err != nil {
 			return fmt.Errorf("failed to add siacoin outputs: %w", err)
-		} else if err := addSiafundInputs(tx, dbID.id, txn); err != nil {
+		} else if err := addSiafundInputs(tx, dbID.id, txn, sfDBIds); err != nil {
 			return fmt.Errorf("failed to add siafund inputs: %w", err)
 		} else if err := addSiafundOutputs(tx, dbID.id, txn, sfDBIds); err != nil {
 			return fmt.Errorf("failed to add siafund outputs: %w", err)
@@ -500,21 +511,17 @@ func addSiacoinElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 		stmt, err := tx.Prepare(`INSERT INTO siacoin_elements(output_id, block_id, leaf_index, source, maturity_height, address, value)
 				VALUES (?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (output_id)
-				DO UPDATE SET leaf_index = ?, spent_index = NULL`)
+				DO UPDATE SET leaf_index = ?, spent_index = NULL
+                RETURNING id;`)
 		if err != nil {
 			return nil, fmt.Errorf("addSiacoinElements: failed to prepare siacoin_elements statement: %w", err)
 		}
 		defer stmt.Close()
 
 		for _, sce := range newElements {
-			result, err := stmt.Exec(encode(sce.StateElement.ID), encode(index.ID), encode(sce.StateElement.LeafIndex), int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), encode(sce.StateElement.LeafIndex))
-			if err != nil {
+			var dbID int64
+			if err := stmt.QueryRow(encode(sce.StateElement.ID), encode(index.ID), encode(sce.StateElement.LeafIndex), int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), encode(sce.StateElement.LeafIndex)).Scan(&dbID); err != nil {
 				return nil, fmt.Errorf("addSiacoinElements: failed to execute siacoin_elements statement: %w", err)
-			}
-
-			dbID, err := result.LastInsertId()
-			if err != nil {
-				return nil, fmt.Errorf("addSiacoinElements: failed to get last insert ID: %w", err)
 			}
 
 			scDBIds[types.SiacoinOutputID(sce.StateElement.ID)] = dbID
@@ -524,21 +531,17 @@ func addSiacoinElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 		stmt, err := tx.Prepare(`INSERT INTO siacoin_elements(output_id, block_id, leaf_index, spent_index, source, maturity_height, address, value)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (output_id)
-                DO UPDATE SET spent_index = ?, leaf_index = ?`)
+                DO UPDATE SET spent_index = ?, leaf_index = ?
+                RETURNING id;`)
 		if err != nil {
 			return nil, fmt.Errorf("addSiacoinElements: failed to prepare siacoin_elements statement: %w", err)
 		}
 		defer stmt.Close()
 
 		for _, sce := range spentElements {
-			result, err := stmt.Exec(encode(sce.StateElement.ID), encode(index.ID), encode(sce.StateElement.LeafIndex), encode(index), int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), encode(index), encode(sce.StateElement.LeafIndex))
-			if err != nil {
+			var dbID int64
+			if err := stmt.QueryRow(encode(sce.StateElement.ID), encode(index.ID), encode(sce.StateElement.LeafIndex), encode(index), int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), encode(index), encode(sce.StateElement.LeafIndex)).Scan(&dbID); err != nil {
 				return nil, fmt.Errorf("addSiacoinElements: failed to execute siacoin_elements statement: %w", err)
-			}
-
-			dbID, err := result.LastInsertId()
-			if err != nil {
-				return nil, fmt.Errorf("addSiacoinElements: failed to get last insert ID: %w", err)
 			}
 
 			scDBIds[types.SiacoinOutputID(sce.StateElement.ID)] = dbID
@@ -554,21 +557,17 @@ func addSiafundElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 		stmt, err := tx.Prepare(`INSERT INTO siafund_elements(output_id, block_id, leaf_index, claim_start, address, value)
 			VALUES (?, ?, ?, ?, ?, ?)
 			ON CONFLICT
-			DO UPDATE SET leaf_index = ?, spent_index = NULL`)
+			DO UPDATE SET leaf_index = ?, spent_index = NULL
+			RETURNING id;`)
 		if err != nil {
 			return nil, fmt.Errorf("addSiafundElements: failed to prepare siafund_elements statement: %w", err)
 		}
 		defer stmt.Close()
 
 		for _, sfe := range newElements {
-			result, err := stmt.Exec(encode(sfe.StateElement.ID), encode(index.ID), encode(sfe.StateElement.LeafIndex), encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), encode(sfe.StateElement.LeafIndex))
-			if err != nil {
+			var dbID int64
+			if err := stmt.QueryRow(encode(sfe.StateElement.ID), encode(index.ID), encode(sfe.StateElement.LeafIndex), encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), encode(sfe.StateElement.LeafIndex)).Scan(&dbID); err != nil {
 				return nil, fmt.Errorf("addSiafundElements: failed to execute siafund_elements statement: %w", err)
-			}
-
-			dbID, err := result.LastInsertId()
-			if err != nil {
-				return nil, fmt.Errorf("addSiafundElements: failed to get last insert ID: %w", err)
 			}
 
 			sfDBIds[types.SiafundOutputID(sfe.StateElement.ID)] = dbID
@@ -578,21 +577,17 @@ func addSiafundElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 		stmt, err := tx.Prepare(`INSERT INTO siafund_elements(output_id, block_id, leaf_index, spent_index, claim_start, address, value)
 			VALUES (?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT
-			DO UPDATE SET leaf_index = ?, spent_index = ?`)
+			DO UPDATE SET leaf_index = ?, spent_index = ?
+			RETURNING id;`)
 		if err != nil {
 			return nil, fmt.Errorf("addSiafundElements: failed to prepare siafund_elements statement: %w", err)
 		}
 		defer stmt.Close()
 
 		for _, sfe := range spentElements {
-			result, err := stmt.Exec(encode(sfe.StateElement.ID), encode(index.ID), encode(sfe.StateElement.LeafIndex), encode(index), encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), encode(sfe.StateElement.LeafIndex), encode(index))
-			if err != nil {
+			var dbID int64
+			if err := stmt.QueryRow(encode(sfe.StateElement.ID), encode(index.ID), encode(sfe.StateElement.LeafIndex), encode(index), encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), encode(sfe.StateElement.LeafIndex), encode(index)).Scan(&dbID); err != nil {
 				return nil, fmt.Errorf("addSiafundElements: failed to execute siafund_elements statement: %w", err)
-			}
-
-			dbID, err := result.LastInsertId()
-			if err != nil {
-				return nil, fmt.Errorf("addSiafundElements: failed to get last insert ID: %w", err)
 			}
 
 			sfDBIds[types.SiafundOutputID(sfe.StateElement.ID)] = dbID
