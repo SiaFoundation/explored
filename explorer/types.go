@@ -196,7 +196,7 @@ type V2Transaction struct {
 
 	SiacoinInputs  []types.V2SiacoinInput `json:"siacoinInputs,omitempty"`
 	SiacoinOutputs []SiacoinOutput        `json:"siacoinOutputs,omitempty"`
-	SiafundInputs  []types.V2SiafundInput `json:"siacoinInputs,omitempty"`
+	SiafundInputs  []types.V2SiafundInput `json:"siafundInputs,omitempty"`
 	SiafundOutputs []SiafundOutput        `json:"siafundOutputs,omitempty"`
 	Attestations   []types.Attestation    `json:"attestations,omitempty"`
 	ArbitraryData  []byte                 `json:"arbitraryData,omitempty"`
