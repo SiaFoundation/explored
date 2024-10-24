@@ -204,7 +204,7 @@ CREATE INDEX transaction_storage_proofs_parent_id_index ON transaction_storage_p
 CREATE TABLE transaction_siacoin_inputs (
 	transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
 	transaction_order INTEGER NOT NULL,
-	parent_id BLOB NOT NULL, -- TODO: change this to a reference to the siacoin_element and join for queries
+	parent_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL,
 	unlock_conditions BLOB NOT NULL,
 	UNIQUE(transaction_id, transaction_order)
 );
@@ -221,7 +221,7 @@ CREATE INDEX transaction_siacoin_outputs_transaction_id_index ON transaction_sia
 CREATE TABLE transaction_siafund_inputs (
 	transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
 	transaction_order INTEGER NOT NULL,
-	parent_id BLOB NOT NULL, -- TODO: change this to a reference to the siacoin_element and join for queries
+	parent_id INTEGER REFERENCES siafund_elements(id) ON DELETE CASCADE NOT NULL,
 	unlock_conditions BLOB NOT NULL,
 	claim_address BLOB NOT NULL,
 	UNIQUE(transaction_id, transaction_order)
