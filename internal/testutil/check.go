@@ -122,7 +122,7 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 		expected := expectTxn.SiacoinInputs[i]
 		got := gotTxn.SiacoinInputs[i]
 
-		// Equal(t, "address", expected.Parent.SiacoinOutput.Address, got.Parent.SiacoinOutput.Address)
+		Equal(t, "address", expected.Parent.SiacoinOutput.Address, got.Parent.SiacoinOutput.Address)
 		Equal(t, "value", expected.Parent.SiacoinOutput.Value, got.Parent.SiacoinOutput.Value)
 		Equal(t, "maturity height", expected.Parent.MaturityHeight, got.Parent.MaturityHeight)
 		Equal(t, "id", expected.Parent.ID, got.Parent.ID)
