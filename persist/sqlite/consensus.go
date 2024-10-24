@@ -94,7 +94,7 @@ func addSignatures(tx *txn, id int64, txn types.Transaction) error {
 	return nil
 }
 
-func addSiacoinInputs(tx *txn, id int64, txn types.Transaction) error {
+func addSiacoinInputs(tx *txn, id int64, txn types.Transaction, dbIDs map[types.SiacoinOutputID]int64) error {
 	stmt, err := tx.Prepare(`INSERT INTO transaction_siacoin_inputs(transaction_id, transaction_order, parent_id, unlock_conditions) VALUES (?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("addSiacoinInputs: failed to prepare statement: %w", err)
@@ -102,7 +102,12 @@ func addSiacoinInputs(tx *txn, id int64, txn types.Transaction) error {
 	defer stmt.Close()
 
 	for i, sci := range txn.SiacoinInputs {
-		if _, err := stmt.Exec(id, i, encode(sci.ParentID), encode(sci.UnlockConditions)); err != nil {
+		dbID, ok := dbIDs[sci.ParentID]
+		if !ok {
+			return errors.New("addSiacoinOutputs: dbID not in map")
+		}
+
+		if _, err := stmt.Exec(id, i, dbID, encode(sci.UnlockConditions)); err != nil {
 			return fmt.Errorf("addSiacoinInputs: failed to execute statement: %w", err)
 		}
 	}
@@ -129,18 +134,24 @@ func addSiacoinOutputs(tx *txn, id int64, txn types.Transaction, dbIDs map[types
 	return nil
 }
 
-func addSiafundInputs(tx *txn, id int64, txn types.Transaction) error {
+func addSiafundInputs(tx *txn, id int64, txn types.Transaction, dbIDs map[types.SiafundOutputID]int64) error {
 	stmt, err := tx.Prepare(`INSERT INTO transaction_siafund_inputs(transaction_id, transaction_order, parent_id, unlock_conditions, claim_address) VALUES (?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("addSiafundInputs: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
-	for i, sci := range txn.SiafundInputs {
-		if _, err := stmt.Exec(id, i, encode(sci.ParentID), encode(sci.UnlockConditions), encode(sci.ClaimAddress)); err != nil {
+	for i, sfi := range txn.SiafundInputs {
+		dbID, ok := dbIDs[sfi.ParentID]
+		if !ok {
+			return errors.New("addSiafundOutputs: dbID not in map")
+		}
+
+		if _, err := stmt.Exec(id, i, dbID, encode(sfi.UnlockConditions), encode(sfi.ClaimAddress)); err != nil {
 			return fmt.Errorf("addSiafundInputs: failed to execute statement: %w", err)
 		}
 	}
+
 	return nil
 }
 
@@ -293,11 +304,11 @@ func addTransactionFields(tx *txn, txns []types.Transaction, scDBIds map[types.S
 			return fmt.Errorf("failed to add arbitrary data: %w", err)
 		} else if err := addSignatures(tx, dbID.id, txn); err != nil {
 			return fmt.Errorf("failed to add signatures: %w", err)
-		} else if err := addSiacoinInputs(tx, dbID.id, txn); err != nil {
+		} else if err := addSiacoinInputs(tx, dbID.id, txn, scDBIds); err != nil {
 			return fmt.Errorf("failed to add siacoin inputs: %w", err)
 		} else if err := addSiacoinOutputs(tx, dbID.id, txn, scDBIds); err != nil {
 			return fmt.Errorf("failed to add siacoin outputs: %w", err)
-		} else if err := addSiafundInputs(tx, dbID.id, txn); err != nil {
+		} else if err := addSiafundInputs(tx, dbID.id, txn, sfDBIds); err != nil {
 			return fmt.Errorf("failed to add siafund inputs: %w", err)
 		} else if err := addSiafundOutputs(tx, dbID.id, txn, sfDBIds); err != nil {
 			return fmt.Errorf("failed to add siafund outputs: %w", err)
