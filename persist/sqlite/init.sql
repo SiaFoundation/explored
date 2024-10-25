@@ -380,6 +380,47 @@ CREATE TABLE foundation_subsidy_events (
     output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL
 );
 
+CREATE TABLE v2_file_contract_elements (
+    id INTEGER PRIMARY KEY,
+    block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
+    transaction_id BLOB REFERENCES v2_transactions(transaction_id) ON DELETE CASCADE NOT NULL,
+
+    contract_id BLOB NOT NULL,
+    leaf_index BLOB NOT NULL,
+
+    capacity BLOB NOT NULL,
+    filesize BLOB NOT NULL,
+    file_merkle_root BLOB NOT NULL,
+    proof_height BLOB NOT NULL,
+    expiration_height BLOB NOT NULL,
+    renter_output_address BLOB NOT NULL,
+    renter_output_value BLOB NOT NULL,
+    host_output_address BLOB NOT NULL,
+    host_output_value BLOB NOT NULL,
+    renter_public_key BLOB NOT NULL,
+    host_public_key BLOB NOT NULL,
+    revision_number BLOB NOT NULL,
+
+    renter_signature BLOB NOT NULL,
+    host_signature BLOB NOT NULL,
+
+    UNIQUE(contract_id, revision_number)
+);
+CREATE INDEX v2_file_contract_elements_contract_id_revision_number_index ON v2_file_contract_elements(contract_id, revision_number);
+
+CREATE TABLE v2_last_contract_revision (
+    contract_id BLOB PRIMARY KEY NOT NULL,
+
+    confirmation_index BLOB,
+    confirmation_transaction_id BLOB REFERENCES v2_transactions(transaction_id),
+
+    resolution INTEGER,
+    resolution_index BLOB,
+    resolution_transaction_id BLOB REFERENCES v2_transactions(transaction_id),
+
+    contract_element_id INTEGER UNIQUE REFERENCES v2_file_contract_elements(id) ON DELETE CASCADE NOT NULL
+);
+
 CREATE TABLE v2_host_announcements (
 	transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
 	transaction_order INTEGER NOT NULL,
