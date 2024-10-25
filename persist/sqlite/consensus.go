@@ -1071,9 +1071,14 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to add file contracts: %w", err)
 	}
 
+	v2FcDBIds, err := updateV2FileContractElements(ut.tx, false, state.Block, state.V2FileContractElements)
+	if err != nil {
+		return fmt.Errorf("ApplyIndex: failed to add v2 file contracts: %w", err)
+	}
+
 	if err := addTransactionFields(ut.tx, state.Block.Transactions, scDBIds, sfDBIds, fcDBIds, txnDBIds); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add transaction fields: %w", err)
-	} else if err := addV2TransactionFields(ut.tx, state.Block.V2Transactions(), scDBIds, sfDBIds, fcDBIds, v2TxnDBIds); err != nil {
+	} else if err := addV2TransactionFields(ut.tx, state.Block.V2Transactions(), scDBIds, sfDBIds, v2FcDBIds, v2TxnDBIds); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add v2 transaction fields: %w", err)
 	} else if err := updateBalances(ut.tx, state.Metrics.Index.Height, state.SpentSiacoinElements, state.NewSiacoinElements, state.SpentSiafundElements, state.NewSiafundElements); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update balances: %w", err)
@@ -1087,6 +1092,8 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to add events: %w", err)
 	} else if err := updateFileContractIndices(ut.tx, false, state.Metrics.Index, state.FileContractElements); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update file contract element indices: %w", err)
+	} else if err := updateV2FileContractIndices(ut.tx, false, state.Metrics.Index, state.V2FileContractElements); err != nil {
+		return fmt.Errorf("ApplyIndex: failed to update v2 file contract element indices: %w", err)
 	}
 
 	return nil

@@ -18,6 +18,17 @@ type (
 		ProofTransactionID        *types.TransactionID
 	}
 
+	// V2FileContractUpdate represents a v2 file contract from a consensus
+	// update.
+	V2FileContractUpdate struct {
+		FileContractElement types.V2FileContractElement
+		Revision            *types.V2FileContractElement
+		Resolution          types.V2FileContractResolutionType
+
+		ConfirmationTransactionID *types.TransactionID
+		ResolutionTransactionID   *types.TransactionID
+	}
+
 	// A DBFileContract represents a file contract element in the DB.
 	DBFileContract struct {
 		ID             types.FileContractID
@@ -48,7 +59,8 @@ type (
 		SpentSiafundElements     []types.SiafundElement
 		EphemeralSiafundElements []types.SiafundElement
 
-		FileContractElements []FileContractUpdate
+		FileContractElements   []FileContractUpdate
+		V2FileContractElements []V2FileContractUpdate
 	}
 
 	// An UpdateTx atomically updates the state of a store.
@@ -156,6 +168,37 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 		fces = append(fces, fce)
 	}
 
+	v2FceMap := make(map[types.FileContractID]V2FileContractUpdate)
+	cau.ForEachV2FileContractElement(func(fce types.V2FileContractElement, created bool, rev *types.V2FileContractElement, res types.V2FileContractResolutionType) {
+		v2FceMap[types.FileContractID(fce.ID)] = V2FileContractUpdate{
+			FileContractElement: fce,
+			Revision:            rev,
+			Resolution:          res,
+		}
+	})
+	for _, txn := range cau.Block.V2Transactions() {
+		txnID := txn.ID()
+		for i := range txn.FileContracts {
+			fcID := txn.V2FileContractID(txn.ID(), i)
+
+			v := v2FceMap[fcID]
+			v.ConfirmationTransactionID = &txnID
+			v2FceMap[fcID] = v
+		}
+		for _, fcr := range txn.FileContractResolutions {
+			fcID := types.FileContractID(fcr.Parent.ID)
+
+			v := v2FceMap[fcID]
+			v.ResolutionTransactionID = &txnID
+			v2FceMap[fcID] = v
+		}
+	}
+
+	var v2Fces []V2FileContractUpdate
+	for _, fce := range v2FceMap {
+		v2Fces = append(v2Fces, fce)
+	}
+
 	var treeUpdates []TreeNodeUpdate
 	cau.ForEachTreeNode(func(row, column uint64, hash types.Hash256) {
 		treeUpdates = append(treeUpdates, TreeNodeUpdate{
@@ -181,7 +224,8 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 		SpentSiafundElements:     spentSiafundElements,
 		EphemeralSiafundElements: ephemeralSiafundElements,
 
-		FileContractElements: fces,
+		FileContractElements:   fces,
+		V2FileContractElements: v2Fces,
 	}
 
 	var err error
@@ -275,6 +319,37 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 		fces = append(fces, fce)
 	}
 
+	v2FceMap := make(map[types.FileContractID]V2FileContractUpdate)
+	cru.ForEachV2FileContractElement(func(fce types.V2FileContractElement, created bool, rev *types.V2FileContractElement, res types.V2FileContractResolutionType) {
+		v2FceMap[types.FileContractID(fce.ID)] = V2FileContractUpdate{
+			FileContractElement: fce,
+			Revision:            rev,
+			Resolution:          res,
+		}
+	})
+	for _, txn := range cru.Block.V2Transactions() {
+		txnID := txn.ID()
+		for i := range txn.FileContracts {
+			fcID := txn.V2FileContractID(txn.ID(), i)
+
+			v := v2FceMap[fcID]
+			v.ConfirmationTransactionID = &txnID
+			v2FceMap[fcID] = v
+		}
+		for _, fcr := range txn.FileContractResolutions {
+			fcID := types.FileContractID(fcr.Parent.ID)
+
+			v := v2FceMap[fcID]
+			v.ResolutionTransactionID = &txnID
+			v2FceMap[fcID] = v
+		}
+	}
+
+	var v2Fces []V2FileContractUpdate
+	for _, fce := range v2FceMap {
+		v2Fces = append(v2Fces, fce)
+	}
+
 	var treeUpdates []TreeNodeUpdate
 	cru.ForEachTreeNode(func(row, column uint64, hash types.Hash256) {
 		treeUpdates = append(treeUpdates, TreeNodeUpdate{
@@ -297,7 +372,8 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 		SpentSiafundElements:     spentSiafundElements,
 		EphemeralSiafundElements: ephemeralSiafundElements,
 
-		FileContractElements: fces,
+		FileContractElements:   fces,
+		V2FileContractElements: v2Fces,
 	}
 	state.Metrics.Index = revertedIndex
 
