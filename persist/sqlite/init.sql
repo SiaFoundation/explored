@@ -317,7 +317,7 @@ CREATE TABLE v2_transaction_file_contracts (
 CREATE INDEX  v2_transaction_file_contracts_transaction_id_index ON v2_transaction_file_contracts(transaction_id);
 
 CREATE TABLE v2_transaction_attestations (
-	transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
+	transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
 	transaction_order INTEGER NOT NULL,
 	public_key BLOB NOT NULL,
 	key TEXT NOT NULL,
