@@ -2,6 +2,7 @@ package sqlite_test
 
 import (
 	"testing"
+	"time"
 
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
@@ -374,10 +375,6 @@ func TestV2FileContract(t *testing.T) {
 		HostPublicKey:    hostPublicKey,
 	}
 	fcOut := v2FC.RenterOutput.Value.Add(v2FC.HostOutput.Value).Add(cm.TipState().V2FileContractTax(v2FC))
-	_ = addr1Policy
-	_ = v2FC
-	_ = giftSC
-	_ = fcOut
 
 	txn1 := types.V2Transaction{
 		SiacoinInputs: []types.V2SiacoinInput{{
@@ -426,6 +423,153 @@ func TestV2FileContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
+
+	{
+		dbTxns, err := db.V2Transactions([]types.TransactionID{txn2.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2Transaction(t, txn2, dbTxns[0])
+	}
+
+	for i := cm.Tip().Height; i < v2FC.ExpirationHeight; i++ {
+		if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	{
+		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID(), txn2.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
+		testutil.CheckV2Transaction(t, txn2, dbTxns[1])
+	}
+}
+
+func TestV2FileContractRevert(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(types.StandardUnlockConditions(pk1.PublicKey()))}
+
+	renterPrivateKey := types.GeneratePrivateKey()
+	renterPublicKey := renterPrivateKey.PublicKey()
+
+	hostPrivateKey := types.GeneratePrivateKey()
+	hostPublicKey := hostPrivateKey.PublicKey()
+
+	_, genesisBlock, cm, db := newStore(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		network.HardforkV2.AllowHeight = 1
+		network.HardforkV2.RequireHeight = 2
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
+	prevState := cm.TipState()
+
+	v1FC := testutil.PrepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), 100, 105, types.VoidAddress)
+	v1FC.Filesize = 65
+	v2FC := types.V2FileContract{
+		Capacity:         v1FC.Filesize,
+		Filesize:         v1FC.Filesize,
+		FileMerkleRoot:   v1FC.FileMerkleRoot,
+		ProofHeight:      20,
+		ExpirationHeight: 30,
+		RenterOutput:     v1FC.ValidProofOutputs[0],
+		HostOutput:       v1FC.ValidProofOutputs[1],
+		MissedHostValue:  v1FC.MissedProofOutputs[1].Value,
+		TotalCollateral:  v1FC.ValidProofOutputs[0].Value,
+		RenterPublicKey:  renterPublicKey,
+		HostPublicKey:    hostPublicKey,
+	}
+	fcOut := v2FC.RenterOutput.Value.Add(v2FC.HostOutput.Value).Add(cm.TipState().V2FileContractTax(v2FC))
+
+	txn1 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, db, genesisBlock.Transactions[0].SiacoinOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Value:   giftSC.Sub(fcOut).Sub(fcOut),
+			Address: addr1,
+		}},
+
+		FileContracts: []types.V2FileContract{v2FC, v2FC},
+	}
+	testutil.SignV2TransactionWithContracts(cm.TipState(), pk1, renterPrivateKey, hostPrivateKey, &txn1)
+
+	b1 := testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn1}, types.VoidAddress)
+	if err := cm.AddBlocks([]types.Block{b1}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	{
+		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
+	}
+
+	// revert the block
+	{
+		state := prevState
+		extra := cm.Tip().Height - state.Index.Height + 1
+
+		var blocks []types.Block
+		for i := uint64(0); i < extra; i++ {
+			var bs consensus.V1BlockSupplement
+			block := testutil.MineBlock(state, nil, types.VoidAddress)
+			blocks = append(blocks, block)
+
+			if err := consensus.ValidateBlock(state, block, bs); err != nil {
+				t.Fatal(err)
+			}
+			state, _ = consensus.ApplyBlock(state, block, bs, time.Time{})
+		}
+
+		if err := cm.AddBlocks(blocks); err != nil {
+			t.Fatal(err)
+		}
+		syncDB(t, db, cm)
+	}
+
+	{
+		_, err := db.Block(b1.ID())
+		if err == nil {
+			t.Fatal("block should not exist")
+		}
+	}
+
+	// See if we can spend the genesis input that was spent in reverted block
+	// We should be able to
+	txn2 := txn1
+	txn2.FileContracts = txn2.FileContracts[:1]
+	txn2.SiacoinOutputs[0].Value = txn2.SiacoinOutputs[0].Value.Add(fcOut)
+	txn2.SiacoinInputs[0].Parent = getSCE(t, db, genesisBlock.Transactions[0].SiacoinOutputID(0))
+	testutil.SignV2TransactionWithContracts(cm.TipState(), pk1, renterPrivateKey, hostPrivateKey, &txn2)
+	b2 := testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn2}, types.VoidAddress)
+	if err := cm.AddBlocks([]types.Block{b2}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	{
+		_, err := db.Block(b1.ID())
+		if err == nil {
+			t.Fatal("block should not exist")
+		}
+	}
+
+	{
+		b, err := db.Block(b2.ID())
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2Transaction(t, txn2, b.V2.Transactions[0])
+	}
 
 	{
 		dbTxns, err := db.V2Transactions([]types.TransactionID{txn2.ID()})
