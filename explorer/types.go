@@ -182,6 +182,20 @@ type Transaction struct {
 	HostAnnouncements []chain.HostAnnouncement `json:"hostAnnouncements,omitempty"`
 }
 
+// A V2FileContract is a v2 file contract.
+type V2FileContract struct {
+	TransactionID types.TransactionID `json:"transactionID"`
+
+	ConfirmationIndex         *types.ChainIndex    `json:"confirmationIndex"`
+	ConfirmationTransactionID *types.TransactionID `json:"confirmationTransactionID"`
+
+	Resolution              *types.V2FileContractResolutionType
+	ResolutionIndex         *types.ChainIndex    `json:"resolutionIndex"`
+	ResolutionTransactionID *types.TransactionID `json:"resolutionTransactionID"`
+
+	types.V2FileContractElement
+}
+
 // A V2Transaction is a v2 transaction that uses the wrapped types above.
 type V2Transaction struct {
 	ID types.TransactionID `json:"id"`
@@ -190,8 +204,11 @@ type V2Transaction struct {
 	SiacoinOutputs []SiacoinOutput        `json:"siacoinOutputs,omitempty"`
 	SiafundInputs  []types.V2SiafundInput `json:"siafundInputs,omitempty"`
 	SiafundOutputs []SiafundOutput        `json:"siafundOutputs,omitempty"`
-	Attestations   []types.Attestation    `json:"attestations,omitempty"`
-	ArbitraryData  []byte                 `json:"arbitraryData,omitempty"`
+
+	FileContracts []V2FileContract `json:"fileContracts,omitempty"`
+
+	Attestations  []types.Attestation `json:"attestations,omitempty"`
+	ArbitraryData []byte              `json:"arbitraryData,omitempty"`
 
 	NewFoundationAddress *types.Address `json:"newFoundationAddress,omitempty"`
 	MinerFee             types.Currency `json:"minerFee"`

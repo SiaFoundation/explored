@@ -74,6 +74,8 @@ func getV2Transactions(tx *txn, ids []types.TransactionID) ([]explorer.V2Transac
 		return nil, fmt.Errorf("getV2Transactions: failed to get siafund inputs: %w", err)
 	} else if err := fillV2TransactionSiafundOutputs(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getV2Transactions: failed to get siafund outputs: %w", err)
+	} else if err := fillV2TransactionFileContracts(tx, dbIDs, txns); err != nil {
+		return nil, fmt.Errorf("getV2Transactions: failed to get file contracts: %w", err)
 	}
 
 	// add host announcements if we have any
@@ -149,7 +151,7 @@ func fillV2TransactionAttestations(tx *txn, dbIDs []int64, txns []explorer.V2Tra
 	return nil
 }
 
-// fillV2TransactionSiacoinInputs fills in the siacoin outputs for each
+// fillV2TransactionSiacoinInputs fills in the siacoin inputs for each
 // transaction.
 func fillV2TransactionSiacoinInputs(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
 	stmt, err := tx.Prepare(`SELECT ts.satisfied_policy, sc.output_id, sc.leaf_index, sc.maturity_height, sc.address, sc.value
@@ -229,7 +231,7 @@ ORDER BY ts.transaction_order ASC`)
 	return nil
 }
 
-// fillV2TransactionSiafundInputs fills in the siacoin outputs for each
+// fillV2TransactionSiafundInputs fills in the siacoin inputs for each
 // transaction.
 func fillV2TransactionSiafundInputs(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
 	stmt, err := tx.Prepare(`SELECT ts.satisfied_policy, ts.claim_address, sf.output_id, sf.leaf_index, sf.address, sf.value
@@ -267,7 +269,7 @@ ORDER BY ts.transaction_order ASC`)
 	return nil
 }
 
-// fillV2TransactionSiafundOutputs fills in the siacoin outputs for each
+// fillV2TransactionSiafundOutputs fills in the siafund outputs for each
 // transaction.
 func fillV2TransactionSiafundOutputs(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
 	stmt, err := tx.Prepare(`SELECT sf.output_id, sf.leaf_index, sf.spent_index, sf.claim_start, sf.address, sf.value
@@ -299,6 +301,65 @@ ORDER BY ts.transaction_order ASC`)
 				}
 
 				txns[i].SiafundOutputs = append(txns[i].SiafundOutputs, sfo)
+			}
+			return nil
+		}()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// fillV2TransactionFileContracts fills in the file contracts for each
+// transaction.
+func fillV2TransactionFileContracts(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
+	stmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_index, rev.confirmation_transaction_id, rev.resolution, rev.resolution_index, rev.resolution_transaction_id, fc.contract_id, fc.leaf_index
+FROM v2_file_contract_elements fc
+INNER JOIN v2_transaction_file_contracts ts ON (ts.contract_id = fc.id)
+INNER JOIN v2_last_contract_revision rev ON (rev.contract_id = fc.contract_id)
+WHERE ts.transaction_id = ?
+ORDER BY ts.transaction_order ASC`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare file contracts statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := stmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query file contracts: %w", err)
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var resolution types.V2FileContractResolutionType
+				var confirmationIndex, resolutionIndex types.ChainIndex
+				var confirmationTransactionID, resolutionTransactionID types.TransactionID
+
+				var fc explorer.V2FileContract
+				if err := rows.Scan(decode(&fc.TransactionID), decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&resolution), decodeNull(&resolutionIndex), decodeNull(&resolutionTransactionID), decode(&fc.V2FileContractElement.ID), decode(&fc.V2FileContractElement.LeafIndex)); err != nil {
+					return fmt.Errorf("failed to scan file contract: %w", err)
+				}
+
+				if resolution != nil {
+					fc.Resolution = &resolution
+				}
+				if confirmationIndex != (types.ChainIndex{}) {
+					fc.ConfirmationIndex = &confirmationIndex
+				}
+				if resolutionIndex != (types.ChainIndex{}) {
+					fc.ResolutionIndex = &resolutionIndex
+				}
+				if confirmationTransactionID != (types.TransactionID{}) {
+					fc.ConfirmationTransactionID = &confirmationTransactionID
+				}
+				if resolutionTransactionID != (types.TransactionID{}) {
+					fc.ResolutionTransactionID = &resolutionTransactionID
+				}
+
+				txns[i].FileContracts = append(txns[i].FileContracts, fc)
 			}
 			return nil
 		}()
