@@ -406,4 +406,32 @@ func TestV2FileContract(t *testing.T) {
 		}
 		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
 	}
+
+	txn2 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, db, txn1.SiacoinOutputID(txn1.ID(), 0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			// 1 for txn1, 2 for this transaction
+			Value:   giftSC.Sub(fcOut.Mul64(3)),
+			Address: addr1,
+		}},
+
+		FileContracts: []types.V2FileContract{v2FC, v2FC},
+	}
+	testutil.SignV2TransactionWithContracts(cm.TipState(), pk1, renterPrivateKey, hostPrivateKey, &txn2)
+
+	if err := cm.AddBlocks([]types.Block{testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn2}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	{
+		dbTxns, err := db.V2Transactions([]types.TransactionID{txn2.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2Transaction(t, txn2, dbTxns[0])
+	}
 }
