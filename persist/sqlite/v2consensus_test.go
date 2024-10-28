@@ -374,16 +374,22 @@ func TestV2FileContract(t *testing.T) {
 		HostPublicKey:    hostPublicKey,
 	}
 	fcOut := v2FC.RenterOutput.Value.Add(v2FC.HostOutput.Value).Add(cm.TipState().V2FileContractTax(v2FC))
+	_ = addr1Policy
+	_ = v2FC
+	_ = giftSC
+	_ = fcOut
 
 	txn1 := types.V2Transaction{
 		SiacoinInputs: []types.V2SiacoinInput{{
 			Parent:          getSCE(t, db, genesisBlock.Transactions[0].SiacoinOutputID(0)),
 			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
 		}},
+
 		SiacoinOutputs: []types.SiacoinOutput{{
 			Value:   giftSC.Sub(fcOut),
 			Address: addr1,
 		}},
+
 		FileContracts: []types.V2FileContract{v2FC},
 	}
 	testutil.SignV2TransactionWithContracts(cm.TipState(), pk1, renterPrivateKey, hostPrivateKey, &txn1)
