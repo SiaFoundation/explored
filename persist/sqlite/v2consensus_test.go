@@ -339,3 +339,65 @@ func TestV2SiafundOutput(t *testing.T) {
 	testutil.CheckBalance(t, db, addr1, types.ZeroCurrency, types.ZeroCurrency, giftSF/2)
 	testutil.CheckBalance(t, db, addr2, types.ZeroCurrency, types.ZeroCurrency, giftSF/2)
 }
+
+func TestV2FileContract(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(types.StandardUnlockConditions(pk1.PublicKey()))}
+
+	renterPrivateKey := types.GeneratePrivateKey()
+	renterPublicKey := renterPrivateKey.PublicKey()
+
+	hostPrivateKey := types.GeneratePrivateKey()
+	hostPublicKey := hostPrivateKey.PublicKey()
+
+	_, genesisBlock, cm, db := newStore(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		network.HardforkV2.AllowHeight = 1
+		network.HardforkV2.RequireHeight = 2
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
+
+	v1FC := testutil.PrepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), 100, 105, types.VoidAddress)
+	v1FC.Filesize = 65
+	v2FC := types.V2FileContract{
+		Capacity:         v1FC.Filesize,
+		Filesize:         v1FC.Filesize,
+		FileMerkleRoot:   v1FC.FileMerkleRoot,
+		ProofHeight:      20,
+		ExpirationHeight: 30,
+		RenterOutput:     v1FC.ValidProofOutputs[0],
+		HostOutput:       v1FC.ValidProofOutputs[1],
+		MissedHostValue:  v1FC.MissedProofOutputs[1].Value,
+		TotalCollateral:  v1FC.ValidProofOutputs[0].Value,
+		RenterPublicKey:  renterPublicKey,
+		HostPublicKey:    hostPublicKey,
+	}
+	fcOut := v2FC.RenterOutput.Value.Add(v2FC.HostOutput.Value).Add(cm.TipState().V2FileContractTax(v2FC))
+
+	txn1 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, db, genesisBlock.Transactions[0].SiacoinOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Value:   giftSC.Sub(fcOut),
+			Address: addr1,
+		}},
+		FileContracts: []types.V2FileContract{v2FC},
+	}
+	testutil.SignV2TransactionWithContracts(cm.TipState(), pk1, renterPrivateKey, hostPrivateKey, &txn1)
+
+	if err := cm.AddBlocks([]types.Block{testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn1}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	{
+		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
+	}
+}
