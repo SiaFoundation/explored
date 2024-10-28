@@ -314,7 +314,7 @@ ORDER BY ts.transaction_order ASC`)
 // fillV2TransactionFileContracts fills in the file contracts for each
 // transaction.
 func fillV2TransactionFileContracts(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
-	stmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_index, rev.confirmation_transaction_id, rev.resolution, rev.resolution_index, rev.resolution_transaction_id, fc.contract_id, fc.leaf_index
+	stmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_index, rev.confirmation_transaction_id, rev.resolution, rev.resolution_index, rev.resolution_transaction_id, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
 FROM v2_file_contract_elements fc
 INNER JOIN v2_transaction_file_contracts ts ON (ts.contract_id = fc.id)
 INNER JOIN v2_last_contract_revision rev ON (rev.contract_id = fc.contract_id)
@@ -338,28 +338,29 @@ ORDER BY ts.transaction_order ASC`)
 				var confirmationIndex, resolutionIndex types.ChainIndex
 				var confirmationTransactionID, resolutionTransactionID types.TransactionID
 
-				var fc explorer.V2FileContract
-				if err := rows.Scan(decode(&fc.TransactionID), decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&resolution), decodeNull(&resolutionIndex), decodeNull(&resolutionTransactionID), decode(&fc.V2FileContractElement.ID), decode(&fc.V2FileContractElement.LeafIndex)); err != nil {
+				var fce explorer.V2FileContract
+				fc := &fce.V2FileContractElement.V2FileContract
+				if err := rows.Scan(decode(&fce.TransactionID), decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&resolution), decodeNull(&resolutionIndex), decodeNull(&resolutionTransactionID), decode(&fce.V2FileContractElement.ID), decode(&fce.V2FileContractElement.LeafIndex), decode(&fc.Capacity), decode(&fc.Filesize), decode(&fc.FileMerkleRoot), decode(&fc.ProofHeight), decode(&fc.ExpirationHeight), decode(&fc.RenterOutput.Address), decode(&fc.RenterOutput.Value), decode(&fc.HostOutput.Address), decode(&fc.HostOutput.Value), decode(&fc.MissedHostValue), decode(&fc.TotalCollateral), decode(&fc.RenterPublicKey), decode(&fc.HostPublicKey), decode(&fc.RevisionNumber), decode(&fc.RenterSignature), decode(&fc.HostSignature)); err != nil {
 					return fmt.Errorf("failed to scan file contract: %w", err)
 				}
 
 				if resolution != nil {
-					fc.Resolution = &resolution
+					fce.Resolution = &resolution
 				}
 				if confirmationIndex != (types.ChainIndex{}) {
-					fc.ConfirmationIndex = &confirmationIndex
+					fce.ConfirmationIndex = &confirmationIndex
 				}
 				if resolutionIndex != (types.ChainIndex{}) {
-					fc.ResolutionIndex = &resolutionIndex
+					fce.ResolutionIndex = &resolutionIndex
 				}
 				if confirmationTransactionID != (types.TransactionID{}) {
-					fc.ConfirmationTransactionID = &confirmationTransactionID
+					fce.ConfirmationTransactionID = &confirmationTransactionID
 				}
 				if resolutionTransactionID != (types.TransactionID{}) {
-					fc.ResolutionTransactionID = &resolutionTransactionID
+					fce.ResolutionTransactionID = &resolutionTransactionID
 				}
 
-				txns[i].FileContracts = append(txns[i].FileContracts, fc)
+				txns[i].FileContracts = append(txns[i].FileContracts, fce)
 			}
 			return nil
 		}()
