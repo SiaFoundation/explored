@@ -1126,6 +1126,8 @@ func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("RevertIndex: failed to update state tree: %w", err)
 	} else if err := updateFileContractIndices(ut.tx, true, state.Metrics.Index, state.FileContractElements); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update file contract element indices: %w", err)
+	} else if err := updateV2FileContractIndices(ut.tx, true, state.Metrics.Index, state.V2FileContractElements); err != nil {
+		return fmt.Errorf("ApplyIndex: failed to update v2 file contract element indices: %w", err)
 	}
 
 	return nil
