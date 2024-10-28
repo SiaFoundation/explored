@@ -308,6 +308,14 @@ CREATE TABLE v2_transaction_siafund_outputs (
 );
 CREATE INDEX v2_transaction_siafund_outputs_transaction_id_index ON v2_transaction_siafund_outputs(transaction_id);
 
+CREATE TABLE v2_transaction_file_contracts (
+    transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
+    transaction_order INTEGER NOT NULL,
+    contract_id INTEGER REFERENCES v2_file_contract_elements(id) ON DELETE CASCADE NOT NULL, -- add an index to all foreign keys
+    UNIQUE(transaction_id, transaction_order)
+);
+CREATE INDEX  v2_transaction_file_contracts_transaction_id_index ON v2_transaction_file_contracts(transaction_id);
+
 CREATE TABLE v2_transaction_attestations (
 	transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
 	transaction_order INTEGER NOT NULL,
@@ -412,7 +420,7 @@ CREATE TABLE v2_last_contract_revision (
     confirmation_index BLOB,
     confirmation_transaction_id BLOB REFERENCES v2_transactions(transaction_id),
 
-    resolution INTEGER,
+    resolution BLOB,
     resolution_index BLOB,
     resolution_transaction_id BLOB REFERENCES v2_transactions(transaction_id),
 
