@@ -161,6 +161,30 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 		Equal(t, "value", expected.Value, got.Value)
 	}
 
+	Equal(t, "file contracts", len(expectTxn.FileContracts), len(gotTxn.FileContracts))
+	for i := range expectTxn.FileContracts {
+		expected := expectTxn.FileContracts[i]
+		got := gotTxn.FileContracts[i]
+		gotFC := got.V2FileContractElement.V2FileContract
+
+		Equal(t, "id", expectTxn.V2FileContractID(expectTxn.ID(), i), types.FileContractID(got.ID))
+		Equal(t, "capacity", expected.Capacity, gotFC.Capacity)
+		Equal(t, "filesize", expected.Filesize, gotFC.Filesize)
+		Equal(t, "proof height", expected.ProofHeight, gotFC.ProofHeight)
+		Equal(t, "expiration height", expected.ExpirationHeight, gotFC.ExpirationHeight)
+		Equal(t, "renter output address", expected.RenterOutput.Address, gotFC.RenterOutput.Address)
+		Equal(t, "renter output value", expected.RenterOutput.Address, gotFC.RenterOutput.Address)
+		Equal(t, "host output address", expected.HostOutput.Address, gotFC.HostOutput.Address)
+		Equal(t, "host output value", expected.HostOutput.Address, gotFC.HostOutput.Address)
+		Equal(t, "missed host value", expected.MissedHostValue, gotFC.MissedHostValue)
+		Equal(t, "total collateral", expected.TotalCollateral, gotFC.TotalCollateral)
+		Equal(t, "renter public key", expected.RenterPublicKey, gotFC.RenterPublicKey)
+		Equal(t, "host public key", expected.HostPublicKey, gotFC.HostPublicKey)
+		Equal(t, "revision number", expected.RevisionNumber, gotFC.RevisionNumber)
+		Equal(t, "renter signature", expected.RenterSignature, gotFC.RenterSignature)
+		Equal(t, "host signature", expected.HostSignature, gotFC.HostSignature)
+	}
+
 	Equal(t, "attestations", len(expectTxn.Attestations), len(gotTxn.Attestations))
 	for i := range expectTxn.Attestations {
 		expected := expectTxn.Attestations[i]

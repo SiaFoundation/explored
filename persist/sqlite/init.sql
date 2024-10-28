@@ -403,6 +403,8 @@ CREATE TABLE v2_file_contract_elements (
     renter_output_value BLOB NOT NULL,
     host_output_address BLOB NOT NULL,
     host_output_value BLOB NOT NULL,
+    missed_host_value BLOB NOT NULL,
+    total_collateral BLOB NOT NULL,
     renter_public_key BLOB NOT NULL,
     host_public_key BLOB NOT NULL,
     revision_number BLOB NOT NULL,
