@@ -61,6 +61,9 @@ type Store interface {
 	Contracts(ids []types.FileContractID) (result []FileContract, err error)
 	ContractsKey(key types.PublicKey) (result []FileContract, err error)
 	ContractRevisions(id types.FileContractID) (result []FileContract, err error)
+	V2Contracts(ids []types.FileContractID) (result []V2FileContract, err error)
+	V2ContractsKey(key types.PublicKey) (result []V2FileContract, err error)
+	V2ContractRevisions(id types.FileContractID) (result []V2FileContract, err error)
 	SiacoinElements(ids []types.SiacoinOutputID) (result []SiacoinOutput, err error)
 	SiafundElements(ids []types.SiafundOutputID) (result []SiafundOutput, err error)
 
@@ -261,6 +264,22 @@ func (e *Explorer) ContractsKey(key types.PublicKey) (result []FileContract, err
 // specified ID.
 func (e *Explorer) ContractRevisions(id types.FileContractID) (result []FileContract, err error) {
 	return e.s.ContractRevisions(id)
+}
+
+// V2Contracts returns the contracts with the specified IDs.
+func (e *Explorer) V2Contracts(ids []types.FileContractID) (result []V2FileContract, err error) {
+	return e.s.V2Contracts(ids)
+}
+
+// V2ContractsKey returns the contracts for a particular ed25519 key.
+func (e *Explorer) V2ContractsKey(key types.PublicKey) (result []V2FileContract, err error) {
+	return e.s.V2ContractsKey(key)
+}
+
+// V2ContractRevisions returns all the revisions of the contract with the
+// specified ID.
+func (e *Explorer) V2ContractRevisions(id types.FileContractID) (result []V2FileContract, err error) {
+	return e.s.V2ContractRevisions(id)
 }
 
 // SiacoinElements returns the siacoin elements with the specified IDs.

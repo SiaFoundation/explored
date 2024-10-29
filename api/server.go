@@ -65,6 +65,9 @@ type (
 		Contracts(ids []types.FileContractID) (result []explorer.FileContract, err error)
 		ContractsKey(key types.PublicKey) (result []explorer.FileContract, err error)
 		ContractRevisions(id types.FileContractID) (result []explorer.FileContract, err error)
+		V2Contracts(ids []types.FileContractID) (result []explorer.V2FileContract, err error)
+		V2ContractsKey(key types.PublicKey) (result []explorer.V2FileContract, err error)
+		V2ContractRevisions(id types.FileContractID) (result []explorer.V2FileContract, err error)
 		Search(id types.Hash256) (explorer.SearchType, error)
 
 		Hosts(pks []types.PublicKey) ([]explorer.Host, error)
@@ -485,6 +488,7 @@ func (s *server) outputsSiafundHandler(jc jape.Context) {
 
 	jc.Encode(outputs[0])
 }
+
 func (s *server) contractsIDHandler(jc jape.Context) {
 	var id types.FileContractID
 	if jc.DecodeParam("id", &id) != nil {
@@ -527,6 +531,68 @@ func (s *server) contractsBatchHandler(jc jape.Context) {
 
 	fcs, err := s.e.Contracts(ids)
 	if jc.Check("failed to get contracts", err) != nil {
+		return
+	}
+	jc.Encode(fcs)
+}
+
+func (s *server) v2ContractsIDHandler(jc jape.Context) {
+	var id types.FileContractID
+	if jc.DecodeParam("id", &id) != nil {
+		return
+	}
+	fcs, err := s.e.V2Contracts([]types.FileContractID{id})
+	if jc.Check("failed to get contract", err) != nil {
+		return
+	} else if len(fcs) == 0 {
+		jc.Error(explorer.ErrContractNotFound, http.StatusNotFound)
+		return
+	}
+	jc.Encode(fcs[0])
+}
+
+func (s *server) v2ContractsBatchHandler(jc jape.Context) {
+	var ids []types.FileContractID
+	if jc.Decode(&ids) != nil {
+		return
+	} else if len(ids) > maxIDs {
+		jc.Error(ErrTooManyIDs, http.StatusBadRequest)
+		return
+	}
+
+	fcs, err := s.e.V2Contracts(ids)
+	if jc.Check("failed to get contracts", err) != nil {
+		return
+	}
+	jc.Encode(fcs)
+}
+
+func (s *server) v2ContractsIDRevisionsHandler(jc jape.Context) {
+	var id types.FileContractID
+	if jc.DecodeParam("id", &id) != nil {
+		return
+	}
+
+	fcs, err := s.e.V2ContractRevisions(id)
+	if errors.Is(err, explorer.ErrContractNotFound) {
+		jc.Error(fmt.Errorf("%w: %v", err, id), http.StatusNotFound)
+		return
+	} else if jc.Check("failed to fetch contract revisions", err) != nil {
+		return
+	}
+	jc.Encode(fcs)
+}
+
+func (s *server) pubkeyV2ContractsHandler(jc jape.Context) {
+	var key types.PublicKey
+	if jc.DecodeParam("key", &key) != nil {
+		return
+	}
+	fcs, err := s.e.V2ContractsKey(key)
+	if jc.Check("failed to get contracts", err) != nil {
+		return
+	} else if len(fcs) == 0 {
+		jc.Error(explorer.ErrContractNotFound, http.StatusNotFound)
 		return
 	}
 	jc.Encode(fcs)
@@ -630,8 +696,13 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET    /contracts/:id/revisions": srv.contractsIDRevisionsHandler,
 		"POST   /contracts":               srv.contractsBatchHandler,
 
-		"GET    /pubkey/:key/contracts": srv.pubkeyContractsHandler,
-		"GET    /pubkey/:key/host":      srv.pubkeyHostHandler,
+		"GET    /v2/contracts/:id":           srv.v2ContractsIDHandler,
+		"GET    /v2/contracts/:id/revisions": srv.v2ContractsIDRevisionsHandler,
+		"POST   /v2/contracts":               srv.v2ContractsBatchHandler,
+
+		"GET    /pubkey/:key/v2/contracts": srv.pubkeyV2ContractsHandler,
+		"GET    /pubkey/:key/contracts":    srv.pubkeyContractsHandler,
+		"GET    /pubkey/:key/host":         srv.pubkeyHostHandler,
 
 		"GET    /metrics/block":     srv.blocksMetricsHandler,
 		"GET    /metrics/block/:id": srv.blocksMetricsIDHandler,
