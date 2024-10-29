@@ -96,6 +96,10 @@ var (
 	// ErrTooManyIDs is returned by the batch transaction and contract
 	// endpoints when more than maxIDs IDs are specified.
 	ErrTooManyIDs = fmt.Errorf("too many IDs provided (provide less than %d)", maxIDs)
+
+	// ErrInvalidTip is returned by /consensus/tip/:height when a block at that
+	// height does not exist yet.
+	ErrInvalidTip = errors.New("invalid tip")
 )
 
 type server struct {
@@ -200,6 +204,17 @@ func (s *server) consensusTipHeightHandler(jc jape.Context) {
 	if jc.DecodeParam("height", &height) != nil {
 		return
 	}
+
+	maxTip, err := s.e.Tip()
+	if jc.Check("failed to get tip", err) != nil {
+		return
+	}
+
+	if height > maxTip.Height {
+		jc.Error(ErrInvalidTip, http.StatusNotFound)
+		return
+	}
+
 	tip, err := s.e.BestTip(height)
 	if jc.Check("failed to get block", err) != nil {
 		return
