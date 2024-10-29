@@ -3,6 +3,7 @@ package sqlite
 import (
 	"database/sql"
 	"fmt"
+	"net"
 	"time"
 
 	"go.sia.tech/core/types"
@@ -100,8 +101,8 @@ WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.StateElement.ID), 
 }
 
 // Hosts returns the hosts with the given public keys.
-func (s *Store) Hosts(pks []types.PublicKey) (result []explorer.Host, err error) {
-	err = s.transaction(func(tx *txn) error {
+func (st *Store) Hosts(pks []types.PublicKey) (result []explorer.Host, err error) {
+	err = st.transaction(func(tx *txn) error {
 		var encoded []any
 		for _, pk := range pks {
 			encoded = append(encoded, encode(pk))
@@ -119,6 +120,22 @@ func (s *Store) Hosts(pks []types.PublicKey) (result []explorer.Host, err error)
 			if err := rows.Scan(decode(&host.PublicKey), &host.NetAddress, decode(&host.KnownSince), decode(&host.LastScan), &host.LastScanSuccessful, decode(&host.LastAnnouncement), &host.TotalScans, &host.SuccessfulInteractions, &host.FailedInteractions, &s.AcceptingContracts, decode(&s.MaxDownloadBatchSize), decode(&s.MaxDuration), decode(&s.MaxReviseBatchSize), &s.NetAddress, decode(&s.RemainingStorage), decode(&s.SectorSize), decode(&s.TotalStorage), decode(&s.Address), decode(&s.WindowSize), decode(&s.Collateral), decode(&s.MaxCollateral), decode(&s.BaseRPCPrice), decode(&s.ContractPrice), decode(&s.DownloadBandwidthPrice), decode(&s.SectorAccessPrice), decode(&s.StoragePrice), decode(&s.UploadBandwidthPrice), &s.EphemeralAccountExpiry, decode(&s.MaxEphemeralAccountBalance), decode(&s.RevisionNumber), &s.Version, &s.Release, &s.SiaMuxPort, decode(&p.UID), &p.Validity, decode(&p.HostBlockHeight), decode(&p.UpdatePriceTableCost), decode(&p.AccountBalanceCost), decode(&p.FundAccountCost), decode(&p.LatestRevisionCost), decode(&p.SubscriptionMemoryCost), decode(&p.SubscriptionNotificationCost), decode(&p.InitBaseCost), decode(&p.MemoryTimeCost), decode(&p.DownloadBandwidthCost), decode(&p.UploadBandwidthCost), decode(&p.DropSectorsBaseCost), decode(&p.DropSectorsUnitCost), decode(&p.HasSectorBaseCost), decode(&p.ReadBaseCost), decode(&p.ReadLengthCost), decode(&p.RenewContractCost), decode(&p.RevisionBaseCost), decode(&p.SwapSectorBaseCost), decode(&p.WriteBaseCost), decode(&p.WriteLengthCost), decode(&p.WriteStoreCost), decode(&p.TxnFeeMinRecommended), decode(&p.TxnFeeMaxRecommended), decode(&p.ContractPrice), decode(&p.CollateralCost), decode(&p.MaxCollateral), decode(&p.MaxDuration), decode(&p.WindowSize), decode(&p.RegistryEntriesLeft), decode(&p.RegistryEntriesTotal)); err != nil {
 				return err
 			}
+
+			// We should fill in country code information if we can but still
+			// return the host even if we are unable to.
+			hostname, _, err := net.SplitHostPort(host.NetAddress)
+			// if we can parse the net address
+			if err == nil {
+				resolved, err := net.ResolveIPAddr("ip", hostname)
+				// if we can resolve the address
+				if err == nil {
+					countryCode, err := st.locator.CountryCode(resolved)
+					if err == nil {
+						host.CountryCode = countryCode
+					}
+				}
+			}
+
 			result = append(result, host)
 		}
 		return nil

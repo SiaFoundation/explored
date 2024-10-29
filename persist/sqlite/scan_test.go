@@ -145,6 +145,7 @@ func TestScan(t *testing.T) {
 	host2 := dbHosts[1]
 	testutil.Equal(t, "host2.NetAddress", hosts[1].NetAddress, host2.NetAddress)
 	testutil.Equal(t, "host2.PublicKey", hosts[1].PublicKey, host2.PublicKey)
+	testutil.Equal(t, "host2.CountryCode", "CA", host2.CountryCode)
 	testutil.Equal(t, "host2.TotalScans", 1, host2.TotalScans)
 	testutil.Equal(t, "host2.SuccessfulInteractions", 1, host2.SuccessfulInteractions)
 	testutil.Equal(t, "host2.FailedInteractions", 0, host2.FailedInteractions)
