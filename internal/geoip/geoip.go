@@ -1,6 +1,7 @@
 package geoip
 
 import (
+	// We need embed to embed the geolocation database.
 	_ "embed"
 	"errors"
 	"net"
@@ -47,7 +48,7 @@ func (ip *ip2Location) CountryCode(addr *net.IPAddr) (string, error) {
 // NewIP2LocationLocator returns a Locator that uses an underlying IP2Location
 // database.  If no path is provided, a default embedded LITE database is used.
 func NewIP2LocationLocator(path string) (Locator, error) {
-	// Unfortuantely, ip2location.OpenDB only accepts a file path.  So we need
+	// Unfortunately, ip2location.OpenDB only accepts a file path.  So we need
 	// to write the embedded file to a temporary file on disk, and use that
 	// instead.
 	if path == "" {
