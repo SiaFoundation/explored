@@ -210,6 +210,12 @@ func (c *Client) ContractRevisions(id types.FileContractID) (resp []explorer.Ext
 	return
 }
 
+// V2Contract returns the v2 file contract with the specified ID.
+func (c *Client) V2Contract(id types.FileContractID) (resp explorer.V2FileContract, err error) {
+	err = c.c.GET(fmt.Sprintf("/v2/contracts/%s", id), &resp)
+	return
+}
+
 // V2Contracts returns the v2 contracts with the specified IDs.
 func (c *Client) V2Contracts(ids []types.FileContractID) (resp []explorer.V2FileContract, err error) {
 	err = c.c.POST("/v2/contracts", ids, &resp)
