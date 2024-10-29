@@ -2535,7 +2535,10 @@ func TestMetricCirculatingSupply(t *testing.T) {
 
 	cm := chain.NewManager(store, genesisState)
 
-	circulatingSupply := genesisState.FoundationSubsidy().Value
+	var circulatingSupply types.Currency
+	if foundationSubsidy, ok := genesisState.FoundationSubsidy(); ok {
+		circulatingSupply = circulatingSupply.Add(foundationSubsidy.Value)
+	}
 	for _, txn := range genesisBlock.Transactions {
 		for _, sco := range txn.SiacoinOutputs {
 			circulatingSupply = circulatingSupply.Add(sco.Value)
