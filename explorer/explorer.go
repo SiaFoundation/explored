@@ -265,17 +265,17 @@ func (e *Explorer) ContractRevisions(id types.FileContractID) (result []Extended
 	return e.s.ContractRevisions(id)
 }
 
-// V2Contracts returns the contracts with the specified IDs.
+// V2Contracts returns the v2 contracts with the specified IDs.
 func (e *Explorer) V2Contracts(ids []types.FileContractID) (result []V2FileContract, err error) {
 	return e.s.V2Contracts(ids)
 }
 
-// V2ContractsKey returns the contracts for a particular ed25519 key.
+// V2ContractsKey returns the v2 contracts for a particular ed25519 key.
 func (e *Explorer) V2ContractsKey(key types.PublicKey) (result []V2FileContract, err error) {
 	return e.s.V2ContractsKey(key)
 }
 
-// V2ContractRevisions returns all the revisions of the contract with the
+// V2ContractRevisions returns all the revisions of the v2 contract with the
 // specified ID.
 func (e *Explorer) V2ContractRevisions(id types.FileContractID) (result []V2FileContract, err error) {
 	return e.s.V2ContractRevisions(id)
