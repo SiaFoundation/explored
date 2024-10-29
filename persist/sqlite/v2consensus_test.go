@@ -513,6 +513,23 @@ func TestV2FileContractRevert(t *testing.T) {
 		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
 	}
 
+	{
+		fcs, err := db.V2Contracts([]types.FileContractID{txn1.V2FileContractID(txn1.ID(), 0), txn1.V2FileContractID(txn1.ID(), 1)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2FC(t, txn1.FileContracts[0], fcs[0])
+		testutil.CheckV2FC(t, txn1.FileContracts[1], fcs[1])
+	}
+
+	{
+		fcs, err := db.V2ContractRevisions(txn1.V2FileContractID(txn1.ID(), 0))
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2FC(t, txn1.FileContracts[0], fcs[0])
+	}
+
 	// revert the block
 	{
 		state := prevState
@@ -540,6 +557,13 @@ func TestV2FileContractRevert(t *testing.T) {
 		_, err := db.Block(b1.ID())
 		if err == nil {
 			t.Fatal("block should not exist")
+		}
+	}
+
+	{
+		_, err := db.V2Contracts([]types.FileContractID{txn1.V2FileContractID(txn1.ID(), 0)})
+		if err == nil {
+			t.Fatal("contract should not exist")
 		}
 	}
 
@@ -577,5 +601,174 @@ func TestV2FileContractRevert(t *testing.T) {
 			t.Fatal(err)
 		}
 		testutil.CheckV2Transaction(t, txn2, dbTxns[0])
+	}
+
+	{
+		fcs, err := db.V2Contracts([]types.FileContractID{txn2.V2FileContractID(txn2.ID(), 0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2FC(t, txn2.FileContracts[0], fcs[0])
+	}
+
+	{
+		fcs, err := db.V2ContractRevisions(txn1.V2FileContractID(txn2.ID(), 0))
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2FC(t, txn2.FileContracts[0], fcs[0])
+	}
+}
+
+func TestV2FileContractKey(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(types.StandardUnlockConditions(pk1.PublicKey()))}
+
+	renterPrivateKey1 := types.GeneratePrivateKey()
+	renterPublicKey1 := renterPrivateKey1.PublicKey()
+
+	renterPrivateKey2 := types.GeneratePrivateKey()
+	renterPublicKey2 := renterPrivateKey2.PublicKey()
+
+	hostPrivateKey := types.GeneratePrivateKey()
+	hostPublicKey := hostPrivateKey.PublicKey()
+
+	_, genesisBlock, cm, db := newStore(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		network.HardforkV2.AllowHeight = 1
+		network.HardforkV2.RequireHeight = 2
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
+
+	v1FC := testutil.PrepareContractFormation(renterPublicKey1, hostPublicKey, types.Siacoins(1), types.Siacoins(1), 100, 105, types.VoidAddress)
+	v1FC.Filesize = 65
+	v2FC1 := types.V2FileContract{
+		Capacity:         v1FC.Filesize,
+		Filesize:         v1FC.Filesize,
+		FileMerkleRoot:   v1FC.FileMerkleRoot,
+		ProofHeight:      20,
+		ExpirationHeight: 30,
+		RenterOutput:     v1FC.ValidProofOutputs[0],
+		HostOutput:       v1FC.ValidProofOutputs[1],
+		MissedHostValue:  v1FC.MissedProofOutputs[1].Value,
+		TotalCollateral:  v1FC.ValidProofOutputs[0].Value,
+		RenterPublicKey:  renterPublicKey1,
+		HostPublicKey:    hostPublicKey,
+	}
+	fcOut := v2FC1.RenterOutput.Value.Add(v2FC1.HostOutput.Value).Add(cm.TipState().V2FileContractTax(v2FC1))
+
+	txn1 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, db, genesisBlock.Transactions[0].SiacoinOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Value:   giftSC.Sub(fcOut),
+			Address: addr1,
+		}},
+		FileContracts: []types.V2FileContract{v2FC1},
+	}
+	testutil.SignV2TransactionWithContracts(cm.TipState(), pk1, renterPrivateKey1, hostPrivateKey, &txn1)
+
+	b1 := testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn1}, types.VoidAddress)
+	if err := cm.AddBlocks([]types.Block{b1}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	{
+		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
+	}
+
+	{
+		fcs, err := db.V2Contracts([]types.FileContractID{txn1.V2FileContractID(txn1.ID(), 0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2FC(t, txn1.FileContracts[0], fcs[0])
+	}
+
+	{
+		fcs, err := db.V2ContractRevisions(txn1.V2FileContractID(txn1.ID(), 0))
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2FC(t, txn1.FileContracts[0], fcs[0])
+	}
+
+	v2FC2 := v2FC1
+	v2FC2.RenterPublicKey = renterPublicKey2
+
+	txn2 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, db, txn1.SiacoinOutputID(txn1.ID(), 0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Value:   txn1.SiacoinOutputs[0].Value.Sub(fcOut),
+			Address: addr1,
+		}},
+		FileContracts: []types.V2FileContract{v2FC2},
+	}
+	testutil.SignV2TransactionWithContracts(cm.TipState(), pk1, renterPrivateKey2, hostPrivateKey, &txn2)
+
+	b2 := testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn2}, types.VoidAddress)
+	if err := cm.AddBlocks([]types.Block{b2}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	{
+		dbTxns, err := db.V2Transactions([]types.TransactionID{txn2.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2Transaction(t, txn2, dbTxns[0])
+	}
+
+	{
+		fcs, err := db.V2Contracts([]types.FileContractID{txn1.V2FileContractID(txn2.ID(), 0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2FC(t, txn2.FileContracts[0], fcs[0])
+	}
+
+	{
+		fcs, err := db.V2ContractRevisions(txn1.V2FileContractID(txn2.ID(), 0))
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2FC(t, txn2.FileContracts[0], fcs[0])
+	}
+
+	{
+		fcs, err := db.V2ContractsKey(renterPublicKey1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2FC(t, txn1.FileContracts[0], fcs[0])
+	}
+
+	{
+		fcs, err := db.V2ContractsKey(renterPublicKey2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2FC(t, txn2.FileContracts[0], fcs[0])
+	}
+
+	{
+		fcs, err := db.V2ContractsKey(hostPublicKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2FC(t, txn1.FileContracts[0], fcs[0])
+		testutil.CheckV2FC(t, txn2.FileContracts[0], fcs[1])
 	}
 }
