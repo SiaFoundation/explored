@@ -1,8 +1,7 @@
 package geoip
 
 import (
-	// We need embed to embed the geolocation database.
-	_ "embed"
+	_ "embed" // needed for geolocation database
 	"errors"
 	"net"
 	"os"
