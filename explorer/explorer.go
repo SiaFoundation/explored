@@ -16,9 +16,8 @@ import (
 )
 
 var (
-	// ErrNoTip is returned when Tip() is unable to find any blocks in the
-	// database and thus there is no tip. It does not mean there was an
-	// error in the underlying database.
+	// ErrNoTip is returned when we are unable to find the tip in the
+	// database or there is no tips at all.
 	ErrNoTip = errors.New("no tip found")
 
 	// ErrContractNotFound is returned when ContractRevisions is unable to find
