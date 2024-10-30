@@ -1,6 +1,8 @@
 package sqlite
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 
 	"go.sia.tech/core/types"
@@ -58,7 +60,9 @@ func (s *Store) Block(id types.BlockID) (result explorer.Block, err error) {
 func (s *Store) BestTip(height uint64) (result types.ChainIndex, err error) {
 	err = s.transaction(func(tx *txn) error {
 		err = tx.QueryRow(`SELECT id, height FROM blocks WHERE height=?`, height).Scan(decode(&result.ID), decode(&result.Height))
-		if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return explorer.ErrNoTip
+		} else if err != nil {
 			return err
 		}
 
