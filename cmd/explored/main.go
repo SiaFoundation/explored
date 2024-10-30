@@ -250,7 +250,7 @@ func runRootCmd(ctx context.Context, log *zap.Logger) error {
 		UniqueID:   gateway.GenerateUniqueID(),
 		NetAddress: syncerAddr,
 	}
-	s := syncer.New(syncerListener, cm, ps, header, syncer.WithLogger(log.Named("syncer")))
+	s := syncer.New(syncerListener, cm, ps, header, syncer.WithLogger(log.Named("syncer")), syncer.WithMaxInboundPeers(256))
 	defer s.Close()
 	go s.Run(ctx)
 
