@@ -200,10 +200,15 @@ func (s *server) consensusTipHeightHandler(jc jape.Context) {
 	if jc.DecodeParam("height", &height) != nil {
 		return
 	}
+
 	tip, err := s.e.BestTip(height)
-	if jc.Check("failed to get block", err) != nil {
+	if errors.Is(err, explorer.ErrNoTip) {
+		jc.Error(explorer.ErrNoTip, http.StatusNotFound)
+		return
+	} else if jc.Check("failed to get tip", err) != nil {
 		return
 	}
+
 	jc.Encode(tip)
 }
 
