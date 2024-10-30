@@ -10,6 +10,7 @@ import (
 	crhpv2 "go.sia.tech/core/rhp/v2"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
+	"go.sia.tech/explored/internal/geoip"
 	rhpv2 "go.sia.tech/explored/internal/rhp/v2"
 	rhpv3 "go.sia.tech/explored/internal/rhp/v3"
 	"go.uber.org/zap"
@@ -51,7 +52,7 @@ func (e *Explorer) waitForSync() error {
 	return nil
 }
 
-func (e *Explorer) scanHost(host chain.HostAnnouncement) (HostScan, error) {
+func (e *Explorer) scanHost(locator geoip.Locator, host chain.HostAnnouncement) (HostScan, error) {
 	ctx, cancel := context.WithTimeout(e.ctx, e.scanCfg.Timeout)
 	defer cancel()
 
@@ -78,6 +79,18 @@ func (e *Explorer) scanHost(host chain.HostAnnouncement) (HostScan, error) {
 		return HostScan{}, fmt.Errorf("scanHost: failed to parse net address: %w", err)
 	}
 
+	resolved, err := net.ResolveIPAddr("ip", hostIP)
+	// if we can resolve the address
+	if err != nil {
+		return HostScan{}, fmt.Errorf("scanHost: failed to resolve host address: %w", err)
+	}
+
+	countryCode, err := locator.CountryCode(resolved)
+	if err != nil {
+		e.log.Debug("Failed to resolve IP geolocation, not setting country code", zap.String("addr", host.NetAddress))
+		countryCode = ""
+	}
+
 	v3Addr := net.JoinHostPort(hostIP, settings.SiaMuxPort)
 	v3Session, err := rhpv3.NewSession(ctx, host.PublicKey, v3Addr, e.cm, nil)
 	if err != nil {
@@ -90,9 +103,10 @@ func (e *Explorer) scanHost(host chain.HostAnnouncement) (HostScan, error) {
 	}
 
 	return HostScan{
-		PublicKey: host.PublicKey,
-		Success:   true,
-		Timestamp: types.CurrentTimestamp(),
+		PublicKey:   host.PublicKey,
+		CountryCode: countryCode,
+		Success:     true,
+		Timestamp:   types.CurrentTimestamp(),
 
 		Settings:   settings,
 		PriceTable: table,
@@ -100,6 +114,14 @@ func (e *Explorer) scanHost(host chain.HostAnnouncement) (HostScan, error) {
 }
 
 func (e *Explorer) addHostScans(hosts chan chain.HostAnnouncement) {
+	// use default included ip2location database
+	locator, err := geoip.NewIP2LocationLocator("")
+	if err != nil {
+		e.log.Error("Failed to create geoip database", zap.Error(err))
+		return
+	}
+	defer locator.Close()
+
 	worker := func() {
 		var scans []HostScan
 		for host := range hosts {
@@ -107,7 +129,7 @@ func (e *Explorer) addHostScans(hosts chan chain.HostAnnouncement) {
 				break
 			}
 
-			scan, err := e.scanHost(host)
+			scan, err := e.scanHost(locator, host)
 			if err != nil {
 				scans = append(scans, HostScan{
 					PublicKey: host.PublicKey,

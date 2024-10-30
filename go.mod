@@ -16,6 +16,7 @@ require (
 )
 
 require (
+	github.com/ip2location/ip2location-go v8.3.0+incompatible // indirect
 	github.com/julienschmidt/httprouter v1.3.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/rogpeppe/go-internal v1.10.0 // indirect

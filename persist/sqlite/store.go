@@ -103,6 +103,7 @@ func OpenDatabase(fp string, log *zap.Logger) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	store := &Store{
 		db:  db,
 		log: log,
