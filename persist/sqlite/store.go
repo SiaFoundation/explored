@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/mattn/go-sqlite3"
-	"go.sia.tech/explored/internal/geoip"
 	"go.uber.org/zap"
 	"lukechampine.com/frand"
 )
@@ -20,8 +19,6 @@ type (
 	Store struct {
 		db  *sql.DB
 		log *zap.Logger
-
-		locator geoip.Locator
 	}
 )
 
@@ -56,7 +53,6 @@ func (s *Store) transaction(fn func(*txn) error) error {
 
 // Close closes the underlying database.
 func (s *Store) Close() error {
-	s.locator.Close()
 	return s.db.Close()
 }
 
@@ -107,16 +103,10 @@ func OpenDatabase(fp string, log *zap.Logger) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	// use default included ip2location database
-	locator, err := geoip.NewIP2LocationLocator("")
-	if err != nil {
-		return nil, err
-	}
 
 	store := &Store{
-		db:      db,
-		log:     log,
-		locator: locator,
+		db:  db,
+		log: log,
 	}
 	if err := store.init(); err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)

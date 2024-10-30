@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"os"
+	"sync"
 
 	"github.com/ip2location/ip2location-go"
 )
@@ -13,6 +14,7 @@ import (
 var ip2LocationDB []byte
 
 // A Locator maps IP addresses to their location.
+// It is assumed that it implementations are thread-safe.
 type Locator interface {
 	// Close closes the Locator.
 	Close() error
@@ -21,12 +23,17 @@ type Locator interface {
 }
 
 type ip2Location struct {
+	mu sync.Mutex
+
 	path string
 	db   *ip2location.DB
 }
 
 // Close implements Locator.
 func (ip *ip2Location) Close() error {
+	ip.mu.Lock()
+	defer ip.mu.Unlock()
+
 	ip.db.Close()
 	return os.Remove(ip.path)
 }
@@ -36,6 +43,8 @@ func (ip *ip2Location) CountryCode(addr *net.IPAddr) (string, error) {
 	if ip == nil {
 		return "", errors.New("nil IP")
 	}
+	ip.mu.Lock()
+	defer ip.mu.Unlock()
 
 	loc, err := ip.db.Get_country_short(addr.String())
 	if err != nil {

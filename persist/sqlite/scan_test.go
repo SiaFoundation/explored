@@ -150,4 +150,7 @@ func TestScan(t *testing.T) {
 	testutil.Equal(t, "host2.SuccessfulInteractions", 1, host2.SuccessfulInteractions)
 	testutil.Equal(t, "host2.FailedInteractions", 0, host2.FailedInteractions)
 	testutil.Equal(t, "host2.LastScanSuccessful", true, host2.LastScanSuccessful)
+	if host2.Settings.SectorSize <= 0 {
+		log.Fatal("SectorSize = 0 on host that's supposed to be active")
+	}
 }

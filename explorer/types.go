@@ -221,9 +221,10 @@ type Metrics struct {
 
 // HostScan represents the results of a host scan.
 type HostScan struct {
-	PublicKey types.PublicKey `json:"publicKey"`
-	Success   bool            `json:"success"`
-	Timestamp time.Time       `json:"timestamp"`
+	PublicKey   types.PublicKey `json:"publicKey"`
+	CountryCode string          `json:"countryCode"`
+	Success     bool            `json:"success"`
+	Timestamp   time.Time       `json:"timestamp"`
 
 	Settings   rhpv2.HostSettings   `json:"settings"`
 	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
