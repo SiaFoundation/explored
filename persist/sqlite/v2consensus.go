@@ -82,6 +82,12 @@ func updateV2FileContractElements(tx *txn, revert bool, b types.Block, fces []ex
 	}
 	defer revisionStmt.Close()
 
+	// so we can get the ids of revision parents to add to the DB
+	parentStmt, err := tx.Prepare(`SELECT id FROM v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?`)
+	if err != nil {
+		return nil, fmt.Errorf("updateV2FileContractElements: failed to prepare parent statement: %w", err)
+	}
+
 	fcTxns := make(map[explorer.DBFileContract]types.TransactionID)
 	for _, txn := range b.V2Transactions() {
 		id := txn.ID()
@@ -164,6 +170,8 @@ func updateV2FileContractElements(tx *txn, revert bool, b types.Block, fces []ex
 	}
 
 	for _, txn := range b.V2Transactions() {
+		// add in any contracts that are not the latest, i.e. contracts that
+		// were created and revised in the same block
 		for j, fc := range txn.FileContracts {
 			fcID := txn.V2FileContractID(txn.ID(), j)
 			dbFC := explorer.DBFileContract{ID: fcID, RevisionNumber: fc.RevisionNumber}
@@ -175,17 +183,30 @@ func updateV2FileContractElements(tx *txn, revert bool, b types.Block, fces []ex
 				return nil, fmt.Errorf("updateFileContractElements: %w", err)
 			}
 		}
+		// add in any revisions that are not the latest, i.e. contracts that
+		// were revised multiple times in one block
 		for _, fcr := range txn.FileContractRevisions {
 			fc := fcr.Revision
-			fcid := types.FileContractID(fcr.Parent.ID)
-			dbFC := explorer.DBFileContract{ID: fcid, RevisionNumber: fc.RevisionNumber}
+			fcID := types.FileContractID(fcr.Parent.ID)
+			dbFC := explorer.DBFileContract{ID: fcID, RevisionNumber: fc.RevisionNumber}
 			if _, exists := fcDBIds[dbFC]; exists {
 				continue
 			}
 
-			if err := addFC(fcid, 0, fc, nil, false); err != nil {
+			if err := addFC(fcID, 0, fc, nil, false); err != nil {
 				return nil, fmt.Errorf("updateFileContractElements: %w", err)
 			}
+		}
+		// don't add anything, just set parent db IDs in fcDBIds map
+		for _, fcr := range txn.FileContractRevisions {
+			fcID := types.FileContractID(fcr.Parent.ID)
+			parentDBFC := explorer.DBFileContract{ID: fcID, RevisionNumber: fcr.Parent.V2FileContract.RevisionNumber}
+
+			var dbID int64
+			if err := parentStmt.QueryRow(encode(fcID), encode(parentDBFC.RevisionNumber)).Scan(&dbID); err != nil {
+				return nil, fmt.Errorf("updateFileContractElements: failed to get parent contract ID: %w", err)
+			}
+			fcDBIds[parentDBFC] = dbID
 		}
 	}
 
@@ -342,6 +363,37 @@ func addV2FileContracts(tx *txn, txnID int64, txn types.V2Transaction, dbIDs map
 	return nil
 }
 
+func addV2FileContractRevisions(tx *txn, txnID int64, txn types.V2Transaction, dbIDs map[explorer.DBFileContract]int64) error {
+	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_revisions(transaction_id, transaction_order, parent_contract_id, revision_contract_id) VALUES (?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addV2FileContractRevisions: failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for i, fcr := range txn.FileContractRevisions {
+		parentDBID, ok := dbIDs[explorer.DBFileContract{
+			ID:             types.FileContractID(fcr.Parent.ID),
+			RevisionNumber: fcr.Parent.V2FileContract.RevisionNumber,
+		}]
+		if !ok {
+			return errors.New("addV2FileContractRevisions: parent dbID not in map")
+		}
+
+		dbID, ok := dbIDs[explorer.DBFileContract{
+			ID:             types.FileContractID(fcr.Parent.ID),
+			RevisionNumber: fcr.Revision.RevisionNumber,
+		}]
+		if !ok {
+			return errors.New("addV2FileContractRevisions: dbID not in map")
+		}
+
+		if _, err := stmt.Exec(txnID, i, parentDBID, dbID); err != nil {
+			return fmt.Errorf("addV2FileContractRevisions: failed to execute statement: %w", err)
+		}
+	}
+	return nil
+}
+
 func addV2Attestations(tx *txn, txnID int64, txn types.V2Transaction) error {
 	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_attestations(transaction_id, transaction_order, public_key, key, value, signature) VALUES (?, ?, ?, ?, ?, ?)`)
 	if err != nil {
@@ -381,6 +433,8 @@ func addV2TransactionFields(tx *txn, txns []types.V2Transaction, scDBIds map[typ
 			return fmt.Errorf("failed to add siafund outputs: %w", err)
 		} else if err := addV2FileContracts(tx, dbID.id, txn, v2FcDBIds); err != nil {
 			return fmt.Errorf("failed to add file contracts: %w", err)
+		} else if err := addV2FileContractRevisions(tx, dbID.id, txn, v2FcDBIds); err != nil {
+			return fmt.Errorf("failed to add file contract revisions: %w", err)
 		}
 	}
 

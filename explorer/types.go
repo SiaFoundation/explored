@@ -181,7 +181,14 @@ type V2FileContract struct {
 	types.V2FileContractElement
 }
 
-// A V2Transaction is a v2 transaction that uses the wrapped types above.
+// A V2FileContractRevision is a V2 file contract revision with the
+// explorer V2FileContract type.
+type V2FileContractRevision struct {
+	Parent   V2FileContract `json:"parent"`
+	Revision V2FileContract `json:"revision"`
+}
+
+// A V2Transaction is a V2 transaction that uses the wrapped types above.
 type V2Transaction struct {
 	ID types.TransactionID `json:"id"`
 
@@ -190,7 +197,8 @@ type V2Transaction struct {
 	SiafundInputs  []types.V2SiafundInput `json:"siafundInputs,omitempty"`
 	SiafundOutputs []SiafundOutput        `json:"siafundOutputs,omitempty"`
 
-	FileContracts []V2FileContract `json:"fileContracts,omitempty"`
+	FileContracts         []V2FileContract         `json:"fileContracts,omitempty"`
+	FileContractRevisions []V2FileContractRevision `json:"fileContractRevisions,omitempty"`
 
 	Attestations  []types.Attestation `json:"attestations,omitempty"`
 	ArbitraryData []byte              `json:"arbitraryData,omitempty"`

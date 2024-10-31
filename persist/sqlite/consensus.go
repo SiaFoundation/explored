@@ -928,6 +928,8 @@ func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []expl
 	}
 
 	for _, txn := range b.Transactions {
+		// add in any contracts that are not the latest, i.e. contracts that
+		// were created and revised in the same block
 		for j, fc := range txn.FileContracts {
 			fcID := txn.FileContractID(j)
 			dbFC := explorer.DBFileContract{ID: txn.FileContractID(j), RevisionNumber: fc.RevisionNumber}
@@ -939,6 +941,8 @@ func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []expl
 				return nil, fmt.Errorf("updateFileContractElements: %w", err)
 			}
 		}
+		// add in any revisions that are not the latest, i.e. contracts that
+		// were revised multiple times in one block
 		for _, fcr := range txn.FileContractRevisions {
 			fc := fcr.FileContract
 			dbFC := explorer.DBFileContract{ID: fcr.ParentID, RevisionNumber: fc.RevisionNumber}
