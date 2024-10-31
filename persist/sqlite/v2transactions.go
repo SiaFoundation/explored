@@ -419,8 +419,8 @@ ORDER BY ts.transaction_order ASC`)
 			}
 			return nil
 		}()
-
 	}
+
 	return nil
 }
 
