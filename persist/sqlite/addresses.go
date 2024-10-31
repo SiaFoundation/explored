@@ -53,7 +53,7 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to fetch v2 transaction ID: %w", err)
 		}
-		txns, err := getV2Transactions(tx, map[int64]transactionID{txnID: {id: types.TransactionID(ev.ID)}})
+		txns, err := getV2Transactions(tx, []types.TransactionID{types.TransactionID(ev.ID)})
 		if err != nil || len(txns) == 0 {
 			return explorer.Event{}, 0, fmt.Errorf("failed to fetch v2 transaction: %w", err)
 		}

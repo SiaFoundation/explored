@@ -151,7 +151,8 @@ type FileContractRevision struct {
 
 // A Transaction is a transaction that uses the wrapped types above.
 type Transaction struct {
-	ID                    types.TransactionID          `json:"id"`
+	ID types.TransactionID `json:"id"`
+
 	SiacoinInputs         []SiacoinInput               `json:"siacoinInputs,omitempty"`
 	SiacoinOutputs        []SiacoinOutput              `json:"siacoinOutputs,omitempty"`
 	SiafundInputs         []SiafundInput               `json:"siafundInputs,omitempty"`
@@ -166,10 +167,36 @@ type Transaction struct {
 	HostAnnouncements []chain.HostAnnouncement `json:"hostAnnouncements,omitempty"`
 }
 
+// A V2FileContract is a v2 file contract.
+type V2FileContract struct {
+	TransactionID types.TransactionID `json:"transactionID"`
+
+	ConfirmationIndex         *types.ChainIndex    `json:"confirmationIndex"`
+	ConfirmationTransactionID *types.TransactionID `json:"confirmationTransactionID"`
+
+	Resolution              *types.V2FileContractResolutionType
+	ResolutionIndex         *types.ChainIndex    `json:"resolutionIndex"`
+	ResolutionTransactionID *types.TransactionID `json:"resolutionTransactionID"`
+
+	types.V2FileContractElement
+}
+
 // A V2Transaction is a v2 transaction that uses the wrapped types above.
 type V2Transaction struct {
-	ID            types.TransactionID `json:"id"`
+	ID types.TransactionID `json:"id"`
+
+	SiacoinInputs  []types.V2SiacoinInput `json:"siacoinInputs,omitempty"`
+	SiacoinOutputs []SiacoinOutput        `json:"siacoinOutputs,omitempty"`
+	SiafundInputs  []types.V2SiafundInput `json:"siafundInputs,omitempty"`
+	SiafundOutputs []SiafundOutput        `json:"siafundOutputs,omitempty"`
+
+	FileContracts []V2FileContract `json:"fileContracts,omitempty"`
+
+	Attestations  []types.Attestation `json:"attestations,omitempty"`
 	ArbitraryData []byte              `json:"arbitraryData,omitempty"`
+
+	NewFoundationAddress *types.Address `json:"newFoundationAddress,omitempty"`
+	MinerFee             types.Currency `json:"minerFee"`
 
 	HostAnnouncements []chain.HostAnnouncement `json:"hostAnnouncements,omitempty"`
 }
@@ -205,6 +232,8 @@ type Metrics struct {
 	SiafundPool types.Currency `json:"siafundPool"`
 	// Total announced hosts
 	TotalHosts uint64 `json:"totalHosts"`
+	// Number of leaves in the accumulator
+	NumLeaves uint64 `json:"numLeaves"`
 	// Number of active contracts
 	ActiveContracts uint64 `json:"activeContracts"`
 	// Number of failed contracts

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
 )
 
@@ -35,10 +36,10 @@ LIMIT ? OFFSET ?`, encode(txnID), limit, offset)
 	return
 }
 
-// blockV2TransactionIDs returns the database ID for each v2 transaction in the
-// block.
-func blockV2TransactionIDs(tx *txn, blockID types.BlockID) (idMap map[int64]transactionID, err error) {
-	rows, err := tx.Query(`SELECT bt.transaction_id, block_order, t.transaction_id
+// blockV2TransactionIDs returns the transaction id as a types.TransactionID
+// for each v2 transaction in the block.
+func blockV2TransactionIDs(tx *txn, blockID types.BlockID) (ids []types.TransactionID, err error) {
+	rows, err := tx.Query(`SELECT t.transaction_id
 FROM v2_block_transactions bt
 INNER JOIN v2_transactions t ON (t.id = bt.transaction_id)
 WHERE block_id = ? ORDER BY block_order ASC`, encode(blockID))
@@ -47,111 +48,333 @@ WHERE block_id = ? ORDER BY block_order ASC`, encode(blockID))
 	}
 	defer rows.Close()
 
-	idMap = make(map[int64]transactionID)
 	for rows.Next() {
-		var dbID int64
-		var blockOrder int64
-		var txnID types.TransactionID
-		if err := rows.Scan(&dbID, &blockOrder, decode(&txnID)); err != nil {
+		var id types.TransactionID
+		if err := rows.Scan(decode(&id)); err != nil {
 			return nil, fmt.Errorf("failed to scan block transaction: %w", err)
 		}
-		idMap[blockOrder] = transactionID{id: txnID, dbID: dbID}
+		ids = append(ids, id)
 	}
 	return
 }
 
-// v2TransactionArbitraryData returns the arbitrary data for each v2 transaction.
-func v2TransactionArbitraryData(tx *txn, txnIDs []int64) (map[int64][]byte, error) {
-	query := `SELECT transaction_id, data
-FROM v2_transaction_arbitrary_data
-WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)`
-	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+// getV2Transactions fetches v2 transactions in the correct order using
+// prepared statements.
+func getV2Transactions(tx *txn, ids []types.TransactionID) ([]explorer.V2Transaction, error) {
+	dbIDs, txns, err := getV2TransactionBase(tx, ids)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("getV2Transactions: failed to get base transactions: %w", err)
+	} else if err := fillV2TransactionAttestations(tx, dbIDs, txns); err != nil {
+		return nil, fmt.Errorf("getV2Transactions: failed to get attestations: %w", err)
+	} else if err := fillV2TransactionSiacoinInputs(tx, dbIDs, txns); err != nil {
+		return nil, fmt.Errorf("getV2Transactions: failed to get siacoin inputs: %w", err)
+	} else if err := fillV2TransactionSiacoinOutputs(tx, dbIDs, txns); err != nil {
+		return nil, fmt.Errorf("getV2Transactions: failed to get siacoin outputs: %w", err)
+	} else if err := fillV2TransactionSiafundInputs(tx, dbIDs, txns); err != nil {
+		return nil, fmt.Errorf("getV2Transactions: failed to get siafund inputs: %w", err)
+	} else if err := fillV2TransactionSiafundOutputs(tx, dbIDs, txns); err != nil {
+		return nil, fmt.Errorf("getV2Transactions: failed to get siafund outputs: %w", err)
+	} else if err := fillV2TransactionFileContracts(tx, dbIDs, txns); err != nil {
+		return nil, fmt.Errorf("getV2Transactions: failed to get file contracts: %w", err)
 	}
-	defer rows.Close()
 
-	result := make(map[int64][]byte)
-	for rows.Next() {
-		var txnID int64
-		var data []byte
-		if err := rows.Scan(&txnID, &data); err != nil {
-			return nil, fmt.Errorf("failed to scan arbitrary data: %w", err)
+	// add host announcements if we have any
+	for i := range txns {
+		for _, attestation := range txns[i].Attestations {
+			var ha chain.HostAnnouncement
+			if ha.FromAttestation(attestation) {
+				txns[i].HostAnnouncements = append(txns[i].HostAnnouncements, ha)
+			}
 		}
-		result[txnID] = data
 	}
-	return result, nil
+	return txns, nil
 }
 
-func getV2Transactions(tx *txn, idMap map[int64]transactionID) ([]explorer.V2Transaction, error) {
-	dbIDs := make([]int64, len(idMap))
-	for order, id := range idMap {
-		dbIDs[order] = id.dbID
-	}
-
-	txnArbitraryData, err := v2TransactionArbitraryData(tx, dbIDs)
+// getV2TransactionBase fetches the base transaction data for a given list of
+// transaction IDs.
+func getV2TransactionBase(tx *txn, txnIDs []types.TransactionID) ([]int64, []explorer.V2Transaction, error) {
+	stmt, err := tx.Prepare(`SELECT id, transaction_id, new_foundation_address, miner_fee, arbitrary_data FROM v2_transactions WHERE transaction_id = ?`)
 	if err != nil {
-		return nil, fmt.Errorf("getV2Transactions: failed to get arbitrary data: %w", err)
+		return nil, nil, fmt.Errorf("getV2TransactionBase: failed to prepare statement: %w", err)
 	}
+	defer stmt.Close()
 
-	var results []explorer.V2Transaction
-	for order, dbID := range dbIDs {
-		txn := explorer.V2Transaction{
-			ID:            idMap[int64(order)].id,
-			ArbitraryData: txnArbitraryData[dbID],
+	var dbID int64
+	dbIDs := make([]int64, 0, len(txnIDs))
+	txns := make([]explorer.V2Transaction, 0, len(txnIDs))
+	for _, id := range txnIDs {
+		var txn explorer.V2Transaction
+		var newFoundationAddress types.Address
+		if err := stmt.QueryRow(encode(id)).Scan(&dbID, decode(&txn.ID), decodeNull(&newFoundationAddress), decode(&txn.MinerFee), &txn.ArbitraryData); err != nil {
+			return nil, nil, fmt.Errorf("failed to scan base transaction: %w", err)
+		}
+		if (newFoundationAddress != types.Address{}) {
+			txn.NewFoundationAddress = &newFoundationAddress
 		}
 
-		// for _, attestation := range txn.Attestations {
-		// 	var ha chain.HostAnnouncement
-		// 	if ha.FromAttestation(attestation) {
-		// 		txn.HostAnnouncements = append(txn.HostAnnouncements, ha)
-		// 	}
-		// }
-
-		results = append(results, txn)
+		dbIDs = append(dbIDs, dbID)
+		txns = append(txns, txn)
 	}
-	return results, nil
+	return dbIDs, txns, nil
 }
 
-// v2TransactionDatabaseIDs returns the database ID for each transaction.
-func v2TransactionDatabaseIDs(tx *txn, txnIDs []types.TransactionID) (dbIDs map[int64]transactionID, err error) {
-	encodedIDs := func(ids []types.TransactionID) []any {
-		result := make([]any, len(ids))
-		for i, id := range ids {
-			result[i] = encode(id)
-		}
-		return result
-	}
-
-	query := `SELECT id, transaction_id FROM v2_transactions WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `) ORDER BY id`
-	rows, err := tx.Query(query, encodedIDs(txnIDs)...)
+// fillV2TransactionAttestations fills in the attestations for each
+// transaction.
+func fillV2TransactionAttestations(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
+	stmt, err := tx.Prepare(`SELECT public_key, key, value, signature FROM v2_transaction_attestations WHERE transaction_id = ? ORDER BY transaction_order`)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to prepare attestations statement: %w", err)
 	}
-	defer rows.Close()
+	defer stmt.Close()
 
-	var i int64
-	dbIDs = make(map[int64]transactionID)
-	for rows.Next() {
-		var dbID int64
-		var txnID types.TransactionID
-		if err := rows.Scan(&dbID, decode(&txnID)); err != nil {
-			return nil, fmt.Errorf("failed to scan transaction: %w", err)
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := stmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query attestations: %w", err)
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var attestation types.Attestation
+				if err := rows.Scan(decode(&attestation.PublicKey), &attestation.Key, &attestation.Value, decode(&attestation.Signature)); err != nil {
+					return fmt.Errorf("failed to scan attestation: %w", err)
+				}
+				txns[i].Attestations = append(txns[i].Attestations, attestation)
+			}
+			return nil
+		}()
+		if err != nil {
+			return err
 		}
-		dbIDs[i] = transactionID{id: txnID, dbID: dbID}
-		i++
 	}
-	return
+	return nil
+}
+
+// fillV2TransactionSiacoinInputs fills in the siacoin inputs for each
+// transaction.
+func fillV2TransactionSiacoinInputs(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
+	stmt, err := tx.Prepare(`SELECT ts.satisfied_policy, sc.output_id, sc.leaf_index, sc.maturity_height, sc.address, sc.value
+FROM siacoin_elements sc
+INNER JOIN v2_transaction_siacoin_inputs ts ON (ts.parent_id = sc.id)
+WHERE ts.transaction_id = ?
+ORDER BY ts.transaction_order ASC`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare siacoin inputs statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := stmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query siacoin inputs: %w", err)
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var sci types.V2SiacoinInput
+				if err := rows.Scan(decode(&sci.SatisfiedPolicy), decode(&sci.Parent.ID), decode(&sci.Parent.LeafIndex), &sci.Parent.MaturityHeight, decode(&sci.Parent.SiacoinOutput.Address), decode(&sci.Parent.SiacoinOutput.Value)); err != nil {
+					return fmt.Errorf("failed to scan siacoin inputs: %w", err)
+				}
+
+				txns[i].SiacoinInputs = append(txns[i].SiacoinInputs, sci)
+			}
+			return nil
+		}()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// fillV2TransactionSiacoinOutputs fills in the siacoin outputs for each
+// transaction.
+func fillV2TransactionSiacoinOutputs(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
+	stmt, err := tx.Prepare(`SELECT sc.output_id, sc.leaf_index, sc.spent_index, sc.source, sc.maturity_height, sc.address, sc.value
+FROM siacoin_elements sc
+INNER JOIN v2_transaction_siacoin_outputs ts ON (ts.output_id = sc.id)
+WHERE ts.transaction_id = ?
+ORDER BY ts.transaction_order ASC`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare siacoin outputs statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := stmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query siacoin outputs: %w", err)
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var spentIndex types.ChainIndex
+				var sco explorer.SiacoinOutput
+				if err := rows.Scan(decode(&sco.StateElement.ID), decode(&sco.LeafIndex), decodeNull(&spentIndex), &sco.Source, &sco.MaturityHeight, decode(&sco.SiacoinOutput.Address), decode(&sco.SiacoinOutput.Value)); err != nil {
+					return fmt.Errorf("failed to scan siacoin output: %w", err)
+				}
+
+				if spentIndex != (types.ChainIndex{}) {
+					sco.SpentIndex = &spentIndex
+				}
+				txns[i].SiacoinOutputs = append(txns[i].SiacoinOutputs, sco)
+			}
+			return nil
+		}()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// fillV2TransactionSiafundInputs fills in the siacoin inputs for each
+// transaction.
+func fillV2TransactionSiafundInputs(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
+	stmt, err := tx.Prepare(`SELECT ts.satisfied_policy, ts.claim_address, sf.output_id, sf.leaf_index, sf.address, sf.value
+FROM siafund_elements sf
+INNER JOIN v2_transaction_siafund_inputs ts ON (ts.parent_id = sf.id)
+WHERE ts.transaction_id = ?
+ORDER BY ts.transaction_order ASC`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare siacoin inputs statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := stmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query siacoin inputs: %w", err)
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var sfi types.V2SiafundInput
+				if err := rows.Scan(decode(&sfi.SatisfiedPolicy), decode(&sfi.ClaimAddress), decode(&sfi.Parent.ID), decode(&sfi.Parent.LeafIndex), decode(&sfi.Parent.SiafundOutput.Address), decode(&sfi.Parent.SiafundOutput.Value)); err != nil {
+					return fmt.Errorf("failed to scan siacoin inputs: %w", err)
+				}
+
+				txns[i].SiafundInputs = append(txns[i].SiafundInputs, sfi)
+			}
+			return nil
+		}()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// fillV2TransactionSiafundOutputs fills in the siafund outputs for each
+// transaction.
+func fillV2TransactionSiafundOutputs(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
+	stmt, err := tx.Prepare(`SELECT sf.output_id, sf.leaf_index, sf.spent_index, sf.claim_start, sf.address, sf.value
+FROM siafund_elements sf
+INNER JOIN v2_transaction_siafund_outputs ts ON (ts.output_id = sf.id)
+WHERE ts.transaction_id = ?
+ORDER BY ts.transaction_order ASC`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare siafund outputs statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := stmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query siafund outputs: %w", err)
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var spentIndex types.ChainIndex
+				var sfo explorer.SiafundOutput
+				if err := rows.Scan(decode(&sfo.StateElement.ID), decode(&sfo.StateElement.LeafIndex), decodeNull(&spentIndex), decode(&sfo.ClaimStart), decode(&sfo.SiafundOutput.Address), decode(&sfo.SiafundOutput.Value)); err != nil {
+					return fmt.Errorf("failed to scan siafund output: %w", err)
+				}
+				if spentIndex != (types.ChainIndex{}) {
+					sfo.SpentIndex = &spentIndex
+				}
+
+				txns[i].SiafundOutputs = append(txns[i].SiafundOutputs, sfo)
+			}
+			return nil
+		}()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// fillV2TransactionFileContracts fills in the file contracts for each
+// transaction.
+func fillV2TransactionFileContracts(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
+	stmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_index, rev.confirmation_transaction_id, rev.resolution, rev.resolution_index, rev.resolution_transaction_id, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
+FROM v2_file_contract_elements fc
+INNER JOIN v2_transaction_file_contracts ts ON (ts.contract_id = fc.id)
+INNER JOIN v2_last_contract_revision rev ON (rev.contract_id = fc.contract_id)
+WHERE ts.transaction_id = ?
+ORDER BY ts.transaction_order ASC`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare file contracts statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := stmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query file contracts: %w", err)
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var resolution types.V2FileContractResolutionType
+				var confirmationIndex, resolutionIndex types.ChainIndex
+				var confirmationTransactionID, resolutionTransactionID types.TransactionID
+
+				var fce explorer.V2FileContract
+				fc := &fce.V2FileContractElement.V2FileContract
+				if err := rows.Scan(decode(&fce.TransactionID), decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&resolution), decodeNull(&resolutionIndex), decodeNull(&resolutionTransactionID), decode(&fce.V2FileContractElement.ID), decode(&fce.V2FileContractElement.LeafIndex), decode(&fc.Capacity), decode(&fc.Filesize), decode(&fc.FileMerkleRoot), decode(&fc.ProofHeight), decode(&fc.ExpirationHeight), decode(&fc.RenterOutput.Address), decode(&fc.RenterOutput.Value), decode(&fc.HostOutput.Address), decode(&fc.HostOutput.Value), decode(&fc.MissedHostValue), decode(&fc.TotalCollateral), decode(&fc.RenterPublicKey), decode(&fc.HostPublicKey), decode(&fc.RevisionNumber), decode(&fc.RenterSignature), decode(&fc.HostSignature)); err != nil {
+					return fmt.Errorf("failed to scan file contract: %w", err)
+				}
+
+				if resolution != nil {
+					fce.Resolution = &resolution
+				}
+				if confirmationIndex != (types.ChainIndex{}) {
+					fce.ConfirmationIndex = &confirmationIndex
+				}
+				if resolutionIndex != (types.ChainIndex{}) {
+					fce.ResolutionIndex = &resolutionIndex
+				}
+				if confirmationTransactionID != (types.TransactionID{}) {
+					fce.ConfirmationTransactionID = &confirmationTransactionID
+				}
+				if resolutionTransactionID != (types.TransactionID{}) {
+					fce.ResolutionTransactionID = &resolutionTransactionID
+				}
+
+				txns[i].FileContracts = append(txns[i].FileContracts, fce)
+			}
+			return nil
+		}()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // V2Transactions implements explorer.Store.
 func (s *Store) V2Transactions(ids []types.TransactionID) (results []explorer.V2Transaction, err error) {
 	err = s.transaction(func(tx *txn) error {
-		dbIDs, err := v2TransactionDatabaseIDs(tx, ids)
-		if err != nil {
-			return fmt.Errorf("failed to get transaction IDs: %w", err)
-		}
-		results, err = getV2Transactions(tx, dbIDs)
+		results, err = getV2Transactions(tx, ids)
 		if err != nil {
 			return fmt.Errorf("failed to get transactions: %w", err)
 		}

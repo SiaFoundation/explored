@@ -21,6 +21,7 @@ CREATE TABLE network_metrics (
 	height INTEGER NOT NULL,
 	difficulty BLOB NOT NULL,
 	siafund_pool BLOB NOT NULL,
+	num_leaves BLOB NOT NULL,
 	total_hosts INTEGER NOT NULL,
 	active_contracts INTEGER NOT NULL,
 	failed_contracts INTEGER NOT NULL,
@@ -203,7 +204,7 @@ CREATE INDEX transaction_storage_proofs_parent_id_index ON transaction_storage_p
 CREATE TABLE transaction_siacoin_inputs (
 	transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
 	transaction_order INTEGER NOT NULL,
-	parent_id BLOB NOT NULL, -- TODO: change this to a reference to the siacoin_element and join for queries
+	parent_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL,
 	unlock_conditions BLOB NOT NULL,
 	UNIQUE(transaction_id, transaction_order)
 );
@@ -220,7 +221,7 @@ CREATE INDEX transaction_siacoin_outputs_transaction_id_index ON transaction_sia
 CREATE TABLE transaction_siafund_inputs (
 	transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
 	transaction_order INTEGER NOT NULL,
-	parent_id BLOB NOT NULL, -- TODO: change this to a reference to the siacoin_element and join for queries
+	parent_id INTEGER REFERENCES siafund_elements(id) ON DELETE CASCADE NOT NULL,
 	unlock_conditions BLOB NOT NULL,
 	claim_address BLOB NOT NULL,
 	UNIQUE(transaction_id, transaction_order)
@@ -255,27 +256,76 @@ CREATE INDEX transaction_file_contract_revisions_transaction_id_index ON transac
 
 CREATE TABLE v2_transactions (
 	id INTEGER PRIMARY KEY,
-	transaction_id BLOB UNIQUE NOT NULL
+	transaction_id BLOB UNIQUE NOT NULL,
+
+	new_foundation_address BLOB,
+	miner_fee BLOB NOT NULL,
+	arbitrary_data BLOB
 );
 CREATE INDEX v2_transactions_transaction_id_index ON v2_transactions(transaction_id);
 
 CREATE TABLE v2_block_transactions (
 	block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
-	transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
 	block_order INTEGER NOT NULL,
+	transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
 	UNIQUE(block_id, block_order)
 );
 CREATE INDEX v2_block_transactions_block_id_index ON v2_block_transactions(block_id);
-CREATE INDEX v2_block_transactions_transaction_id_index ON v2_block_transactions(transaction_id);
 CREATE INDEX v2_block_transactions_transaction_id_block_id ON v2_block_transactions(transaction_id, block_id);
 
-CREATE TABLE v2_transaction_arbitrary_data (
-	transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
-	data BLOB NOT NULL,
-	UNIQUE(transaction_id)
+CREATE TABLE v2_transaction_siacoin_inputs (
+    transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
+    transaction_order INTEGER NOT NULL,
+    parent_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL,
+    satisfied_policy BLOB NOT NULL,
+    UNIQUE(transaction_id, transaction_order)
 );
+CREATE INDEX v2_transaction_siacoin_inputs_transaction_id_index ON v2_transaction_siacoin_inputs(transaction_id);
 
-CREATE INDEX v2_transaction_arbitrary_data_transaction_id_index ON v2_transaction_arbitrary_data(transaction_id);
+CREATE TABLE v2_transaction_siacoin_outputs (
+    transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
+    transaction_order INTEGER NOT NULL,
+    output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL,
+    UNIQUE(transaction_id, transaction_order)
+);
+CREATE INDEX v2_transaction_siacoin_outputs_transaction_id_index ON v2_transaction_siacoin_outputs(transaction_id);
+
+CREATE TABLE v2_transaction_siafund_inputs (
+    transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
+    transaction_order INTEGER NOT NULL,
+    parent_id INTEGER REFERENCES siafund_elements(id) ON DELETE CASCADE NOT NULL,
+    claim_address BLOB NOT NULL,
+    satisfied_policy BLOB NOT NULL,
+    UNIQUE(transaction_id, transaction_order)
+);
+CREATE INDEX v2_transaction_siafund_inputs_transaction_id_index ON v2_transaction_siafund_inputs(transaction_id);
+
+CREATE TABLE v2_transaction_siafund_outputs (
+    transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
+    transaction_order INTEGER NOT NULL,
+    output_id INTEGER REFERENCES siafund_elements(id) ON DELETE CASCADE NOT NULL, -- add an index to all foreign keys
+    UNIQUE(transaction_id, transaction_order)
+);
+CREATE INDEX v2_transaction_siafund_outputs_transaction_id_index ON v2_transaction_siafund_outputs(transaction_id);
+
+CREATE TABLE v2_transaction_file_contracts (
+    transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
+    transaction_order INTEGER NOT NULL,
+    contract_id INTEGER REFERENCES v2_file_contract_elements(id) ON DELETE CASCADE NOT NULL, -- add an index to all foreign keys
+    UNIQUE(transaction_id, transaction_order)
+);
+CREATE INDEX  v2_transaction_file_contracts_transaction_id_index ON v2_transaction_file_contracts(transaction_id);
+
+CREATE TABLE v2_transaction_attestations (
+	transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
+	transaction_order INTEGER NOT NULL,
+	public_key BLOB NOT NULL,
+	key TEXT NOT NULL,
+	value BLOB NOT NULL,
+	signature BLOB NOT NULL,
+	UNIQUE(transaction_id, transaction_order)
+);
+CREATE INDEX v2_transaction_attestations_transaction_id_index ON v2_transaction_attestations(transaction_id);
 
 CREATE TABLE state_tree (
 	row INTEGER NOT NULL,
@@ -334,6 +384,49 @@ CREATE TABLE miner_payout_events (
 CREATE TABLE foundation_subsidy_events (
     event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
     output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL
+);
+
+CREATE TABLE v2_file_contract_elements (
+    id INTEGER PRIMARY KEY,
+    block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
+    transaction_id BLOB REFERENCES v2_transactions(transaction_id) ON DELETE CASCADE NOT NULL,
+
+    contract_id BLOB NOT NULL,
+    leaf_index BLOB NOT NULL,
+
+    capacity BLOB NOT NULL,
+    filesize BLOB NOT NULL,
+    file_merkle_root BLOB NOT NULL,
+    proof_height BLOB NOT NULL,
+    expiration_height BLOB NOT NULL,
+    renter_output_address BLOB NOT NULL,
+    renter_output_value BLOB NOT NULL,
+    host_output_address BLOB NOT NULL,
+    host_output_value BLOB NOT NULL,
+    missed_host_value BLOB NOT NULL,
+    total_collateral BLOB NOT NULL,
+    renter_public_key BLOB NOT NULL,
+    host_public_key BLOB NOT NULL,
+    revision_number BLOB NOT NULL,
+
+    renter_signature BLOB NOT NULL,
+    host_signature BLOB NOT NULL,
+
+    UNIQUE(contract_id, revision_number)
+);
+CREATE INDEX v2_file_contract_elements_contract_id_revision_number_index ON v2_file_contract_elements(contract_id, revision_number);
+
+CREATE TABLE v2_last_contract_revision (
+    contract_id BLOB PRIMARY KEY NOT NULL,
+
+    confirmation_index BLOB,
+    confirmation_transaction_id BLOB REFERENCES v2_transactions(transaction_id),
+
+    resolution BLOB,
+    resolution_index BLOB,
+    resolution_transaction_id BLOB REFERENCES v2_transactions(transaction_id),
+
+    contract_element_id INTEGER UNIQUE REFERENCES v2_file_contract_elements(id) ON DELETE CASCADE NOT NULL
 );
 
 CREATE TABLE v2_host_announcements (

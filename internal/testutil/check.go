@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
 )
 
@@ -36,70 +37,75 @@ func CheckTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer
 	t.Helper()
 
 	Equal(t, "siacoin inputs", len(expectTxn.SiacoinInputs), len(gotTxn.SiacoinInputs))
-	Equal(t, "siacoin outputs", len(expectTxn.SiacoinOutputs), len(gotTxn.SiacoinOutputs))
-	Equal(t, "siafund inputs", len(expectTxn.SiafundInputs), len(gotTxn.SiafundInputs))
-	Equal(t, "siafund outputs", len(expectTxn.SiafundOutputs), len(gotTxn.SiafundOutputs))
-	Equal(t, "arbitrary data", len(expectTxn.ArbitraryData), len(gotTxn.ArbitraryData))
-	Equal(t, "miner fees", len(expectTxn.MinerFees), len(gotTxn.MinerFees))
-	Equal(t, "signatures", len(expectTxn.Signatures), len(gotTxn.Signatures))
-
 	for i := range expectTxn.SiacoinInputs {
-		expectSci := expectTxn.SiacoinInputs[i]
-		gotSci := gotTxn.SiacoinInputs[i]
+		expected := expectTxn.SiacoinInputs[i]
+		got := gotTxn.SiacoinInputs[i]
 
-		if gotSci.Value == types.ZeroCurrency {
+		if got.Value == types.ZeroCurrency {
 			t.Fatal("invalid value")
 		}
-		Equal(t, "parent ID", expectSci.ParentID, gotSci.ParentID)
-		Equal(t, "unlock conditions", expectSci.UnlockConditions, gotSci.UnlockConditions)
-		Equal(t, "address", expectSci.UnlockConditions.UnlockHash(), gotSci.Address)
+		Equal(t, "parent ID", expected.ParentID, got.ParentID)
+		Equal(t, "unlock conditions", expected.UnlockConditions, got.UnlockConditions)
+		Equal(t, "address", expected.UnlockConditions.UnlockHash(), got.Address)
 	}
-	for i := range expectTxn.SiacoinOutputs {
-		expectSco := expectTxn.SiacoinOutputs[i]
-		gotSco := gotTxn.SiacoinOutputs[i].SiacoinOutput
 
-		Equal(t, "address", expectSco.Address, gotSco.Address)
-		Equal(t, "value", expectSco.Value, gotSco.Value)
+	Equal(t, "siacoin outputs", len(expectTxn.SiacoinOutputs), len(gotTxn.SiacoinOutputs))
+	for i := range expectTxn.SiacoinOutputs {
+		expected := expectTxn.SiacoinOutputs[i]
+		got := gotTxn.SiacoinOutputs[i].SiacoinOutput
+
+		Equal(t, "address", expected.Address, got.Address)
+		Equal(t, "value", expected.Value, got.Value)
 		Equal(t, "source", explorer.SourceTransaction, gotTxn.SiacoinOutputs[i].Source)
 	}
-	for i := range expectTxn.SiafundInputs {
-		expectSfi := expectTxn.SiafundInputs[i]
-		gotSfi := gotTxn.SiafundInputs[i]
 
-		if gotSfi.Value == 0 {
+	Equal(t, "siafund inputs", len(expectTxn.SiafundInputs), len(gotTxn.SiafundInputs))
+	for i := range expectTxn.SiafundInputs {
+		expected := expectTxn.SiafundInputs[i]
+		got := gotTxn.SiafundInputs[i]
+
+		if got.Value == 0 {
 			t.Fatal("invalid value")
 		}
-		Equal(t, "parent ID", expectSfi.ParentID, gotSfi.ParentID)
-		Equal(t, "claim address", expectSfi.ClaimAddress, gotSfi.ClaimAddress)
-		Equal(t, "unlock conditions", expectSfi.UnlockConditions, gotSfi.UnlockConditions)
-		Equal(t, "address", expectSfi.UnlockConditions.UnlockHash(), gotSfi.Address)
+		Equal(t, "parent ID", expected.ParentID, got.ParentID)
+		Equal(t, "claim address", expected.ClaimAddress, got.ClaimAddress)
+		Equal(t, "unlock conditions", expected.UnlockConditions, got.UnlockConditions)
+		Equal(t, "address", expected.UnlockConditions.UnlockHash(), got.Address)
 	}
-	for i := range expectTxn.SiafundOutputs {
-		expectSfo := expectTxn.SiafundOutputs[i]
-		gotSfo := gotTxn.SiafundOutputs[i].SiafundOutput
 
-		Equal(t, "address", expectSfo.Address, gotSfo.Address)
-		Equal(t, "value", expectSfo.Value, gotSfo.Value)
+	Equal(t, "siafund outputs", len(expectTxn.SiafundOutputs), len(gotTxn.SiafundOutputs))
+	for i := range expectTxn.SiafundOutputs {
+		expected := expectTxn.SiafundOutputs[i]
+		got := gotTxn.SiafundOutputs[i].SiafundOutput
+
+		Equal(t, "address", expected.Address, got.Address)
+		Equal(t, "value", expected.Value, got.Value)
 	}
+
+	Equal(t, "arbitrary data", len(expectTxn.ArbitraryData), len(gotTxn.ArbitraryData))
 	for i := range expectTxn.ArbitraryData {
-		Equal(t, "miner fee", expectTxn.ArbitraryData[i], gotTxn.ArbitraryData[i])
+		Equal(t, "arbitrary data", expectTxn.ArbitraryData[i], gotTxn.ArbitraryData[i])
 	}
+
+	Equal(t, "miner fees", len(expectTxn.MinerFees), len(gotTxn.MinerFees))
 	for i := range expectTxn.MinerFees {
 		Equal(t, "miner fee", expectTxn.MinerFees[i], gotTxn.MinerFees[i])
 	}
-	for i := range expectTxn.Signatures {
-		expectSig := expectTxn.Signatures[i]
-		gotSig := gotTxn.Signatures[i]
 
-		Equal(t, "parent ID", expectSig.ParentID, gotSig.ParentID)
-		Equal(t, "public key index", expectSig.PublicKeyIndex, gotSig.PublicKeyIndex)
-		Equal(t, "timelock", expectSig.Timelock, gotSig.Timelock)
-		Equal(t, "signature", expectSig.Signature, gotSig.Signature)
+	Equal(t, "signatures", len(expectTxn.Signatures), len(gotTxn.Signatures))
+	for i := range expectTxn.Signatures {
+		expected := expectTxn.Signatures[i]
+		got := gotTxn.Signatures[i]
+
+		Equal(t, "parent ID", expected.ParentID, got.ParentID)
+		Equal(t, "public key index", expected.PublicKeyIndex, got.PublicKeyIndex)
+		Equal(t, "timelock", expected.Timelock, got.Timelock)
+		Equal(t, "signature", expected.Signature, got.Signature)
 
 		// reflect.DeepCheck treats empty slices as different from nil
 		// slices so these will differ because the decoder is doing
 		// cf.X = make([]uint64, d.ReadPrefix()) and the prefix is 0
-		// testutil.Equal(t, "covered fields", expectSig.CoveredFields, gotSig.CoveredFields)
+		// testutil.Equal(t, "covered fields", expected.CoveredFields, got.CoveredFields)
 	}
 }
 
@@ -108,8 +114,90 @@ func CheckTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer
 func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn explorer.V2Transaction) {
 	t.Helper()
 
-	Equal(t, "arbitrary data", len(expectTxn.ArbitraryData), len(gotTxn.ArbitraryData))
+	Equal(t, "new foundation address", expectTxn.NewFoundationAddress, gotTxn.NewFoundationAddress)
+	Equal(t, "miner fee", expectTxn.MinerFee, gotTxn.MinerFee)
 
+	Equal(t, "siacoin inputs", len(expectTxn.SiacoinInputs), len(gotTxn.SiacoinInputs))
+	for i := range expectTxn.SiacoinInputs {
+		expected := expectTxn.SiacoinInputs[i]
+		got := gotTxn.SiacoinInputs[i]
+
+		Equal(t, "address", expected.Parent.SiacoinOutput.Address, got.Parent.SiacoinOutput.Address)
+		Equal(t, "value", expected.Parent.SiacoinOutput.Value, got.Parent.SiacoinOutput.Value)
+		Equal(t, "maturity height", expected.Parent.MaturityHeight, got.Parent.MaturityHeight)
+		Equal(t, "id", expected.Parent.ID, got.Parent.ID)
+		Equal(t, "leaf index", expected.Parent.LeafIndex, got.Parent.LeafIndex)
+		Equal(t, "satisfied policy", expected.SatisfiedPolicy, got.SatisfiedPolicy)
+	}
+
+	Equal(t, "siacoin outputs", len(expectTxn.SiacoinOutputs), len(gotTxn.SiacoinOutputs))
+	for i := range expectTxn.SiacoinOutputs {
+		expected := expectTxn.SiacoinOutputs[i]
+		got := gotTxn.SiacoinOutputs[i].SiacoinOutput
+
+		Equal(t, "address", expected.Address, got.Address)
+		Equal(t, "value", expected.Value, got.Value)
+	}
+
+	Equal(t, "siafund inputs", len(expectTxn.SiafundInputs), len(gotTxn.SiafundInputs))
+	for i := range expectTxn.SiafundInputs {
+		expected := expectTxn.SiafundInputs[i]
+		got := gotTxn.SiafundInputs[i]
+
+		Equal(t, "address", expected.Parent.SiafundOutput.Address, got.Parent.SiafundOutput.Address)
+		Equal(t, "value", expected.Parent.SiafundOutput.Value, got.Parent.SiafundOutput.Value)
+		Equal(t, "claim address", expected.ClaimAddress, got.ClaimAddress)
+		Equal(t, "id", expected.Parent.ID, got.Parent.ID)
+		Equal(t, "leaf index", expected.Parent.LeafIndex, got.Parent.LeafIndex)
+		Equal(t, "satisfied policy", expected.SatisfiedPolicy, got.SatisfiedPolicy)
+	}
+
+	Equal(t, "siafund outputs", len(expectTxn.SiafundOutputs), len(gotTxn.SiafundOutputs))
+	for i := range expectTxn.SiafundOutputs {
+		expected := expectTxn.SiafundOutputs[i]
+		got := gotTxn.SiafundOutputs[i].SiafundOutput
+
+		Equal(t, "address", expected.Address, got.Address)
+		Equal(t, "value", expected.Value, got.Value)
+	}
+
+	Equal(t, "file contracts", len(expectTxn.FileContracts), len(gotTxn.FileContracts))
+	for i := range expectTxn.FileContracts {
+		expected := expectTxn.FileContracts[i]
+		got := gotTxn.FileContracts[i]
+
+		Equal(t, "id", expectTxn.V2FileContractID(expectTxn.ID(), i), types.FileContractID(got.ID))
+		CheckV2FC(t, expected, got)
+	}
+
+	Equal(t, "attestations", len(expectTxn.Attestations), len(gotTxn.Attestations))
+	for i := range expectTxn.Attestations {
+		expected := expectTxn.Attestations[i]
+		got := gotTxn.Attestations[i]
+
+		Equal(t, "public key", expected.PublicKey, got.PublicKey)
+		Equal(t, "key", expected.Key, got.Key)
+		Equal(t, "value", expected.Value, got.Value)
+		Equal(t, "signature", expected.Signature, got.Signature)
+	}
+
+	var hostAnnouncements []chain.HostAnnouncement
+	for _, attestation := range expectTxn.Attestations {
+		var ha chain.HostAnnouncement
+		if ha.FromAttestation(attestation) {
+			hostAnnouncements = append(hostAnnouncements, ha)
+		}
+	}
+	Equal(t, "host announcements", len(hostAnnouncements), len(gotTxn.HostAnnouncements))
+	for i := range hostAnnouncements {
+		expected := hostAnnouncements[i]
+		got := gotTxn.HostAnnouncements[i]
+
+		Equal(t, "net address", expected.NetAddress, got.NetAddress)
+		Equal(t, "public key", expected.PublicKey, got.PublicKey)
+	}
+
+	Equal(t, "arbitrary data", len(expectTxn.ArbitraryData), len(gotTxn.ArbitraryData))
 	for i := range expectTxn.ArbitraryData {
 		Equal(t, "arbitrary data value", expectTxn.ArbitraryData[i], gotTxn.ArbitraryData[i])
 	}
@@ -160,4 +248,27 @@ func CheckFC(t *testing.T, revision, resolved, valid bool, expected types.FileCo
 		Equal(t, "missed proof output address", expected.MissedProofOutputs[i].Address, gotFC.MissedProofOutputs[i].Address)
 		Equal(t, "missed proof output value", expected.MissedProofOutputs[i].Value, gotFC.MissedProofOutputs[i].Value)
 	}
+}
+
+// CheckV2FC checks the retrieved file contract with the source file contract
+// in addition to checking the resolved and valid fields.
+func CheckV2FC(t *testing.T, expected types.V2FileContract, got explorer.V2FileContract) {
+	t.Helper()
+
+	gotFC := got.V2FileContractElement.V2FileContract
+	Equal(t, "capacity", expected.Capacity, gotFC.Capacity)
+	Equal(t, "filesize", expected.Filesize, gotFC.Filesize)
+	Equal(t, "proof height", expected.ProofHeight, gotFC.ProofHeight)
+	Equal(t, "expiration height", expected.ExpirationHeight, gotFC.ExpirationHeight)
+	Equal(t, "renter output address", expected.RenterOutput.Address, gotFC.RenterOutput.Address)
+	Equal(t, "renter output value", expected.RenterOutput.Address, gotFC.RenterOutput.Address)
+	Equal(t, "host output address", expected.HostOutput.Address, gotFC.HostOutput.Address)
+	Equal(t, "host output value", expected.HostOutput.Address, gotFC.HostOutput.Address)
+	Equal(t, "missed host value", expected.MissedHostValue, gotFC.MissedHostValue)
+	Equal(t, "total collateral", expected.TotalCollateral, gotFC.TotalCollateral)
+	Equal(t, "renter public key", expected.RenterPublicKey, gotFC.RenterPublicKey)
+	Equal(t, "host public key", expected.HostPublicKey, gotFC.HostPublicKey)
+	Equal(t, "revision number", expected.RevisionNumber, gotFC.RevisionNumber)
+	Equal(t, "renter signature", expected.RenterSignature, gotFC.RenterSignature)
+	Equal(t, "host signature", expected.HostSignature, gotFC.HostSignature)
 }

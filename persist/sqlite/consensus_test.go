@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils"
 	"go.sia.tech/coreutils/chain"
@@ -16,7 +17,7 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
-func syncDB(t *testing.T, db *sqlite.Store, cm *chain.Manager) {
+func syncDB(t *testing.T, db explorer.Store, cm *chain.Manager) {
 	index, err := db.Tip()
 	if err != nil && !errors.Is(err, explorer.ErrNoTip) {
 		t.Fatal(err)
@@ -38,6 +39,44 @@ func syncDB(t *testing.T, db *sqlite.Store, cm *chain.Manager) {
 			index = caus[len(caus)-1].State.Index
 		}
 	}
+}
+
+func newStore(t *testing.T, v2 bool, f func(*consensus.Network, types.Block)) (*consensus.Network, types.Block, *chain.Manager, explorer.Store) {
+	log := zaptest.NewLogger(t)
+	dir := t.TempDir()
+	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var network *consensus.Network
+	var genesisBlock types.Block
+	if v2 {
+		network, genesisBlock = ctestutil.V2Network()
+	} else {
+		network, genesisBlock = ctestutil.Network()
+	}
+	if f != nil {
+		f(network, genesisBlock)
+	}
+
+	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cm := chain.NewManager(store, genesisState)
+	syncDB(t, db, cm)
+
+	t.Cleanup(func() {
+		db.Close()
+		bdb.Close()
+	})
+	return network, genesisBlock, cm, db
 }
 
 // CheckMetrics checks the that the metrics from the DB match what we expect.
@@ -96,28 +135,7 @@ func CheckFCRevisions(t *testing.T, confirmationIndex types.ChainIndex, confirma
 }
 
 func TestBalance(t *testing.T) {
-	log := zaptest.NewLogger(t)
-	dir := t.TempDir()
-	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer bdb.Close()
-
-	network, genesisBlock := ctestutil.Network()
-
-	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cm := chain.NewManager(store, genesisState)
+	_, _, cm, db := newStore(t, false, nil)
 
 	// Generate three addresses: addr1, addr2, addr3
 	pk1 := types.GeneratePrivateKey()
@@ -200,20 +218,6 @@ func TestBalance(t *testing.T) {
 }
 
 func TestSiafundBalance(t *testing.T) {
-	log := zaptest.NewLogger(t)
-	dir := t.TempDir()
-	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer bdb.Close()
-
 	// Generate three addresses: addr1, addr2, addr3
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
@@ -224,16 +228,10 @@ func TestSiafundBalance(t *testing.T) {
 	pk3 := types.GeneratePrivateKey()
 	addr3 := types.StandardUnlockHash(pk3.PublicKey())
 
-	network, genesisBlock := ctestutil.Network()
-	genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	_, genesisBlock, cm, db := newStore(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	})
 	giftSF := genesisBlock.Transactions[0].SiafundOutputs[0].Value
-
-	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cm := chain.NewManager(store, genesisState)
 
 	// Send all of the payout except 100 SF to addr2
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
@@ -278,20 +276,6 @@ func TestSiafundBalance(t *testing.T) {
 }
 
 func TestSendTransactions(t *testing.T) {
-	log := zaptest.NewLogger(t)
-	dir := t.TempDir()
-	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer bdb.Close()
-
 	// Generate three addresses: addr1, addr2, addr3
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
@@ -302,16 +286,10 @@ func TestSendTransactions(t *testing.T) {
 	pk3 := types.GeneratePrivateKey()
 	addr3 := types.StandardUnlockHash(pk3.PublicKey())
 
-	network, genesisBlock := ctestutil.Network()
-	genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	_, genesisBlock, cm, db := newStore(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	})
 	giftSF := genesisBlock.Transactions[0].SiafundOutputs[0].Value
-
-	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cm := chain.NewManager(store, genesisState)
 
 	expectedPayout := cm.TipState().BlockReward()
 	maturityHeight := cm.TipState().MaturityHeight()
@@ -467,28 +445,7 @@ func TestSendTransactions(t *testing.T) {
 }
 
 func TestTip(t *testing.T) {
-	log := zaptest.NewLogger(t)
-	dir := t.TempDir()
-	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer bdb.Close()
-
-	network, genesisBlock := ctestutil.Network()
-
-	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cm := chain.NewManager(store, genesisState)
+	_, _, cm, db := newStore(t, false, nil)
 
 	const n = 100
 	for i := cm.Tip().Height; i < n; i++ {
@@ -516,21 +473,6 @@ func TestTip(t *testing.T) {
 }
 
 func TestFileContract(t *testing.T) {
-	log := zaptest.NewLogger(t)
-	dir := t.TempDir()
-
-	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer bdb.Close()
-
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
 
@@ -540,16 +482,10 @@ func TestFileContract(t *testing.T) {
 	hostPrivateKey := types.GeneratePrivateKey()
 	hostPublicKey := hostPrivateKey.PublicKey()
 
-	network, genesisBlock := ctestutil.Network()
-	genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	_, genesisBlock, cm, db := newStore(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
 	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
-
-	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cm := chain.NewManager(store, genesisState)
 
 	scOutputID := genesisBlock.Transactions[0].SiacoinOutputID(0)
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
@@ -772,21 +708,6 @@ func TestFileContract(t *testing.T) {
 }
 
 func TestEphemeralFileContract(t *testing.T) {
-	log := zaptest.NewLogger(t)
-	dir := t.TempDir()
-
-	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer bdb.Close()
-
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
 
@@ -796,16 +717,10 @@ func TestEphemeralFileContract(t *testing.T) {
 	hostPrivateKey := types.GeneratePrivateKey()
 	hostPublicKey := hostPrivateKey.PublicKey()
 
-	network, genesisBlock := ctestutil.Network()
-	genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	_, genesisBlock, cm, db := newStore(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
 	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
-
-	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cm := chain.NewManager(store, genesisState)
 
 	scOutputID := genesisBlock.Transactions[0].SiacoinOutputID(0)
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
@@ -1021,34 +936,14 @@ func TestEphemeralFileContract(t *testing.T) {
 }
 
 func TestRevertTip(t *testing.T) {
-	log := zaptest.NewLogger(t)
-	dir := t.TempDir()
-	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer bdb.Close()
-
-	network, genesisBlock := ctestutil.Network()
-
-	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cm := chain.NewManager(store, genesisState)
-
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
 
 	pk2 := types.GeneratePrivateKey()
 	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
+	_, _, cm, db := newStore(t, false, nil)
+	genesisState := cm.TipState()
 
 	const n = 100
 	for i := cm.Tip().Height; i < n; i++ {
@@ -1109,29 +1004,6 @@ func TestRevertTip(t *testing.T) {
 }
 
 func TestRevertBalance(t *testing.T) {
-	log := zaptest.NewLogger(t)
-	dir := t.TempDir()
-	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer bdb.Close()
-
-	network, genesisBlock := ctestutil.Network()
-
-	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cm := chain.NewManager(store, genesisState)
-
 	// Generate three addresses: addr1, addr2, addr3
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
@@ -1141,6 +1013,9 @@ func TestRevertBalance(t *testing.T) {
 
 	pk3 := types.GeneratePrivateKey()
 	addr3 := types.StandardUnlockHash(pk3.PublicKey())
+
+	_, _, cm, db := newStore(t, false, nil)
+	genesisState := cm.TipState()
 
 	// t.Log("addr1:", addr1)
 	// t.Log("addr2:", addr2)
@@ -1628,32 +1503,11 @@ func TestRevertSendTransactions(t *testing.T) {
 }
 
 func TestHostAnnouncement(t *testing.T) {
-	log := zaptest.NewLogger(t)
-	dir := t.TempDir()
-	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer bdb.Close()
-
-	network, genesisBlock := ctestutil.Network()
-
-	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cm := chain.NewManager(store, genesisState)
-
 	pk1 := types.GeneratePrivateKey()
 	pk2 := types.GeneratePrivateKey()
 	pk3 := types.GeneratePrivateKey()
+
+	_, _, cm, db := newStore(t, false, nil)
 
 	checkHostAnnouncements := func(expectedArbitraryData [][]byte, got []chain.HostAnnouncement) {
 		t.Helper()
@@ -1835,20 +1689,6 @@ func TestHostAnnouncement(t *testing.T) {
 }
 
 func TestMultipleReorg(t *testing.T) {
-	log := zaptest.NewLogger(t)
-	dir := t.TempDir()
-	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer bdb.Close()
-
 	// Generate three addresses: addr1, addr2, addr3
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
@@ -1859,22 +1699,12 @@ func TestMultipleReorg(t *testing.T) {
 	pk3 := types.GeneratePrivateKey()
 	addr3 := types.StandardUnlockHash(pk3.PublicKey())
 
-	// t.Log("addr1:", addr1)
-	// t.Log("addr2:", addr2)
-	// t.Log("addr3:", addr3)
-
-	network, genesisBlock := ctestutil.Network()
-	genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
-	genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	_, genesisBlock, cm, db := newStore(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	})
 	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
 	giftSF := genesisBlock.Transactions[0].SiafundOutputs[0].Value
-
-	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cm := chain.NewManager(store, genesisState)
 
 	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
 	// transfer gift from addr1 to addr2
@@ -2171,21 +2001,6 @@ func TestMultipleReorg(t *testing.T) {
 }
 
 func TestMultipleReorgFileContract(t *testing.T) {
-	log := zaptest.NewLogger(t)
-	dir := t.TempDir()
-
-	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer bdb.Close()
-
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
 
@@ -2195,16 +2010,11 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	hostPrivateKey := types.GeneratePrivateKey()
 	hostPublicKey := hostPrivateKey.PublicKey()
 
-	network, genesisBlock := ctestutil.Network()
-	genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	_, genesisBlock, cm, db := newStore(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	genesisState := cm.TipState()
 	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
-
-	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cm := chain.NewManager(store, genesisState)
 
 	scOutputID := genesisBlock.Transactions[0].SiacoinOutputID(0)
 	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
@@ -2507,33 +2317,13 @@ func TestMultipleReorgFileContract(t *testing.T) {
 }
 
 func TestMetricCirculatingSupply(t *testing.T) {
-	log := zaptest.NewLogger(t)
-	dir := t.TempDir()
-
-	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer bdb.Close()
-
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
 
-	network, genesisBlock := ctestutil.Network()
-	genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
-
-	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cm := chain.NewManager(store, genesisState)
+	_, genesisBlock, cm, db := newStore(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	genesisState := cm.TipState()
 
 	var circulatingSupply types.Currency
 	if foundationSubsidy, ok := genesisState.FoundationSubsidy(); ok {
