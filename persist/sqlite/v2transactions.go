@@ -76,6 +76,8 @@ func getV2Transactions(tx *txn, ids []types.TransactionID) ([]explorer.V2Transac
 		return nil, fmt.Errorf("getV2Transactions: failed to get siafund outputs: %w", err)
 	} else if err := fillV2TransactionFileContracts(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getV2Transactions: failed to get file contracts: %w", err)
+	} else if err := fillV2TransactionFileContractRevisions(tx, dbIDs, txns); err != nil {
+		return nil, fmt.Errorf("getV2Transactions: failed to get file contracts: %w", err)
 	}
 
 	// add host announcements if we have any
@@ -334,30 +336,9 @@ ORDER BY ts.transaction_order ASC`)
 			defer rows.Close()
 
 			for rows.Next() {
-				var resolution types.V2FileContractResolutionType
-				var confirmationIndex, resolutionIndex types.ChainIndex
-				var confirmationTransactionID, resolutionTransactionID types.TransactionID
-
-				var fce explorer.V2FileContract
-				fc := &fce.V2FileContractElement.V2FileContract
-				if err := rows.Scan(decode(&fce.TransactionID), decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&resolution), decodeNull(&resolutionIndex), decodeNull(&resolutionTransactionID), decode(&fce.V2FileContractElement.ID), decode(&fce.V2FileContractElement.LeafIndex), decode(&fc.Capacity), decode(&fc.Filesize), decode(&fc.FileMerkleRoot), decode(&fc.ProofHeight), decode(&fc.ExpirationHeight), decode(&fc.RenterOutput.Address), decode(&fc.RenterOutput.Value), decode(&fc.HostOutput.Address), decode(&fc.HostOutput.Value), decode(&fc.MissedHostValue), decode(&fc.TotalCollateral), decode(&fc.RenterPublicKey), decode(&fc.HostPublicKey), decode(&fc.RevisionNumber), decode(&fc.RenterSignature), decode(&fc.HostSignature)); err != nil {
+				fce, err := scanV2FileContract(rows)
+				if err != nil {
 					return fmt.Errorf("failed to scan file contract: %w", err)
-				}
-
-				if resolution != nil {
-					fce.Resolution = &resolution
-				}
-				if confirmationIndex != (types.ChainIndex{}) {
-					fce.ConfirmationIndex = &confirmationIndex
-				}
-				if resolutionIndex != (types.ChainIndex{}) {
-					fce.ResolutionIndex = &resolutionIndex
-				}
-				if confirmationTransactionID != (types.TransactionID{}) {
-					fce.ConfirmationTransactionID = &confirmationTransactionID
-				}
-				if resolutionTransactionID != (types.TransactionID{}) {
-					fce.ResolutionTransactionID = &resolutionTransactionID
 				}
 
 				txns[i].FileContracts = append(txns[i].FileContracts, fce)
@@ -367,6 +348,78 @@ ORDER BY ts.transaction_order ASC`)
 		if err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// fillV2TransactionFileContractRevisions fills in the file contracts for each
+// transaction.
+func fillV2TransactionFileContractRevisions(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
+	parentStmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_index, rev.confirmation_transaction_id, rev.resolution, rev.resolution_index, rev.resolution_transaction_id, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
+FROM v2_file_contract_elements fc
+INNER JOIN v2_transaction_file_contract_revisions ts ON (ts.parent_contract_id = fc.id)
+INNER JOIN v2_last_contract_revision rev ON (rev.contract_id = fc.contract_id)
+WHERE ts.transaction_id = ?
+ORDER BY ts.transaction_order ASC`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare file contracts parent statement: %w", err)
+	}
+	defer parentStmt.Close()
+
+	revisionStmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_index, rev.confirmation_transaction_id, rev.resolution, rev.resolution_index, rev.resolution_transaction_id, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
+FROM v2_file_contract_elements fc
+INNER JOIN v2_transaction_file_contract_revisions ts ON (ts.revision_contract_id = fc.id)
+INNER JOIN v2_last_contract_revision rev ON (rev.contract_id = fc.contract_id)
+WHERE ts.transaction_id = ?
+ORDER BY ts.transaction_order ASC`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare file contracts revision statement: %w", err)
+	}
+	defer revisionStmt.Close()
+
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := parentStmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query file contract revision parents: %w", err)
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				fce, err := scanV2FileContract(rows)
+				if err != nil {
+					return fmt.Errorf("failed to scan file contract: %w", err)
+				}
+
+				txns[i].FileContractRevisions = append(txns[i].FileContractRevisions, explorer.V2FileContractRevision{
+					Parent: fce,
+				})
+			}
+			return nil
+		}()
+		if err != nil {
+			return err
+		}
+		err = func() error {
+			rows, err := revisionStmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query file contract revision revisions: %w", err)
+			}
+			defer rows.Close()
+
+			j := 0
+			for rows.Next() {
+				fce, err := scanV2FileContract(rows)
+				if err != nil {
+					return fmt.Errorf("failed to scan file contract: %w", err)
+				}
+
+				txns[i].FileContractRevisions[j].Revision = fce
+				j++
+			}
+			return nil
+		}()
+
 	}
 	return nil
 }
