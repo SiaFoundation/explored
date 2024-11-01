@@ -87,6 +87,7 @@ func updateV2FileContractElements(tx *txn, revert bool, b types.Block, fces []ex
 	if err != nil {
 		return nil, fmt.Errorf("updateV2FileContractElements: failed to prepare parent statement: %w", err)
 	}
+	defer parentStmt.Close()
 
 	fcTxns := make(map[explorer.DBFileContract]types.TransactionID)
 	for _, txn := range b.V2Transactions() {
