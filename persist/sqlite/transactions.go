@@ -14,8 +14,8 @@ import (
 func (s *Store) TransactionChainIndices(txnID types.TransactionID, offset, limit uint64) (indices []types.ChainIndex, err error) {
 	err = s.transaction(func(tx *txn) error {
 		rows, err := tx.Query(`SELECT DISTINCT b.id, b.height FROM blocks b
-INNER JOIN block_transactions bt ON (bt.block_id = b.id)
-INNER JOIN transactions t ON (t.id = bt.transaction_id)
+INNER JOIN block_transactions bt ON bt.block_id = b.id
+INNER JOIN transactions t ON t.id = bt.transaction_id
 WHERE t.transaction_id = ?
 ORDER BY b.height DESC 
 LIMIT ? OFFSET ?`, encode(txnID), limit, offset)
@@ -112,7 +112,7 @@ ORDER BY transaction_order ASC`
 func transactionSiacoinOutputs(tx *txn, txnIDs []int64) (map[int64][]explorer.SiacoinOutput, error) {
 	query := `SELECT ts.transaction_id, sc.output_id, sc.leaf_index, sc.spent_index, sc.source, sc.maturity_height, sc.address, sc.value
 FROM siacoin_elements sc
-INNER JOIN transaction_siacoin_outputs ts ON (ts.output_id = sc.id)
+INNER JOIN transaction_siacoin_outputs ts ON ts.output_id = sc.id
 WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
 ORDER BY ts.transaction_order ASC`
 	rows, err := tx.Query(query, queryArgs(txnIDs)...)
@@ -142,7 +142,7 @@ ORDER BY ts.transaction_order ASC`
 func transactionSiacoinInputs(tx *txn, txnIDs []int64) (map[int64][]explorer.SiacoinInput, error) {
 	query := `SELECT sc.id, ts.transaction_id, sc.output_id, ts.unlock_conditions, sc.value
 FROM siacoin_elements sc
-INNER JOIN transaction_siacoin_inputs ts ON (ts.parent_id = sc.id)
+INNER JOIN transaction_siacoin_inputs ts ON ts.parent_id = sc.id
 WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
 ORDER BY ts.transaction_order ASC`
 	rows, err := tx.Query(query, queryArgs(txnIDs)...)
@@ -168,7 +168,7 @@ ORDER BY ts.transaction_order ASC`
 func transactionSiafundInputs(tx *txn, txnIDs []int64) (map[int64][]explorer.SiafundInput, error) {
 	query := `SELECT ts.transaction_id, sf.output_id, ts.unlock_conditions, ts.claim_address, sf.value
 FROM siafund_elements sf
-INNER JOIN transaction_siafund_inputs ts ON (ts.parent_id = sf.id)
+INNER JOIN transaction_siafund_inputs ts ON ts.parent_id = sf.id
 WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
 ORDER BY ts.transaction_order ASC`
 	rows, err := tx.Query(query, queryArgs(txnIDs)...)
@@ -195,7 +195,7 @@ ORDER BY ts.transaction_order ASC`
 func transactionSiafundOutputs(tx *txn, txnIDs []int64) (map[int64][]explorer.SiafundOutput, error) {
 	query := `SELECT ts.transaction_id, sf.output_id, sf.leaf_index, sf.spent_index, sf.claim_start, sf.address, sf.value
 FROM siafund_elements sf
-INNER JOIN transaction_siafund_outputs ts ON (ts.output_id = sf.id)
+INNER JOIN transaction_siafund_outputs ts ON ts.output_id = sf.id
 WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
 ORDER BY ts.transaction_order ASC`
 	rows, err := tx.Query(query, queryArgs(txnIDs)...)
@@ -286,8 +286,8 @@ type contractOrder struct {
 func transactionFileContracts(tx *txn, txnIDs []int64) (map[int64][]explorer.FileContract, error) {
 	query := `SELECT ts.transaction_id, fc.id, rev.confirmation_index, rev.confirmation_transaction_id, rev.proof_index, rev.proof_transaction_id, fc.contract_id, fc.leaf_index, fc.resolved, fc.valid, fc.transaction_id, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
 FROM file_contract_elements fc
-INNER JOIN transaction_file_contracts ts ON (ts.contract_id = fc.id)
-INNER JOIN last_contract_revision rev ON (rev.contract_id = fc.contract_id)
+INNER JOIN transaction_file_contracts ts ON ts.contract_id = fc.id
+INNER JOIN last_contract_revision rev ON rev.contract_id = fc.contract_id
 WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
 ORDER BY ts.transaction_order ASC`
 	rows, err := tx.Query(query, queryArgs(txnIDs)...)
@@ -347,8 +347,8 @@ ORDER BY ts.transaction_order ASC`
 func transactionFileContractRevisions(tx *txn, txnIDs []int64) (map[int64][]explorer.FileContractRevision, error) {
 	query := `SELECT ts.transaction_id, fc.id, rev.confirmation_index, rev.confirmation_transaction_id, rev.proof_index, rev.proof_transaction_id, ts.parent_id, ts.unlock_conditions, fc.contract_id, fc.leaf_index, fc.resolved, fc.valid, fc.transaction_id, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
 FROM file_contract_elements fc
-INNER JOIN transaction_file_contract_revisions ts ON (ts.contract_id = fc.id)
-INNER JOIN last_contract_revision rev ON (rev.contract_id = fc.contract_id)
+INNER JOIN transaction_file_contract_revisions ts ON ts.contract_id = fc.id
+INNER JOIN last_contract_revision rev ON rev.contract_id = fc.contract_id
 WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
 ORDER BY ts.transaction_order ASC`
 	rows, err := tx.Query(query, queryArgs(txnIDs)...)
@@ -442,7 +442,7 @@ type transactionID struct {
 func blockTransactionIDs(tx *txn, blockID types.BlockID) (idMap map[int64]transactionID, err error) {
 	rows, err := tx.Query(`SELECT bt.transaction_id, block_order, t.transaction_id
 FROM block_transactions bt
-INNER JOIN transactions t ON (t.id = bt.transaction_id)
+INNER JOIN transactions t ON t.id = bt.transaction_id
 WHERE block_id = ? ORDER BY block_order ASC`, encode(blockID))
 	if err != nil {
 		return nil, err
@@ -466,7 +466,7 @@ WHERE block_id = ? ORDER BY block_order ASC`, encode(blockID))
 func blockMinerPayouts(tx *txn, blockID types.BlockID) ([]explorer.SiacoinOutput, error) {
 	query := `SELECT sc.output_id, sc.leaf_index, sc.spent_index, sc.source, sc.maturity_height, sc.address, sc.value
 FROM siacoin_elements sc
-INNER JOIN miner_payouts mp ON (mp.output_id = sc.id)
+INNER JOIN miner_payouts mp ON mp.output_id = sc.id
 WHERE mp.block_id = ?
 ORDER BY mp.block_order ASC`
 	rows, err := tx.Query(query, encode(blockID))
