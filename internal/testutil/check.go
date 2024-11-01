@@ -170,6 +170,17 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 		CheckV2FC(t, expected, got)
 	}
 
+	Equal(t, "file contract revision", len(expectTxn.FileContractRevisions), len(gotTxn.FileContractRevisions))
+	for i := range expectTxn.FileContractRevisions {
+		expected := expectTxn.FileContractRevisions[i]
+		got := gotTxn.FileContractRevisions[i]
+
+		Equal(t, "parent ID", expected.Parent.ID, got.Parent.ID)
+		Equal(t, "revision ID", expected.Parent.ID, got.Revision.ID)
+		CheckV2FC(t, expected.Parent.V2FileContract, got.Parent)
+		CheckV2FC(t, expected.Revision, got.Revision)
+	}
+
 	Equal(t, "attestations", len(expectTxn.Attestations), len(gotTxn.Attestations))
 	for i := range expectTxn.Attestations {
 		expected := expectTxn.Attestations[i]
