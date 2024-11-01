@@ -75,8 +75,8 @@ WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.ID), decode(&m.Sia
 		var m explorer.EventMinerPayout
 		err = tx.QueryRow(`SELECT sc.output_id, sc.leaf_index, sc.maturity_height, sc.address, sc.value
 FROM siacoin_elements sc
-INNER JOIN miner_payout_events ev ON (ev.output_id = sc.id)
-WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.ID), decode(&m.SiacoinOutput.StateElement.LeafIndex), decode(&m.SiacoinOutput.MaturityHeight), decode(&m.SiacoinOutput.SiacoinOutput.Address), decode(&m.SiacoinOutput.SiacoinOutput.Value))
+INNER JOIN miner_payout_events ev ON ev.output_id = sc.id
+WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.StateElement.ID), decode(&m.SiacoinOutput.StateElement.LeafIndex), decode(&m.SiacoinOutput.MaturityHeight), decode(&m.SiacoinOutput.SiacoinOutput.Address), decode(&m.SiacoinOutput.SiacoinOutput.Value))
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to fetch miner payout event data: %w", err)
 		}
@@ -85,8 +85,8 @@ WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.ID), decode(&m.Sia
 		var m explorer.EventFoundationSubsidy
 		err = tx.QueryRow(`SELECT sc.output_id, sc.leaf_index, sc.maturity_height, sc.address, sc.value
 FROM siacoin_elements sc
-INNER JOIN foundation_subsidy_events ev ON (ev.output_id = sc.id)
-WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.ID), decode(&m.SiacoinOutput.StateElement.LeafIndex), decode(&m.SiacoinOutput.MaturityHeight), decode(&m.SiacoinOutput.SiacoinOutput.Address), decode(&m.SiacoinOutput.SiacoinOutput.Value))
+INNER JOIN foundation_subsidy_events ev ON ev.output_id = sc.id
+WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.StateElement.ID), decode(&m.SiacoinOutput.StateElement.LeafIndex), decode(&m.SiacoinOutput.MaturityHeight), decode(&m.SiacoinOutput.SiacoinOutput.Address), decode(&m.SiacoinOutput.SiacoinOutput.Value))
 		ev.Data = &m
 	default:
 		return explorer.Event{}, 0, fmt.Errorf("unknown event type: %s", eventType)
@@ -153,8 +153,8 @@ func (s *Store) AddressEvents(address types.Address, offset, limit uint64) (even
 	err = s.transaction(func(tx *txn) error {
 		const query = `SELECT ev.id, ev.event_id, ev.maturity_height, ev.date_created, ev.height, ev.block_id, ev.event_type
 	FROM events ev
-	INNER JOIN event_addresses ea ON (ev.id = ea.event_id)
-	INNER JOIN address_balance sa ON (ea.address_id = sa.id)
+	INNER JOIN event_addresses ea ON ev.id = ea.event_id
+	INNER JOIN address_balance sa ON ea.address_id = sa.id
 	WHERE sa.address = $1
 	ORDER BY ev.maturity_height DESC, ev.id DESC
 	LIMIT $2 OFFSET $3`
