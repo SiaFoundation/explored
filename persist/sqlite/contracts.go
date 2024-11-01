@@ -41,7 +41,7 @@ func (s *Store) Contracts(ids []types.FileContractID) (result []explorer.Extende
 	err = s.transaction(func(tx *txn) error {
 		query := `SELECT fc1.id, fc1.contract_id, fc1.resolved, fc1.valid, fc1.transaction_id, rev.confirmation_index, rev.confirmation_transaction_id, rev.proof_index, rev.proof_transaction_id, fc1.filesize, fc1.file_merkle_root, fc1.window_start, fc1.window_end, fc1.payout, fc1.unlock_hash, fc1.revision_number
 			FROM file_contract_elements fc1
-			INNER JOIN last_contract_revision rev ON (rev.contract_element_id = fc1.id)
+			INNER JOIN last_contract_revision rev ON rev.contract_element_id = fc1.id
 			WHERE rev.contract_id IN (` + queryPlaceHolders(len(ids)) + `)`
 		rows, err := tx.Query(query, encodedIDs(ids)...)
 		if err != nil {
@@ -86,7 +86,7 @@ func (s *Store) ContractRevisions(id types.FileContractID) (revisions []explorer
 	err = s.transaction(func(tx *txn) error {
 		query := `SELECT fc.id, fc.contract_id, fc.resolved, fc.valid, fc.transaction_id, rev.confirmation_index, rev.confirmation_transaction_id, rev.proof_index, rev.proof_transaction_id, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
 			FROM file_contract_elements fc
-			JOIN last_contract_revision rev ON (rev.contract_id = fc.contract_id)
+			JOIN last_contract_revision rev ON rev.contract_id = fc.contract_id
 			WHERE fc.contract_id = ?
 			ORDER BY fc.revision_number ASC`
 		rows, err := tx.Query(query, encode(id))
@@ -144,7 +144,7 @@ func (s *Store) ContractsKey(key types.PublicKey) (result []explorer.ExtendedFil
 	err = s.transaction(func(tx *txn) error {
 		query := `SELECT fc1.id, fc1.contract_id, fc1.resolved, fc1.valid, fc1.transaction_id, rev.confirmation_index, rev.confirmation_transaction_id, rev.proof_index, rev.proof_transaction_id, fc1.filesize, fc1.file_merkle_root, fc1.window_start, fc1.window_end, fc1.payout, fc1.unlock_hash, fc1.revision_number
 			FROM file_contract_elements fc1
-			INNER JOIN last_contract_revision rev ON (rev.contract_element_id = fc1.id)
+			INNER JOIN last_contract_revision rev ON rev.contract_element_id = fc1.id
 			WHERE rev.ed25519_renter_key = ? OR rev.ed25519_host_key = ?`
 		rows, err := tx.Query(query, encode(key), encode(key))
 		if err != nil {

@@ -21,7 +21,6 @@ github.com/stretchr/testify v1.8.3 h1:RP3t2pwF7cMEbC1dqtB6poj3niw/9gnV4Cjg5oW5gt
 github.com/stretchr/testify v1.8.3/go.mod h1:sz/lmYIOXD/1dqDmKjjqLyZ2RngseejIcXlSw2iwfAo=
 go.etcd.io/bbolt v1.3.11 h1:yGEzV1wPz2yVCLsD8ZAiGHhHVlczyC9d1rP43/VCRJ0=
 go.etcd.io/bbolt v1.3.11/go.mod h1:dksAq7YMXoljX0xu6VF5DMZGbhYYoLUalEiSySYAS4I=
-<<<<<<< HEAD
 go.sia.tech/core v0.6.1 h1:eaExM2E2eNr43su2XDkY5J24E3F54YGS7hcC3WtVjVk=
 go.sia.tech/core v0.6.1/go.mod h1:P3C1BWa/7J4XgdzWuaYHBvLo2RzZ0UBaJM4TG1GWB2g=
 go.sia.tech/coreutils v0.6.0 h1:r0IZt+aVdGG2uIHl7OtaWRYdVx4NQ7ezRoSGa0Ej8GY=
