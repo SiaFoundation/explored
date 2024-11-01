@@ -377,48 +377,40 @@ ORDER BY ts.transaction_order ASC`)
 	}
 	defer revisionStmt.Close()
 
-	for i, dbID := range dbIDs {
-		err := func() error {
-			rows, err := parentStmt.Query(dbID)
+	decorateTransactions := func(stmt *stmt, dbID int64, txnIndex int, revision bool) error {
+		rows, err := stmt.Query(dbID)
+		if err != nil {
+			return fmt.Errorf("failed to query file contracts: %w", err)
+		}
+		defer rows.Close()
+
+		j := 0
+		for rows.Next() {
+			fce, err := scanV2FileContract(rows)
 			if err != nil {
-				return fmt.Errorf("failed to query file contract revision parents: %w", err)
+				return fmt.Errorf("failed to scan file contract: %w", err)
 			}
-			defer rows.Close()
 
-			for rows.Next() {
-				fce, err := scanV2FileContract(rows)
-				if err != nil {
-					return fmt.Errorf("failed to scan file contract: %w", err)
-				}
-
-				txns[i].FileContractRevisions = append(txns[i].FileContractRevisions, explorer.V2FileContractRevision{
+			if revision {
+				txns[txnIndex].FileContractRevisions[j].Revision = fce
+				j++
+			} else {
+				// Add as a parent contract.
+				txns[txnIndex].FileContractRevisions = append(txns[txnIndex].FileContractRevisions, explorer.V2FileContractRevision{
 					Parent: fce,
 				})
 			}
-			return nil
-		}()
-		if err != nil {
+		}
+		return nil
+	}
+
+	for i, dbID := range dbIDs {
+		if err := decorateTransactions(parentStmt, dbID, i, false); err != nil {
 			return err
 		}
-		err = func() error {
-			rows, err := revisionStmt.Query(dbID)
-			if err != nil {
-				return fmt.Errorf("failed to query file contract revision revisions: %w", err)
-			}
-			defer rows.Close()
-
-			j := 0
-			for rows.Next() {
-				fce, err := scanV2FileContract(rows)
-				if err != nil {
-					return fmt.Errorf("failed to scan file contract: %w", err)
-				}
-
-				txns[i].FileContractRevisions[j].Revision = fce
-				j++
-			}
-			return nil
-		}()
+		if err := decorateTransactions(revisionStmt, dbID, i, true); err != nil {
+			return err
+		}
 	}
 
 	return nil
