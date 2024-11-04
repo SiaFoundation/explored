@@ -379,7 +379,7 @@ func TestSendTransactions(t *testing.T) {
 		}
 
 		testutil.SignTransaction(cm.TipState(), pk1, &parentTxn)
-		scOutputID = types.Hash256(parentTxn.SiacoinOutputID(2))
+		scOutputID = types.SiacoinOutputID(parentTxn.SiacoinOutputID(2))
 		sfOutputID = parentTxn.SiafundOutputID(2)
 
 		// Mine a block with the above transaction
@@ -1438,7 +1438,7 @@ func TestRevertSendTransactions(t *testing.T) {
 		}
 
 		testutil.SignTransaction(cm.TipState(), pk1, &parentTxn)
-		scOutputID = types.Hash256(parentTxn.SiacoinOutputID(2))
+		scOutputID = types.SiacoinOutputID(parentTxn.SiacoinOutputID(2))
 		sfOutputID = parentTxn.SiafundOutputID(2)
 
 		// Mine a block with the above transaction

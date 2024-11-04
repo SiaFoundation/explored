@@ -18,7 +18,7 @@ func encodedIDs(ids []types.FileContractID) []any {
 func scanFileContract(s scanner) (contractID int64, fc explorer.FileContract, err error) {
 	var confirmationIndex, proofIndex types.ChainIndex
 	var confirmationTransactionID, proofTransactionID types.TransactionID
-	err = s.Scan(&contractID, decode(&fc.StateElement.ID), decode(&fc.StateElement.LeafIndex), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&proofIndex), decodeNull(&proofTransactionID), decode(&fc.FileContract.Filesize), decode(&fc.FileContract.FileMerkleRoot), decode(&fc.FileContract.WindowStart), decode(&fc.FileContract.WindowEnd), decode(&fc.FileContract.Payout), decode(&fc.FileContract.UnlockHash), decode(&fc.FileContract.RevisionNumber))
+	err = s.Scan(&contractID, decode(&fc.ID), decode(&fc.StateElement.LeafIndex), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&proofIndex), decodeNull(&proofTransactionID), decode(&fc.FileContract.Filesize), decode(&fc.FileContract.FileMerkleRoot), decode(&fc.FileContract.WindowStart), decode(&fc.FileContract.WindowEnd), decode(&fc.FileContract.Payout), decode(&fc.FileContract.UnlockHash), decode(&fc.FileContract.RevisionNumber))
 
 	if confirmationIndex != (types.ChainIndex{}) {
 		fc.ConfirmationIndex = &confirmationIndex

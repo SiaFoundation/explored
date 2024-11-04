@@ -91,7 +91,7 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 		if created && spent {
 			ephemeralSiacoinElements = append(ephemeralSiacoinElements, SiacoinOutput{
 				SiacoinElement: se,
-				Source:         sources[types.SiacoinOutputID(se.StateElement.ID)],
+				Source:         sources[types.SiacoinOutputID(se.ID)],
 			})
 			return
 		}
@@ -99,12 +99,12 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 		if spent {
 			spentSiacoinElements = append(spentSiacoinElements, SiacoinOutput{
 				SiacoinElement: se,
-				Source:         sources[types.SiacoinOutputID(se.StateElement.ID)],
+				Source:         sources[types.SiacoinOutputID(se.ID)],
 			})
 		} else {
 			newSiacoinElements = append(newSiacoinElements, SiacoinOutput{
 				SiacoinElement: se,
-				Source:         sources[types.SiacoinOutputID(se.StateElement.ID)],
+				Source:         sources[types.SiacoinOutputID(se.ID)],
 			})
 		}
 	})

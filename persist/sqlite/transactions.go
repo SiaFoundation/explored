@@ -17,7 +17,7 @@ func (s *Store) TransactionChainIndices(txnID types.TransactionID, offset, limit
 INNER JOIN block_transactions bt ON (bt.block_id = b.id)
 INNER JOIN transactions t ON (t.id = bt.transaction_id)
 WHERE t.transaction_id = ?
-ORDER BY b.height DESC 
+ORDER BY b.height DESC
 LIMIT ? OFFSET ?`, encode(txnID), limit, offset)
 		if err != nil {
 			return err
@@ -127,7 +127,7 @@ ORDER BY ts.transaction_order ASC`
 		var txnID int64
 		var spentIndex types.ChainIndex
 		var sco explorer.SiacoinOutput
-		if err := rows.Scan(&txnID, decode(&sco.StateElement.ID), decode(&sco.LeafIndex), decodeNull(&spentIndex), &sco.Source, &sco.MaturityHeight, decode(&sco.SiacoinOutput.Address), decode(&sco.SiacoinOutput.Value)); err != nil {
+		if err := rows.Scan(&txnID, decode(&sco.ID), decode(&sco.StateElement.LeafIndex), decodeNull(&spentIndex), &sco.Source, &sco.MaturityHeight, decode(&sco.SiacoinOutput.Address), decode(&sco.SiacoinOutput.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan siacoin output: %w", err)
 		}
 		if spentIndex != (types.ChainIndex{}) {
@@ -209,7 +209,7 @@ ORDER BY ts.transaction_order ASC`
 		var txnID int64
 		var spentIndex types.ChainIndex
 		var sfo explorer.SiafundOutput
-		if err := rows.Scan(&txnID, decode(&sfo.StateElement.ID), decode(&sfo.StateElement.LeafIndex), decodeNull(&spentIndex), decode(&sfo.ClaimStart), decode(&sfo.SiafundOutput.Address), decode(&sfo.SiafundOutput.Value)); err != nil {
+		if err := rows.Scan(&txnID, decode(&sfo.ID), decode(&sfo.StateElement.LeafIndex), decodeNull(&spentIndex), decode(&sfo.ClaimStart), decode(&sfo.SiafundOutput.Address), decode(&sfo.SiafundOutput.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan siafund output: %w", err)
 		}
 		if spentIndex != (types.ChainIndex{}) {
@@ -305,7 +305,7 @@ ORDER BY ts.transaction_order ASC`
 
 		var confirmationIndex, proofIndex types.ChainIndex
 		var confirmationTransactionID, proofTransactionID types.TransactionID
-		if err := rows.Scan(&txnID, &contractID, decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&proofIndex), decodeNull(&proofTransactionID), decode(&fc.StateElement.ID), decode(&fc.StateElement.LeafIndex), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decode(&fc.FileContract.Filesize), decode(&fc.FileContract.FileMerkleRoot), decode(&fc.FileContract.WindowStart), decode(&fc.FileContract.WindowEnd), decode(&fc.FileContract.Payout), decode(&fc.FileContract.UnlockHash), decode(&fc.FileContract.RevisionNumber)); err != nil {
+		if err := rows.Scan(&txnID, &contractID, decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&proofIndex), decodeNull(&proofTransactionID), decode(&fc.ID), decode(&fc.StateElement.LeafIndex), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decode(&fc.FileContract.Filesize), decode(&fc.FileContract.FileMerkleRoot), decode(&fc.FileContract.WindowStart), decode(&fc.FileContract.WindowEnd), decode(&fc.FileContract.Payout), decode(&fc.FileContract.UnlockHash), decode(&fc.FileContract.RevisionNumber)); err != nil {
 			return nil, fmt.Errorf("failed to scan file contract: %w", err)
 		}
 
@@ -366,7 +366,7 @@ ORDER BY ts.transaction_order ASC`
 
 		var confirmationIndex, proofIndex types.ChainIndex
 		var confirmationTransactionID, proofTransactionID types.TransactionID
-		if err := rows.Scan(&txnID, &contractID, decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&proofIndex), decodeNull(&proofTransactionID), decode(&fc.ParentID), decode(&fc.UnlockConditions), decode(&fc.StateElement.ID), decode(&fc.StateElement.LeafIndex), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decode(&fc.FileContract.FileContract.Filesize), decode(&fc.FileContract.FileContract.FileMerkleRoot), decode(&fc.FileContract.FileContract.WindowStart), decode(&fc.FileContract.FileContract.WindowEnd), decode(&fc.FileContract.FileContract.Payout), decode(&fc.FileContract.FileContract.UnlockHash), decode(&fc.FileContract.FileContract.RevisionNumber)); err != nil {
+		if err := rows.Scan(&txnID, &contractID, decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&proofIndex), decodeNull(&proofTransactionID), decode(&fc.ParentID), decode(&fc.UnlockConditions), decode(&fc.ID), decode(&fc.StateElement.LeafIndex), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decode(&fc.FileContract.FileContract.Filesize), decode(&fc.FileContract.FileContract.FileMerkleRoot), decode(&fc.FileContract.FileContract.WindowStart), decode(&fc.FileContract.FileContract.WindowEnd), decode(&fc.FileContract.FileContract.Payout), decode(&fc.FileContract.FileContract.UnlockHash), decode(&fc.FileContract.FileContract.RevisionNumber)); err != nil {
 			return nil, fmt.Errorf("failed to scan file contract: %w", err)
 		}
 
@@ -477,7 +477,7 @@ ORDER BY mp.block_order ASC`
 	for rows.Next() {
 		var spentIndex types.ChainIndex
 		var output explorer.SiacoinOutput
-		if err := rows.Scan(decode(&output.StateElement.ID), decode(&output.StateElement.LeafIndex), decodeNull(&spentIndex), &output.Source, &output.MaturityHeight, decode(&output.SiacoinOutput.Address), decode(&output.SiacoinOutput.Value)); err != nil {
+		if err := rows.Scan(decode(&output.ID), decode(&output.StateElement.LeafIndex), decodeNull(&spentIndex), &output.Source, &output.MaturityHeight, decode(&output.SiacoinOutput.Address), decode(&output.SiacoinOutput.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan miner payout: %w", err)
 		}
 		if spentIndex != (types.ChainIndex{}) {

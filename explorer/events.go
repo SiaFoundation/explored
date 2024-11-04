@@ -146,19 +146,19 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 	fces := make(map[types.FileContractID]types.FileContractElement)
 	v2fces := make(map[types.FileContractID]types.V2FileContractElement)
 	cu.ForEachSiacoinElement(func(sce types.SiacoinElement, created, spent bool) {
-		sce.MerkleProof = nil
+		sce.StateElement.MerkleProof = nil
 		sces[types.SiacoinOutputID(sce.ID)] = sce
 	})
 	cu.ForEachSiafundElement(func(sfe types.SiafundElement, created, spent bool) {
-		sfe.MerkleProof = nil
+		sfe.StateElement.MerkleProof = nil
 		sfes[types.SiafundOutputID(sfe.ID)] = sfe
 	})
 	cu.ForEachFileContractElement(func(fce types.FileContractElement, created bool, rev *types.FileContractElement, resolved, valid bool) {
-		fce.MerkleProof = nil
+		fce.StateElement.MerkleProof = nil
 		fces[types.FileContractID(fce.ID)] = fce
 	})
 	cu.ForEachV2FileContractElement(func(fce types.V2FileContractElement, created bool, rev *types.V2FileContractElement, res types.V2FileContractResolutionType) {
-		fce.MerkleProof = nil
+		fce.StateElement.MerkleProof = nil
 		v2fces[types.FileContractID(fce.ID)] = fce
 	})
 
@@ -220,7 +220,7 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 		var e EventV2Transaction
 		for _, a := range txn.Attestations {
 			var ha chain.HostAnnouncement
-			if ha.FromAttestation(a) {
+			if ha.FromArbitraryData(a.Value) {
 				e.HostAnnouncements = append(e.HostAnnouncements, ha)
 			}
 		}

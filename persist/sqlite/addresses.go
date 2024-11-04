@@ -69,14 +69,14 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 FROM contract_payout_events ev
 JOIN siacoin_elements sce ON ev.output_id = sce.id
 JOIN file_contract_elements fce ON ev.contract_id = fce.id
-WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.StateElement.ID), decode(&m.SiacoinOutput.StateElement.LeafIndex), &m.SiacoinOutput.MaturityHeight, decode(&m.SiacoinOutput.SiacoinOutput.Address), decode(&m.SiacoinOutput.SiacoinOutput.Value), decode(&m.FileContract.StateElement.ID), decode(&m.FileContract.StateElement.LeafIndex), decode(&m.FileContract.FileContract.Filesize), decode(&m.FileContract.FileContract.FileMerkleRoot), decode(&m.FileContract.FileContract.WindowStart), decode(&m.FileContract.FileContract.WindowEnd), decode(&m.FileContract.FileContract.Payout), decode(&m.FileContract.FileContract.UnlockHash), decode(&m.FileContract.FileContract.RevisionNumber), &m.Missed)
+WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.ID), decode(&m.SiacoinOutput.StateElement.LeafIndex), &m.SiacoinOutput.MaturityHeight, decode(&m.SiacoinOutput.SiacoinOutput.Address), decode(&m.SiacoinOutput.SiacoinOutput.Value), decode(&m.FileContract.ID), decode(&m.FileContract.StateElement.LeafIndex), decode(&m.FileContract.FileContract.Filesize), decode(&m.FileContract.FileContract.FileMerkleRoot), decode(&m.FileContract.FileContract.WindowStart), decode(&m.FileContract.FileContract.WindowEnd), decode(&m.FileContract.FileContract.Payout), decode(&m.FileContract.FileContract.UnlockHash), decode(&m.FileContract.FileContract.RevisionNumber), &m.Missed)
 		ev.Data = &m
 	case explorer.EventTypeMinerPayout:
 		var m explorer.EventMinerPayout
 		err = tx.QueryRow(`SELECT sc.output_id, sc.leaf_index, sc.maturity_height, sc.address, sc.value
 FROM siacoin_elements sc
 INNER JOIN miner_payout_events ev ON (ev.output_id = sc.id)
-WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.StateElement.ID), decode(&m.SiacoinOutput.StateElement.LeafIndex), decode(&m.SiacoinOutput.MaturityHeight), decode(&m.SiacoinOutput.SiacoinOutput.Address), decode(&m.SiacoinOutput.SiacoinOutput.Value))
+WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.ID), decode(&m.SiacoinOutput.StateElement.LeafIndex), decode(&m.SiacoinOutput.MaturityHeight), decode(&m.SiacoinOutput.SiacoinOutput.Address), decode(&m.SiacoinOutput.SiacoinOutput.Value))
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to fetch miner payout event data: %w", err)
 		}
@@ -86,7 +86,7 @@ WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.StateElement.ID), 
 		err = tx.QueryRow(`SELECT sc.output_id, sc.leaf_index, sc.maturity_height, sc.address, sc.value
 FROM siacoin_elements sc
 INNER JOIN foundation_subsidy_events ev ON (ev.output_id = sc.id)
-WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.StateElement.ID), decode(&m.SiacoinOutput.StateElement.LeafIndex), decode(&m.SiacoinOutput.MaturityHeight), decode(&m.SiacoinOutput.SiacoinOutput.Address), decode(&m.SiacoinOutput.SiacoinOutput.Value))
+WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.ID), decode(&m.SiacoinOutput.StateElement.LeafIndex), decode(&m.SiacoinOutput.MaturityHeight), decode(&m.SiacoinOutput.SiacoinOutput.Address), decode(&m.SiacoinOutput.SiacoinOutput.Value))
 		ev.Data = &m
 	default:
 		return explorer.Event{}, 0, fmt.Errorf("unknown event type: %s", eventType)
@@ -180,7 +180,7 @@ func (s *Store) AddressEvents(address types.Address, offset, limit uint64) (even
 
 func scanSiacoinOutput(s scanner) (sco explorer.SiacoinOutput, err error) {
 	var spentIndex types.ChainIndex
-	err = s.Scan(decode(&sco.StateElement.ID), decode(&sco.StateElement.LeafIndex), &sco.Source, decodeNull(&spentIndex), &sco.MaturityHeight, decode(&sco.SiacoinOutput.Address), decode(&sco.SiacoinOutput.Value))
+	err = s.Scan(decode(&sco.ID), decode(&sco.StateElement.LeafIndex), &sco.Source, decodeNull(&spentIndex), &sco.MaturityHeight, decode(&sco.SiacoinOutput.Address), decode(&sco.SiacoinOutput.Value))
 	if spentIndex != (types.ChainIndex{}) {
 		sco.SpentIndex = &spentIndex
 	}
@@ -189,7 +189,7 @@ func scanSiacoinOutput(s scanner) (sco explorer.SiacoinOutput, err error) {
 
 func scanSiafundOutput(s scanner) (sfo explorer.SiafundOutput, err error) {
 	var spentIndex types.ChainIndex
-	err = s.Scan(decode(&sfo.StateElement.ID), decode(&sfo.StateElement.LeafIndex), decodeNull(&spentIndex), decode(&sfo.ClaimStart), decode(&sfo.SiafundOutput.Address), decode(&sfo.SiafundOutput.Value))
+	err = s.Scan(decode(&sfo.ID), decode(&sfo.StateElement.LeafIndex), decodeNull(&spentIndex), decode(&sfo.ClaimStart), decode(&sfo.SiafundOutput.Address), decode(&sfo.SiafundOutput.Value))
 	if spentIndex != (types.ChainIndex{}) {
 		sfo.SpentIndex = &spentIndex
 	}
