@@ -219,9 +219,9 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 
 		var e EventV2Transaction
 		for _, a := range txn.Attestations {
-			var ha chain.HostAnnouncement
-			if ha.FromArbitraryData(a.Value) {
-				e.HostAnnouncements = append(e.HostAnnouncements, ha)
+			var ha chain.V2HostAnnouncement
+			if ha.FromAttestation(a) == nil {
+				panic("implement me")
 			}
 		}
 		addEvent(types.Hash256(txn.ID()), cs.Index.Height, &e, relevant) // transaction maturity height is the current block height
