@@ -406,15 +406,15 @@ ORDER BY ts.transaction_order ASC`)
 			return err
 		}
 
-		if len(parents) != len(revisions) {
-			panic("should have a parent for every v2 revision contract")
-		}
-
 		for j := range parents {
-			txns[i].FileContractRevisions = append(txns[i].FileContractRevisions, explorer.V2FileContractRevision{
-				Parent:   parents[j],
-				Revision: revisions[j],
-			})
+			fcr := explorer.V2FileContractRevision{
+				Parent: parents[j],
+			}
+			if j < len(revisions) {
+				fcr.Revision = revisions[j]
+			}
+
+			txns[i].FileContractRevisions = append(txns[i].FileContractRevisions, fcr)
 		}
 	}
 
