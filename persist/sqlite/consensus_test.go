@@ -163,7 +163,7 @@ func TestBalance(t *testing.T) {
 	parentTxn := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{
 			{
-				ParentID:         types.SiacoinOutputID(utxos[0].ID),
+				ParentID:         utxos[0].ID,
 				UnlockConditions: unlockConditions,
 			},
 		},
@@ -240,7 +240,7 @@ func TestSiafundBalance(t *testing.T) {
 	parentTxn := types.Transaction{
 		SiafundInputs: []types.SiafundInput{
 			{
-				ParentID:         types.SiafundOutputID(genesisBlock.Transactions[0].SiafundOutputID(0)),
+				ParentID:         genesisBlock.Transactions[0].SiafundOutputID(0),
 				UnlockConditions: unlockConditions,
 			},
 		},
@@ -356,7 +356,7 @@ func TestSendTransactions(t *testing.T) {
 		parentTxn := types.Transaction{
 			SiacoinInputs: []types.SiacoinInput{
 				{
-					ParentID:         types.SiacoinOutputID(scOutputID),
+					ParentID:         scOutputID,
 					UnlockConditions: unlockConditions,
 				},
 			},
@@ -379,7 +379,7 @@ func TestSendTransactions(t *testing.T) {
 		}
 
 		testutil.SignTransaction(cm.TipState(), pk1, &parentTxn)
-		scOutputID = types.SiacoinOutputID(parentTxn.SiacoinOutputID(2))
+		scOutputID = parentTxn.SiacoinOutputID(2)
 		sfOutputID = parentTxn.SiafundOutputID(2)
 
 		// Mine a block with the above transaction
@@ -1220,7 +1220,7 @@ func TestRevertBalance(t *testing.T) {
 	parentTxn := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{
 			{
-				ParentID:         types.SiacoinOutputID(utxos2[0].ID),
+				ParentID:         utxos2[0].ID,
 				UnlockConditions: unlockConditions,
 			},
 		},
@@ -1415,7 +1415,7 @@ func TestRevertSendTransactions(t *testing.T) {
 		parentTxn := types.Transaction{
 			SiacoinInputs: []types.SiacoinInput{
 				{
-					ParentID:         types.SiacoinOutputID(scOutputID),
+					ParentID:         scOutputID,
 					UnlockConditions: unlockConditions,
 				},
 			},
@@ -1438,7 +1438,7 @@ func TestRevertSendTransactions(t *testing.T) {
 		}
 
 		testutil.SignTransaction(cm.TipState(), pk1, &parentTxn)
-		scOutputID = types.SiacoinOutputID(parentTxn.SiacoinOutputID(2))
+		scOutputID = parentTxn.SiacoinOutputID(2)
 		sfOutputID = parentTxn.SiafundOutputID(2)
 
 		// Mine a block with the above transaction

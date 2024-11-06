@@ -517,7 +517,7 @@ func addSiacoinElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 				return nil, fmt.Errorf("addSiacoinElements: failed to get last insert ID: %w", err)
 			}
 
-			scDBIds[types.SiacoinOutputID(sce.ID)] = dbID
+			scDBIds[sce.ID] = dbID
 		}
 	}
 	if len(spentElements) > 0 {
@@ -571,7 +571,7 @@ func addSiafundElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 				return nil, fmt.Errorf("addSiafundElements: failed to get last insert ID: %w", err)
 			}
 
-			sfDBIds[types.SiafundOutputID(sfe.ID)] = dbID
+			sfDBIds[sfe.ID] = dbID
 		}
 	}
 	if len(spentElements) > 0 {
@@ -595,7 +595,7 @@ func addSiafundElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 				return nil, fmt.Errorf("addSiafundElements: failed to get last insert ID: %w", err)
 			}
 
-			sfDBIds[types.SiafundOutputID(sfe.ID)] = dbID
+			sfDBIds[sfe.ID] = dbID
 		}
 	}
 	return sfDBIds, nil
@@ -732,7 +732,7 @@ func addEvents(tx *txn, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[exp
 		case *explorer.EventMinerPayout:
 			_, err = minerPayoutEventStmt.Exec(eventID, scDBIds[types.SiacoinOutputID(event.ID)])
 		case *explorer.EventContractPayout:
-			_, err = contractPayoutEventStmt.Exec(eventID, scDBIds[types.SiacoinOutputID(v.SiacoinOutput.ID)], fcDBIds[explorer.DBFileContract{ID: types.FileContractID(v.FileContract.ID), RevisionNumber: v.FileContract.FileContract.RevisionNumber}], v.Missed)
+			_, err = contractPayoutEventStmt.Exec(eventID, scDBIds[v.SiacoinOutput.ID], fcDBIds[explorer.DBFileContract{ID: v.FileContract.ID, RevisionNumber: v.FileContract.FileContract.RevisionNumber}], v.Missed)
 		case *explorer.EventFoundationSubsidy:
 			_, err = foundationSubsidyEventStmt.Exec(eventID, scDBIds[types.SiacoinOutputID(event.ID)])
 		default:
@@ -917,7 +917,7 @@ func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []expl
 		}
 
 		if err := addFC(
-			types.FileContractID(fce.ID),
+			fce.ID,
 			fce.StateElement.LeafIndex,
 			fce.FileContract,
 			update.Resolved,
