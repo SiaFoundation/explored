@@ -203,6 +203,8 @@ type V2FileContractRevision struct {
 	Revision V2FileContract `json:"revision"`
 }
 
+// A V2HostAnnouncement is a types.V2HostAnnouncement list of net addresses
+// with the host public key attached.
 type V2HostAnnouncement struct {
 	PublicKey types.PublicKey `json:"publicKey"`
 	chain.V2HostAnnouncement
