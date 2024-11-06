@@ -91,7 +91,7 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 		if created && spent {
 			ephemeralSiacoinElements = append(ephemeralSiacoinElements, SiacoinOutput{
 				SiacoinElement: se,
-				Source:         sources[types.SiacoinOutputID(se.StateElement.ID)],
+				Source:         sources[se.ID],
 			})
 			return
 		}
@@ -99,12 +99,12 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 		if spent {
 			spentSiacoinElements = append(spentSiacoinElements, SiacoinOutput{
 				SiacoinElement: se,
-				Source:         sources[types.SiacoinOutputID(se.StateElement.ID)],
+				Source:         sources[se.ID],
 			})
 		} else {
 			newSiacoinElements = append(newSiacoinElements, SiacoinOutput{
 				SiacoinElement: se,
-				Source:         sources[types.SiacoinOutputID(se.StateElement.ID)],
+				Source:         sources[se.ID],
 			})
 		}
 	})
@@ -126,7 +126,7 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 
 	fceMap := make(map[types.FileContractID]FileContractUpdate)
 	cau.ForEachFileContractElement(func(fce types.FileContractElement, created bool, rev *types.FileContractElement, resolved, valid bool) {
-		fceMap[types.FileContractID(fce.ID)] = FileContractUpdate{
+		fceMap[fce.ID] = FileContractUpdate{
 			FileContractElement: fce,
 			Revision:            rev,
 			Resolved:            resolved,
@@ -244,7 +244,7 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 
 	fceMap := make(map[types.FileContractID]FileContractUpdate)
 	cru.ForEachFileContractElement(func(fce types.FileContractElement, created bool, rev *types.FileContractElement, resolved, valid bool) {
-		fceMap[types.FileContractID(fce.ID)] = FileContractUpdate{
+		fceMap[fce.ID] = FileContractUpdate{
 			FileContractElement: fce,
 			Revision:            rev,
 			Resolved:            resolved,

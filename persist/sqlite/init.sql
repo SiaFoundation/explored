@@ -296,7 +296,7 @@ CREATE TABLE events (
 CREATE INDEX events_block_id_height_index ON events(block_id, height);
 
 CREATE TABLE event_addresses (
-	event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE, 
+	event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
 	address_id INTEGER NOT NULL REFERENCES address_balance(id),
 	PRIMARY KEY (event_id, address_id)
 );

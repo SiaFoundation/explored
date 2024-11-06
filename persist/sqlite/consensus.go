@@ -507,7 +507,7 @@ func addSiacoinElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 		defer stmt.Close()
 
 		for _, sce := range newElements {
-			result, err := stmt.Exec(encode(sce.StateElement.ID), encode(index.ID), encode(sce.StateElement.LeafIndex), int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), encode(sce.StateElement.LeafIndex))
+			result, err := stmt.Exec(encode(sce.ID), encode(index.ID), encode(sce.StateElement.LeafIndex), int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), encode(sce.StateElement.LeafIndex))
 			if err != nil {
 				return nil, fmt.Errorf("addSiacoinElements: failed to execute siacoin_elements statement: %w", err)
 			}
@@ -517,7 +517,7 @@ func addSiacoinElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 				return nil, fmt.Errorf("addSiacoinElements: failed to get last insert ID: %w", err)
 			}
 
-			scDBIds[types.SiacoinOutputID(sce.StateElement.ID)] = dbID
+			scDBIds[sce.ID] = dbID
 		}
 	}
 	if len(spentElements) > 0 {
@@ -531,7 +531,7 @@ func addSiacoinElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 		defer stmt.Close()
 
 		for _, sce := range spentElements {
-			result, err := stmt.Exec(encode(sce.StateElement.ID), encode(index.ID), encode(sce.StateElement.LeafIndex), encode(index), int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), encode(index), encode(sce.StateElement.LeafIndex))
+			result, err := stmt.Exec(encode(sce.ID), encode(index.ID), encode(sce.StateElement.LeafIndex), encode(index), int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), encode(index), encode(sce.StateElement.LeafIndex))
 			if err != nil {
 				return nil, fmt.Errorf("addSiacoinElements: failed to execute siacoin_elements statement: %w", err)
 			}
@@ -541,7 +541,7 @@ func addSiacoinElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 				return nil, fmt.Errorf("addSiacoinElements: failed to get last insert ID: %w", err)
 			}
 
-			scDBIds[types.SiacoinOutputID(sce.StateElement.ID)] = dbID
+			scDBIds[types.SiacoinOutputID(sce.ID)] = dbID
 		}
 	}
 
@@ -561,7 +561,7 @@ func addSiafundElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 		defer stmt.Close()
 
 		for _, sfe := range newElements {
-			result, err := stmt.Exec(encode(sfe.StateElement.ID), encode(index.ID), encode(sfe.StateElement.LeafIndex), encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), encode(sfe.StateElement.LeafIndex))
+			result, err := stmt.Exec(encode(sfe.ID), encode(index.ID), encode(sfe.StateElement.LeafIndex), encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), encode(sfe.StateElement.LeafIndex))
 			if err != nil {
 				return nil, fmt.Errorf("addSiafundElements: failed to execute siafund_elements statement: %w", err)
 			}
@@ -571,7 +571,7 @@ func addSiafundElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 				return nil, fmt.Errorf("addSiafundElements: failed to get last insert ID: %w", err)
 			}
 
-			sfDBIds[types.SiafundOutputID(sfe.StateElement.ID)] = dbID
+			sfDBIds[sfe.ID] = dbID
 		}
 	}
 	if len(spentElements) > 0 {
@@ -585,7 +585,7 @@ func addSiafundElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 		defer stmt.Close()
 
 		for _, sfe := range spentElements {
-			result, err := stmt.Exec(encode(sfe.StateElement.ID), encode(index.ID), encode(sfe.StateElement.LeafIndex), encode(index), encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), encode(sfe.StateElement.LeafIndex), encode(index))
+			result, err := stmt.Exec(encode(sfe.ID), encode(index.ID), encode(sfe.StateElement.LeafIndex), encode(index), encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), encode(sfe.StateElement.LeafIndex), encode(index))
 			if err != nil {
 				return nil, fmt.Errorf("addSiafundElements: failed to execute siafund_elements statement: %w", err)
 			}
@@ -595,7 +595,7 @@ func addSiafundElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 				return nil, fmt.Errorf("addSiafundElements: failed to get last insert ID: %w", err)
 			}
 
-			sfDBIds[types.SiafundOutputID(sfe.StateElement.ID)] = dbID
+			sfDBIds[sfe.ID] = dbID
 		}
 	}
 	return sfDBIds, nil
@@ -732,7 +732,7 @@ func addEvents(tx *txn, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[exp
 		case *explorer.EventMinerPayout:
 			_, err = minerPayoutEventStmt.Exec(eventID, scDBIds[types.SiacoinOutputID(event.ID)])
 		case *explorer.EventContractPayout:
-			_, err = contractPayoutEventStmt.Exec(eventID, scDBIds[types.SiacoinOutputID(v.SiacoinOutput.StateElement.ID)], fcDBIds[explorer.DBFileContract{ID: types.FileContractID(v.FileContract.StateElement.ID), RevisionNumber: v.FileContract.FileContract.RevisionNumber}], v.Missed)
+			_, err = contractPayoutEventStmt.Exec(eventID, scDBIds[v.SiacoinOutput.ID], fcDBIds[explorer.DBFileContract{ID: v.FileContract.ID, RevisionNumber: v.FileContract.FileContract.RevisionNumber}], v.Missed)
 		case *explorer.EventFoundationSubsidy:
 			_, err = foundationSubsidyEventStmt.Exec(eventID, scDBIds[types.SiacoinOutputID(event.ID)])
 		default:
@@ -917,7 +917,7 @@ func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []expl
 		}
 
 		if err := addFC(
-			types.FileContractID(fce.StateElement.ID),
+			fce.ID,
 			fce.StateElement.LeafIndex,
 			fce.FileContract,
 			update.Resolved,

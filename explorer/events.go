@@ -146,20 +146,20 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 	fces := make(map[types.FileContractID]types.FileContractElement)
 	v2fces := make(map[types.FileContractID]types.V2FileContractElement)
 	cu.ForEachSiacoinElement(func(sce types.SiacoinElement, created, spent bool) {
-		sce.MerkleProof = nil
-		sces[types.SiacoinOutputID(sce.ID)] = sce
+		sce.StateElement.MerkleProof = nil
+		sces[sce.ID] = sce
 	})
 	cu.ForEachSiafundElement(func(sfe types.SiafundElement, created, spent bool) {
-		sfe.MerkleProof = nil
-		sfes[types.SiafundOutputID(sfe.ID)] = sfe
+		sfe.StateElement.MerkleProof = nil
+		sfes[sfe.ID] = sfe
 	})
 	cu.ForEachFileContractElement(func(fce types.FileContractElement, created bool, rev *types.FileContractElement, resolved, valid bool) {
-		fce.MerkleProof = nil
-		fces[types.FileContractID(fce.ID)] = fce
+		fce.StateElement.MerkleProof = nil
+		fces[fce.ID] = fce
 	})
 	cu.ForEachV2FileContractElement(func(fce types.V2FileContractElement, created bool, rev *types.V2FileContractElement, res types.V2FileContractResolutionType) {
-		fce.MerkleProof = nil
-		v2fces[types.FileContractID(fce.ID)] = fce
+		fce.StateElement.MerkleProof = nil
+		v2fces[fce.ID] = fce
 	})
 
 	relevantTxn := func(txn types.Transaction) (addrs []types.Address) {
@@ -219,9 +219,9 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 
 		var e EventV2Transaction
 		for _, a := range txn.Attestations {
-			var ha chain.HostAnnouncement
-			if ha.FromAttestation(a) {
-				e.HostAnnouncements = append(e.HostAnnouncements, ha)
+			var ha chain.V2HostAnnouncement
+			if ha.FromAttestation(a) == nil {
+				// TODO: handle attestation
 			}
 		}
 		addEvent(types.Hash256(txn.ID()), cs.Index.Height, &e, relevant) // transaction maturity height is the current block height
@@ -235,7 +235,7 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 
 		if valid {
 			for i := range fce.FileContract.ValidProofOutputs {
-				outputID := types.FileContractID(fce.ID).ValidOutputID(i)
+				outputID := fce.ID.ValidOutputID(i)
 				addEvent(types.Hash256(outputID), cs.MaturityHeight(), &EventContractPayout{
 					FileContract:  fce,
 					SiacoinOutput: sces[outputID],
@@ -244,7 +244,7 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 			}
 		} else {
 			for i := range fce.FileContract.MissedProofOutputs {
-				outputID := types.FileContractID(fce.ID).MissedOutputID(i)
+				outputID := fce.ID.MissedOutputID(i)
 				addEvent(types.Hash256(outputID), cs.MaturityHeight(), &EventContractPayout{
 					FileContract:  fce,
 					SiacoinOutput: sces[outputID],
