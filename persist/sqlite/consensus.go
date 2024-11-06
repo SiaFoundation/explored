@@ -790,13 +790,13 @@ func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []expl
 	}
 	defer revisionStmt.Close()
 
-	validOutputsStmt, err := tx.Prepare(`INSERT INTO file_contract_valid_proof_outputs(contract_id, contract_order, address, value) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING`)
+	validOutputsStmt, err := tx.Prepare(`INSERT INTO file_contract_valid_proof_outputs(contract_id, contract_order, id, address, value) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`)
 	if err != nil {
 		return nil, fmt.Errorf("addFileContracts: failed to prepare valid proof outputs statement: %w", err)
 	}
 	defer validOutputsStmt.Close()
 
-	missedOutputsStmt, err := tx.Prepare(`INSERT INTO file_contract_missed_proof_outputs(contract_id, contract_order, address, value) VALUES (?, ?, ?, ?)  ON CONFLICT DO NOTHING`)
+	missedOutputsStmt, err := tx.Prepare(`INSERT INTO file_contract_missed_proof_outputs(contract_id, contract_order, id, address, value) VALUES (?, ?, ?, ?, ?)  ON CONFLICT DO NOTHING`)
 	if err != nil {
 		return nil, fmt.Errorf("addFileContracts: failed to prepare missed proof outputs statement: %w", err)
 	}
@@ -861,12 +861,12 @@ func updateFileContractElements(tx *txn, revert bool, b types.Block, fces []expl
 		}
 
 		for i, sco := range fc.ValidProofOutputs {
-			if _, err := validOutputsStmt.Exec(dbID, i, encode(sco.Address), encode(sco.Value)); err != nil {
+			if _, err := validOutputsStmt.Exec(dbID, i, encode(fcID.ValidOutputID(i)), encode(sco.Address), encode(sco.Value)); err != nil {
 				return fmt.Errorf("updateFileContractElements: failed to execute valid proof outputs statement: %w", err)
 			}
 		}
 		for i, sco := range fc.MissedProofOutputs {
-			if _, err := missedOutputsStmt.Exec(dbID, i, encode(sco.Address), encode(sco.Value)); err != nil {
+			if _, err := missedOutputsStmt.Exec(dbID, i, encode(fcID.MissedOutputID(i)), encode(sco.Address), encode(sco.Value)); err != nil {
 				return fmt.Errorf("updateFileContractElements: failed to execute missed proof outputs statement: %w", err)
 			}
 		}

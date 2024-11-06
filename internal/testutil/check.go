@@ -134,7 +134,7 @@ func CheckV2ChainIndices(t *testing.T, db explorer.Store, txnID types.Transactio
 
 // CheckFC checks the retrieved file contract with the source file contract in
 // addition to checking the resolved and valid fields.
-func CheckFC(t *testing.T, revision, resolved, valid bool, expected types.FileContract, got explorer.FileContract) {
+func CheckFC(t *testing.T, revision, resolved, valid bool, expected types.FileContract, got explorer.EnhancedFileContract) {
 	t.Helper()
 
 	Equal(t, "resolved state", resolved, got.Resolved)

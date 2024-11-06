@@ -116,6 +116,7 @@ CREATE TABLE last_contract_revision (
 CREATE TABLE file_contract_valid_proof_outputs (
 	contract_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL,
 	contract_order INTEGER NOT NULL,
+	id BLOB NOT NULL,
 	address BLOB NOT NULL,
 	value BLOB NOT NULL,
 	UNIQUE(contract_id, contract_order)
@@ -126,6 +127,7 @@ CREATE INDEX file_contract_valid_proof_outputs_contract_id_index ON file_contrac
 CREATE TABLE file_contract_missed_proof_outputs (
 	contract_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL,
 	contract_order INTEGER NOT NULL,
+	id BLOB NOT NULL,
 	address BLOB NOT NULL,
 	value BLOB NOT NULL,
 	UNIQUE(contract_id, contract_order)
