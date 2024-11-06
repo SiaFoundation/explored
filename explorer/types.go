@@ -123,6 +123,7 @@ type SiafundOutput struct {
 	types.SiafundElement
 }
 
+// A ContractSiacoinOutput is a SiacoinOutput with an added field for its ID.
 type ContractSiacoinOutput struct {
 	ID types.SiacoinOutputID `json:"id"`
 	types.SiacoinOutput
