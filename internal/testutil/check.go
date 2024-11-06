@@ -126,7 +126,7 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 		Equal(t, "value", expected.Parent.SiacoinOutput.Value, got.Parent.SiacoinOutput.Value)
 		Equal(t, "maturity height", expected.Parent.MaturityHeight, got.Parent.MaturityHeight)
 		Equal(t, "id", expected.Parent.ID, got.Parent.ID)
-		Equal(t, "leaf index", expected.Parent.LeafIndex, got.Parent.LeafIndex)
+		Equal(t, "leaf index", expected.Parent.StateElement.LeafIndex, got.Parent.StateElement.LeafIndex)
 		Equal(t, "satisfied policy", expected.SatisfiedPolicy, got.SatisfiedPolicy)
 	}
 
@@ -148,7 +148,7 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 		Equal(t, "value", expected.Parent.SiafundOutput.Value, got.Parent.SiafundOutput.Value)
 		Equal(t, "claim address", expected.ClaimAddress, got.ClaimAddress)
 		Equal(t, "id", expected.Parent.ID, got.Parent.ID)
-		Equal(t, "leaf index", expected.Parent.LeafIndex, got.Parent.LeafIndex)
+		Equal(t, "leaf index", expected.Parent.StateElement.LeafIndex, got.Parent.StateElement.LeafIndex)
 		Equal(t, "satisfied policy", expected.SatisfiedPolicy, got.SatisfiedPolicy)
 	}
 
@@ -192,20 +192,27 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 		Equal(t, "signature", expected.Signature, got.Signature)
 	}
 
-	var hostAnnouncements []chain.HostAnnouncement
+	var hostAnnouncements []explorer.V2HostAnnouncement
 	for _, attestation := range expectTxn.Attestations {
-		var ha chain.HostAnnouncement
-		if ha.FromAttestation(attestation) {
-			hostAnnouncements = append(hostAnnouncements, ha)
+		var ha chain.V2HostAnnouncement
+		if ha.FromAttestation(attestation) != nil {
+			hostAnnouncements = append(hostAnnouncements, explorer.V2HostAnnouncement{
+				V2HostAnnouncement: ha,
+				PublicKey:          attestation.PublicKey,
+			})
 		}
 	}
 	Equal(t, "host announcements", len(hostAnnouncements), len(gotTxn.HostAnnouncements))
 	for i := range hostAnnouncements {
-		expected := hostAnnouncements[i]
-		got := gotTxn.HostAnnouncements[i]
+		expected := []chain.NetAddress(hostAnnouncements[i].V2HostAnnouncement)
+		got := []chain.NetAddress(gotTxn.HostAnnouncements[i].V2HostAnnouncement)
 
-		Equal(t, "net address", expected.NetAddress, got.NetAddress)
-		Equal(t, "public key", expected.PublicKey, got.PublicKey)
+		Equal(t, "public key", hostAnnouncements[i].PublicKey, gotTxn.HostAnnouncements[i].PublicKey)
+		Equal(t, "net addresses", len(expected), len(got))
+		for j := range expected {
+			Equal(t, "protocol", expected[j].Protocol, got[j].Protocol)
+			Equal(t, "address", expected[j].Address, got[j].Address)
+		}
 	}
 
 	Equal(t, "arbitrary data", len(expectTxn.ArbitraryData), len(gotTxn.ArbitraryData))

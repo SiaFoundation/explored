@@ -83,9 +83,12 @@ func getV2Transactions(tx *txn, ids []types.TransactionID) ([]explorer.V2Transac
 	// add host announcements if we have any
 	for i := range txns {
 		for _, attestation := range txns[i].Attestations {
-			var ha chain.HostAnnouncement
-			if ha.FromAttestation(attestation) {
-				txns[i].HostAnnouncements = append(txns[i].HostAnnouncements, ha)
+			var ha chain.V2HostAnnouncement
+			if ha.FromAttestation(attestation) != nil {
+				txns[i].HostAnnouncements = append(txns[i].HostAnnouncements, explorer.V2HostAnnouncement{
+					V2HostAnnouncement: ha,
+					PublicKey:          attestation.PublicKey,
+				})
 			}
 		}
 	}
@@ -176,7 +179,7 @@ ORDER BY ts.transaction_order ASC`)
 
 			for rows.Next() {
 				var sci types.V2SiacoinInput
-				if err := rows.Scan(decode(&sci.SatisfiedPolicy), decode(&sci.Parent.ID), decode(&sci.Parent.LeafIndex), &sci.Parent.MaturityHeight, decode(&sci.Parent.SiacoinOutput.Address), decode(&sci.Parent.SiacoinOutput.Value)); err != nil {
+				if err := rows.Scan(decode(&sci.SatisfiedPolicy), decode(&sci.Parent.ID), decode(&sci.Parent.StateElement.LeafIndex), &sci.Parent.MaturityHeight, decode(&sci.Parent.SiacoinOutput.Address), decode(&sci.Parent.SiacoinOutput.Value)); err != nil {
 					return fmt.Errorf("failed to scan siacoin inputs: %w", err)
 				}
 
@@ -215,7 +218,7 @@ ORDER BY ts.transaction_order ASC`)
 			for rows.Next() {
 				var spentIndex types.ChainIndex
 				var sco explorer.SiacoinOutput
-				if err := rows.Scan(decode(&sco.StateElement.ID), decode(&sco.LeafIndex), decodeNull(&spentIndex), &sco.Source, &sco.MaturityHeight, decode(&sco.SiacoinOutput.Address), decode(&sco.SiacoinOutput.Value)); err != nil {
+				if err := rows.Scan(decode(&sco.ID), decode(&sco.StateElement.LeafIndex), decodeNull(&spentIndex), &sco.Source, &sco.MaturityHeight, decode(&sco.SiacoinOutput.Address), decode(&sco.SiacoinOutput.Value)); err != nil {
 					return fmt.Errorf("failed to scan siacoin output: %w", err)
 				}
 
@@ -256,7 +259,7 @@ ORDER BY ts.transaction_order ASC`)
 
 			for rows.Next() {
 				var sfi types.V2SiafundInput
-				if err := rows.Scan(decode(&sfi.SatisfiedPolicy), decode(&sfi.ClaimAddress), decode(&sfi.Parent.ID), decode(&sfi.Parent.LeafIndex), decode(&sfi.Parent.SiafundOutput.Address), decode(&sfi.Parent.SiafundOutput.Value)); err != nil {
+				if err := rows.Scan(decode(&sfi.SatisfiedPolicy), decode(&sfi.ClaimAddress), decode(&sfi.Parent.ID), decode(&sfi.Parent.StateElement.LeafIndex), decode(&sfi.Parent.SiafundOutput.Address), decode(&sfi.Parent.SiafundOutput.Value)); err != nil {
 					return fmt.Errorf("failed to scan siacoin inputs: %w", err)
 				}
 
@@ -295,7 +298,7 @@ ORDER BY ts.transaction_order ASC`)
 			for rows.Next() {
 				var spentIndex types.ChainIndex
 				var sfo explorer.SiafundOutput
-				if err := rows.Scan(decode(&sfo.StateElement.ID), decode(&sfo.StateElement.LeafIndex), decodeNull(&spentIndex), decode(&sfo.ClaimStart), decode(&sfo.SiafundOutput.Address), decode(&sfo.SiafundOutput.Value)); err != nil {
+				if err := rows.Scan(decode(&sfo.ID), decode(&sfo.StateElement.LeafIndex), decodeNull(&spentIndex), decode(&sfo.ClaimStart), decode(&sfo.SiafundOutput.Address), decode(&sfo.SiafundOutput.Value)); err != nil {
 					return fmt.Errorf("failed to scan siafund output: %w", err)
 				}
 				if spentIndex != (types.ChainIndex{}) {

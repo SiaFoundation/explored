@@ -76,7 +76,7 @@ WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.ID), decode(&m.Sia
 		err = tx.QueryRow(`SELECT sc.output_id, sc.leaf_index, sc.maturity_height, sc.address, sc.value
 FROM siacoin_elements sc
 INNER JOIN miner_payout_events ev ON ev.output_id = sc.id
-WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.StateElement.ID), decode(&m.SiacoinOutput.StateElement.LeafIndex), decode(&m.SiacoinOutput.MaturityHeight), decode(&m.SiacoinOutput.SiacoinOutput.Address), decode(&m.SiacoinOutput.SiacoinOutput.Value))
+WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.ID), decode(&m.SiacoinOutput.StateElement.LeafIndex), decode(&m.SiacoinOutput.MaturityHeight), decode(&m.SiacoinOutput.SiacoinOutput.Address), decode(&m.SiacoinOutput.SiacoinOutput.Value))
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to fetch miner payout event data: %w", err)
 		}
@@ -86,7 +86,7 @@ WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.StateElement.ID), 
 		err = tx.QueryRow(`SELECT sc.output_id, sc.leaf_index, sc.maturity_height, sc.address, sc.value
 FROM siacoin_elements sc
 INNER JOIN foundation_subsidy_events ev ON ev.output_id = sc.id
-WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.StateElement.ID), decode(&m.SiacoinOutput.StateElement.LeafIndex), decode(&m.SiacoinOutput.MaturityHeight), decode(&m.SiacoinOutput.SiacoinOutput.Address), decode(&m.SiacoinOutput.SiacoinOutput.Value))
+WHERE ev.event_id = ?`, eventID).Scan(decode(&m.SiacoinOutput.ID), decode(&m.SiacoinOutput.StateElement.LeafIndex), decode(&m.SiacoinOutput.MaturityHeight), decode(&m.SiacoinOutput.SiacoinOutput.Address), decode(&m.SiacoinOutput.SiacoinOutput.Value))
 		ev.Data = &m
 	default:
 		return explorer.Event{}, 0, fmt.Errorf("unknown event type: %s", eventType)

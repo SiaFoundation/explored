@@ -13,7 +13,7 @@ func scanV2FileContract(s scanner) (fce explorer.V2FileContract, err error) {
 	var confirmationTransactionID, resolutionTransactionID types.TransactionID
 
 	fc := &fce.V2FileContractElement.V2FileContract
-	if err = s.Scan(decode(&fce.TransactionID), decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&resolution), decodeNull(&resolutionIndex), decodeNull(&resolutionTransactionID), decode(&fce.V2FileContractElement.ID), decode(&fce.V2FileContractElement.LeafIndex), decode(&fc.Capacity), decode(&fc.Filesize), decode(&fc.FileMerkleRoot), decode(&fc.ProofHeight), decode(&fc.ExpirationHeight), decode(&fc.RenterOutput.Address), decode(&fc.RenterOutput.Value), decode(&fc.HostOutput.Address), decode(&fc.HostOutput.Value), decode(&fc.MissedHostValue), decode(&fc.TotalCollateral), decode(&fc.RenterPublicKey), decode(&fc.HostPublicKey), decode(&fc.RevisionNumber), decode(&fc.RenterSignature), decode(&fc.HostSignature)); err != nil {
+	if err = s.Scan(decode(&fce.TransactionID), decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&resolution), decodeNull(&resolutionIndex), decodeNull(&resolutionTransactionID), decode(&fce.V2FileContractElement.ID), decode(&fce.V2FileContractElement.StateElement.LeafIndex), decode(&fc.Capacity), decode(&fc.Filesize), decode(&fc.FileMerkleRoot), decode(&fc.ProofHeight), decode(&fc.ExpirationHeight), decode(&fc.RenterOutput.Address), decode(&fc.RenterOutput.Value), decode(&fc.HostOutput.Address), decode(&fc.HostOutput.Value), decode(&fc.MissedHostValue), decode(&fc.TotalCollateral), decode(&fc.RenterPublicKey), decode(&fc.HostPublicKey), decode(&fc.RevisionNumber), decode(&fc.RenterSignature), decode(&fc.HostSignature)); err != nil {
 		return
 	}
 

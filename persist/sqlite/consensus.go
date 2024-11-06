@@ -520,7 +520,7 @@ func addSiacoinElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 
 		for _, sce := range newElements {
 			var dbID int64
-			if err := stmt.QueryRow(encode(sce.ID), encode(index.ID), encode(sce.LeafIndex), int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), encode(sce.StateElement.LeafIndex)).Scan(&dbID); err != nil {
+			if err := stmt.QueryRow(encode(sce.ID), encode(index.ID), encode(sce.StateElement.LeafIndex), int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), encode(sce.StateElement.LeafIndex)).Scan(&dbID); err != nil {
 				return nil, fmt.Errorf("addSiacoinElements: failed to execute siacoin_elements statement: %w", err)
 			}
 
