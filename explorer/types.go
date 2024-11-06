@@ -203,6 +203,11 @@ type V2FileContractRevision struct {
 	Revision V2FileContract `json:"revision"`
 }
 
+type V2HostAnnouncement struct {
+	PublicKey types.PublicKey `json:"publicKey"`
+	chain.V2HostAnnouncement
+}
+
 // A V2Transaction is a V2 transaction that uses the wrapped types above.
 type V2Transaction struct {
 	ID types.TransactionID `json:"id"`
@@ -221,7 +226,7 @@ type V2Transaction struct {
 	NewFoundationAddress *types.Address `json:"newFoundationAddress,omitempty"`
 	MinerFee             types.Currency `json:"minerFee"`
 
-	HostAnnouncements []chain.HostAnnouncement `json:"hostAnnouncements,omitempty"`
+	HostAnnouncements []V2HostAnnouncement `json:"hostAnnouncements,omitempty"`
 }
 
 // V2BlockData is a struct containing the fields from types.V2BlockData and our

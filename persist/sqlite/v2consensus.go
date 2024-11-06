@@ -156,7 +156,7 @@ func updateV2FileContractElements(tx *txn, revert bool, b types.Block, fces []ex
 		}
 
 		if err := addFC(
-			types.FileContractID(fce.StateElement.ID),
+			types.FileContractID(fce.ID),
 			fce.StateElement.LeafIndex,
 			fce.V2FileContract,
 			update.Resolution,

@@ -20,7 +20,7 @@ func getSCE(t *testing.T, db explorer.Store, scid types.SiacoinOutputID) types.S
 	}
 	sce := sces[0]
 
-	sce.SiacoinElement.MerkleProof, err = db.MerkleProof(sce.StateElement.LeafIndex)
+	sce.SiacoinElement.StateElement.MerkleProof, err = db.MerkleProof(sce.StateElement.LeafIndex)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func getSFE(t *testing.T, db explorer.Store, sfid types.SiafundOutputID) types.S
 	}
 	sfe := sfes[0]
 
-	sfe.SiafundElement.MerkleProof, err = db.MerkleProof(sfe.StateElement.LeafIndex)
+	sfe.SiafundElement.StateElement.MerkleProof, err = db.MerkleProof(sfe.StateElement.LeafIndex)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func getFCE(t *testing.T, db explorer.Store, fcid types.FileContractID) types.V2
 	}
 	fce := fces[0]
 
-	fce.V2FileContractElement.MerkleProof, err = db.MerkleProof(fce.V2FileContractElement.StateElement.LeafIndex)
+	fce.V2FileContractElement.StateElement.MerkleProof, err = db.MerkleProof(fce.V2FileContractElement.StateElement.LeafIndex)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,14 +222,14 @@ func TestV2Attestations(t *testing.T) {
 	})
 	cs := cm.TipState()
 
-	ha1 := chain.HostAnnouncement{
-		PublicKey:  pk1.PublicKey(),
-		NetAddress: "127.0.0.1:4444",
-	}
-	ha2 := chain.HostAnnouncement{
-		PublicKey:  pk2.PublicKey(),
-		NetAddress: "127.0.0.1:8888",
-	}
+	ha1 := chain.V2HostAnnouncement{{
+		Protocol: "http",
+		Address:  "127.0.0.1:4444",
+	}}
+	ha2 := chain.V2HostAnnouncement{{
+		Protocol: "http",
+		Address:  "127.0.0.1:8888",
+	}}
 
 	otherAttestation := types.Attestation{
 		PublicKey: pk1.PublicKey(),
