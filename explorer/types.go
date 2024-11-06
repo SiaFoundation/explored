@@ -133,6 +133,7 @@ type ContractSiacoinOutput struct {
 // "missed" depending on whether a valid StorageProof is submitted for the
 // contract.
 type FileContract struct {
+	ID                 types.FileContractID    `json:"id"`
 	Filesize           uint64                  `json:"filesize"`
 	FileMerkleRoot     types.Hash256           `json:"fileMerkleRoot"`
 	WindowStart        uint64                  `json:"windowStart"`
@@ -142,14 +143,6 @@ type FileContract struct {
 	MissedProofOutputs []ContractSiacoinOutput `json:"missedProofOutputs"`
 	UnlockHash         types.Hash256           `json:"unlockHash"`
 	RevisionNumber     uint64                  `json:"revisionNumber"`
-}
-
-// A FileContractElement is a record of a FileContract within the state
-// accumulator.
-type FileContractElement struct {
-	ID           types.FileContractID `json:"id"`
-	StateElement types.StateElement   `json:"stateElement"`
-	FileContract FileContract         `json:"fileContract"`
 }
 
 // A EnhancedFileContract is a FileContractElement with added fields for
@@ -166,7 +159,7 @@ type EnhancedFileContract struct {
 	ProofIndex         *types.ChainIndex    `json:"proofIndex"`
 	ProofTransactionID *types.TransactionID `json:"proofTransactionID"`
 
-	FileContractElement
+	FileContract
 }
 
 // A FileContractRevision is a FileContract with extra fields for revision
