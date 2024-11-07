@@ -82,7 +82,7 @@ func CheckChainIndices(t *testing.T, db explorer.Store, txnID types.TransactionI
 }
 
 // CheckFCRevisions checks that the revision numbers for the file contracts match.
-func CheckFCRevisions(t *testing.T, confirmationIndex types.ChainIndex, confirmationTransactionID types.TransactionID, valid, missed []types.SiacoinOutput, revisionNumbers []uint64, fcs []explorer.EnhancedFileContract) {
+func CheckFCRevisions(t *testing.T, confirmationIndex types.ChainIndex, confirmationTransactionID types.TransactionID, valid, missed []types.SiacoinOutput, revisionNumbers []uint64, fcs []explorer.ExtendedFileContract) {
 	t.Helper()
 
 	testutil.Equal(t, "number of revisions", len(revisionNumbers), len(fcs))
@@ -715,7 +715,7 @@ func TestFileContract(t *testing.T) {
 		testutil.Equal(t, "confirmation index", prevTip, *fcr.ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *fcr.ConfirmationTransactionID)
 
-		testutil.CheckFC(t, false, false, false, fc, fcr.EnhancedFileContract)
+		testutil.CheckFC(t, false, false, false, fc, fcr.ExtendedFileContract)
 	}
 
 	for i := cm.Tip().Height; i < windowEnd; i++ {
@@ -938,7 +938,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		testutil.Equal(t, "parent id", txn.FileContractID(0), fcr.ParentID)
 		testutil.Equal(t, "unlock conditions", uc, fcr.UnlockConditions)
 
-		testutil.CheckFC(t, true, false, false, revisedFC1, fcr.EnhancedFileContract)
+		testutil.CheckFC(t, true, false, false, revisedFC1, fcr.ExtendedFileContract)
 	}
 
 	revisedFC2 := revisedFC1
@@ -1020,7 +1020,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		fcr := txns[0].FileContractRevisions[0]
 		testutil.Equal(t, "parent id", txn.FileContractID(0), fcr.ParentID)
 		testutil.Equal(t, "unlock conditions", uc, fcr.UnlockConditions)
-		testutil.CheckFC(t, true, false, false, revisedFC2, fcr.EnhancedFileContract)
+		testutil.CheckFC(t, true, false, false, revisedFC2, fcr.ExtendedFileContract)
 	}
 
 	{
@@ -1034,7 +1034,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		fcr := txns[0].FileContractRevisions[0]
 		testutil.Equal(t, "parent id", txn.FileContractID(0), fcr.ParentID)
 		testutil.Equal(t, "unlock conditions", uc, fcr.UnlockConditions)
-		testutil.CheckFC(t, true, false, false, revisedFC3, fcr.EnhancedFileContract)
+		testutil.CheckFC(t, true, false, false, revisedFC3, fcr.ExtendedFileContract)
 	}
 }
 
@@ -2348,7 +2348,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		testutil.Equal(t, "parent id", txn.FileContractID(0), fcr.ParentID)
 		testutil.Equal(t, "unlock conditions", uc, fcr.UnlockConditions)
 
-		testutil.CheckFC(t, false, false, false, revFC, fcr.EnhancedFileContract)
+		testutil.CheckFC(t, false, false, false, revFC, fcr.ExtendedFileContract)
 	}
 
 	{

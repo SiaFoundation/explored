@@ -130,8 +130,8 @@ type ContractSiacoinOutput struct {
 }
 
 // A FileContract is a storage agreement between a renter and a host. It
-// contains a bidirectional payment channel that resolves as either "valid" or
-// "missed" depending on whether a valid StorageProof is submitted for the
+// serves as a bidirectional payment channel that resolves as either "valid"
+// or "missed" depending on whether a valid StorageProof is submitted for the
 // contract.
 type FileContract struct {
 	ID                 types.FileContractID    `json:"id"`
@@ -146,9 +146,9 @@ type FileContract struct {
 	RevisionNumber     uint64                  `json:"revisionNumber"`
 }
 
-// A EnhancedFileContract is a FileContractElement with added fields for
+// A ExtendedFileContract is a FileContract with added fields for
 // resolved/valid state, and when the transaction was confirmed and proved.
-type EnhancedFileContract struct {
+type ExtendedFileContract struct {
 	Resolved bool `json:"resolved"`
 	Valid    bool `json:"valid"`
 
@@ -169,7 +169,7 @@ type FileContractRevision struct {
 	ParentID         types.FileContractID   `json:"parentID"`
 	UnlockConditions types.UnlockConditions `json:"unlockConditions"`
 
-	EnhancedFileContract
+	ExtendedFileContract
 }
 
 // A Transaction is a transaction that uses the wrapped types above.
@@ -179,7 +179,7 @@ type Transaction struct {
 	SiacoinOutputs        []SiacoinOutput              `json:"siacoinOutputs,omitempty"`
 	SiafundInputs         []SiafundInput               `json:"siafundInputs,omitempty"`
 	SiafundOutputs        []SiafundOutput              `json:"siafundOutputs,omitempty"`
-	FileContracts         []EnhancedFileContract       `json:"fileContracts,omitempty"`
+	FileContracts         []ExtendedFileContract       `json:"fileContracts,omitempty"`
 	FileContractRevisions []FileContractRevision       `json:"fileContractRevisions,omitempty"`
 	StorageProofs         []types.StorageProof         `json:"storageProofs,omitempty"`
 	MinerFees             []types.Currency             `json:"minerFees,omitempty"`

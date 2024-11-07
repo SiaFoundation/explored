@@ -281,7 +281,7 @@ type contractOrder struct {
 }
 
 // transactionFileContracts returns the file contracts for each transaction.
-func transactionFileContracts(tx *txn, txnIDs []int64) (map[int64][]explorer.EnhancedFileContract, error) {
+func transactionFileContracts(tx *txn, txnIDs []int64) (map[int64][]explorer.ExtendedFileContract, error) {
 	query := `SELECT ts.transaction_id, fc.id, rev.confirmation_index, rev.confirmation_transaction_id, rev.proof_index, rev.proof_transaction_id, fc.contract_id, fc.resolved, fc.valid, fc.transaction_id, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
 FROM file_contract_elements fc
 INNER JOIN transaction_file_contracts ts ON (ts.contract_id = fc.id)
@@ -296,12 +296,12 @@ ORDER BY ts.transaction_order ASC`
 
 	var contractIDs []int64
 	// map transaction ID to contract list
-	result := make(map[int64][]explorer.EnhancedFileContract)
+	result := make(map[int64][]explorer.ExtendedFileContract)
 	// map contract ID to transaction ID
 	contractTransaction := make(map[int64]contractOrder)
 	for rows.Next() {
 		var txnID, contractID int64
-		var fc explorer.EnhancedFileContract
+		var fc explorer.ExtendedFileContract
 
 		var confirmationIndex, proofIndex types.ChainIndex
 		var confirmationTransactionID, proofTransactionID types.TransactionID
@@ -366,7 +366,7 @@ ORDER BY ts.transaction_order ASC`
 
 		var confirmationIndex, proofIndex types.ChainIndex
 		var confirmationTransactionID, proofTransactionID types.TransactionID
-		if err := rows.Scan(&txnID, &contractID, decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&proofIndex), decodeNull(&proofTransactionID), decode(&fc.ParentID), decode(&fc.UnlockConditions), decode(&fc.ID), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decode(&fc.EnhancedFileContract.FileContract.Filesize), decode(&fc.EnhancedFileContract.FileContract.FileMerkleRoot), decode(&fc.EnhancedFileContract.FileContract.WindowStart), decode(&fc.EnhancedFileContract.FileContract.WindowEnd), decode(&fc.EnhancedFileContract.FileContract.Payout), decode(&fc.EnhancedFileContract.FileContract.UnlockHash), decode(&fc.EnhancedFileContract.FileContract.RevisionNumber)); err != nil {
+		if err := rows.Scan(&txnID, &contractID, decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&proofIndex), decodeNull(&proofTransactionID), decode(&fc.ParentID), decode(&fc.UnlockConditions), decode(&fc.ID), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decode(&fc.ExtendedFileContract.FileContract.Filesize), decode(&fc.ExtendedFileContract.FileContract.FileMerkleRoot), decode(&fc.ExtendedFileContract.FileContract.WindowStart), decode(&fc.ExtendedFileContract.FileContract.WindowEnd), decode(&fc.ExtendedFileContract.FileContract.Payout), decode(&fc.ExtendedFileContract.FileContract.UnlockHash), decode(&fc.ExtendedFileContract.FileContract.RevisionNumber)); err != nil {
 			return nil, fmt.Errorf("failed to scan file contract: %w", err)
 		}
 
@@ -395,8 +395,8 @@ ORDER BY ts.transaction_order ASC`
 	}
 	for contractID, output := range proofOutputs {
 		index := contractTransaction[contractID]
-		result[index.txnID][index.transactionOrder].EnhancedFileContract.FileContract.ValidProofOutputs = output.valid
-		result[index.txnID][index.transactionOrder].EnhancedFileContract.FileContract.MissedProofOutputs = output.missed
+		result[index.txnID][index.transactionOrder].ExtendedFileContract.FileContract.ValidProofOutputs = output.valid
+		result[index.txnID][index.transactionOrder].ExtendedFileContract.FileContract.MissedProofOutputs = output.missed
 	}
 
 	return result, nil

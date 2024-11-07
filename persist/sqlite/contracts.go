@@ -15,7 +15,7 @@ func encodedIDs(ids []types.FileContractID) []any {
 	return result
 }
 
-func scanFileContract(s scanner) (contractID int64, fc explorer.EnhancedFileContract, err error) {
+func scanFileContract(s scanner) (contractID int64, fc explorer.ExtendedFileContract, err error) {
 	var confirmationIndex, proofIndex types.ChainIndex
 	var confirmationTransactionID, proofTransactionID types.TransactionID
 	err = s.Scan(&contractID, decode(&fc.ID), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&proofIndex), decodeNull(&proofTransactionID), decode(&fc.FileContract.Filesize), decode(&fc.FileContract.FileMerkleRoot), decode(&fc.FileContract.WindowStart), decode(&fc.FileContract.WindowEnd), decode(&fc.FileContract.Payout), decode(&fc.FileContract.UnlockHash), decode(&fc.FileContract.RevisionNumber))
@@ -37,7 +37,7 @@ func scanFileContract(s scanner) (contractID int64, fc explorer.EnhancedFileCont
 }
 
 // Contracts implements explorer.Store.
-func (s *Store) Contracts(ids []types.FileContractID) (result []explorer.EnhancedFileContract, err error) {
+func (s *Store) Contracts(ids []types.FileContractID) (result []explorer.ExtendedFileContract, err error) {
 	err = s.transaction(func(tx *txn) error {
 		query := `SELECT fc1.id, fc1.contract_id, fc1.resolved, fc1.valid, fc1.transaction_id, rev.confirmation_index, rev.confirmation_transaction_id, rev.proof_index, rev.proof_transaction_id, fc1.filesize, fc1.file_merkle_root, fc1.window_start, fc1.window_end, fc1.payout, fc1.unlock_hash, fc1.revision_number
 			FROM file_contract_elements fc1
@@ -50,10 +50,10 @@ func (s *Store) Contracts(ids []types.FileContractID) (result []explorer.Enhance
 		defer rows.Close()
 
 		var contractIDs []int64
-		idContract := make(map[int64]explorer.EnhancedFileContract)
+		idContract := make(map[int64]explorer.ExtendedFileContract)
 		for rows.Next() {
 			var contractID int64
-			var fc explorer.EnhancedFileContract
+			var fc explorer.ExtendedFileContract
 
 			contractID, fc, err := scanFileContract(rows)
 			if err != nil {
@@ -82,7 +82,7 @@ func (s *Store) Contracts(ids []types.FileContractID) (result []explorer.Enhance
 }
 
 // ContractRevisions implements explorer.Store.
-func (s *Store) ContractRevisions(id types.FileContractID) (revisions []explorer.EnhancedFileContract, err error) {
+func (s *Store) ContractRevisions(id types.FileContractID) (revisions []explorer.ExtendedFileContract, err error) {
 	err = s.transaction(func(tx *txn) error {
 		query := `SELECT fc.id, fc.contract_id, fc.resolved, fc.valid, fc.transaction_id, rev.confirmation_index, rev.confirmation_transaction_id, rev.proof_index, rev.proof_transaction_id, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
 			FROM file_contract_elements fc
@@ -98,7 +98,7 @@ func (s *Store) ContractRevisions(id types.FileContractID) (revisions []explorer
 		// fetch revisions
 		type fce struct {
 			ID           int64
-			FileContract explorer.EnhancedFileContract
+			FileContract explorer.ExtendedFileContract
 		}
 		var fces []fce
 		var contractIDs []int64
@@ -119,7 +119,7 @@ func (s *Store) ContractRevisions(id types.FileContractID) (revisions []explorer
 		}
 
 		// merge outputs into revisions
-		revisions = make([]explorer.EnhancedFileContract, len(fces))
+		revisions = make([]explorer.ExtendedFileContract, len(fces))
 		for i, revision := range fces {
 			output, found := proofOutputs[revision.ID]
 			if !found {
@@ -140,7 +140,7 @@ func (s *Store) ContractRevisions(id types.FileContractID) (revisions []explorer
 }
 
 // ContractsKey implements explorer.Store.
-func (s *Store) ContractsKey(key types.PublicKey) (result []explorer.EnhancedFileContract, err error) {
+func (s *Store) ContractsKey(key types.PublicKey) (result []explorer.ExtendedFileContract, err error) {
 	err = s.transaction(func(tx *txn) error {
 		query := `SELECT fc1.id, fc1.contract_id, fc1.resolved, fc1.valid, fc1.transaction_id, rev.confirmation_index, rev.confirmation_transaction_id, rev.proof_index, rev.proof_transaction_id, fc1.filesize, fc1.file_merkle_root, fc1.window_start, fc1.window_end, fc1.payout, fc1.unlock_hash, fc1.revision_number
 			FROM file_contract_elements fc1
@@ -153,7 +153,7 @@ func (s *Store) ContractsKey(key types.PublicKey) (result []explorer.EnhancedFil
 		defer rows.Close()
 
 		var contractIDs []int64
-		idContract := make(map[int64]explorer.EnhancedFileContract)
+		idContract := make(map[int64]explorer.ExtendedFileContract)
 		for rows.Next() {
 			contractID, fc, err := scanFileContract(rows)
 			if err != nil {

@@ -186,26 +186,26 @@ func (c *Client) AddressBalance(address types.Address) (resp AddressBalanceRespo
 }
 
 // Contract returns the file contract with the specified ID.
-func (c *Client) Contract(id types.FileContractID) (resp explorer.EnhancedFileContract, err error) {
+func (c *Client) Contract(id types.FileContractID) (resp explorer.ExtendedFileContract, err error) {
 	err = c.c.GET(fmt.Sprintf("/contracts/%s", id), &resp)
 	return
 }
 
 // Contracts returns the transactions with the specified IDs.
-func (c *Client) Contracts(ids []types.FileContractID) (resp []explorer.EnhancedFileContract, err error) {
+func (c *Client) Contracts(ids []types.FileContractID) (resp []explorer.ExtendedFileContract, err error) {
 	err = c.c.POST("/contracts", ids, &resp)
 	return
 }
 
 // ContractsKey returns the contracts for a particular ed25519 key.
-func (c *Client) ContractsKey(key types.PublicKey) (resp []explorer.EnhancedFileContract, err error) {
+func (c *Client) ContractsKey(key types.PublicKey) (resp []explorer.ExtendedFileContract, err error) {
 	err = c.c.GET(fmt.Sprintf("/pubkey/%s/contracts", key), &resp)
 	return
 }
 
 // ContractRevisions returns all the revisions of the contract with the
 // specified ID.
-func (c *Client) ContractRevisions(id types.FileContractID) (resp []explorer.EnhancedFileContract, err error) {
+func (c *Client) ContractRevisions(id types.FileContractID) (resp []explorer.ExtendedFileContract, err error) {
 	err = c.c.GET(fmt.Sprintf("/contracts/%s/revisions", id), &resp)
 	return
 }
