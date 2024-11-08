@@ -438,7 +438,6 @@ CREATE TABLE v2_transaction_events (
 CREATE TABLE host_info (
     public_key BLOB PRIMARY KEY NOT NULL,
     net_address TEXT NOT NULL,
-    v2_net_addresses BLOB NOT NULL,
     country_code TEXT NOT NULL,
     known_since INTEGER NOT NULL,
     last_scan INTEGER NOT NULL,
@@ -508,6 +507,16 @@ CREATE TABLE host_info (
     price_table_registry_entries_total BLOB NOT NULL
 );
 
+CREATE TABLE host_info_v2_netaddresses(
+    public_key BLOB REFERENCES host_info(public_key) ON DELETE CASCADE NOT NULL,
+    netaddress_order INTEGER NOT NULL,
+    protocol TEXT NOT NULL,
+    address TEXT NOT NULL,
+
+    UNIQUE(public_key, netaddress_order)
+);
+
+CREATE INDEX host_info_v2_netaddresses_public_key ON host_info_v2_netaddresses(public_key);
 
 -- initialize the global settings table
 INSERT INTO global_settings (id, db_version) VALUES (0, 0); -- should not be changed
