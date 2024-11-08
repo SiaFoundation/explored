@@ -291,9 +291,11 @@ type HostScan struct {
 
 // Host represents a host and the information gathered from scanning it.
 type Host struct {
-	PublicKey   types.PublicKey `json:"publicKey"`
-	NetAddress  string          `json:"netAddress"`
-	CountryCode string          `json:"countryCode"`
+	PublicKey      types.PublicKey    `json:"publicKey"`
+	NetAddress     string             `json:"netAddress"`
+	V2NetAddresses []chain.NetAddress `json:"netAddresses"`
+
+	CountryCode string `json:"countryCode"`
 
 	KnownSince             time.Time `json:"knownSince"`
 	LastScan               time.Time `json:"lastScan"`

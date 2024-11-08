@@ -444,7 +444,7 @@ CREATE TABLE v2_host_announcements (
 	transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
 	transaction_order INTEGER NOT NULL,
 	public_key BLOB NOT NULL,
-	net_address BLOB NOT NULL,
+	v2_net_addresses BLOB NOT NULL,
 	UNIQUE(transaction_id, transaction_order)
 );
 CREATE INDEX v2_host_announcements_transaction_id_index ON v2_host_announcements(transaction_id);
@@ -458,6 +458,7 @@ CREATE TABLE v2_transaction_events (
 CREATE TABLE host_info (
     public_key BLOB PRIMARY KEY NOT NULL,
     net_address TEXT NOT NULL,
+    v2_net_addresses BLOB NOT NULL,
     country_code TEXT NOT NULL,
     known_since INTEGER NOT NULL,
     last_scan INTEGER NOT NULL,

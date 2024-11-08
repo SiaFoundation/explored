@@ -267,7 +267,7 @@ func TestV2Attestations(t *testing.T) {
 		if v, ok := events[0].Data.(*explorer.EventV2Transaction); !ok {
 			t.Fatal("expected EventV2Transaction")
 		} else {
-			testutil.Equal(t, "host announcements", 2, len(v.HostAnnouncements))
+			testutil.CheckV2Transaction(t, txn1, explorer.V2Transaction(*v))
 		}
 	}
 
