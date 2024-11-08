@@ -30,21 +30,8 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 		if err != nil || len(txns) == 0 {
 			return explorer.Event{}, 0, fmt.Errorf("failed to fetch transaction: %w", err)
 		}
-
-		rows, err := tx.Query(`SELECT public_key, net_address FROM host_announcements WHERE transaction_id = ? ORDER BY transaction_order ASC`, txnID)
-		if err != nil {
-			return explorer.Event{}, 0, fmt.Errorf("failed to get host announcements: %w", err)
-		}
-		defer rows.Close()
-
 		eventTx.Transaction = txns[0]
-		for rows.Next() {
-			var announcement chain.HostAnnouncement
-			if err := rows.Scan(decode(&announcement.PublicKey), &announcement.NetAddress); err != nil {
-				return explorer.Event{}, 0, fmt.Errorf("failed to scan announcement: %w", err)
-			}
-			eventTx.HostAnnouncements = append(eventTx.HostAnnouncements, announcement)
-		}
+		eventTx.HostAnnouncements = eventTx.Transaction.HostAnnouncements
 		ev.Data = &eventTx
 	case explorer.EventTypeV2Transaction:
 		var txnID int64

@@ -2,6 +2,7 @@ package sqlite_test
 
 import (
 	"errors"
+	"math"
 	"path/filepath"
 	"testing"
 	"time"
@@ -1522,12 +1523,25 @@ func TestRevertSendTransactions(t *testing.T) {
 
 func TestHostAnnouncement(t *testing.T) {
 	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+
 	pk2 := types.GeneratePrivateKey()
 	pk3 := types.GeneratePrivateKey()
 
-	_, _, cm, db := newStore(t, false, nil)
+	_, genesisBlock, cm, db := newStore(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
 
 	txn1 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         genesisBlock.Transactions[0].SiacoinOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   genesisBlock.Transactions[0].SiacoinOutputs[0].Value,
+		}},
 		ArbitraryData: [][]byte{
 			testutil.CreateAnnouncement(pk1, "127.0.0.1:1234"),
 		},
@@ -1595,6 +1609,18 @@ func TestHostAnnouncement(t *testing.T) {
 		testutil.Equal(t, "txns[1].ID", txn2.ID(), dbTxns[1].ID)
 		testutil.Equal(t, "txns[2].ID", txn3.ID(), dbTxns[2].ID)
 		testutil.Equal(t, "txns[3].ID", txn4.ID(), dbTxns[3].ID)
+	}
+
+	{
+		events, err := db.AddressEvents(addr1, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if v, ok := events[0].Data.(*explorer.EventTransaction); !ok {
+			t.Fatal("expected EventTransaction")
+		} else {
+			testutil.CheckTransaction(t, txn1, v.Transaction)
+		}
 	}
 
 	{
