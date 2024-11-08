@@ -123,9 +123,32 @@ type SiafundOutput struct {
 	types.SiafundElement
 }
 
-// A FileContract is a types.FileContractElement with added fields for
-// resolved/valid state.
+// A ContractSiacoinOutput is a SiacoinOutput with an added field for its ID.
+type ContractSiacoinOutput struct {
+	ID types.SiacoinOutputID `json:"id"`
+	types.SiacoinOutput
+}
+
+// A FileContract is a storage agreement between a renter and a host. It
+// serves as a bidirectional payment channel that resolves as either "valid"
+// or "missed" depending on whether a valid StorageProof is submitted for the
+// contract.
 type FileContract struct {
+	ID                 types.FileContractID    `json:"id"`
+	Filesize           uint64                  `json:"filesize"`
+	FileMerkleRoot     types.Hash256           `json:"fileMerkleRoot"`
+	WindowStart        uint64                  `json:"windowStart"`
+	WindowEnd          uint64                  `json:"windowEnd"`
+	Payout             types.Currency          `json:"payout"`
+	ValidProofOutputs  []ContractSiacoinOutput `json:"validProofOutputs"`
+	MissedProofOutputs []ContractSiacoinOutput `json:"missedProofOutputs"`
+	UnlockHash         types.Hash256           `json:"unlockHash"`
+	RevisionNumber     uint64                  `json:"revisionNumber"`
+}
+
+// A ExtendedFileContract is a FileContract with added fields for
+// resolved/valid state, and when the transaction was confirmed and proved.
+type ExtendedFileContract struct {
 	Resolved bool `json:"resolved"`
 	Valid    bool `json:"valid"`
 
@@ -137,7 +160,7 @@ type FileContract struct {
 	ProofIndex         *types.ChainIndex    `json:"proofIndex"`
 	ProofTransactionID *types.TransactionID `json:"proofTransactionID"`
 
-	types.FileContractElement
+	FileContract
 }
 
 // A FileContractRevision is a FileContract with extra fields for revision
@@ -146,7 +169,7 @@ type FileContractRevision struct {
 	ParentID         types.FileContractID   `json:"parentID"`
 	UnlockConditions types.UnlockConditions `json:"unlockConditions"`
 
-	FileContract
+	ExtendedFileContract
 }
 
 // A Transaction is a transaction that uses the wrapped types above.
@@ -156,7 +179,7 @@ type Transaction struct {
 	SiacoinOutputs        []SiacoinOutput              `json:"siacoinOutputs,omitempty"`
 	SiafundInputs         []SiafundInput               `json:"siafundInputs,omitempty"`
 	SiafundOutputs        []SiafundOutput              `json:"siafundOutputs,omitempty"`
-	FileContracts         []FileContract               `json:"fileContracts,omitempty"`
+	FileContracts         []ExtendedFileContract       `json:"fileContracts,omitempty"`
 	FileContractRevisions []FileContractRevision       `json:"fileContractRevisions,omitempty"`
 	StorageProofs         []types.StorageProof         `json:"storageProofs,omitempty"`
 	MinerFees             []types.Currency             `json:"minerFees,omitempty"`

@@ -82,16 +82,34 @@ func CheckChainIndices(t *testing.T, db explorer.Store, txnID types.TransactionI
 }
 
 // CheckFCRevisions checks that the revision numbers for the file contracts match.
-func CheckFCRevisions(t *testing.T, confirmationIndex types.ChainIndex, confirmationTransactionID types.TransactionID, valid, missed []types.SiacoinOutput, revisionNumbers []uint64, fcs []explorer.FileContract) {
+func CheckFCRevisions(t *testing.T, confirmationIndex types.ChainIndex, confirmationTransactionID types.TransactionID, valid, missed []types.SiacoinOutput, revisionNumbers []uint64, fcs []explorer.ExtendedFileContract) {
 	t.Helper()
 
 	testutil.Equal(t, "number of revisions", len(revisionNumbers), len(fcs))
 	for i := range revisionNumbers {
+		testutil.Equal(t, "revision number", revisionNumbers[i], fcs[i].FileContract.RevisionNumber)
 		testutil.Equal(t, "confirmation index", confirmationIndex, *fcs[i].ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", confirmationTransactionID, *fcs[i].ConfirmationTransactionID)
-		testutil.Equal(t, "valid proof outputs", valid, fcs[i].FileContract.ValidProofOutputs)
-		testutil.Equal(t, "missed proof outputs", missed, fcs[i].FileContract.MissedProofOutputs)
-		testutil.Equal(t, "revision number", revisionNumbers[i], fcs[i].FileContract.RevisionNumber)
+
+		testutil.Equal(t, "valid proof outputs", len(valid), len(fcs[i].FileContract.ValidProofOutputs))
+		for j := range valid {
+			expected := valid[j]
+			got := fcs[i].FileContract.ValidProofOutputs[j]
+
+			testutil.Equal(t, "id", fcs[i].ID.ValidOutputID(j), got.ID)
+			testutil.Equal(t, "value", expected.Value, got.Value)
+			testutil.Equal(t, "address", expected.Address, got.Address)
+		}
+
+		testutil.Equal(t, "missed proof outputs", len(missed), len(fcs[i].FileContract.MissedProofOutputs))
+		for j := range missed {
+			expected := missed[j]
+			got := fcs[i].FileContract.MissedProofOutputs[j]
+
+			testutil.Equal(t, "id", fcs[i].ID.MissedOutputID(j), got.ID)
+			testutil.Equal(t, "value", expected.Value, got.Value)
+			testutil.Equal(t, "address", expected.Address, got.Address)
+		}
 	}
 }
 
@@ -697,7 +715,7 @@ func TestFileContract(t *testing.T) {
 		testutil.Equal(t, "confirmation index", prevTip, *fcr.ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", txn.ID(), *fcr.ConfirmationTransactionID)
 
-		testutil.CheckFC(t, false, false, false, fc, fcr.FileContract)
+		testutil.CheckFC(t, false, false, false, fc, fcr.ExtendedFileContract)
 	}
 
 	for i := cm.Tip().Height; i < windowEnd; i++ {
@@ -920,7 +938,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		testutil.Equal(t, "parent id", txn.FileContractID(0), fcr.ParentID)
 		testutil.Equal(t, "unlock conditions", uc, fcr.UnlockConditions)
 
-		testutil.CheckFC(t, true, false, false, revisedFC1, fcr.FileContract)
+		testutil.CheckFC(t, true, false, false, revisedFC1, fcr.ExtendedFileContract)
 	}
 
 	revisedFC2 := revisedFC1
@@ -1002,7 +1020,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		fcr := txns[0].FileContractRevisions[0]
 		testutil.Equal(t, "parent id", txn.FileContractID(0), fcr.ParentID)
 		testutil.Equal(t, "unlock conditions", uc, fcr.UnlockConditions)
-		testutil.CheckFC(t, true, false, false, revisedFC2, fcr.FileContract)
+		testutil.CheckFC(t, true, false, false, revisedFC2, fcr.ExtendedFileContract)
 	}
 
 	{
@@ -1016,7 +1034,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		fcr := txns[0].FileContractRevisions[0]
 		testutil.Equal(t, "parent id", txn.FileContractID(0), fcr.ParentID)
 		testutil.Equal(t, "unlock conditions", uc, fcr.UnlockConditions)
-		testutil.CheckFC(t, true, false, false, revisedFC3, fcr.FileContract)
+		testutil.CheckFC(t, true, false, false, revisedFC3, fcr.ExtendedFileContract)
 	}
 }
 
@@ -2330,7 +2348,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		testutil.Equal(t, "parent id", txn.FileContractID(0), fcr.ParentID)
 		testutil.Equal(t, "unlock conditions", uc, fcr.UnlockConditions)
 
-		testutil.CheckFC(t, false, false, false, revFC, fcr.FileContract)
+		testutil.CheckFC(t, false, false, false, revFC, fcr.ExtendedFileContract)
 	}
 
 	{

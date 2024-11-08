@@ -221,14 +221,14 @@ ORDER BY ts.transaction_order ASC`
 }
 
 type fileContractProofOutputs struct {
-	valid  []types.SiacoinOutput
-	missed []types.SiacoinOutput
+	valid  []explorer.ContractSiacoinOutput
+	missed []explorer.ContractSiacoinOutput
 }
 
 func fileContractOutputs(tx *txn, contractIDs []int64) (map[int64]fileContractProofOutputs, error) {
 	result := make(map[int64]fileContractProofOutputs)
 
-	validQuery := `SELECT contract_id, address, value
+	validQuery := `SELECT contract_id, id, address, value
 FROM file_contract_valid_proof_outputs
 WHERE contract_id IN (` + queryPlaceHolders(len(contractIDs)) + `)
 ORDER BY contract_order`
@@ -240,8 +240,8 @@ ORDER BY contract_order`
 
 	for validRows.Next() {
 		var contractID int64
-		var sco types.SiacoinOutput
-		if err := validRows.Scan(&contractID, decode(&sco.Address), decode(&sco.Value)); err != nil {
+		var sco explorer.ContractSiacoinOutput
+		if err := validRows.Scan(&contractID, decode(&sco.ID), decode(&sco.Address), decode(&sco.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan valid proof output: %w", err)
 		}
 
@@ -250,7 +250,7 @@ ORDER BY contract_order`
 		result[contractID] = r
 	}
 
-	missedQuery := `SELECT contract_id, address, value
+	missedQuery := `SELECT contract_id, id, address, value
 FROM file_contract_missed_proof_outputs
 WHERE contract_id IN (` + queryPlaceHolders(len(contractIDs)) + `)
 ORDER BY contract_order`
@@ -262,8 +262,8 @@ ORDER BY contract_order`
 
 	for missedRows.Next() {
 		var contractID int64
-		var sco types.SiacoinOutput
-		if err := missedRows.Scan(&contractID, decode(&sco.Address), decode(&sco.Value)); err != nil {
+		var sco explorer.ContractSiacoinOutput
+		if err := missedRows.Scan(&contractID, decode(&sco.ID), decode(&sco.Address), decode(&sco.Value)); err != nil {
 			return nil, fmt.Errorf("failed to scan missed proof output: %w", err)
 		}
 
@@ -281,8 +281,8 @@ type contractOrder struct {
 }
 
 // transactionFileContracts returns the file contracts for each transaction.
-func transactionFileContracts(tx *txn, txnIDs []int64) (map[int64][]explorer.FileContract, error) {
-	query := `SELECT ts.transaction_id, fc.id, rev.confirmation_index, rev.confirmation_transaction_id, rev.proof_index, rev.proof_transaction_id, fc.contract_id, fc.leaf_index, fc.resolved, fc.valid, fc.transaction_id, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
+func transactionFileContracts(tx *txn, txnIDs []int64) (map[int64][]explorer.ExtendedFileContract, error) {
+	query := `SELECT ts.transaction_id, fc.id, rev.confirmation_index, rev.confirmation_transaction_id, rev.proof_index, rev.proof_transaction_id, fc.contract_id, fc.resolved, fc.valid, fc.transaction_id, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
 FROM file_contract_elements fc
 INNER JOIN transaction_file_contracts ts ON (ts.contract_id = fc.id)
 INNER JOIN last_contract_revision rev ON (rev.contract_id = fc.contract_id)
@@ -296,16 +296,16 @@ ORDER BY ts.transaction_order ASC`
 
 	var contractIDs []int64
 	// map transaction ID to contract list
-	result := make(map[int64][]explorer.FileContract)
+	result := make(map[int64][]explorer.ExtendedFileContract)
 	// map contract ID to transaction ID
 	contractTransaction := make(map[int64]contractOrder)
 	for rows.Next() {
 		var txnID, contractID int64
-		var fc explorer.FileContract
+		var fc explorer.ExtendedFileContract
 
 		var confirmationIndex, proofIndex types.ChainIndex
 		var confirmationTransactionID, proofTransactionID types.TransactionID
-		if err := rows.Scan(&txnID, &contractID, decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&proofIndex), decodeNull(&proofTransactionID), decode(&fc.ID), decode(&fc.StateElement.LeafIndex), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decode(&fc.FileContract.Filesize), decode(&fc.FileContract.FileMerkleRoot), decode(&fc.FileContract.WindowStart), decode(&fc.FileContract.WindowEnd), decode(&fc.FileContract.Payout), decode(&fc.FileContract.UnlockHash), decode(&fc.FileContract.RevisionNumber)); err != nil {
+		if err := rows.Scan(&txnID, &contractID, decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&proofIndex), decodeNull(&proofTransactionID), decode(&fc.ID), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decode(&fc.FileContract.Filesize), decode(&fc.FileContract.FileMerkleRoot), decode(&fc.FileContract.WindowStart), decode(&fc.FileContract.WindowEnd), decode(&fc.FileContract.Payout), decode(&fc.FileContract.UnlockHash), decode(&fc.FileContract.RevisionNumber)); err != nil {
 			return nil, fmt.Errorf("failed to scan file contract: %w", err)
 		}
 
@@ -343,7 +343,7 @@ ORDER BY ts.transaction_order ASC`
 
 // transactionFileContracts returns the file contract revisions for each transaction.
 func transactionFileContractRevisions(tx *txn, txnIDs []int64) (map[int64][]explorer.FileContractRevision, error) {
-	query := `SELECT ts.transaction_id, fc.id, rev.confirmation_index, rev.confirmation_transaction_id, rev.proof_index, rev.proof_transaction_id, ts.parent_id, ts.unlock_conditions, fc.contract_id, fc.leaf_index, fc.resolved, fc.valid, fc.transaction_id, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
+	query := `SELECT ts.transaction_id, fc.id, rev.confirmation_index, rev.confirmation_transaction_id, rev.proof_index, rev.proof_transaction_id, ts.parent_id, ts.unlock_conditions, fc.contract_id, fc.resolved, fc.valid, fc.transaction_id, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
 FROM file_contract_elements fc
 INNER JOIN transaction_file_contract_revisions ts ON (ts.contract_id = fc.id)
 INNER JOIN last_contract_revision rev ON (rev.contract_id = fc.contract_id)
@@ -366,7 +366,7 @@ ORDER BY ts.transaction_order ASC`
 
 		var confirmationIndex, proofIndex types.ChainIndex
 		var confirmationTransactionID, proofTransactionID types.TransactionID
-		if err := rows.Scan(&txnID, &contractID, decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&proofIndex), decodeNull(&proofTransactionID), decode(&fc.ParentID), decode(&fc.UnlockConditions), decode(&fc.ID), decode(&fc.StateElement.LeafIndex), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decode(&fc.FileContract.FileContract.Filesize), decode(&fc.FileContract.FileContract.FileMerkleRoot), decode(&fc.FileContract.FileContract.WindowStart), decode(&fc.FileContract.FileContract.WindowEnd), decode(&fc.FileContract.FileContract.Payout), decode(&fc.FileContract.FileContract.UnlockHash), decode(&fc.FileContract.FileContract.RevisionNumber)); err != nil {
+		if err := rows.Scan(&txnID, &contractID, decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&proofIndex), decodeNull(&proofTransactionID), decode(&fc.ParentID), decode(&fc.UnlockConditions), decode(&fc.ID), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decode(&fc.ExtendedFileContract.FileContract.Filesize), decode(&fc.ExtendedFileContract.FileContract.FileMerkleRoot), decode(&fc.ExtendedFileContract.FileContract.WindowStart), decode(&fc.ExtendedFileContract.FileContract.WindowEnd), decode(&fc.ExtendedFileContract.FileContract.Payout), decode(&fc.ExtendedFileContract.FileContract.UnlockHash), decode(&fc.ExtendedFileContract.FileContract.RevisionNumber)); err != nil {
 			return nil, fmt.Errorf("failed to scan file contract: %w", err)
 		}
 
@@ -395,8 +395,8 @@ ORDER BY ts.transaction_order ASC`
 	}
 	for contractID, output := range proofOutputs {
 		index := contractTransaction[contractID]
-		result[index.txnID][index.transactionOrder].FileContract.FileContract.ValidProofOutputs = output.valid
-		result[index.txnID][index.transactionOrder].FileContract.FileContract.MissedProofOutputs = output.missed
+		result[index.txnID][index.transactionOrder].ExtendedFileContract.FileContract.ValidProofOutputs = output.valid
+		result[index.txnID][index.transactionOrder].ExtendedFileContract.FileContract.MissedProofOutputs = output.missed
 	}
 
 	return result, nil
