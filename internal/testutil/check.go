@@ -107,6 +107,22 @@ func CheckTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer
 		// cf.X = make([]uint64, d.ReadPrefix()) and the prefix is 0
 		// testutil.Equal(t, "covered fields", expected.CoveredFields, got.CoveredFields)
 	}
+
+	var hostAnnouncements []chain.HostAnnouncement
+	for _, arb := range expectTxn.ArbitraryData {
+		var ha chain.HostAnnouncement
+		if ha.FromArbitraryData(arb) {
+			hostAnnouncements = append(hostAnnouncements, ha)
+		}
+	}
+	Equal(t, "host announcements", len(hostAnnouncements), len(gotTxn.HostAnnouncements))
+	for i := range hostAnnouncements {
+		expected := hostAnnouncements[i]
+		got := gotTxn.HostAnnouncements[i]
+
+		Equal(t, "public key", expected.PublicKey, got.PublicKey)
+		Equal(t, "net address", expected.NetAddress, got.NetAddress)
+	}
 }
 
 // CheckV2Transaction checks the inputs and outputs of the retrieved transaction

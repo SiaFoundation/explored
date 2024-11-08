@@ -1527,23 +1527,6 @@ func TestHostAnnouncement(t *testing.T) {
 
 	_, _, cm, db := newStore(t, false, nil)
 
-	checkHostAnnouncements := func(expectedArbitraryData [][]byte, got []chain.HostAnnouncement) {
-		t.Helper()
-
-		var expected []chain.HostAnnouncement
-		for _, arb := range expectedArbitraryData {
-			var ha chain.HostAnnouncement
-			if ha.FromArbitraryData(arb) {
-				expected = append(expected, ha)
-			}
-		}
-		testutil.Equal(t, "len(hostAnnouncements)", len(expected), len(got))
-		for i := range expected {
-			testutil.Equal(t, "host public key", expected[i].PublicKey, got[i].PublicKey)
-			testutil.Equal(t, "host net address", expected[i].NetAddress, got[i].NetAddress)
-		}
-	}
-
 	txn1 := types.Transaction{
 		ArbitraryData: [][]byte{
 			testutil.CreateAnnouncement(pk1, "127.0.0.1:1234"),
@@ -1619,8 +1602,7 @@ func TestHostAnnouncement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Equal(t, "len(txns)", 1, len(dbTxns))
-		checkHostAnnouncements(txn1.ArbitraryData, dbTxns[0].HostAnnouncements)
+		testutil.CheckTransaction(t, txn1, dbTxns[0])
 	}
 
 	{
@@ -1628,8 +1610,7 @@ func TestHostAnnouncement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Equal(t, "len(txns)", 1, len(dbTxns))
-		checkHostAnnouncements(txn2.ArbitraryData, dbTxns[0].HostAnnouncements)
+		testutil.CheckTransaction(t, txn2, dbTxns[0])
 	}
 
 	{
@@ -1637,8 +1618,7 @@ func TestHostAnnouncement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Equal(t, "len(txns)", 1, len(dbTxns))
-		checkHostAnnouncements(txn3.ArbitraryData, dbTxns[0].HostAnnouncements)
+		testutil.CheckTransaction(t, txn3, dbTxns[0])
 	}
 
 	ts := time.Unix(0, 0)
