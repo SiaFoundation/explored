@@ -195,7 +195,7 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 	var hostAnnouncements []explorer.V2HostAnnouncement
 	for _, attestation := range expectTxn.Attestations {
 		var ha chain.V2HostAnnouncement
-		if ha.FromAttestation(attestation) != nil {
+		if ha.FromAttestation(attestation) == nil {
 			hostAnnouncements = append(hostAnnouncements, explorer.V2HostAnnouncement{
 				V2HostAnnouncement: ha,
 				PublicKey:          attestation.PublicKey,

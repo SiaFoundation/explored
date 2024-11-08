@@ -85,11 +85,7 @@ type EventTransaction struct {
 }
 
 // An EventV2Transaction represents a v2 transaction that affects the wallet.
-type EventV2Transaction struct {
-	Transaction       V2Transaction            `json:"transaction"`
-	HostAnnouncements []chain.HostAnnouncement `json:"hostAnnouncements"`
-	Fee               types.Currency           `json:"fee"`
-}
+type EventV2Transaction V2Transaction
 
 // An EventMinerPayout represents a miner payout from a block.
 type EventMinerPayout struct {
@@ -221,7 +217,10 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 		for _, a := range txn.Attestations {
 			var ha chain.V2HostAnnouncement
 			if ha.FromAttestation(a) == nil {
-				// TODO: handle attestation
+				e.HostAnnouncements = append(e.HostAnnouncements, V2HostAnnouncement{
+					PublicKey:          a.PublicKey,
+					V2HostAnnouncement: ha,
+				})
 			}
 		}
 		addEvent(types.Hash256(txn.ID()), cs.Index.Height, &e, relevant) // transaction maturity height is the current block height
