@@ -1,6 +1,7 @@
 package sqlite_test
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -214,12 +215,17 @@ func TestV2FoundationAddress(t *testing.T) {
 
 func TestV2Attestations(t *testing.T) {
 	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(types.StandardUnlockConditions(pk1.PublicKey()))}
+
 	pk2 := types.GeneratePrivateKey()
 
-	_, _, cm, db := newStore(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+	_, genesisBlock, cm, db := newStore(t, true, func(network *consensus.Network, genesisBlock types.Block) {
 		network.HardforkV2.AllowHeight = 1
 		network.HardforkV2.RequireHeight = 2
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
+	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
 	cs := cm.TipState()
 
 	ha1 := chain.V2HostAnnouncement{{
@@ -239,13 +245,31 @@ func TestV2Attestations(t *testing.T) {
 	otherAttestation.Signature = pk1.SignHash(cs.AttestationSigHash(otherAttestation))
 
 	txn1 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, db, genesisBlock.Transactions[0].SiacoinOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		MinerFee:     giftSC,
 		Attestations: []types.Attestation{ha1.ToAttestation(cs, pk1), otherAttestation, ha2.ToAttestation(cs, pk2)},
 	}
+	testutil.SignV2Transaction(cm.TipState(), pk1, &txn1)
 
 	if err := cm.AddBlocks([]types.Block{testutil.MineV2Block(cs, []types.V2Transaction{txn1}, types.VoidAddress)}); err != nil {
 		t.Fatal(err)
 	}
 	syncDB(t, db, cm)
+
+	{
+		events, err := db.AddressEvents(addr1, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if v, ok := events[0].Data.(*explorer.EventV2Transaction); !ok {
+			t.Fatal("expected EventV2Transaction")
+		} else {
+			testutil.Equal(t, "host announcements", 2, len(v.HostAnnouncements))
+		}
+	}
 
 	{
 		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})

@@ -452,8 +452,7 @@ CREATE INDEX v2_host_announcements_public_key_index ON v2_host_announcements(pub
 
 CREATE TABLE v2_transaction_events (
     event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
-    transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
-    fee BLOB NOT NULL
+    transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL
 );
 
 CREATE TABLE host_info (

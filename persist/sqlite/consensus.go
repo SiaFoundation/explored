@@ -625,7 +625,7 @@ func addEvents(tx *txn, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[exp
 	}
 	defer transactionEventStmt.Close()
 
-	v2TransactionEventStmt, err := tx.Prepare(`INSERT INTO v2_transaction_events (event_id, transaction_id, fee) VALUES (?, ?, ?)`)
+	v2TransactionEventStmt, err := tx.Prepare(`INSERT INTO v2_transaction_events (event_id, transaction_id) VALUES (?, ?)`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare v2 transaction event statement: %w", err)
 	}
@@ -703,17 +703,18 @@ func addEvents(tx *txn, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[exp
 			}
 		case *explorer.EventV2Transaction:
 			dbID := v2TxnDBIds[types.TransactionID(event.ID)].id
-			if _, err = v2TransactionEventStmt.Exec(eventID, dbID, encode(v.Fee)); err != nil {
+			if _, err = v2TransactionEventStmt.Exec(eventID, dbID); err != nil {
 				return fmt.Errorf("failed to insert transaction event: %w", err)
 			}
 			var hosts []explorer.Host
 			for i, announcement := range v.HostAnnouncements {
-				if _, err = hostAnnouncementStmt.Exec(dbID, i, encode(announcement.PublicKey), announcement.NetAddress); err != nil {
-					return fmt.Errorf("failed to insert host announcement: %w", err)
-				}
+				// if _, err = hostAnnouncementStmt.Exec(dbID, i, encode(announcement.PublicKey), announcement.NetAddress); err != nil {
+				// 	return fmt.Errorf("failed to insert host announcement: %w", err)
+				// }
+				_ = i
 				hosts = append(hosts, explorer.Host{
 					PublicKey:  announcement.PublicKey,
-					NetAddress: announcement.NetAddress,
+					NetAddress: announcement.V2HostAnnouncement[0].Address,
 
 					KnownSince:       event.Timestamp,
 					LastAnnouncement: event.Timestamp,

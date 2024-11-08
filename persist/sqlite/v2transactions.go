@@ -84,7 +84,7 @@ func getV2Transactions(tx *txn, ids []types.TransactionID) ([]explorer.V2Transac
 	for i := range txns {
 		for _, attestation := range txns[i].Attestations {
 			var ha chain.V2HostAnnouncement
-			if ha.FromAttestation(attestation) != nil {
+			if ha.FromAttestation(attestation) == nil {
 				txns[i].HostAnnouncements = append(txns[i].HostAnnouncements, explorer.V2HostAnnouncement{
 					V2HostAnnouncement: ha,
 					PublicKey:          attestation.PublicKey,
