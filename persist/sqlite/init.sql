@@ -364,16 +364,6 @@ CREATE TABLE event_addresses (
 CREATE INDEX event_addresses_event_id_index ON event_addresses(event_id);
 CREATE INDEX event_addresses_address_id_index ON event_addresses(address_id);
 
-CREATE TABLE host_announcements (
-	transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
-	transaction_order INTEGER NOT NULL,
-	public_key BLOB NOT NULL,
-	net_address BLOB NOT NULL,
-	UNIQUE(transaction_id, transaction_order)
-);
-CREATE INDEX host_announcements_transaction_id_index ON host_announcements(transaction_id);
-CREATE INDEX host_announcements_public_key_index ON host_announcements(public_key);
-
 CREATE TABLE transaction_events (
     event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
     transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
@@ -439,16 +429,6 @@ CREATE TABLE v2_last_contract_revision (
 
     contract_element_id INTEGER UNIQUE REFERENCES v2_file_contract_elements(id) ON DELETE CASCADE NOT NULL
 );
-
-CREATE TABLE v2_host_announcements (
-	transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
-	transaction_order INTEGER NOT NULL,
-	public_key BLOB NOT NULL,
-	v2_net_addresses BLOB NOT NULL,
-	UNIQUE(transaction_id, transaction_order)
-);
-CREATE INDEX v2_host_announcements_transaction_id_index ON v2_host_announcements(transaction_id);
-CREATE INDEX v2_host_announcements_public_key_index ON v2_host_announcements(public_key);
 
 CREATE TABLE v2_transaction_events (
     event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,

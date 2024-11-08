@@ -631,18 +631,6 @@ func addEvents(tx *txn, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[exp
 	}
 	defer v2TransactionEventStmt.Close()
 
-	hostAnnouncementStmt, err := tx.Prepare(`INSERT INTO host_announcements (transaction_id, transaction_order, public_key, net_address) VALUES (?, ?, ?, ?)`)
-	if err != nil {
-		return fmt.Errorf("failed to prepare host anonouncement statement: %w", err)
-	}
-	defer hostAnnouncementStmt.Close()
-
-	v2HostAnnouncementStmt, err := tx.Prepare(`INSERT INTO v2_host_announcements (transaction_id, transaction_order, public_key, v2_net_addresses) VALUES (?, ?, ?, ?)`)
-	if err != nil {
-		return fmt.Errorf("failed to prepare host anonouncement statement: %w", err)
-	}
-	defer v2HostAnnouncementStmt.Close()
-
 	minerPayoutEventStmt, err := tx.Prepare(`INSERT INTO miner_payout_events (event_id, output_id) VALUES (?, ?)`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare miner payout event statement: %w", err)
@@ -684,10 +672,7 @@ func addEvents(tx *txn, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[exp
 				return fmt.Errorf("failed to insert transaction event: %w", err)
 			}
 			var hosts []explorer.Host
-			for i, announcement := range v.HostAnnouncements {
-				if _, err = hostAnnouncementStmt.Exec(dbID, i, encode(announcement.PublicKey), announcement.NetAddress); err != nil {
-					return fmt.Errorf("failed to insert host announcement: %w", err)
-				}
+			for _, announcement := range v.HostAnnouncements {
 				hosts = append(hosts, explorer.Host{
 					PublicKey:  announcement.PublicKey,
 					NetAddress: announcement.NetAddress,
@@ -707,14 +692,10 @@ func addEvents(tx *txn, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[exp
 				return fmt.Errorf("failed to insert transaction event: %w", err)
 			}
 			var hosts []explorer.Host
-			for i, announcement := range v.HostAnnouncements {
-				netAddresses := []chain.NetAddress(announcement.V2HostAnnouncement)
-				if _, err = v2HostAnnouncementStmt.Exec(dbID, i, encode(announcement.PublicKey), encode(netAddresses)); err != nil {
-					return fmt.Errorf("failed to insert host announcement: %w", err)
-				}
+			for _, announcement := range v.HostAnnouncements {
 				hosts = append(hosts, explorer.Host{
 					PublicKey:      announcement.PublicKey,
-					V2NetAddresses: netAddresses,
+					V2NetAddresses: []chain.NetAddress(announcement.V2HostAnnouncement),
 
 					KnownSince:       event.Timestamp,
 					LastAnnouncement: event.Timestamp,
