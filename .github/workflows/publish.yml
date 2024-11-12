@@ -6,8 +6,8 @@ on:
     branches:
       - master
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
-      - 'v[0-9]+.[0-9]+.[0-9]+-**'
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-**"
 
 concurrency:
   group: ${{ github.workflow }}
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   publish:
-    uses: SiaFoundation/workflows/.github/workflows/go-publish.yml@master
+    uses: SiaFoundation/workflows/.github/workflows/go-publish.yml@d0721ade42a1811c199a3f5707c6980f1d8a2ad8
     secrets: inherit
     with:
       linux-build-args: -tags=timetzdata -trimpath -a -ldflags '-s -w -linkmode external -extldflags "-static"'
