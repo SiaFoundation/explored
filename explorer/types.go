@@ -301,7 +301,7 @@ type HostScan struct {
 type Host struct {
 	PublicKey      types.PublicKey    `json:"publicKey"`
 	NetAddress     string             `json:"netAddress"`
-	V2NetAddresses []chain.NetAddress `json:"netAddresses"`
+	V2NetAddresses []chain.NetAddress `json:"v2NetAddresses,omitempty"`
 
 	CountryCode string `json:"countryCode"`
 
