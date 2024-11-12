@@ -129,23 +129,6 @@ type ContractSiacoinOutput struct {
 	types.SiacoinOutput
 }
 
-// A FileContract is a storage agreement between a renter and a host. It
-// serves as a bidirectional payment channel that resolves as either "valid"
-// or "missed" depending on whether a valid StorageProof is submitted for the
-// contract.
-type FileContract struct {
-	ID                 types.FileContractID    `json:"id"`
-	Filesize           uint64                  `json:"filesize"`
-	FileMerkleRoot     types.Hash256           `json:"fileMerkleRoot"`
-	WindowStart        uint64                  `json:"windowStart"`
-	WindowEnd          uint64                  `json:"windowEnd"`
-	Payout             types.Currency          `json:"payout"`
-	ValidProofOutputs  []ContractSiacoinOutput `json:"validProofOutputs"`
-	MissedProofOutputs []ContractSiacoinOutput `json:"missedProofOutputs"`
-	UnlockHash         types.Hash256           `json:"unlockHash"`
-	RevisionNumber     uint64                  `json:"revisionNumber"`
-}
-
 // A ExtendedFileContract is a FileContract with added fields for
 // resolved/valid state, and when the transaction was confirmed and proved.
 type ExtendedFileContract struct {
@@ -160,7 +143,16 @@ type ExtendedFileContract struct {
 	ProofIndex         *types.ChainIndex    `json:"proofIndex"`
 	ProofTransactionID *types.TransactionID `json:"proofTransactionID"`
 
-	FileContract
+	ID                 types.FileContractID    `json:"id"`
+	Filesize           uint64                  `json:"filesize"`
+	FileMerkleRoot     types.Hash256           `json:"fileMerkleRoot"`
+	WindowStart        uint64                  `json:"windowStart"`
+	WindowEnd          uint64                  `json:"windowEnd"`
+	Payout             types.Currency          `json:"payout"`
+	ValidProofOutputs  []ContractSiacoinOutput `json:"validProofOutputs"`
+	MissedProofOutputs []ContractSiacoinOutput `json:"missedProofOutputs"`
+	UnlockHash         types.Hash256           `json:"unlockHash"`
+	RevisionNumber     uint64                  `json:"revisionNumber"`
 }
 
 // A FileContractRevision is a FileContract with extra fields for revision

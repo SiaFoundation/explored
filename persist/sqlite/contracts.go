@@ -18,7 +18,7 @@ func encodedIDs(ids []types.FileContractID) []any {
 func scanFileContract(s scanner) (contractID int64, fc explorer.ExtendedFileContract, err error) {
 	var confirmationIndex, proofIndex types.ChainIndex
 	var confirmationTransactionID, proofTransactionID types.TransactionID
-	err = s.Scan(&contractID, decode(&fc.ID), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&proofIndex), decodeNull(&proofTransactionID), decode(&fc.FileContract.Filesize), decode(&fc.FileContract.FileMerkleRoot), decode(&fc.FileContract.WindowStart), decode(&fc.FileContract.WindowEnd), decode(&fc.FileContract.Payout), decode(&fc.FileContract.UnlockHash), decode(&fc.FileContract.RevisionNumber))
+	err = s.Scan(&contractID, decode(&fc.ID), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&proofIndex), decodeNull(&proofTransactionID), decode(&fc.Filesize), decode(&fc.FileMerkleRoot), decode(&fc.WindowStart), decode(&fc.WindowEnd), decode(&fc.Payout), decode(&fc.UnlockHash), decode(&fc.RevisionNumber))
 
 	if confirmationIndex != (types.ChainIndex{}) {
 		fc.ConfirmationIndex = &confirmationIndex
@@ -70,8 +70,8 @@ func (s *Store) Contracts(ids []types.FileContractID) (result []explorer.Extende
 		}
 		for contractID, output := range proofOutputs {
 			fc := idContract[contractID]
-			fc.FileContract.ValidProofOutputs = output.valid
-			fc.FileContract.MissedProofOutputs = output.missed
+			fc.ValidProofOutputs = output.valid
+			fc.MissedProofOutputs = output.missed
 			result = append(result, fc)
 		}
 
@@ -127,8 +127,8 @@ func (s *Store) ContractRevisions(id types.FileContractID) (revisions []explorer
 				return fmt.Errorf("missing proof outputs for contract %v", contractIDs[i])
 			}
 			revisions[i] = revision.FileContract
-			revisions[i].FileContract.ValidProofOutputs = output.valid
-			revisions[i].FileContract.MissedProofOutputs = output.missed
+			revisions[i].ValidProofOutputs = output.valid
+			revisions[i].MissedProofOutputs = output.missed
 		}
 
 		if len(revisions) == 0 {
@@ -170,8 +170,8 @@ func (s *Store) ContractsKey(key types.PublicKey) (result []explorer.ExtendedFil
 		}
 		for contractID, output := range proofOutputs {
 			fc := idContract[contractID]
-			fc.FileContract.ValidProofOutputs = output.valid
-			fc.FileContract.MissedProofOutputs = output.missed
+			fc.ValidProofOutputs = output.valid
+			fc.MissedProofOutputs = output.missed
 			result = append(result, fc)
 		}
 

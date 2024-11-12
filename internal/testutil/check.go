@@ -140,24 +140,23 @@ func CheckFC(t *testing.T, revision, resolved, valid bool, expected types.FileCo
 	Equal(t, "resolved state", resolved, got.Resolved)
 	Equal(t, "valid state", valid, got.Valid)
 
-	gotFC := got.FileContract
-	Equal(t, "filesize", expected.Filesize, gotFC.Filesize)
-	Equal(t, "file merkle root", expected.FileMerkleRoot, gotFC.FileMerkleRoot)
-	Equal(t, "window start", expected.WindowStart, gotFC.WindowStart)
-	Equal(t, "window end", expected.WindowEnd, gotFC.WindowEnd)
+	Equal(t, "filesize", expected.Filesize, got.Filesize)
+	Equal(t, "file merkle root", expected.FileMerkleRoot, got.FileMerkleRoot)
+	Equal(t, "window start", expected.WindowStart, got.WindowStart)
+	Equal(t, "window end", expected.WindowEnd, got.WindowEnd)
 	if !revision {
-		Equal(t, "payout", expected.Payout, gotFC.Payout)
+		Equal(t, "payout", expected.Payout, got.Payout)
 	}
-	Equal(t, "unlock hash", expected.UnlockHash, gotFC.UnlockHash)
-	Equal(t, "revision number", expected.RevisionNumber, gotFC.RevisionNumber)
-	Equal(t, "valid proof outputs", len(expected.ValidProofOutputs), len(gotFC.ValidProofOutputs))
+	Equal(t, "unlock hash", expected.UnlockHash, got.UnlockHash)
+	Equal(t, "revision number", expected.RevisionNumber, got.RevisionNumber)
+	Equal(t, "valid proof outputs", len(expected.ValidProofOutputs), len(got.ValidProofOutputs))
 	for i := range expected.ValidProofOutputs {
-		Equal(t, "valid proof output address", expected.ValidProofOutputs[i].Address, gotFC.ValidProofOutputs[i].Address)
-		Equal(t, "valid proof output value", expected.ValidProofOutputs[i].Value, gotFC.ValidProofOutputs[i].Value)
+		Equal(t, "valid proof output address", expected.ValidProofOutputs[i].Address, got.ValidProofOutputs[i].Address)
+		Equal(t, "valid proof output value", expected.ValidProofOutputs[i].Value, got.ValidProofOutputs[i].Value)
 	}
-	Equal(t, "missed proof outputs", len(expected.MissedProofOutputs), len(gotFC.MissedProofOutputs))
+	Equal(t, "missed proof outputs", len(expected.MissedProofOutputs), len(got.MissedProofOutputs))
 	for i := range expected.MissedProofOutputs {
-		Equal(t, "missed proof output address", expected.MissedProofOutputs[i].Address, gotFC.MissedProofOutputs[i].Address)
-		Equal(t, "missed proof output value", expected.MissedProofOutputs[i].Value, gotFC.MissedProofOutputs[i].Value)
+		Equal(t, "missed proof output address", expected.MissedProofOutputs[i].Address, got.MissedProofOutputs[i].Address)
+		Equal(t, "missed proof output value", expected.MissedProofOutputs[i].Value, got.MissedProofOutputs[i].Value)
 	}
 }

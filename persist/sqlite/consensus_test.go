@@ -87,24 +87,24 @@ func CheckFCRevisions(t *testing.T, confirmationIndex types.ChainIndex, confirma
 
 	testutil.Equal(t, "number of revisions", len(revisionNumbers), len(fcs))
 	for i := range revisionNumbers {
-		testutil.Equal(t, "revision number", revisionNumbers[i], fcs[i].FileContract.RevisionNumber)
+		testutil.Equal(t, "revision number", revisionNumbers[i], fcs[i].RevisionNumber)
 		testutil.Equal(t, "confirmation index", confirmationIndex, *fcs[i].ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", confirmationTransactionID, *fcs[i].ConfirmationTransactionID)
 
-		testutil.Equal(t, "valid proof outputs", len(valid), len(fcs[i].FileContract.ValidProofOutputs))
+		testutil.Equal(t, "valid proof outputs", len(valid), len(fcs[i].ValidProofOutputs))
 		for j := range valid {
 			expected := valid[j]
-			got := fcs[i].FileContract.ValidProofOutputs[j]
+			got := fcs[i].ValidProofOutputs[j]
 
 			testutil.Equal(t, "id", fcs[i].ID.ValidOutputID(j), got.ID)
 			testutil.Equal(t, "value", expected.Value, got.Value)
 			testutil.Equal(t, "address", expected.Address, got.Address)
 		}
 
-		testutil.Equal(t, "missed proof outputs", len(missed), len(fcs[i].FileContract.MissedProofOutputs))
+		testutil.Equal(t, "missed proof outputs", len(missed), len(fcs[i].MissedProofOutputs))
 		for j := range missed {
 			expected := missed[j]
-			got := fcs[i].FileContract.MissedProofOutputs[j]
+			got := fcs[i].MissedProofOutputs[j]
 
 			testutil.Equal(t, "id", fcs[i].ID.MissedOutputID(j), got.ID)
 			testutil.Equal(t, "value", expected.Value, got.Value)
