@@ -14,7 +14,7 @@ func (s *Store) Block(id types.BlockID) (result explorer.Block, err error) {
 	err = s.transaction(func(tx *txn) error {
 		var v2Height uint64
 		var v2Commitment types.Hash256
-		err := tx.QueryRow(`SELECT parent_id, nonce, timestamp, height, v2_height, v2_commitment FROM blocks WHERE id = ?`, encode(id)).Scan(decode(&result.ParentID), decode(&result.Nonce), decode(&result.Timestamp), &result.Height, decodeNull(&v2Height), decodeNull(&v2Commitment))
+		err := tx.QueryRow(`SELECT parent_id, nonce, timestamp, height, chain_index_element, v2_height, v2_commitment FROM blocks WHERE id = ?`, encode(id)).Scan(decode(&result.ParentID), decode(&result.Nonce), decode(&result.Timestamp), &result.Height, decode(&result.ChainIndexElement), decodeNull(&v2Height), decodeNull(&v2Commitment))
 		if err != nil {
 			return fmt.Errorf("failed to get block: %w", err)
 		}

@@ -178,7 +178,9 @@ func SignV2TransactionWithContracts(cs consensus.State, pk, renterPK, hostPK typ
 			r.RenterSignature = renterPK.SignHash(cs.RenewalSigHash(*r))
 			r.HostSignature = hostPK.SignHash(cs.RenewalSigHash(*r))
 		case *types.V2FileContractFinalization:
-			*r = types.V2FileContractFinalization(renterPK.SignHash(cs.ContractSigHash(txn.FileContractResolutions[i].Parent.V2FileContract)))
+			finalRevision := txn.FileContractResolutions[i].Parent.V2FileContract
+			finalRevision.RevisionNumber = types.MaxRevisionNumber
+			*r = types.V2FileContractFinalization(renterPK.SignHash(cs.ContractSigHash(finalRevision)))
 		}
 	}
 }

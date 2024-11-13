@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"database/sql"
 	"fmt"
 
 	"go.sia.tech/core/types"
@@ -77,7 +78,9 @@ func getV2Transactions(tx *txn, ids []types.TransactionID) ([]explorer.V2Transac
 	} else if err := fillV2TransactionFileContracts(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getV2Transactions: failed to get file contracts: %w", err)
 	} else if err := fillV2TransactionFileContractRevisions(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getV2Transactions: failed to get file contracts: %w", err)
+		return nil, fmt.Errorf("getV2Transactions: failed to get file contract revisions: %w", err)
+	} else if err := fillV2TransactionFileContractResolutions(tx, dbIDs, txns); err != nil {
+		return nil, fmt.Errorf("getV2Transactions: failed to get file contract resolutions: %w", err)
 	}
 
 	// add host announcements if we have any
@@ -319,7 +322,7 @@ ORDER BY ts.transaction_order ASC`)
 // fillV2TransactionFileContracts fills in the file contracts for each
 // transaction.
 func fillV2TransactionFileContracts(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
-	stmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_index, rev.confirmation_transaction_id, rev.resolution, rev.resolution_index, rev.resolution_transaction_id, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
+	stmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_index, rev.confirmation_transaction_id, rev.resolution_index, rev.resolution_transaction_id, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
 FROM v2_file_contract_elements fc
 INNER JOIN v2_transaction_file_contracts ts ON (ts.contract_id = fc.id)
 INNER JOIN v2_last_contract_revision rev ON (rev.contract_id = fc.contract_id)
@@ -355,10 +358,10 @@ ORDER BY ts.transaction_order ASC`)
 	return nil
 }
 
-// fillV2TransactionFileContractRevisions fills in the file contracts for each
-// transaction.
+// fillV2TransactionFileContractRevisions fills in the file contract revisions
+// for each transaction.
 func fillV2TransactionFileContractRevisions(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
-	parentStmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_index, rev.confirmation_transaction_id, rev.resolution, rev.resolution_index, rev.resolution_transaction_id, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
+	parentStmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_index, rev.confirmation_transaction_id, rev.resolution_index, rev.resolution_transaction_id, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
 FROM v2_file_contract_elements fc
 INNER JOIN v2_transaction_file_contract_revisions ts ON (ts.parent_contract_id = fc.id)
 INNER JOIN v2_last_contract_revision rev ON (rev.contract_id = fc.contract_id)
@@ -369,7 +372,7 @@ ORDER BY ts.transaction_order ASC`)
 	}
 	defer parentStmt.Close()
 
-	revisionStmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_index, rev.confirmation_transaction_id, rev.resolution, rev.resolution_index, rev.resolution_transaction_id, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
+	revisionStmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_index, rev.confirmation_transaction_id, rev.resolution_index, rev.resolution_transaction_id, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
 FROM v2_file_contract_elements fc
 INNER JOIN v2_transaction_file_contract_revisions ts ON (ts.revision_contract_id = fc.id)
 INNER JOIN v2_last_contract_revision rev ON (rev.contract_id = fc.contract_id)
@@ -421,6 +424,126 @@ ORDER BY ts.transaction_order ASC`)
 		}
 	}
 
+	return nil
+}
+
+// fillV2TransactionFileContractResolutions fills in the file contract
+// resolutions for each transaction.
+func fillV2TransactionFileContractResolutions(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
+	consolidatedStmt, err := tx.Prepare(`
+        SELECT 
+            parent_contract_id, resolution_type,
+            renewal_final_revision_contract_id, renewal_new_contract_id,
+            renewal_renter_rollover, renewal_host_rollover,
+            renewal_renter_signature, renewal_host_signature,
+            storage_proof_proof_index, storage_proof_leaf, storage_proof_proof,
+            finalization_signature
+        FROM v2_transaction_file_contract_resolutions
+        WHERE transaction_id = ?
+        ORDER BY transaction_order
+    `)
+	if err != nil {
+		return fmt.Errorf("failed to prepare consolidated statement: %w", err)
+	}
+	defer consolidatedStmt.Close()
+
+	// get a v2 FC by id
+	fcStmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_index, rev.confirmation_transaction_id, rev.resolution_index, rev.resolution_transaction_id, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
+FROM v2_file_contract_elements fc
+INNER JOIN v2_last_contract_revision rev ON (rev.contract_id = fc.contract_id)
+WHERE fc.id = ?`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare file contracts statement: %w", err)
+	}
+	defer fcStmt.Close()
+
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := consolidatedStmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query file contract resolutions: %w", err)
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				// all
+				var parentContractID, resolutionType int64
+				// renewal
+				var renewalFinalRevisionID, renewalNewContractID sql.NullInt64
+				var renewalRenterRollover, renewalHostRollover types.Currency
+				var renewalRenterSignature, renewalHostSignature types.Signature
+				// storage proof
+				var storageProofProofIndex types.ChainIndexElement
+				var storageProofProof []types.Hash256
+				var storageProofLeaf []byte
+				// finalization
+				var finalizationSignature types.Signature
+
+				// Scan all fields, some of which may be NULL
+				if err := rows.Scan(
+					&parentContractID, &resolutionType,
+					&renewalFinalRevisionID, &renewalNewContractID,
+					decodeNull(&renewalRenterRollover), decodeNull(&renewalHostRollover),
+					decodeNull(&renewalRenterSignature), decodeNull(&renewalHostSignature),
+					decodeNull(&storageProofProofIndex), &storageProofLeaf, decodeNull(&storageProofProof),
+					decodeNull(&finalizationSignature),
+				); err != nil {
+					return fmt.Errorf("failed to scan resolution metadata: %w", err)
+				}
+
+				// Retrieve parent contract element
+				parent, err := scanV2FileContract(fcStmt.QueryRow(parentContractID))
+				if err != nil {
+					return fmt.Errorf("failed to scan file contract: %w", err)
+				}
+
+				var res explorer.V2FileContractResolutionType
+				switch resolutionType {
+				case 0: // V2FileContractRenewal
+					renewal := &explorer.V2FileContractRenewal{
+						RenterRollover:  renewalRenterRollover,
+						HostRollover:    renewalHostRollover,
+						RenterSignature: renewalRenterSignature,
+						HostSignature:   renewalHostSignature,
+					}
+					if renewalFinalRevisionID.Valid {
+						renewal.FinalRevision, err = scanV2FileContract(fcStmt.QueryRow(renewalFinalRevisionID.Int64))
+						if err != nil {
+							return fmt.Errorf("failed to scan final revision: %w", err)
+						}
+					}
+					if renewalNewContractID.Valid {
+						renewal.NewContract, err = scanV2FileContract(fcStmt.QueryRow(renewalNewContractID.Int64))
+						if err != nil {
+							return fmt.Errorf("failed to scan new contract: %w", err)
+						}
+					}
+					res = renewal
+				case 1: // V2StorageProof
+					proof := &explorer.V2StorageProof{
+						ProofIndex: storageProofProofIndex,
+						Proof:      storageProofProof,
+						Leaf:       [64]byte(storageProofLeaf),
+					}
+					res = proof
+				case 2: // V2FileContractFinalization
+					res = (*explorer.V2FileContractFinalization)(&finalizationSignature)
+				case 3: // V2FileContractExpiration
+					res = new(explorer.V2FileContractExpiration)
+				}
+
+				// Append the resolution to the transaction.
+				txns[i].FileContractResolutions = append(txns[i].FileContractResolutions, explorer.V2FileContractResolution{
+					Parent:     parent,
+					Resolution: res,
+				})
+			}
+			return nil
+		}()
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

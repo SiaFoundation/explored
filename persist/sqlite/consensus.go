@@ -16,7 +16,7 @@ type updateTx struct {
 	tx *txn
 }
 
-func addBlock(tx *txn, b types.Block, height uint64) error {
+func addBlock(tx *txn, b types.Block, cie types.ChainIndexElement, height uint64) error {
 	// nonce is encoded because database/sql doesn't support uint64 with high bit set
 	var v2Height any
 	var v2Commitment any
@@ -24,7 +24,8 @@ func addBlock(tx *txn, b types.Block, height uint64) error {
 		v2Height = encode(b.V2.Height)
 		v2Commitment = encode(b.V2.Commitment)
 	}
-	_, err := tx.Exec("INSERT INTO blocks(id, height, parent_id, nonce, timestamp, v2_height, v2_commitment) VALUES (?, ?, ?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encode(b.Nonce), encode(b.Timestamp), v2Height, v2Commitment)
+	cie.StateElement.MerkleProof = nil
+	_, err := tx.Exec("INSERT INTO blocks(id, height, parent_id, nonce, timestamp, chain_index_element, v2_height, v2_commitment) VALUES (?, ?, ?, ?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encode(b.Nonce), encode(b.Timestamp), encode(cie), v2Height, v2Commitment)
 	return err
 }
 
@@ -1018,7 +1019,7 @@ func (ut *updateTx) Metrics(height uint64) (explorer.Metrics, error) {
 }
 
 func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
-	if err := addBlock(ut.tx, state.Block, state.Metrics.Index.Height); err != nil {
+	if err := addBlock(ut.tx, state.Block, state.ChainIndexElement, state.Metrics.Index.Height); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add block: %w", err)
 	} else if err := updateMaturedBalances(ut.tx, false, state.Metrics.Index.Height); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update matured balances: %w", err)
@@ -1106,6 +1107,8 @@ func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("RevertIndex: failed to update balances: %w", err)
 	} else if _, err := updateFileContractElements(ut.tx, true, state.Block, state.FileContractElements); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update file contract state: %w", err)
+	} else if _, err := updateV2FileContractElements(ut.tx, true, state.Block, state.V2FileContractElements); err != nil {
+		return fmt.Errorf("ApplyIndex: failed to add v2 file contracts: %w", err)
 	} else if err := deleteBlock(ut.tx, state.Block.ID()); err != nil {
 		return fmt.Errorf("RevertIndex: failed to delete block: %w", err)
 	} else if err := updateStateTree(ut.tx, state.TreeUpdates); err != nil {

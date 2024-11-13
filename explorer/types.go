@@ -189,7 +189,6 @@ type V2FileContract struct {
 	ConfirmationIndex         *types.ChainIndex    `json:"confirmationIndex"`
 	ConfirmationTransactionID *types.TransactionID `json:"confirmationTransactionID"`
 
-	Resolution              *types.V2FileContractResolutionType
 	ResolutionIndex         *types.ChainIndex    `json:"resolutionIndex"`
 	ResolutionTransactionID *types.TransactionID `json:"resolutionTransactionID"`
 
@@ -210,6 +209,63 @@ type V2HostAnnouncement struct {
 	chain.V2HostAnnouncement
 }
 
+// V2FileContractResolutionType enumerates the types of file contract resolution.
+type V2FileContractResolutionType interface {
+	isV2FileContractResolution()
+}
+
+func (*V2FileContractFinalization) isV2FileContractResolution() {}
+func (*V2FileContractRenewal) isV2FileContractResolution()      {}
+func (*V2StorageProof) isV2FileContractResolution()             {}
+func (*V2FileContractExpiration) isV2FileContractResolution()   {}
+
+// A V2FileContractFinalization finalizes a contract, preventing further
+// revisions and immediately creating its valid outputs.
+type V2FileContractFinalization types.Signature
+
+// A V2FileContractRenewal renews a file contract.
+type V2FileContractRenewal struct {
+	FinalRevision  V2FileContract `json:"finalRevision"`
+	NewContract    V2FileContract `json:"newContract"`
+	RenterRollover types.Currency `json:"renterRollover"`
+	HostRollover   types.Currency `json:"hostRollover"`
+
+	// signatures cover above fields
+	RenterSignature types.Signature `json:"renterSignature"`
+	HostSignature   types.Signature `json:"hostSignature"`
+}
+
+// A V2StorageProof asserts the presence of a randomly-selected leaf within the
+// Merkle tree of a V2FileContract's data.
+type V2StorageProof struct {
+	// Selecting the leaf requires a source of unpredictable entropy; we use the
+	// ID of the block at the contract's ProofHeight. The storage proof thus
+	// includes a proof that this ID is the correct ancestor.
+	//
+	// During validation, it is imperative to check that ProofIndex.Height
+	// matches the ProofHeight field of the contract's final revision;
+	// otherwise, the prover could use any ProofIndex, giving them control over
+	// the leaf index.
+	ProofIndex types.ChainIndexElement
+
+	// The leaf is always 64 bytes, extended with zeros if necessary.
+	Leaf  [64]byte
+	Proof []types.Hash256
+}
+
+// A V2FileContractExpiration resolves an expired contract. A contract is
+// considered expired when its proof window has elapsed. If the contract is not
+// storing any data, it will resolve as valid; otherwise, it resolves as missed.
+type V2FileContractExpiration struct{}
+
+// A V2FileContractResolution closes a v2 file contract's payment channel.
+// There are four resolution types: renewwal, storage proof, finalization,
+// and expiration.
+type V2FileContractResolution struct {
+	Parent     V2FileContract               `json:"parent"`
+	Resolution V2FileContractResolutionType `json:"resolution"`
+}
+
 // A V2Transaction is a V2 transaction that uses the wrapped types above.
 type V2Transaction struct {
 	ID types.TransactionID `json:"id"`
@@ -219,8 +275,9 @@ type V2Transaction struct {
 	SiafundInputs  []types.V2SiafundInput `json:"siafundInputs,omitempty"`
 	SiafundOutputs []SiafundOutput        `json:"siafundOutputs,omitempty"`
 
-	FileContracts         []V2FileContract         `json:"fileContracts,omitempty"`
-	FileContractRevisions []V2FileContractRevision `json:"fileContractRevisions,omitempty"`
+	FileContracts           []V2FileContract           `json:"fileContracts,omitempty"`
+	FileContractRevisions   []V2FileContractRevision   `json:"fileContractRevisions,omitempty"`
+	FileContractResolutions []V2FileContractResolution `json:"fileContractResolutions,omitempty"`
 
 	Attestations  []types.Attestation `json:"attestations,omitempty"`
 	ArbitraryData []byte              `json:"arbitraryData,omitempty"`
@@ -242,12 +299,13 @@ type V2BlockData struct {
 // A Block is a block containing wrapped transactions and siacoin
 // outputs for the miner payouts.
 type Block struct {
-	Height       uint64          `json:"height"`
-	ParentID     types.BlockID   `json:"parentID"`
-	Nonce        uint64          `json:"nonce"`
-	Timestamp    time.Time       `json:"timestamp"`
-	MinerPayouts []SiacoinOutput `json:"minerPayouts"`
-	Transactions []Transaction   `json:"transactions"`
+	Height            uint64                  `json:"height"`
+	ParentID          types.BlockID           `json:"parentID"`
+	Nonce             uint64                  `json:"nonce"`
+	Timestamp         time.Time               `json:"timestamp"`
+	ChainIndexElement types.ChainIndexElement `json:"chainIndexElement"`
+	MinerPayouts      []SiacoinOutput         `json:"minerPayouts"`
+	Transactions      []Transaction           `json:"transactions"`
 
 	V2 *V2BlockData `json:"v2,omitempty"`
 }
