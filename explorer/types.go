@@ -8,6 +8,7 @@ import (
 	"go.sia.tech/core/consensus"
 	rhpv2 "go.sia.tech/core/rhp/v2"
 	rhpv3 "go.sia.tech/core/rhp/v3"
+	rhpv4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 )
@@ -287,6 +288,9 @@ type HostScan struct {
 
 	Settings   rhpv2.HostSettings   `json:"settings"`
 	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
+
+	RHPV4Settings rhpv4.HostSettings `json:"rhpV4Settings"`
+	RHPV4Prices   rhpv4.HostPrices   `json:"rhpV4Prices"`
 }
 
 // Host represents a host and the information gathered from scanning it.
@@ -307,6 +311,9 @@ type Host struct {
 
 	Settings   rhpv2.HostSettings   `json:"settings"`
 	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
+
+	RHPV4Settings rhpv4.HostSettings `json:"rhpV4Settings"`
+	RHPV4Prices   rhpv4.HostPrices   `json:"rhpV4Prices"`
 }
 
 // HostMetrics represents averages of scanned information from hosts.
