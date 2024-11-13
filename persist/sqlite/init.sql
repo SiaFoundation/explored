@@ -535,7 +535,28 @@ CREATE TABLE host_info (
     price_table_max_duration BLOB NOT NULL,
     price_table_window_size BLOB NOT NULL,
     price_table_registry_entries_left BLOB NOT NULL,
-    price_table_registry_entries_total BLOB NOT NULL
+    price_table_registry_entries_total BLOB NOT NULL,
+    -- rhp4 settings
+    rhp4_settings_protocol_version BLOB NOT NULL,
+    rhp4_settings_release TEXT NOT NULL,
+    rhp4_settings_wallet_address BLOB NOT NULL,
+    rhp4_settings_accepting_contracts INTEGER NOT NULL,
+    rhp4_settings_max_collateral BLOB NOT NULL,
+    rhp4_settings_max_collateral_duration BLOB NOT NULL,
+    rhp4_settings_max_sector_duration BLOB NOT NULL,
+    rhp4_settings_max_sector_batch_size BLOB NOT NULL,
+    rhp4_settings_remaining_storage BLOB NOT NULL,
+    rhp4_settings_total_storage BLOB NOT NULL,
+    -- rhp4 prices
+    rhp4_prices_contract_price BLOB NOT NULL,
+    rhp4_prices_collateral_price BLOB NOT NULL,
+    rhp4_prices_storage_price BLOB NOT NULL,
+    rhp4_prices_ingress_price BLOB NOT NULL,
+    rhp4_prices_egress_price BLOB NOT NULL,
+    rhp4_prices_free_sector_price BLOB NOT NULL,
+    rhp4_prices_tip_height BLOB NOT NULL,
+    rhp4_prices_valid_until BLOB NOT NULL,
+    rhp4_prices_signature BLOB NOT NULL
 );
 
 CREATE TABLE host_info_v2_netaddresses(
