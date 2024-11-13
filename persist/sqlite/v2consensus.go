@@ -105,15 +105,27 @@ func updateV2FileContractElements(tx *txn, revert bool, b types.Block, fces []ex
 				RevisionNumber: fcr.Revision.RevisionNumber,
 			}] = id
 		}
+		for _, fcr := range txn.FileContractResolutions {
+			if v, ok := fcr.Resolution.(*types.V2FileContractRenewal); ok {
+				fcTxns[explorer.DBFileContract{
+					ID:             types.FileContractID(fcr.Parent.ID),
+					RevisionNumber: v.FinalRevision.RevisionNumber,
+				}] = id
+				fcTxns[explorer.DBFileContract{
+					ID:             types.FileContractID(fcr.Parent.ID).V2RenewalID(),
+					RevisionNumber: v.NewContract.RevisionNumber,
+				}] = id
+			}
+		}
 	}
 
 	fcDBIds := make(map[explorer.DBFileContract]int64)
-	addFC := func(fcID types.FileContractID, leafIndex uint64, fc types.V2FileContract, resolution types.V2FileContractResolutionType, lastRevision bool) error {
+	addFC := func(fcID types.FileContractID, leafIndex uint64, fc types.V2FileContract, lastRevision bool) error {
 		var dbID int64
 		dbFC := explorer.DBFileContract{ID: fcID, RevisionNumber: fc.RevisionNumber}
 		err := stmt.QueryRow(encode(fcID), encode(b.ID()), encode(fcTxns[dbFC]), encode(leafIndex), encode(fc.Capacity), encode(fc.Filesize), encode(fc.FileMerkleRoot), encode(fc.ProofHeight), encode(fc.ExpirationHeight), encode(fc.RenterOutput.Address), encode(fc.RenterOutput.Value), encode(fc.HostOutput.Address), encode(fc.HostOutput.Value), encode(fc.MissedHostValue), encode(fc.TotalCollateral), encode(fc.RenterPublicKey), encode(fc.HostPublicKey), encode(fc.RevisionNumber), encode(fc.RenterSignature), encode(fc.HostSignature), encode(leafIndex)).Scan(&dbID)
 		if err != nil {
-			return fmt.Errorf("failed to execute file_contract_elements statement: %w", err)
+			return fmt.Errorf("failed to execute v2_file_contract_elements statement: %w", err)
 		}
 
 		// only update if it's the most recent revision which will come from
@@ -133,11 +145,13 @@ func updateV2FileContractElements(tx *txn, revert bool, b types.Block, fces []ex
 
 		if revert {
 			// Reverting
-			if update.Revision != nil {
+			if update.Resolution != nil {
+				fce = &update.FileContractElement
+			} else if update.Revision != nil {
 				// Contract revision reverted.
 				// We are reverting the revision, so get the contract before
 				// the revision.
-				fce = update.Revision
+				fce = &update.FileContractElement
 			} else {
 				// Contract formation reverted.
 				// The contract update has no revision, therefore it refers
@@ -159,10 +173,9 @@ func updateV2FileContractElements(tx *txn, revert bool, b types.Block, fces []ex
 			types.FileContractID(fce.ID),
 			fce.StateElement.LeafIndex,
 			fce.V2FileContract,
-			update.Resolution,
 			true,
 		); err != nil {
-			return nil, fmt.Errorf("updateFileContractElements: %w", err)
+			return nil, fmt.Errorf("updateV2FileContractElements: %w", err)
 		}
 	}
 
@@ -180,8 +193,8 @@ func updateV2FileContractElements(tx *txn, revert bool, b types.Block, fces []ex
 				continue
 			}
 
-			if err := addFC(fcID, 0, fc, nil, false); err != nil {
-				return nil, fmt.Errorf("updateFileContractElements: %w", err)
+			if err := addFC(fcID, 0, fc, false); err != nil {
+				return nil, fmt.Errorf("updateV2FileContractElements: %w", err)
 			}
 		}
 		// add in any revisions that are not the latest, i.e. contracts that
@@ -194,8 +207,40 @@ func updateV2FileContractElements(tx *txn, revert bool, b types.Block, fces []ex
 				continue
 			}
 
-			if err := addFC(fcID, 0, fc, nil, false); err != nil {
-				return nil, fmt.Errorf("updateFileContractElements: %w", err)
+			if err := addFC(fcID, 0, fc, false); err != nil {
+				return nil, fmt.Errorf("updateV2FileContractElements: %w", err)
+			}
+		}
+		// Add the final revision and new renewal contracts
+		for _, fcr := range txn.FileContractResolutions {
+			if v, ok := fcr.Resolution.(*types.V2FileContractRenewal); ok {
+				{
+					fc := v.FinalRevision
+					fcID := types.FileContractID(fcr.Parent.ID)
+
+					// Add final revision, because the ApplyUpdate doesn't tell
+					// us about this case.  We set lastRevision to true here
+					// because this is the final revision.
+					if err := addFC(fcID, fcr.Parent.StateElement.LeafIndex, fc, true); err != nil {
+						return nil, fmt.Errorf("updateV2FileContractElements: failed to add final revision: %w", err)
+					}
+				}
+				{
+					// Add NewContract if we have not seen it already.
+					// Only way this could happen is if the renewal is revised
+					// in the same block so that the initial renewal is not the
+					// "latest" revision of it.
+					fc := v.NewContract
+					fcID := types.FileContractID(fcr.Parent.ID).V2RenewalID()
+					dbFC := explorer.DBFileContract{ID: fcID, RevisionNumber: fc.RevisionNumber}
+					if _, exists := fcDBIds[dbFC]; exists {
+						continue
+					}
+
+					if err := addFC(fcID, 0, fc, false); err != nil {
+						return nil, fmt.Errorf("updateV2FileContractElements: failed to add new contract: %w", err)
+					}
+				}
 			}
 		}
 		// don't add anything, just set parent db IDs in fcDBIds map
@@ -205,7 +250,18 @@ func updateV2FileContractElements(tx *txn, revert bool, b types.Block, fces []ex
 
 			var dbID int64
 			if err := parentStmt.QueryRow(encode(fcID), encode(parentDBFC.RevisionNumber)).Scan(&dbID); err != nil {
-				return nil, fmt.Errorf("updateFileContractElements: failed to get parent contract ID: %w", err)
+				return nil, fmt.Errorf("updateV2FileContractElements: failed to get parent contract ID: %w", err)
+			}
+			fcDBIds[parentDBFC] = dbID
+		}
+		// don't add anything, just set parent db IDs in fcDBIds map
+		for _, fcr := range txn.FileContractResolutions {
+			fcID := types.FileContractID(fcr.Parent.ID)
+			parentDBFC := explorer.DBFileContract{ID: fcID, RevisionNumber: fcr.Parent.V2FileContract.RevisionNumber}
+
+			var dbID int64
+			if err := parentStmt.QueryRow(encode(fcID), encode(parentDBFC.RevisionNumber)).Scan(&dbID); err != nil {
+				return nil, fmt.Errorf("updateV2FileContractElements: failed to get parent contract ID: %w", err)
 			}
 			fcDBIds[parentDBFC] = dbID
 		}
@@ -221,7 +277,7 @@ func updateV2FileContractIndices(tx *txn, revert bool, index types.ChainIndex, f
 	}
 	defer confirmationIndexStmt.Close()
 
-	resolutionIndexStmt, err := tx.Prepare(`UPDATE v2_last_contract_revision SET resolution = ?, resolution_index = ?, resolution_transaction_id = ? WHERE contract_id = ?`)
+	resolutionIndexStmt, err := tx.Prepare(`UPDATE v2_last_contract_revision SET resolution_index = ?, resolution_transaction_id = ? WHERE contract_id = ?`)
 	if err != nil {
 		return fmt.Errorf("updateV2FileContractIndices: failed to prepare resolution index statement: %w", err)
 	}
@@ -239,7 +295,7 @@ func updateV2FileContractIndices(tx *txn, revert bool, index types.ChainIndex, f
 			}
 			if update.ResolutionTransactionID != nil {
 				if _, err := resolutionIndexStmt.Exec(nil, nil, encode(fcID)); err != nil {
-					return fmt.Errorf("updateV2FileContractIndices: failed to update proof index: %w", err)
+					return fmt.Errorf("updateV2FileContractIndices: failed to update resolution index: %w", err)
 				}
 			}
 		} else {
@@ -250,7 +306,7 @@ func updateV2FileContractIndices(tx *txn, revert bool, index types.ChainIndex, f
 			}
 			if update.ResolutionTransactionID != nil {
 				if _, err := resolutionIndexStmt.Exec(encode(index), encode(update.ResolutionTransactionID), encode(fcID)); err != nil {
-					return fmt.Errorf("updateV2FileContractIndices: failed to update proof index: %w", err)
+					return fmt.Errorf("updateV2FileContractIndices: failed to update resolution index: %w", err)
 				}
 			}
 		}
@@ -395,6 +451,78 @@ func addV2FileContractRevisions(tx *txn, txnID int64, txn types.V2Transaction, d
 	return nil
 }
 
+func addV2FileContractResolutions(tx *txn, txnID int64, txn types.V2Transaction, dbIDs map[explorer.DBFileContract]int64) error {
+	renewalStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_resolutions(transaction_id, transaction_order, parent_contract_id, resolution_type, renewal_final_revision_contract_id, renewal_new_contract_id, renewal_renter_rollover, renewal_host_rollover, renewal_renter_signature, renewal_host_signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addV2FileContractResolutions: failed to prepare renewal statement: %w", err)
+	}
+	defer renewalStmt.Close()
+
+	storageProofStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_resolutions(transaction_id, transaction_order, parent_contract_id, resolution_type, storage_proof_proof_index, storage_proof_leaf, storage_proof_proof) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addV2FileContractResolutions: failed to prepare storage proof statement: %w", err)
+	}
+	defer storageProofStmt.Close()
+
+	finalizationStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_resolutions(transaction_id, transaction_order, parent_contract_id, resolution_type, finalization_signature) VALUES (?, ?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addV2FileContractResolutions: failed to prepare finalization statement: %w", err)
+	}
+	defer finalizationStmt.Close()
+
+	expirationStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_resolutions(transaction_id, transaction_order, parent_contract_id, resolution_type) VALUES (?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("addV2FileContractResolutions: failed to prepare expiration statement: %w", err)
+	}
+	defer expirationStmt.Close()
+
+	for i, fcr := range txn.FileContractResolutions {
+		parentDBID, ok := dbIDs[explorer.DBFileContract{
+			ID:             types.FileContractID(fcr.Parent.ID),
+			RevisionNumber: fcr.Parent.V2FileContract.RevisionNumber,
+		}]
+		if !ok {
+			return errors.New("addV2FileContractResolutions: parent dbID not in map")
+		}
+
+		switch v := fcr.Resolution.(type) {
+		case *types.V2FileContractRenewal:
+			finalDBID, ok := dbIDs[explorer.DBFileContract{
+				ID:             types.FileContractID(fcr.Parent.ID),
+				RevisionNumber: v.FinalRevision.RevisionNumber,
+			}]
+			if !ok {
+				return errors.New("addV2FileContractResolutions: final dbID not in map")
+			}
+
+			newDBID, ok := dbIDs[explorer.DBFileContract{
+				ID:             types.FileContractID(fcr.Parent.ID).V2RenewalID(),
+				RevisionNumber: v.NewContract.RevisionNumber,
+			}]
+			if !ok {
+				return errors.New("addV2FileContractResolutions: renewal dbID not in map")
+			}
+
+			if _, err := renewalStmt.Exec(txnID, i, parentDBID, 0, finalDBID, newDBID, encode(v.RenterRollover), encode(v.HostRollover), encode(v.RenterSignature), encode(v.HostSignature)); err != nil {
+				return fmt.Errorf("addV2FileContractResolutions: failed to execute renewal statement: %w", err)
+			}
+		case *types.V2StorageProof:
+			if _, err := storageProofStmt.Exec(txnID, i, parentDBID, 1, encode(v.ProofIndex), v.Leaf[:], encode(v.Proof)); err != nil {
+				return fmt.Errorf("addV2FileContractResolutions: failed to execute storage proof statement: %w", err)
+			}
+		case *types.V2FileContractFinalization:
+			if _, err := finalizationStmt.Exec(txnID, i, parentDBID, 2, encode(v)); err != nil {
+				return fmt.Errorf("addV2FileContractResolutions: failed to execute finalization statement: %w", err)
+			}
+		case *types.V2FileContractExpiration:
+			if _, err := expirationStmt.Exec(txnID, i, parentDBID, 3); err != nil {
+				return fmt.Errorf("addV2FileContractResolutions: failed to execute expiration statement: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
 func addV2Attestations(tx *txn, txnID int64, txn types.V2Transaction) error {
 	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_attestations(transaction_id, transaction_order, public_key, key, value, signature) VALUES (?, ?, ?, ?, ?, ?)`)
 	if err != nil {
@@ -436,6 +564,8 @@ func addV2TransactionFields(tx *txn, txns []types.V2Transaction, scDBIds map[typ
 			return fmt.Errorf("failed to add file contracts: %w", err)
 		} else if err := addV2FileContractRevisions(tx, dbID.id, txn, v2FcDBIds); err != nil {
 			return fmt.Errorf("failed to add file contract revisions: %w", err)
+		} else if err := addV2FileContractResolutions(tx, dbID.id, txn, v2FcDBIds); err != nil {
+			return fmt.Errorf("failed to add file contract resolutions: %w", err)
 		}
 	}
 

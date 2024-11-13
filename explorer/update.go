@@ -45,7 +45,8 @@ type (
 	// An UpdateState contains information relevant to the block being applied
 	// or reverted.
 	UpdateState struct {
-		Block types.Block
+		Block             types.Block
+		ChainIndexElement types.ChainIndexElement
 
 		Events      []Event
 		Metrics     Metrics
@@ -211,7 +212,8 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 	events := AppliedEvents(cau.State, cau.Block, cau)
 
 	state := UpdateState{
-		Block: cau.Block,
+		Block:             cau.Block,
+		ChainIndexElement: cau.ChainIndexElement(),
 
 		Events:      events,
 		TreeUpdates: treeUpdates,

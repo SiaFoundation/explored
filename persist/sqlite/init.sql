@@ -9,6 +9,7 @@ CREATE TABLE blocks (
 	parent_id BLOB NOT NULL,
 	nonce BLOB NOT NULL,
 	timestamp INTEGER NOT NULL,
+	chain_index_element BLOB NOT NULL,
 
 	v2_height INTEGER,
 	v2_commitment BLOB
@@ -327,6 +328,37 @@ CREATE TABLE v2_transaction_file_contract_revisions (
 );
 CREATE INDEX v2_transaction_file_contract_revisions_transaction_id_index ON v2_transaction_file_contract_revisions(transaction_id);
 
+CREATE TABLE v2_transaction_file_contract_resolutions (
+    transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
+    transaction_order INTEGER NOT NULL,
+    parent_contract_id INTEGER REFERENCES v2_file_contract_elements(id) ON DELETE CASCADE NOT NULL, -- add an index to all foreign keys
+
+    -- V2FileContractRenewal = 0, V2StorageProof = 1, V2FileContractFinalization = 2, V2FileContractExpiration = 3
+    resolution_type INTEGER NOT NULL,
+
+    -- V2FileContractRenewal
+    renewal_final_revision_contract_id INTEGER REFERENCES v2_file_contract_elements(id) ON DELETE CASCADE,
+    renewal_new_contract_id INTEGER REFERENCES v2_file_contract_elements(id) ON DELETE CASCADE,
+    renewal_renter_rollover BLOB,
+    renewal_host_rollover BLOB,
+    renewal_renter_signature BLOB,
+    renewal_host_signature BLOB,
+
+    -- V2StorageProof
+    storage_proof_proof_index BLOB,
+    storage_proof_leaf BLOB,
+    storage_proof_proof BLOB,
+
+    -- V2FileContractFinalization
+    finalization_signature BLOB,
+
+    -- V2FileContractExpiration
+    -- no fields
+
+    UNIQUE(transaction_id, transaction_order)
+);
+CREATE INDEX v2_transaction_file_contract_resolutions_transaction_id_index ON v2_transaction_file_contract_resolutions(transaction_id);
+
 CREATE TABLE v2_transaction_attestations (
 	transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
 	transaction_order INTEGER NOT NULL,
@@ -423,7 +455,6 @@ CREATE TABLE v2_last_contract_revision (
     confirmation_index BLOB,
     confirmation_transaction_id BLOB REFERENCES v2_transactions(transaction_id),
 
-    resolution BLOB,
     resolution_index BLOB,
     resolution_transaction_id BLOB REFERENCES v2_transactions(transaction_id),
 

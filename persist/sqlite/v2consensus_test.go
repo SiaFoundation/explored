@@ -1,11 +1,13 @@
 package sqlite_test
 
 import (
+	"bytes"
 	"math"
 	"testing"
 	"time"
 
 	"go.sia.tech/core/consensus"
+	rhp2 "go.sia.tech/core/rhp/v2"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
@@ -13,6 +15,8 @@ import (
 )
 
 func getSCE(t *testing.T, db explorer.Store, scid types.SiacoinOutputID) types.SiacoinElement {
+	t.Helper()
+
 	sces, err := db.SiacoinElements([]types.SiacoinOutputID{scid})
 	if err != nil {
 		t.Fatal(err)
@@ -30,6 +34,8 @@ func getSCE(t *testing.T, db explorer.Store, scid types.SiacoinOutputID) types.S
 }
 
 func getSFE(t *testing.T, db explorer.Store, sfid types.SiafundOutputID) types.SiafundElement {
+	t.Helper()
+
 	sfes, err := db.SiafundElements([]types.SiafundOutputID{sfid})
 	if err != nil {
 		t.Fatal(err)
@@ -47,6 +53,8 @@ func getSFE(t *testing.T, db explorer.Store, sfid types.SiafundOutputID) types.S
 }
 
 func getFCE(t *testing.T, db explorer.Store, fcid types.FileContractID) types.V2FileContractElement {
+	t.Helper()
+
 	fces, err := db.V2Contracts([]types.FileContractID{fcid})
 	if err != nil {
 		t.Fatal(err)
@@ -61,6 +69,21 @@ func getFCE(t *testing.T, db explorer.Store, fcid types.FileContractID) types.V2
 	}
 
 	return fce.V2FileContractElement
+}
+
+func getCIE(t *testing.T, db explorer.Store, bid types.BlockID) types.ChainIndexElement {
+	t.Helper()
+
+	b, err := db.Block(bid)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	b.ChainIndexElement.StateElement.MerkleProof, err = db.MerkleProof(b.ChainIndexElement.StateElement.LeafIndex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b.ChainIndexElement
 }
 
 func TestV2ArbitraryData(t *testing.T) {
@@ -913,5 +936,333 @@ func TestV2FileContractRevision(t *testing.T) {
 			t.Fatal(err)
 		}
 		testutil.CheckV2FC(t, txn2.FileContractRevisions[0].Revision, fcs[0])
+	}
+}
+
+func TestV2FileContractResolution(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(types.StandardUnlockConditions(pk1.PublicKey()))}
+
+	renterPrivateKey := types.GeneratePrivateKey()
+	renterPublicKey := renterPrivateKey.PublicKey()
+
+	hostPrivateKey := types.GeneratePrivateKey()
+	hostPublicKey := hostPrivateKey.PublicKey()
+
+	_, genesisBlock, cm, db := newStore(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		network.HardforkV2.AllowHeight = 1
+		network.HardforkV2.RequireHeight = 2
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
+
+	v1FC := testutil.PrepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), 100, 105, types.VoidAddress)
+	v1FC.Filesize = 65
+
+	data := make([]byte, 2*rhp2.LeafSize)
+	data[0], data[rhp2.LeafSize] = 1, 1
+	v1FC.FileMerkleRoot, _ = rhp2.ReaderRoot(bytes.NewReader(data))
+
+	v2FC := types.V2FileContract{
+		Capacity:         v1FC.Filesize,
+		Filesize:         v1FC.Filesize,
+		FileMerkleRoot:   v1FC.FileMerkleRoot,
+		ProofHeight:      cm.Tip().Height + 3,
+		ExpirationHeight: cm.Tip().Height + 4,
+		RenterOutput:     v1FC.ValidProofOutputs[0],
+		HostOutput:       v1FC.ValidProofOutputs[1],
+		MissedHostValue:  v1FC.MissedProofOutputs[1].Value,
+		TotalCollateral:  v1FC.ValidProofOutputs[0].Value,
+		RenterPublicKey:  renterPublicKey,
+		HostPublicKey:    hostPublicKey,
+	}
+	fcOut := v2FC.RenterOutput.Value.Add(v2FC.HostOutput.Value).Add(cm.TipState().V2FileContractTax(v2FC))
+
+	// use identical contracts except for revision number so it is apparent if
+	// wrong data is retrieved
+	v2FC0 := v2FC
+	v2FC0.RevisionNumber = 0
+
+	v2FC1 := v2FC
+	v2FC1.RevisionNumber = 1
+
+	v2FC2 := v2FC
+	v2FC2.RevisionNumber = 2
+
+	v2FC3 := v2FC
+	v2FC3.RevisionNumber = 3
+
+	txn1 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, db, genesisBlock.Transactions[0].SiacoinOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Value:   giftSC.Sub(fcOut.Mul64(4)),
+			Address: addr1,
+		}},
+		FileContracts: []types.V2FileContract{v2FC0, v2FC1, v2FC2, v2FC3},
+	}
+	testutil.SignV2TransactionWithContracts(cm.TipState(), pk1, renterPrivateKey, hostPrivateKey, &txn1)
+
+	b1 := testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn1}, types.VoidAddress)
+	if err := cm.AddBlocks([]types.Block{b1}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	v2FC0ID := txn1.V2FileContractID(txn1.ID(), 0)
+	v2FC1ID := txn1.V2FileContractID(txn1.ID(), 1)
+	v2FC2ID := txn1.V2FileContractID(txn1.ID(), 2)
+	v2FC3ID := txn1.V2FileContractID(txn1.ID(), 3)
+
+	{
+		fcs, err := db.V2Contracts([]types.FileContractID{v2FC0ID, v2FC1ID, v2FC2ID, v2FC3ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2FC(t, txn1.FileContracts[0], fcs[0])
+		testutil.CheckV2FC(t, txn1.FileContracts[1], fcs[1])
+		testutil.CheckV2FC(t, txn1.FileContracts[2], fcs[2])
+		testutil.CheckV2FC(t, txn1.FileContracts[3], fcs[3])
+	}
+
+	// we will revert back here when we undo the resolutions
+	prevState := cm.TipState()
+
+	{
+		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
+	}
+
+	v2FCFinalRevision := v2FC
+	v2FCFinalRevision.Filesize--
+	v2FCFinalRevision.RevisionNumber = types.MaxRevisionNumber
+	v2FCNewContract := v2FC
+	v2FCNewContract.RevisionNumber = 10
+	renewal := &types.V2FileContractRenewal{
+		FinalRevision:  v2FCFinalRevision,
+		NewContract:    v2FCNewContract,
+		RenterRollover: types.ZeroCurrency,
+		HostRollover:   types.ZeroCurrency,
+	}
+	sce1 := getSCE(t, db, txn1.SiacoinOutputID(txn1.ID(), 0))
+	txn2 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          sce1,
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   sce1.SiacoinOutput.Value.Sub(fcOut),
+		}},
+		FileContractResolutions: []types.V2FileContractResolution{
+			{
+				Parent:     getFCE(t, db, v2FC0ID),
+				Resolution: new(types.V2FileContractFinalization),
+			},
+			{
+				Parent:     getFCE(t, db, v2FC1ID),
+				Resolution: renewal,
+			},
+		},
+	}
+	testutil.SignV2TransactionWithContracts(cm.TipState(), pk1, renterPrivateKey, hostPrivateKey, &txn2)
+
+	if err := cm.AddBlocks([]types.Block{testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn2}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	{
+		dbTxns, err := db.V2Transactions([]types.TransactionID{txn2.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2Transaction(t, txn2, dbTxns[0])
+		testutil.Equal(t, "resolution index", cm.Tip(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionIndex)
+		testutil.Equal(t, "resolution transaction ID", txn2.ID(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionTransactionID)
+		testutil.Equal(t, "resolution index", cm.Tip(), *dbTxns[0].FileContractResolutions[1].Parent.ResolutionIndex)
+		testutil.Equal(t, "resolution transaction ID", txn2.ID(), *dbTxns[0].FileContractResolutions[1].Parent.ResolutionTransactionID)
+	}
+
+	b2 := testutil.MineV2Block(cm.TipState(), nil, types.VoidAddress)
+	if err := cm.AddBlocks([]types.Block{b2}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	storageProof := &types.V2StorageProof{
+		ProofIndex: getCIE(t, db, b2.ID()),
+		Leaf:       [64]byte{1},
+		Proof:      []types.Hash256{cm.TipState().StorageProofLeafHash([]byte{1})},
+	}
+
+	txn3 := types.V2Transaction{
+		FileContractResolutions: []types.V2FileContractResolution{
+			{
+				Parent:     getFCE(t, db, v2FC2ID),
+				Resolution: storageProof,
+			},
+		},
+	}
+	testutil.SignV2TransactionWithContracts(cm.TipState(), pk1, renterPrivateKey, hostPrivateKey, &txn3)
+
+	if err := cm.AddBlocks([]types.Block{testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn3}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	{
+		dbTxns, err := db.V2Transactions([]types.TransactionID{txn3.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2Transaction(t, txn3, dbTxns[0])
+		testutil.Equal(t, "resolution index", cm.Tip(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionIndex)
+		testutil.Equal(t, "resolution transaction ID", txn3.ID(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionTransactionID)
+	}
+
+	txn4 := types.V2Transaction{
+		FileContractResolutions: []types.V2FileContractResolution{
+			{
+				Parent:     getFCE(t, db, v2FC3ID),
+				Resolution: new(types.V2FileContractExpiration),
+			},
+		},
+	}
+	testutil.SignV2TransactionWithContracts(cm.TipState(), pk1, renterPrivateKey, hostPrivateKey, &txn4)
+
+	if err := cm.AddBlocks([]types.Block{testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn4}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	{
+		dbTxns, err := db.V2Transactions([]types.TransactionID{txn4.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2Transaction(t, txn4, dbTxns[0])
+		testutil.Equal(t, "resolution index", cm.Tip(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionIndex)
+		testutil.Equal(t, "resolution transaction ID", txn4.ID(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionTransactionID)
+	}
+
+	// revert the block
+	{
+		state := prevState
+		extra := cm.Tip().Height - state.Index.Height + 1
+
+		var blocks []types.Block
+		for i := uint64(0); i < extra; i++ {
+			var bs consensus.V1BlockSupplement
+			block := testutil.MineBlock(state, nil, types.VoidAddress)
+			blocks = append(blocks, block)
+
+			if err := consensus.ValidateBlock(state, block, bs); err != nil {
+				t.Fatal(err)
+			}
+			state, _ = consensus.ApplyBlock(state, block, bs, time.Time{})
+		}
+
+		if err := cm.AddBlocks(blocks); err != nil {
+			t.Fatal(err)
+		}
+		syncDB(t, db, cm)
+	}
+
+	{
+		fcs, err := db.V2Contracts([]types.FileContractID{v2FC0ID, v2FC1ID, v2FC2ID, v2FC3ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2FC(t, txn1.FileContracts[0], fcs[0])
+		testutil.CheckV2FC(t, txn1.FileContracts[1], fcs[1])
+		testutil.CheckV2FC(t, txn1.FileContracts[2], fcs[2])
+		testutil.CheckV2FC(t, txn1.FileContracts[3], fcs[3])
+	}
+
+	sce1 = getSCE(t, db, txn1.SiacoinOutputID(txn1.ID(), 0))
+	// renewal is not possible because proof window has opened at this point
+	txn2.SiacoinInputs = nil
+	txn2.SiacoinOutputs = nil
+	txn2.FileContractResolutions = txn2.FileContractResolutions[:1]
+	txn2.FileContractResolutions[0].Parent = getFCE(t, db, v2FC0ID)
+	// txn2.FileContractResolutions[1].Parent = getFCE(t, db, v2FC1ID)
+	testutil.SignV2TransactionWithContracts(cm.TipState(), pk1, renterPrivateKey, hostPrivateKey, &txn2)
+
+	if err := cm.AddBlocks([]types.Block{testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn2}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	{
+		dbTxns, err := db.V2Transactions([]types.TransactionID{txn2.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2Transaction(t, txn2, dbTxns[0])
+		testutil.Equal(t, "resolution index", cm.Tip(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionIndex)
+		testutil.Equal(t, "resolution transaction ID", txn2.ID(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionTransactionID)
+	}
+
+	tip, err := db.BestTip(v2FC3.ProofHeight)
+	if err != nil {
+		t.Fatal(err)
+	}
+	storageProof.ProofIndex = getCIE(t, db, tip.ID)
+	txn3.FileContractResolutions[0].Parent = getFCE(t, db, v2FC2ID)
+	txn3.FileContractResolutions[0].Resolution = storageProof
+
+	testutil.SignV2TransactionWithContracts(cm.TipState(), pk1, renterPrivateKey, hostPrivateKey, &txn3)
+
+	if err := cm.AddBlocks([]types.Block{testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn3}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	{
+		dbTxns, err := db.V2Transactions([]types.TransactionID{txn3.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2Transaction(t, txn3, dbTxns[0])
+		testutil.Equal(t, "resolution index", cm.Tip(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionIndex)
+		testutil.Equal(t, "resolution transaction ID", txn3.ID(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionTransactionID)
+	}
+
+	txn4.FileContractResolutions[0].Parent = getFCE(t, db, v2FC3ID)
+	testutil.SignV2TransactionWithContracts(cm.TipState(), pk1, renterPrivateKey, hostPrivateKey, &txn4)
+
+	if err := cm.AddBlocks([]types.Block{testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn4}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	{
+		dbTxns, err := db.V2Transactions([]types.TransactionID{txn4.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2Transaction(t, txn4, dbTxns[0])
+		testutil.Equal(t, "resolution index", cm.Tip(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionIndex)
+		testutil.Equal(t, "resolution transaction ID", txn4.ID(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionTransactionID)
+	}
+
+	{
+		// If we re-added the renewal after the revert this would fail because
+		// the revision number for v2FC0 would be types.MaxRevisionNumber.
+		fcs, err := db.V2Contracts([]types.FileContractID{v2FC0ID, v2FC1ID, v2FC2ID, v2FC3ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.CheckV2FC(t, txn1.FileContracts[0], fcs[0])
+		testutil.CheckV2FC(t, txn1.FileContracts[1], fcs[1])
+		testutil.CheckV2FC(t, txn1.FileContracts[2], fcs[2])
+		testutil.CheckV2FC(t, txn1.FileContracts[3], fcs[3])
 	}
 }
