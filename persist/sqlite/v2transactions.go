@@ -497,7 +497,9 @@ WHERE fc.id = ?`)
 					return fmt.Errorf("failed to scan file contract: %w", err)
 				}
 
-				var res explorer.V2FileContractResolutionType
+				fcr := explorer.V2FileContractResolution{
+					Parent: parent,
+				}
 				switch resolutionType {
 				case 0: // V2FileContractRenewal
 					renewal := &explorer.V2FileContractRenewal{
@@ -518,25 +520,28 @@ WHERE fc.id = ?`)
 							return fmt.Errorf("failed to scan new contract: %w", err)
 						}
 					}
-					res = renewal
+
+					fcr.Type = "renewal"
+					fcr.Resolution = renewal
 				case 1: // V2StorageProof
-					proof := &explorer.V2StorageProof{
+					proof := &types.V2StorageProof{
 						ProofIndex: storageProofProofIndex,
 						Proof:      storageProofProof,
 						Leaf:       [64]byte(storageProofLeaf),
 					}
-					res = proof
+
+					fcr.Type = "storageProof"
+					fcr.Resolution = proof
 				case 2: // V2FileContractFinalization
-					res = (*explorer.V2FileContractFinalization)(&finalizationSignature)
+					fcr.Type = "finalization"
+					fcr.Resolution = (*types.V2FileContractFinalization)(&finalizationSignature)
 				case 3: // V2FileContractExpiration
-					res = new(explorer.V2FileContractExpiration)
+					fcr.Type = "expiration"
+					fcr.Resolution = new(types.V2FileContractExpiration)
 				}
 
 				// Append the resolution to the transaction.
-				txns[i].FileContractResolutions = append(txns[i].FileContractResolutions, explorer.V2FileContractResolution{
-					Parent:     parent,
-					Resolution: res,
-				})
+				txns[i].FileContractResolutions = append(txns[i].FileContractResolutions, fcr)
 			}
 			return nil
 		}()

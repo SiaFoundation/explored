@@ -212,29 +212,35 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 				CheckV2FC(t, v.FinalRevision, gotV.FinalRevision)
 				CheckV2FC(t, v.NewContract, gotV.NewContract)
 
+				Equal(t, "type", "renewal", got.Type)
 				Equal(t, "renter rollover", v.RenterRollover, gotV.RenterRollover)
 				Equal(t, "host rollover", v.HostRollover, gotV.HostRollover)
 				Equal(t, "renter signature", v.RenterSignature, gotV.RenterSignature)
 				Equal(t, "host signature", v.HostSignature, gotV.HostSignature)
 			}
 		case *types.V2StorageProof:
-			if gotV, ok := got.Resolution.(*explorer.V2StorageProof); !ok {
+			if gotV, ok := got.Resolution.(*types.V2StorageProof); !ok {
 				t.Fatalf("expected V2StorageProof, got %v", reflect.TypeOf(got.Resolution))
 			} else {
+				Equal(t, "type", "storageProof", got.Type)
 				Equal(t, "proof index", v.ProofIndex, gotV.ProofIndex)
 				Equal(t, "leaf", v.Leaf, gotV.Leaf)
 				Equal(t, "proof", v.Proof, gotV.Proof)
 			}
 		case *types.V2FileContractFinalization:
-			if gotV, ok := got.Resolution.(*explorer.V2FileContractFinalization); !ok {
+			if gotV, ok := got.Resolution.(*types.V2FileContractFinalization); !ok {
 				t.Fatalf("expected V2FileContractFinalization, got %v", reflect.TypeOf(got.Resolution))
 			} else {
+				Equal(t, "type", "finalization", got.Type)
 				Equal(t, "finalization signature", types.Signature(*v), types.Signature(*gotV))
 			}
 		case *types.V2FileContractExpiration:
-			if _, ok := got.Resolution.(*explorer.V2FileContractExpiration); !ok {
+			Equal(t, "type", "expiration", got.Type)
+			if _, ok := got.Resolution.(*types.V2FileContractExpiration); !ok {
 				t.Fatalf("expected V2FileContractExpiration, got %v", reflect.TypeOf(got.Resolution))
 			}
+		default:
+			t.Fatalf("invalid resolution type: %v", reflect.TypeOf(got.Resolution))
 		}
 	}
 

@@ -209,20 +209,6 @@ type V2HostAnnouncement struct {
 	chain.V2HostAnnouncement
 }
 
-// V2FileContractResolutionType enumerates the types of file contract resolution.
-type V2FileContractResolutionType interface {
-	isV2FileContractResolution()
-}
-
-func (*V2FileContractFinalization) isV2FileContractResolution() {}
-func (*V2FileContractRenewal) isV2FileContractResolution()      {}
-func (*V2StorageProof) isV2FileContractResolution()             {}
-func (*V2FileContractExpiration) isV2FileContractResolution()   {}
-
-// A V2FileContractFinalization finalizes a contract, preventing further
-// revisions and immediately creating its valid outputs.
-type V2FileContractFinalization types.Signature
-
 // A V2FileContractRenewal renews a file contract.
 type V2FileContractRenewal struct {
 	FinalRevision  V2FileContract `json:"finalRevision"`
@@ -235,35 +221,13 @@ type V2FileContractRenewal struct {
 	HostSignature   types.Signature `json:"hostSignature"`
 }
 
-// A V2StorageProof asserts the presence of a randomly-selected leaf within the
-// Merkle tree of a V2FileContract's data.
-type V2StorageProof struct {
-	// Selecting the leaf requires a source of unpredictable entropy; we use the
-	// ID of the block at the contract's ProofHeight. The storage proof thus
-	// includes a proof that this ID is the correct ancestor.
-	//
-	// During validation, it is imperative to check that ProofIndex.Height
-	// matches the ProofHeight field of the contract's final revision;
-	// otherwise, the prover could use any ProofIndex, giving them control over
-	// the leaf index.
-	ProofIndex types.ChainIndexElement
-
-	// The leaf is always 64 bytes, extended with zeros if necessary.
-	Leaf  [64]byte
-	Proof []types.Hash256
-}
-
-// A V2FileContractExpiration resolves an expired contract. A contract is
-// considered expired when its proof window has elapsed. If the contract is not
-// storing any data, it will resolve as valid; otherwise, it resolves as missed.
-type V2FileContractExpiration struct{}
-
 // A V2FileContractResolution closes a v2 file contract's payment channel.
 // There are four resolution types: renewwal, storage proof, finalization,
 // and expiration.
 type V2FileContractResolution struct {
-	Parent     V2FileContract               `json:"parent"`
-	Resolution V2FileContractResolutionType `json:"resolution"`
+	Parent     V2FileContract `json:"parent"`
+	Type       string         `json:"string"`
+	Resolution any            `json:"resolution"`
 }
 
 // A V2Transaction is a V2 transaction that uses the wrapped types above.
