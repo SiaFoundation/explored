@@ -24,8 +24,7 @@ func addBlock(tx *txn, b types.Block, cie types.ChainIndexElement, height uint64
 		v2Height = encode(b.V2.Height)
 		v2Commitment = encode(b.V2.Commitment)
 	}
-	cie.StateElement.MerkleProof = nil
-	_, err := tx.Exec("INSERT INTO blocks(id, height, parent_id, nonce, timestamp, chain_index_element, v2_height, v2_commitment) VALUES (?, ?, ?, ?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encode(b.Nonce), encode(b.Timestamp), encode(cie), v2Height, v2Commitment)
+	_, err := tx.Exec("INSERT INTO blocks(id, height, parent_id, nonce, timestamp, leaf_index, v2_height, v2_commitment) VALUES (?, ?, ?, ?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encode(b.Nonce), encode(b.Timestamp), encode(cie.StateElement.LeafIndex), v2Height, v2Commitment)
 	return err
 }
 

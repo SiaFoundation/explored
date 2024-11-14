@@ -299,13 +299,13 @@ type V2BlockData struct {
 // A Block is a block containing wrapped transactions and siacoin
 // outputs for the miner payouts.
 type Block struct {
-	Height            uint64                  `json:"height"`
-	ParentID          types.BlockID           `json:"parentID"`
-	Nonce             uint64                  `json:"nonce"`
-	Timestamp         time.Time               `json:"timestamp"`
-	ChainIndexElement types.ChainIndexElement `json:"chainIndexElement"`
-	MinerPayouts      []SiacoinOutput         `json:"minerPayouts"`
-	Transactions      []Transaction           `json:"transactions"`
+	Height       uint64          `json:"height"`
+	ParentID     types.BlockID   `json:"parentID"`
+	Nonce        uint64          `json:"nonce"`
+	Timestamp    time.Time       `json:"timestamp"`
+	LeafIndex    uint64          `json:"leafIndex"`
+	MinerPayouts []SiacoinOutput `json:"minerPayouts"`
+	Transactions []Transaction   `json:"transactions"`
 
 	V2 *V2BlockData `json:"v2,omitempty"`
 }

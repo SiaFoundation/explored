@@ -79,11 +79,18 @@ func getCIE(t *testing.T, db explorer.Store, bid types.BlockID) types.ChainIndex
 		t.Fatal(err)
 	}
 
-	b.ChainIndexElement.StateElement.MerkleProof, err = db.MerkleProof(b.ChainIndexElement.StateElement.LeafIndex)
+	merkleProof, err := db.MerkleProof(b.LeafIndex)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return b.ChainIndexElement
+	return types.ChainIndexElement{
+		ID: bid,
+		StateElement: types.StateElement{
+			LeafIndex:   b.LeafIndex,
+			MerkleProof: merkleProof,
+		},
+		ChainIndex: types.ChainIndex{ID: bid, Height: b.Height},
+	}
 }
 
 func TestV2ArbitraryData(t *testing.T) {
