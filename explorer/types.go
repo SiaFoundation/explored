@@ -312,7 +312,6 @@ type HostScan struct {
 	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
 
 	RHPV4Settings rhpv4.HostSettings `json:"rhpV4Settings"`
-	RHPV4Prices   rhpv4.HostPrices   `json:"rhpV4Prices"`
 }
 
 // Host represents a host and the information gathered from scanning it.
@@ -335,7 +334,6 @@ type Host struct {
 	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
 
 	RHPV4Settings rhpv4.HostSettings `json:"rhpV4Settings"`
-	RHPV4Prices   rhpv4.HostPrices   `json:"rhpV4Prices"`
 }
 
 // HostMetrics represents averages of scanned information from hosts.

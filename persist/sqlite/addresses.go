@@ -134,7 +134,7 @@ func (st *Store) Hosts(pks []types.PublicKey) (result []explorer.Host, err error
 }
 
 // HostsForScanning returns hosts ordered by the transaction they were created in.
-func (s *Store) HostsForScanning(maxLastScan, minLastAnnouncement time.Time, offset, limit uint64) (result []chain.HostAnnouncement, err error) {
+func (s *Store) HostsForScanning(maxLastScan, minLastAnnouncement time.Time, offset, limit uint64) (result []explorer.Host, err error) {
 	err = s.transaction(func(tx *txn) error {
 		rows, err := tx.Query(`SELECT public_key, net_address FROM host_info WHERE last_scan <= ? AND last_announcement >= ? ORDER BY last_scan ASC LIMIT ? OFFSET ?`, encode(maxLastScan), encode(minLastAnnouncement), limit, offset)
 		if err != nil {
@@ -142,11 +142,37 @@ func (s *Store) HostsForScanning(maxLastScan, minLastAnnouncement time.Time, off
 		}
 		defer rows.Close()
 
+		v2AddrStmt, err := tx.Prepare(`SELECT protocol,address FROM host_info_v2_netaddresses WHERE public_key = ? ORDER BY netaddress_order`)
+		if err != nil {
+			return err
+		}
+		defer v2AddrStmt.Close()
+
 		for rows.Next() {
-			var host chain.HostAnnouncement
+			var host explorer.Host
 			if err := rows.Scan(decode(&host.PublicKey), &host.NetAddress); err != nil {
 				return err
 			}
+
+			err := func() error {
+				v2AddrRows, err := v2AddrStmt.Query(encode(host.PublicKey))
+				if err != nil {
+					return err
+				}
+				defer v2AddrRows.Close()
+				for v2AddrRows.Next() {
+					var netAddr chain.NetAddress
+					if err := v2AddrRows.Scan(&netAddr.Protocol, &netAddr.Address); err != nil {
+						return err
+					}
+					host.V2NetAddresses = append(host.V2NetAddresses, netAddr)
+				}
+				return nil
+			}()
+			if err != nil {
+				return err
+			}
+
 			result = append(result, host)
 		}
 		return nil
