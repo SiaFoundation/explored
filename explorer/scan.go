@@ -173,6 +173,7 @@ func (e *Explorer) addHostScans(hosts chan Host) {
 			}
 
 			var scan HostScan
+			var err error
 			if len(host.V2NetAddresses) == 0 {
 				scan, err = e.scanV1Host(locator, host)
 			} else {
