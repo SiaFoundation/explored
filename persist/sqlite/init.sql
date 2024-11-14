@@ -9,7 +9,7 @@ CREATE TABLE blocks (
 	parent_id BLOB NOT NULL,
 	nonce BLOB NOT NULL,
 	timestamp INTEGER NOT NULL,
-	chain_index_element BLOB NOT NULL,
+	leaf_index BLOB NOT NULL,
 
 	v2_height INTEGER,
 	v2_commitment BLOB
