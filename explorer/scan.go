@@ -9,7 +9,7 @@ import (
 
 	crhpv2 "go.sia.tech/core/rhp/v2"
 	"go.sia.tech/core/types"
-	"go.sia.tech/coreutils/chain"
+	crhpv4 "go.sia.tech/coreutils/rhp/v4"
 	"go.sia.tech/explored/internal/geoip"
 	rhpv2 "go.sia.tech/explored/internal/rhp/v2"
 	rhpv3 "go.sia.tech/explored/internal/rhp/v3"
@@ -52,11 +52,12 @@ func (e *Explorer) waitForSync() error {
 	return nil
 }
 
-func (e *Explorer) scanHost(locator geoip.Locator, host chain.HostAnnouncement) (HostScan, error) {
+func (e *Explorer) scanV1Host(locator geoip.Locator, host Host) (HostScan, error) {
 	ctx, cancel := context.WithTimeout(e.ctx, e.scanCfg.Timeout)
 	defer cancel()
 
 	dialer := (&net.Dialer{})
+
 	conn, err := dialer.DialContext(ctx, "tcp", host.NetAddress)
 	if err != nil {
 		return HostScan{}, fmt.Errorf("scanHost: failed to connect to host: %w", err)
@@ -113,7 +114,49 @@ func (e *Explorer) scanHost(locator geoip.Locator, host chain.HostAnnouncement) 
 	}, nil
 }
 
-func (e *Explorer) addHostScans(hosts chan chain.HostAnnouncement) {
+func (e *Explorer) scanV2Host(locator geoip.Locator, host Host) (HostScan, error) {
+	ctx, cancel := context.WithTimeout(e.ctx, e.scanCfg.Timeout)
+	defer cancel()
+
+	transport, err := crhpv4.DialSiaMux(ctx, host.V2NetAddresses[0].Address, host.PublicKey)
+	if err != nil {
+		return HostScan{}, fmt.Errorf("failed to dial host: %w", err)
+	}
+	defer transport.Close()
+
+	settings, err := crhpv4.RPCSettings(ctx, transport)
+	if err != nil {
+		return HostScan{}, fmt.Errorf("failed to get host settings: %w", err)
+	}
+
+	hostIP, _, err := net.SplitHostPort(host.NetAddress)
+	if err != nil {
+		return HostScan{}, fmt.Errorf("scanHost: failed to parse net address: %w", err)
+	}
+
+	resolved, err := net.ResolveIPAddr("ip", hostIP)
+	// if we can resolve the address
+	if err != nil {
+		return HostScan{}, fmt.Errorf("scanHost: failed to resolve host address: %w", err)
+	}
+
+	countryCode, err := locator.CountryCode(resolved)
+	if err != nil {
+		e.log.Debug("Failed to resolve IP geolocation, not setting country code", zap.String("addr", host.NetAddress))
+		countryCode = ""
+	}
+
+	return HostScan{
+		PublicKey:   host.PublicKey,
+		CountryCode: countryCode,
+		Success:     true,
+		Timestamp:   types.CurrentTimestamp(),
+
+		RHPV4Settings: settings,
+	}, nil
+}
+
+func (e *Explorer) addHostScans(hosts chan Host) {
 	// use default included ip2location database
 	locator, err := geoip.NewIP2LocationLocator("")
 	if err != nil {
@@ -129,7 +172,12 @@ func (e *Explorer) addHostScans(hosts chan chain.HostAnnouncement) {
 				break
 			}
 
-			scan, err := e.scanHost(locator, host)
+			var scan HostScan
+			if len(host.V2NetAddresses) == 0 {
+				scan, err = e.scanV1Host(locator, host)
+			} else {
+				scan, err = e.scanV2Host(locator, host)
+			}
 			if err != nil {
 				scans = append(scans, HostScan{
 					PublicKey: host.PublicKey,
@@ -172,7 +220,7 @@ func (e *Explorer) isClosed() bool {
 	}
 }
 
-func (e *Explorer) fetchHosts(hosts chan chain.HostAnnouncement) {
+func (e *Explorer) fetchHosts(hosts chan Host) {
 	var exhausted bool
 	offset := 0
 
@@ -210,7 +258,7 @@ func (e *Explorer) scanHosts() {
 
 	for !e.isClosed() {
 		// fetch hosts
-		hosts := make(chan chain.HostAnnouncement, scanBatchSize)
+		hosts := make(chan Host, scanBatchSize)
 		e.wg.Add(1)
 		go func() {
 			defer e.wg.Done()
