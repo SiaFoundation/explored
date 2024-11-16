@@ -565,7 +565,7 @@ CREATE TABLE host_info_v2_netaddresses(
     protocol TEXT NOT NULL,
     address TEXT NOT NULL,
 
-    UNIQUE(public_key, netaddress_order)
+    PRIMARY KEY(public_key, netaddress_order)
 );
 
 CREATE INDEX host_info_v2_netaddresses_public_key ON host_info_v2_netaddresses(public_key);

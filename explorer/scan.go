@@ -118,7 +118,8 @@ func (e *Explorer) scanV2Host(locator geoip.Locator, host Host) (HostScan, error
 	ctx, cancel := context.WithTimeout(e.ctx, e.scanCfg.Timeout)
 	defer cancel()
 
-	transport, err := crhpv4.DialSiaMux(ctx, host.V2NetAddresses[0].Address, host.PublicKey)
+	addr := host.V2NetAddresses[0].Address
+	transport, err := crhpv4.DialSiaMux(ctx, addr, host.PublicKey)
 	if err != nil {
 		return HostScan{}, fmt.Errorf("failed to dial host: %w", err)
 	}
@@ -129,7 +130,7 @@ func (e *Explorer) scanV2Host(locator geoip.Locator, host Host) (HostScan, error
 		return HostScan{}, fmt.Errorf("failed to get host settings: %w", err)
 	}
 
-	hostIP, _, err := net.SplitHostPort(host.NetAddress)
+	hostIP, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		return HostScan{}, fmt.Errorf("scanHost: failed to parse net address: %w", err)
 	}
@@ -173,10 +174,13 @@ func (e *Explorer) addHostScans(hosts chan Host) {
 			}
 
 			var scan HostScan
+			var addr string
 			var err error
 			if len(host.V2NetAddresses) == 0 {
+				addr = host.NetAddress
 				scan, err = e.scanV1Host(locator, host)
 			} else {
+				addr = host.V2NetAddresses[0].Address
 				scan, err = e.scanV2Host(locator, host)
 			}
 			if err != nil {
@@ -185,11 +189,11 @@ func (e *Explorer) addHostScans(hosts chan Host) {
 					Success:   false,
 					Timestamp: types.CurrentTimestamp(),
 				})
-				e.log.Debug("Scanning host failed", zap.String("addr", host.NetAddress), zap.Stringer("pk", host.PublicKey), zap.Error(err))
+				e.log.Debug("Scanning host failed", zap.String("addr", addr), zap.Stringer("pk", host.PublicKey), zap.Error(err))
 				continue
 			}
 
-			e.log.Debug("Scanning host succeeded", zap.String("addr", host.NetAddress), zap.Stringer("pk", host.PublicKey))
+			e.log.Debug("Scanning host succeeded", zap.String("addr", addr), zap.Stringer("pk", host.PublicKey))
 			scans = append(scans, scan)
 		}
 
