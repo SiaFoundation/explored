@@ -151,7 +151,7 @@ type ExtendedFileContract struct {
 	Payout             types.Currency          `json:"payout"`
 	ValidProofOutputs  []ContractSiacoinOutput `json:"validProofOutputs"`
 	MissedProofOutputs []ContractSiacoinOutput `json:"missedProofOutputs"`
-	UnlockHash         types.Hash256           `json:"unlockHash"`
+	UnlockHash         types.Address           `json:"unlockHash"`
 	RevisionNumber     uint64                  `json:"revisionNumber"`
 }
 
