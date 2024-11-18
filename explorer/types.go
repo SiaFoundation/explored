@@ -315,7 +315,7 @@ type Host struct {
 	RHPV4Settings rhpv4.HostSettings `json:"rhpV4Settings"`
 }
 
-// V2SiaMuxAddr returns the `Address` of the first TCP siamux `NetAddress` it
+// V2SiamuxAddr returns the `Address` of the first TCP siamux `NetAddress` it
 // finds in the host's list of net addresses.  The protocol for this address is
 // ProtocolTCPSiaMux.
 func (h Host) V2SiamuxAddr() (string, bool) {
