@@ -185,9 +185,8 @@ func (e *Explorer) addHostScans(hosts chan Host) {
 				if !ok {
 					e.log.Debug("Host did not have any v2 siamux net addresses in its announcement, unable to scan", zap.Stringer("pk", host.PublicKey))
 					continue
-				} else {
-					scan, err = e.scanV2Host(locator, host)
 				}
+				scan, err = e.scanV2Host(locator, host)
 			} else {
 				scan, err = e.scanV1Host(locator, host)
 			}
