@@ -53,7 +53,7 @@ func PrepareContractFormation(renterPubKey types.PublicKey, hostKey types.Public
 		WindowStart:    startHeight,
 		WindowEnd:      endHeight,
 		Payout:         payout,
-		UnlockHash:     types.Hash256(uc.UnlockHash()),
+		UnlockHash:     uc.UnlockHash(),
 		RevisionNumber: 0,
 		ValidProofOutputs: []types.SiacoinOutput{
 			{Value: renterPayout, Address: refundAddr},
