@@ -81,7 +81,6 @@ func (e *Explorer) scanV1Host(locator geoip.Locator, host Host) (HostScan, error
 	}
 
 	resolved, err := net.ResolveIPAddr("ip", hostIP)
-	// if we can resolve the address
 	if err != nil {
 		return HostScan{}, fmt.Errorf("scanHost: failed to resolve host address: %w", err)
 	}
@@ -118,7 +117,11 @@ func (e *Explorer) scanV2Host(locator geoip.Locator, host Host) (HostScan, error
 	ctx, cancel := context.WithTimeout(e.ctx, e.scanCfg.Timeout)
 	defer cancel()
 
-	addr := host.V2NetAddresses[0].Address
+	addr, ok := host.V2SiamuxAddr()
+	if !ok {
+		return HostScan{}, fmt.Errorf("host has no v2 siamux address")
+	}
+
 	transport, err := crhpv4.DialSiaMux(ctx, addr, host.PublicKey)
 	if err != nil {
 		return HostScan{}, fmt.Errorf("failed to dial host: %w", err)
@@ -136,7 +139,6 @@ func (e *Explorer) scanV2Host(locator geoip.Locator, host Host) (HostScan, error
 	}
 
 	resolved, err := net.ResolveIPAddr("ip", hostIP)
-	// if we can resolve the address
 	if err != nil {
 		return HostScan{}, fmt.Errorf("scanHost: failed to resolve host address: %w", err)
 	}
@@ -175,13 +177,19 @@ func (e *Explorer) addHostScans(hosts chan Host) {
 
 			var scan HostScan
 			var addr string
+			var ok bool
 			var err error
-			if len(host.V2NetAddresses) == 0 {
-				addr = host.NetAddress
-				scan, err = e.scanV1Host(locator, host)
+
+			if host.IsV2() {
+				addr, ok = host.V2SiamuxAddr()
+				if !ok {
+					e.log.Debug("Host did not have any v2 siamux net addresses in its announcement, unable to scan", zap.Stringer("pk", host.PublicKey))
+					continue
+				} else {
+					scan, err = e.scanV2Host(locator, host)
+				}
 			} else {
-				addr = host.V2NetAddresses[0].Address
-				scan, err = e.scanV2Host(locator, host)
+				scan, err = e.scanV1Host(locator, host)
 			}
 			if err != nil {
 				scans = append(scans, HostScan{
