@@ -11,6 +11,7 @@ import (
 	rhpv4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
+	crhpv4 "go.sia.tech/coreutils/rhp/v4"
 )
 
 // A Source represents where a siacoin output came from.
@@ -334,6 +335,23 @@ type Host struct {
 	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
 
 	RHPV4Settings rhpv4.HostSettings `json:"rhpV4Settings"`
+}
+
+// V2SiaMuxAddr returns the `Address` of the first TCP siamux `NetAddress` it
+// finds in the host's list of net addresses.  The protocol for this address is
+// ProtocolTCPSiaMux.
+func (h Host) V2SiamuxAddr() (string, bool) {
+	for _, netAddr := range h.V2NetAddresses {
+		if netAddr.Protocol == crhpv4.ProtocolTCPSiaMux {
+			return netAddr.Address, true
+		}
+	}
+	return "", false
+}
+
+// IsV2 returns whether a host supports V2 or not.
+func (h Host) IsV2() bool {
+	return len(h.V2NetAddresses) > 0
 }
 
 // HostMetrics represents averages of scanned information from hosts.
