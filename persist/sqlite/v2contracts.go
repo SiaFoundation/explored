@@ -8,22 +8,16 @@ import (
 )
 
 func scanV2FileContract(s scanner) (fce explorer.V2FileContract, err error) {
-	var confirmationIndex, resolutionIndex types.ChainIndex
-	var confirmationTransactionID, resolutionTransactionID types.TransactionID
+	var resolutionIndex types.ChainIndex
+	var resolutionTransactionID types.TransactionID
 
 	fc := &fce.V2FileContractElement.V2FileContract
-	if err = s.Scan(decode(&fce.TransactionID), decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&resolutionIndex), decodeNull(&resolutionTransactionID), decode(&fce.V2FileContractElement.ID), decode(&fce.V2FileContractElement.StateElement.LeafIndex), decode(&fc.Capacity), decode(&fc.Filesize), decode(&fc.FileMerkleRoot), decode(&fc.ProofHeight), decode(&fc.ExpirationHeight), decode(&fc.RenterOutput.Address), decode(&fc.RenterOutput.Value), decode(&fc.HostOutput.Address), decode(&fc.HostOutput.Value), decode(&fc.MissedHostValue), decode(&fc.TotalCollateral), decode(&fc.RenterPublicKey), decode(&fc.HostPublicKey), decode(&fc.RevisionNumber), decode(&fc.RenterSignature), decode(&fc.HostSignature)); err != nil {
+	if err = s.Scan(decode(&fce.TransactionID), decode(&fce.ConfirmationIndex), decode(&fce.ConfirmationTransactionID), decodeNull(&resolutionIndex), decodeNull(&resolutionTransactionID), decode(&fce.V2FileContractElement.ID), decode(&fce.V2FileContractElement.StateElement.LeafIndex), decode(&fc.Capacity), decode(&fc.Filesize), decode(&fc.FileMerkleRoot), decode(&fc.ProofHeight), decode(&fc.ExpirationHeight), decode(&fc.RenterOutput.Address), decode(&fc.RenterOutput.Value), decode(&fc.HostOutput.Address), decode(&fc.HostOutput.Value), decode(&fc.MissedHostValue), decode(&fc.TotalCollateral), decode(&fc.RenterPublicKey), decode(&fc.HostPublicKey), decode(&fc.RevisionNumber), decode(&fc.RenterSignature), decode(&fc.HostSignature)); err != nil {
 		return
 	}
 
-	if confirmationIndex != (types.ChainIndex{}) {
-		fce.ConfirmationIndex = &confirmationIndex
-	}
 	if resolutionIndex != (types.ChainIndex{}) {
 		fce.ResolutionIndex = &resolutionIndex
-	}
-	if confirmationTransactionID != (types.TransactionID{}) {
-		fce.ConfirmationTransactionID = &confirmationTransactionID
 	}
 	if resolutionTransactionID != (types.TransactionID{}) {
 		fce.ResolutionTransactionID = &resolutionTransactionID

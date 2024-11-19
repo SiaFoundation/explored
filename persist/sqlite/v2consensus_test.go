@@ -1019,6 +1019,8 @@ func TestV2FileContractResolution(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
+	tip1 := cm.Tip()
+
 	v2FC0ID := txn1.V2FileContractID(txn1.ID(), 0)
 	v2FC1ID := txn1.V2FileContractID(txn1.ID(), 1)
 	v2FC2ID := txn1.V2FileContractID(txn1.ID(), 2)
@@ -1091,8 +1093,14 @@ func TestV2FileContractResolution(t *testing.T) {
 			t.Fatal(err)
 		}
 		testutil.CheckV2Transaction(t, txn2, dbTxns[0])
+
+		testutil.Equal(t, "confirmation index", tip1, dbTxns[0].FileContractResolutions[0].Parent.ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn1.ID(), dbTxns[0].FileContractResolutions[0].Parent.ConfirmationTransactionID)
 		testutil.Equal(t, "resolution index", cm.Tip(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionIndex)
 		testutil.Equal(t, "resolution transaction ID", txn2.ID(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionTransactionID)
+
+		testutil.Equal(t, "confirmation index", tip1, dbTxns[0].FileContractResolutions[1].Parent.ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn1.ID(), dbTxns[0].FileContractResolutions[1].Parent.ConfirmationTransactionID)
 		testutil.Equal(t, "resolution index", cm.Tip(), *dbTxns[0].FileContractResolutions[1].Parent.ResolutionIndex)
 		testutil.Equal(t, "resolution transaction ID", txn2.ID(), *dbTxns[0].FileContractResolutions[1].Parent.ResolutionTransactionID)
 	}
@@ -1130,6 +1138,8 @@ func TestV2FileContractResolution(t *testing.T) {
 			t.Fatal(err)
 		}
 		testutil.CheckV2Transaction(t, txn3, dbTxns[0])
+		testutil.Equal(t, "confirmation index", tip1, dbTxns[0].FileContractResolutions[0].Parent.ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn1.ID(), dbTxns[0].FileContractResolutions[0].Parent.ConfirmationTransactionID)
 		testutil.Equal(t, "resolution index", cm.Tip(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionIndex)
 		testutil.Equal(t, "resolution transaction ID", txn3.ID(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionTransactionID)
 	}
@@ -1155,6 +1165,8 @@ func TestV2FileContractResolution(t *testing.T) {
 			t.Fatal(err)
 		}
 		testutil.CheckV2Transaction(t, txn4, dbTxns[0])
+		testutil.Equal(t, "confirmation index", tip1, dbTxns[0].FileContractResolutions[0].Parent.ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn1.ID(), dbTxns[0].FileContractResolutions[0].Parent.ConfirmationTransactionID)
 		testutil.Equal(t, "resolution index", cm.Tip(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionIndex)
 		testutil.Equal(t, "resolution transaction ID", txn4.ID(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionTransactionID)
 	}
@@ -1213,6 +1225,8 @@ func TestV2FileContractResolution(t *testing.T) {
 			t.Fatal(err)
 		}
 		testutil.CheckV2Transaction(t, txn2, dbTxns[0])
+		testutil.Equal(t, "confirmation index", tip1, dbTxns[0].FileContractResolutions[0].Parent.ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn1.ID(), dbTxns[0].FileContractResolutions[0].Parent.ConfirmationTransactionID)
 		testutil.Equal(t, "resolution index", cm.Tip(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionIndex)
 		testutil.Equal(t, "resolution transaction ID", txn2.ID(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionTransactionID)
 	}
@@ -1238,6 +1252,8 @@ func TestV2FileContractResolution(t *testing.T) {
 			t.Fatal(err)
 		}
 		testutil.CheckV2Transaction(t, txn3, dbTxns[0])
+		testutil.Equal(t, "confirmation index", tip1, dbTxns[0].FileContractResolutions[0].Parent.ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn1.ID(), dbTxns[0].FileContractResolutions[0].Parent.ConfirmationTransactionID)
 		testutil.Equal(t, "resolution index", cm.Tip(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionIndex)
 		testutil.Equal(t, "resolution transaction ID", txn3.ID(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionTransactionID)
 	}
@@ -1256,6 +1272,8 @@ func TestV2FileContractResolution(t *testing.T) {
 			t.Fatal(err)
 		}
 		testutil.CheckV2Transaction(t, txn4, dbTxns[0])
+		testutil.Equal(t, "confirmation index", tip1, dbTxns[0].FileContractResolutions[0].Parent.ConfirmationIndex)
+		testutil.Equal(t, "confirmation transaction ID", txn1.ID(), dbTxns[0].FileContractResolutions[0].Parent.ConfirmationTransactionID)
 		testutil.Equal(t, "resolution index", cm.Tip(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionIndex)
 		testutil.Equal(t, "resolution transaction ID", txn4.ID(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionTransactionID)
 	}

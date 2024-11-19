@@ -305,17 +305,10 @@ ORDER BY ts.transaction_order ASC`
 		var txnID, contractID int64
 		var fc explorer.ExtendedFileContract
 
-		var confirmationIndex, proofIndex types.ChainIndex
-		var confirmationTransactionID, proofTransactionID types.TransactionID
-		if err := rows.Scan(&txnID, &contractID, decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&proofIndex), decodeNull(&proofTransactionID), decode(&fc.ID), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decode(&fc.Filesize), decode(&fc.FileMerkleRoot), decode(&fc.WindowStart), decode(&fc.WindowEnd), decode(&fc.Payout), decode(&fc.UnlockHash), decode(&fc.RevisionNumber)); err != nil {
+		var proofIndex types.ChainIndex
+		var proofTransactionID types.TransactionID
+		if err := rows.Scan(&txnID, &contractID, decode(&fc.ConfirmationIndex), decode(&fc.ConfirmationTransactionID), decodeNull(&proofIndex), decodeNull(&proofTransactionID), decode(&fc.ID), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decode(&fc.Filesize), decode(&fc.FileMerkleRoot), decode(&fc.WindowStart), decode(&fc.WindowEnd), decode(&fc.Payout), decode(&fc.UnlockHash), decode(&fc.RevisionNumber)); err != nil {
 			return nil, fmt.Errorf("failed to scan file contract: %w", err)
-		}
-
-		if confirmationIndex != (types.ChainIndex{}) {
-			fc.ConfirmationIndex = &confirmationIndex
-		}
-		if confirmationTransactionID != (types.TransactionID{}) {
-			fc.ConfirmationTransactionID = &confirmationTransactionID
 		}
 
 		if proofIndex != (types.ChainIndex{}) {
@@ -366,17 +359,10 @@ ORDER BY ts.transaction_order ASC`
 		var txnID, contractID int64
 		var fc explorer.FileContractRevision
 
-		var confirmationIndex, proofIndex types.ChainIndex
-		var confirmationTransactionID, proofTransactionID types.TransactionID
-		if err := rows.Scan(&txnID, &contractID, decodeNull(&confirmationIndex), decodeNull(&confirmationTransactionID), decodeNull(&proofIndex), decodeNull(&proofTransactionID), decode(&fc.ParentID), decode(&fc.UnlockConditions), decode(&fc.ID), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decode(&fc.ExtendedFileContract.Filesize), decode(&fc.ExtendedFileContract.FileMerkleRoot), decode(&fc.ExtendedFileContract.WindowStart), decode(&fc.ExtendedFileContract.WindowEnd), decode(&fc.ExtendedFileContract.Payout), decode(&fc.ExtendedFileContract.UnlockHash), decode(&fc.ExtendedFileContract.RevisionNumber)); err != nil {
+		var proofIndex types.ChainIndex
+		var proofTransactionID types.TransactionID
+		if err := rows.Scan(&txnID, &contractID, decode(&fc.ConfirmationIndex), decode(&fc.ConfirmationTransactionID), decodeNull(&proofIndex), decodeNull(&proofTransactionID), decode(&fc.ParentID), decode(&fc.UnlockConditions), decode(&fc.ID), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decode(&fc.ExtendedFileContract.Filesize), decode(&fc.ExtendedFileContract.FileMerkleRoot), decode(&fc.ExtendedFileContract.WindowStart), decode(&fc.ExtendedFileContract.WindowEnd), decode(&fc.ExtendedFileContract.Payout), decode(&fc.ExtendedFileContract.UnlockHash), decode(&fc.ExtendedFileContract.RevisionNumber)); err != nil {
 			return nil, fmt.Errorf("failed to scan file contract: %w", err)
-		}
-
-		if confirmationIndex != (types.ChainIndex{}) {
-			fc.ConfirmationIndex = &confirmationIndex
-		}
-		if confirmationTransactionID != (types.TransactionID{}) {
-			fc.ConfirmationTransactionID = &confirmationTransactionID
 		}
 
 		if proofIndex != (types.ChainIndex{}) {

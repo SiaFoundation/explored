@@ -106,8 +106,8 @@ CREATE TABLE last_contract_revision (
 	ed25519_renter_key BLOB,
 	ed25519_host_key BLOB,
 
-	confirmation_index BLOB,
-	confirmation_transaction_id BLOB REFERENCES transactions(transaction_id),
+	confirmation_index BLOB NOT NULL,
+	confirmation_transaction_id BLOB NOT NULL REFERENCES transactions(transaction_id),
 
 	proof_index BLOB,
 	proof_transaction_id BLOB REFERENCES transactions(transaction_id),
@@ -452,8 +452,8 @@ CREATE INDEX v2_file_contract_elements_contract_id_revision_number_index ON v2_f
 CREATE TABLE v2_last_contract_revision (
     contract_id BLOB PRIMARY KEY NOT NULL,
 
-    confirmation_index BLOB,
-    confirmation_transaction_id BLOB REFERENCES v2_transactions(transaction_id),
+    confirmation_index BLOB NOT NULL,
+    confirmation_transaction_id BLOB NOT NULL REFERENCES v2_transactions(transaction_id),
 
     resolution_index BLOB,
     resolution_transaction_id BLOB REFERENCES v2_transactions(transaction_id),
