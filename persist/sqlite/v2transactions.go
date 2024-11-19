@@ -322,7 +322,7 @@ ORDER BY ts.transaction_order ASC`)
 // fillV2TransactionFileContracts fills in the file contracts for each
 // transaction.
 func fillV2TransactionFileContracts(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
-	stmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_index, rev.confirmation_transaction_id, rev.resolution_index, rev.resolution_transaction_id, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
+	stmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.resolution_height, rev.resolution_block_id, rev.resolution_transaction_id, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
 FROM v2_file_contract_elements fc
 INNER JOIN v2_transaction_file_contracts ts ON (ts.contract_id = fc.id)
 INNER JOIN v2_last_contract_revision rev ON (rev.contract_id = fc.contract_id)
@@ -361,7 +361,7 @@ ORDER BY ts.transaction_order ASC`)
 // fillV2TransactionFileContractRevisions fills in the file contract revisions
 // for each transaction.
 func fillV2TransactionFileContractRevisions(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
-	parentStmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_index, rev.confirmation_transaction_id, rev.resolution_index, rev.resolution_transaction_id, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
+	parentStmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.resolution_height, rev.resolution_block_id, rev.resolution_transaction_id, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
 FROM v2_file_contract_elements fc
 INNER JOIN v2_transaction_file_contract_revisions ts ON (ts.parent_contract_id = fc.id)
 INNER JOIN v2_last_contract_revision rev ON (rev.contract_id = fc.contract_id)
@@ -372,7 +372,7 @@ ORDER BY ts.transaction_order ASC`)
 	}
 	defer parentStmt.Close()
 
-	revisionStmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_index, rev.confirmation_transaction_id, rev.resolution_index, rev.resolution_transaction_id, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
+	revisionStmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.resolution_height, rev.resolution_block_id, rev.resolution_transaction_id, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
 FROM v2_file_contract_elements fc
 INNER JOIN v2_transaction_file_contract_revisions ts ON (ts.revision_contract_id = fc.id)
 INNER JOIN v2_last_contract_revision rev ON (rev.contract_id = fc.contract_id)
@@ -448,7 +448,7 @@ func fillV2TransactionFileContractResolutions(tx *txn, dbIDs []int64, txns []exp
 	defer consolidatedStmt.Close()
 
 	// get a v2 FC by id
-	fcStmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_index, rev.confirmation_transaction_id, rev.resolution_index, rev.resolution_transaction_id, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
+	fcStmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.resolution_height, rev.resolution_block_id, rev.resolution_transaction_id, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
 FROM v2_file_contract_elements fc
 INNER JOIN v2_last_contract_revision rev ON (rev.contract_id = fc.contract_id)
 WHERE fc.id = ?`)

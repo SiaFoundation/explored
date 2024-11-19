@@ -73,10 +73,10 @@ func updateV2FileContractElements(tx *txn, revert bool, index types.ChainIndex, 
 	}
 	defer stmt.Close()
 
-	revisionStmt, err := tx.Prepare(`INSERT INTO v2_last_contract_revision(contract_id, contract_element_id, confirmation_index, confirmation_transaction_id)
-    VALUES (?, ?, COALESCE(?, X'aa'), COALESCE(?, X'aa'))
+	revisionStmt, err := tx.Prepare(`INSERT INTO v2_last_contract_revision(contract_id, contract_element_id, confirmation_height, confirmation_block_id, confirmation_transaction_id)
+    VALUES (?, ?, COALESCE(?, X''), COALESCE(?, X''), COALESCE(?, X''))
     ON CONFLICT (contract_id)
-    DO UPDATE SET contract_element_id = ?, confirmation_index = COALESCE(?, confirmation_index), confirmation_transaction_id = COALESCE(?, confirmation_transaction_id)`)
+    DO UPDATE SET contract_element_id = ?, confirmation_height = COALESCE(?, confirmation_height), confirmation_block_id = COALESCE(?, confirmation_block_id), confirmation_transaction_id = COALESCE(?, confirmation_transaction_id)`)
 	if err != nil {
 		return nil, fmt.Errorf("updateV2FileContractElements: failed to prepare last_contract_revision statement: %w", err)
 	}
@@ -131,14 +131,14 @@ func updateV2FileContractElements(tx *txn, revert bool, index types.ChainIndex, 
 		// only update if it's the most recent revision which will come from
 		// running ForEachFileContractElement on the update
 		if lastRevision {
-			var encodedChainIndex []byte
-			var encodedConfirmationTransactionID []byte
+			var encodedHeight, encodedBlockID, encodedConfirmationTransactionID []byte
 			if confirmationTransactionID != nil {
-				encodedChainIndex = encode(index).([]byte)
+				encodedHeight = encode(index.Height).([]byte)
+				encodedBlockID = encode(index.ID).([]byte)
 				encodedConfirmationTransactionID = encode(*confirmationTransactionID).([]byte)
 			}
 
-			if _, err := revisionStmt.Exec(encode(fcID), dbID, encodedChainIndex, encodedConfirmationTransactionID, dbID, encodedChainIndex, encodedConfirmationTransactionID); err != nil {
+			if _, err := revisionStmt.Exec(encode(fcID), dbID, encodedHeight, encodedBlockID, encodedConfirmationTransactionID, dbID, encodedHeight, encodedBlockID, encodedConfirmationTransactionID); err != nil {
 				return fmt.Errorf("failed to update last revision number: %w", err)
 			}
 		}
@@ -279,7 +279,7 @@ func updateV2FileContractElements(tx *txn, revert bool, index types.ChainIndex, 
 }
 
 func updateV2FileContractIndices(tx *txn, revert bool, index types.ChainIndex, fces []explorer.V2FileContractUpdate) error {
-	resolutionIndexStmt, err := tx.Prepare(`UPDATE v2_last_contract_revision SET resolution_index = ?, resolution_transaction_id = ? WHERE contract_id = ?`)
+	resolutionIndexStmt, err := tx.Prepare(`UPDATE v2_last_contract_revision SET resolution_height = ?, resolution_block_id = ?, resolution_transaction_id = ? WHERE contract_id = ?`)
 	if err != nil {
 		return fmt.Errorf("updateV2FileContractIndices: failed to prepare resolution index statement: %w", err)
 	}
@@ -291,13 +291,13 @@ func updateV2FileContractIndices(tx *txn, revert bool, index types.ChainIndex, f
 
 		if revert {
 			if update.ResolutionTransactionID != nil {
-				if _, err := resolutionIndexStmt.Exec(nil, nil, encode(fcID)); err != nil {
+				if _, err := resolutionIndexStmt.Exec(nil, nil, nil, encode(fcID)); err != nil {
 					return fmt.Errorf("updateV2FileContractIndices: failed to update resolution index: %w", err)
 				}
 			}
 		} else {
 			if update.ResolutionTransactionID != nil {
-				if _, err := resolutionIndexStmt.Exec(encode(index), encode(update.ResolutionTransactionID), encode(fcID)); err != nil {
+				if _, err := resolutionIndexStmt.Exec(encode(index.Height), encode(index.ID), encode(update.ResolutionTransactionID), encode(fcID)); err != nil {
 					return fmt.Errorf("updateV2FileContractIndices: failed to update resolution index: %w", err)
 				}
 			}

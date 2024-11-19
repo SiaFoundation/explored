@@ -106,10 +106,12 @@ CREATE TABLE last_contract_revision (
 	ed25519_renter_key BLOB,
 	ed25519_host_key BLOB,
 
-	confirmation_index BLOB NOT NULL,
+    confirmation_height BLOB NOT NULL,
+    confirmation_block_id BLOB NOT NULL REFERENCES blocks(id) ON DELETE CASCADE,
 	confirmation_transaction_id BLOB NOT NULL REFERENCES transactions(transaction_id),
 
-	proof_index BLOB,
+    proof_height BLOB,
+    proof_block_id BLOB,
 	proof_transaction_id BLOB REFERENCES transactions(transaction_id),
 
 	contract_element_id INTEGER UNIQUE REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL
@@ -452,10 +454,12 @@ CREATE INDEX v2_file_contract_elements_contract_id_revision_number_index ON v2_f
 CREATE TABLE v2_last_contract_revision (
     contract_id BLOB PRIMARY KEY NOT NULL,
 
-    confirmation_index BLOB NOT NULL,
+    confirmation_height BLOB NOT NULL,
+    confirmation_block_id BLOB NOT NULL REFERENCES blocks(id) ON DELETE CASCADE,
     confirmation_transaction_id BLOB NOT NULL REFERENCES v2_transactions(transaction_id),
 
-    resolution_index BLOB,
+    resolution_height BLOB,
+    resolution_block_id BLOB,
     resolution_transaction_id BLOB REFERENCES v2_transactions(transaction_id),
 
     contract_element_id INTEGER UNIQUE REFERENCES v2_file_contract_elements(id) ON DELETE CASCADE NOT NULL

@@ -758,10 +758,10 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
 	}
 	defer stmt.Close()
 
-	revisionStmt, err := tx.Prepare(`INSERT INTO last_contract_revision(contract_id, contract_element_id, ed25519_renter_key, ed25519_host_key, confirmation_index, confirmation_transaction_id)
-	VALUES (?, ?, ?, ?, COALESCE(?, X'aa'), COALESCE(?, X'aa'))
+	revisionStmt, err := tx.Prepare(`INSERT INTO last_contract_revision(contract_id, contract_element_id, ed25519_renter_key, ed25519_host_key, confirmation_height, confirmation_block_id, confirmation_transaction_id)
+	VALUES (?, ?, ?, ?, COALESCE(?, X''), COALESCE(?, X''), COALESCE(?, X''))
 	ON CONFLICT (contract_id)
-	DO UPDATE SET contract_element_id = ?, ed25519_renter_key = COALESCE(?, ed25519_renter_key), ed25519_host_key = COALESCE(?, ed25519_host_key), confirmation_index = COALESCE(?, confirmation_index), confirmation_transaction_id = COALESCE(?, confirmation_transaction_id)`)
+	DO UPDATE SET contract_element_id = ?, ed25519_renter_key = COALESCE(?, ed25519_renter_key), ed25519_host_key = COALESCE(?, ed25519_host_key), confirmation_height = COALESCE(?, confirmation_height), confirmation_block_id = COALESCE(?, confirmation_block_id), confirmation_transaction_id = COALESCE(?, confirmation_transaction_id)`)
 	if err != nil {
 		return nil, fmt.Errorf("updateFileContractElements: failed to prepare last_contract_revision statement: %w", err)
 	}
@@ -857,14 +857,14 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
 				encodedHostKey = encode(keys[1]).([]byte)
 			}
 
-			var encodedChainIndex []byte
-			var encodedConfirmationTransactionID []byte
+			var encodedHeight, encodedBlockID, encodedConfirmationTransactionID []byte
 			if confirmationTransactionID != nil {
-				encodedChainIndex = encode(index).([]byte)
+				encodedHeight = encode(index.Height).([]byte)
+				encodedBlockID = encode(index.ID).([]byte)
 				encodedConfirmationTransactionID = encode(*confirmationTransactionID).([]byte)
 			}
 
-			if _, err := revisionStmt.Exec(encode(fcID), dbID, encodedRenterKey, encodedHostKey, encodedChainIndex, encodedConfirmationTransactionID, dbID, encodedRenterKey, encodedHostKey, encodedChainIndex, encodedConfirmationTransactionID); err != nil {
+			if _, err := revisionStmt.Exec(encode(fcID), dbID, encodedRenterKey, encodedHostKey, encodedHeight, encodedBlockID, encodedConfirmationTransactionID, dbID, encodedRenterKey, encodedHostKey, encodedHeight, encodedBlockID, encodedConfirmationTransactionID); err != nil {
 				return fmt.Errorf("failed to update last revision number: %w", err)
 			}
 		}
@@ -950,7 +950,7 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
 }
 
 func updateFileContractIndices(tx *txn, revert bool, index types.ChainIndex, fces []explorer.FileContractUpdate) error {
-	proofIndexStmt, err := tx.Prepare(`UPDATE last_contract_revision SET proof_index = ?, proof_transaction_id = ? WHERE contract_id = ?`)
+	proofIndexStmt, err := tx.Prepare(`UPDATE last_contract_revision SET proof_height = ?, proof_block_id = ?, proof_transaction_id = ? WHERE contract_id = ?`)
 	if err != nil {
 		return fmt.Errorf("updateFileContractIndices: failed to prepare proof index statement: %w", err)
 	}
@@ -962,13 +962,13 @@ func updateFileContractIndices(tx *txn, revert bool, index types.ChainIndex, fce
 
 		if revert {
 			if update.ProofTransactionID != nil {
-				if _, err := proofIndexStmt.Exec(nil, nil, encode(fcID)); err != nil {
+				if _, err := proofIndexStmt.Exec(nil, nil, nil, encode(fcID)); err != nil {
 					return fmt.Errorf("updateFileContractIndices: failed to update proof index: %w", err)
 				}
 			}
 		} else {
 			if update.ProofTransactionID != nil {
-				if _, err := proofIndexStmt.Exec(encode(index), encode(update.ProofTransactionID), encode(fcID)); err != nil {
+				if _, err := proofIndexStmt.Exec(encode(index.Height), encode(index.ID), encode(update.ProofTransactionID), encode(fcID)); err != nil {
 					return fmt.Errorf("updateFileContractIndices: failed to update proof index: %w", err)
 				}
 			}
