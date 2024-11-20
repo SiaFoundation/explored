@@ -217,47 +217,88 @@ func TestScan(t *testing.T) {
 
 	time.Sleep(4 * cfg.Timeout)
 
-	dbHosts, err := e.Hosts([]types.PublicKey{pubkey0, pubkey1, pubkey2})
-	if err != nil {
+	{
+		dbHosts, err := e.Hosts([]types.PublicKey{pubkey0, pubkey1, pubkey2})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(dbHosts)", 3, len(dbHosts))
+
+		sort.Slice(hosts, func(i, j int) bool {
+			return hosts[i].NetAddress < hosts[j].NetAddress
+		})
+		sort.Slice(dbHosts, func(i, j int) bool {
+			return dbHosts[i].NetAddress < dbHosts[j].NetAddress
+		})
+
+		host0 := dbHosts[0]
+		testutil.Equal(t, "host0.NetAddress", hosts[0].NetAddress, host0.NetAddress)
+		testutil.Equal(t, "host0.PublicKey", hosts[0].PublicKey, host0.PublicKey)
+		testutil.Equal(t, "host0.TotalScans", 1, host0.TotalScans)
+		testutil.Equal(t, "host0.SuccessfulInteractions", 1, host0.SuccessfulInteractions)
+		testutil.Equal(t, "host0.FailedInteractions", 0, host0.FailedInteractions)
+		testutil.Equal(t, "host0.LastScanSuccessful", true, host0.LastScanSuccessful)
+		testutil.Equal(t, "host0.LastAnnouncement", ts, host0.LastAnnouncement)
+		if !host0.RHPV4Settings.AcceptingContracts {
+			log.Fatal("AcceptingContracts = false on host that's supposed to be active")
+		}
+
+		host1 := dbHosts[1]
+		testutil.Equal(t, "host1.NetAddress", hosts[1].NetAddress, host1.NetAddress)
+		testutil.Equal(t, "host1.PublicKey", hosts[1].PublicKey, host1.PublicKey)
+		testutil.Equal(t, "host1.TotalScans", 1, host1.TotalScans)
+		testutil.Equal(t, "host1.SuccessfulInteractions", 0, host1.SuccessfulInteractions)
+		testutil.Equal(t, "host1.FailedInteractions", 1, host1.FailedInteractions)
+		testutil.Equal(t, "host1.LastScanSuccessful", false, host1.LastScanSuccessful)
+		testutil.Equal(t, "host1.LastAnnouncement", ts, host1.LastAnnouncement)
+
+		host2 := dbHosts[2]
+		testutil.Equal(t, "host2.NetAddress", hosts[2].NetAddress, host2.NetAddress)
+		testutil.Equal(t, "host2.PublicKey", hosts[2].PublicKey, host2.PublicKey)
+		testutil.Equal(t, "host2.CountryCode", "CA", host2.CountryCode)
+		testutil.Equal(t, "host2.TotalScans", 1, host2.TotalScans)
+		testutil.Equal(t, "host2.SuccessfulInteractions", 1, host2.SuccessfulInteractions)
+		testutil.Equal(t, "host2.FailedInteractions", 0, host2.FailedInteractions)
+		testutil.Equal(t, "host2.LastScanSuccessful", true, host2.LastScanSuccessful)
+		testutil.Equal(t, "host2.LastAnnouncement", ts, host2.LastAnnouncement)
+		if host2.Settings.SectorSize <= 0 {
+			log.Fatal("SectorSize = 0 on host that's supposed to be active")
+		}
+	}
+
+	ts = types.CurrentTimestamp()
+	for i := range hosts {
+		hosts[i].LastAnnouncement = ts
+	}
+
+	if err := db.transaction(func(tx *txn) error {
+		return addHosts(tx, hosts)
+	}); err != nil {
 		t.Fatal(err)
 	}
-	testutil.Equal(t, "len(dbHosts)", 3, len(dbHosts))
 
-	sort.Slice(hosts, func(i, j int) bool {
-		return hosts[i].NetAddress < hosts[j].NetAddress
-	})
-	sort.Slice(dbHosts, func(i, j int) bool {
-		return dbHosts[i].NetAddress < dbHosts[j].NetAddress
-	})
+	{
+		dbHosts, err := e.Hosts([]types.PublicKey{pubkey0, pubkey1, pubkey2})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(dbHosts)", 3, len(dbHosts))
 
-	host0 := dbHosts[0]
-	testutil.Equal(t, "host0.NetAddress", hosts[0].NetAddress, host0.NetAddress)
-	testutil.Equal(t, "host0.PublicKey", hosts[0].PublicKey, host0.PublicKey)
-	testutil.Equal(t, "host0.TotalScans", 1, host0.TotalScans)
-	testutil.Equal(t, "host0.SuccessfulInteractions", 1, host0.SuccessfulInteractions)
-	testutil.Equal(t, "host0.FailedInteractions", 0, host0.FailedInteractions)
-	testutil.Equal(t, "host0.LastScanSuccessful", true, host0.LastScanSuccessful)
-	if !host0.RHPV4Settings.AcceptingContracts {
-		log.Fatal("AcceptingContracts = false on host that's supposed to be active")
+		sort.Slice(hosts, func(i, j int) bool {
+			return hosts[i].NetAddress < hosts[j].NetAddress
+		})
+		sort.Slice(dbHosts, func(i, j int) bool {
+			return dbHosts[i].NetAddress < dbHosts[j].NetAddress
+		})
+
+		host0 := dbHosts[0]
+		testutil.Equal(t, "host0.LastAnnouncement", ts, host0.LastAnnouncement)
+
+		host1 := dbHosts[1]
+		testutil.Equal(t, "host1.LastAnnouncement", ts, host1.LastAnnouncement)
+
+		host2 := dbHosts[2]
+		testutil.Equal(t, "host2.LastAnnouncement", ts, host2.LastAnnouncement)
 	}
 
-	host1 := dbHosts[1]
-	testutil.Equal(t, "host1.NetAddress", hosts[1].NetAddress, host1.NetAddress)
-	testutil.Equal(t, "host1.PublicKey", hosts[1].PublicKey, host1.PublicKey)
-	testutil.Equal(t, "host1.TotalScans", 1, host1.TotalScans)
-	testutil.Equal(t, "host1.SuccessfulInteractions", 0, host1.SuccessfulInteractions)
-	testutil.Equal(t, "host1.FailedInteractions", 1, host1.FailedInteractions)
-	testutil.Equal(t, "host1.LastScanSuccessful", false, host1.LastScanSuccessful)
-
-	host2 := dbHosts[2]
-	testutil.Equal(t, "host2.NetAddress", hosts[2].NetAddress, host2.NetAddress)
-	testutil.Equal(t, "host2.PublicKey", hosts[2].PublicKey, host2.PublicKey)
-	testutil.Equal(t, "host2.CountryCode", "CA", host2.CountryCode)
-	testutil.Equal(t, "host2.TotalScans", 1, host2.TotalScans)
-	testutil.Equal(t, "host2.SuccessfulInteractions", 1, host2.SuccessfulInteractions)
-	testutil.Equal(t, "host2.FailedInteractions", 0, host2.FailedInteractions)
-	testutil.Equal(t, "host2.LastScanSuccessful", true, host2.LastScanSuccessful)
-	if host2.Settings.SectorSize <= 0 {
-		log.Fatal("SectorSize = 0 on host that's supposed to be active")
-	}
 }
