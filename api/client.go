@@ -222,16 +222,16 @@ func (c *Client) V2Contracts(ids []types.FileContractID) (resp []explorer.V2File
 	return
 }
 
-// V2ContractsKey returns the v2 contracts for a particular ed25519 key.
-func (c *Client) V2ContractsKey(key types.PublicKey) (resp []explorer.V2FileContract, err error) {
-	err = c.c.GET(fmt.Sprintf("/pubkey/%s/v2/contracts", key), &resp)
-	return
-}
-
 // V2ContractRevisions returns all the revisions of the contract with the
 // specified ID.
 func (c *Client) V2ContractRevisions(id types.FileContractID) (resp []explorer.V2FileContract, err error) {
 	err = c.c.GET(fmt.Sprintf("/v2/contracts/%s/revisions", id), &resp)
+	return
+}
+
+// V2ContractsKey returns the v2 contracts for a particular ed25519 key.
+func (c *Client) V2ContractsKey(key types.PublicKey) (resp []explorer.V2FileContract, err error) {
+	err = c.c.GET(fmt.Sprintf("/v2/pubkey/%s/contracts", key), &resp)
 	return
 }
 

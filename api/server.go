@@ -588,7 +588,7 @@ func (s *server) v2ContractsIDRevisionsHandler(jc jape.Context) {
 	jc.Encode(fcs)
 }
 
-func (s *server) pubkeyV2ContractsHandler(jc jape.Context) {
+func (s *server) v2PubkeyContractsHandler(jc jape.Context) {
 	var key types.PublicKey
 	if jc.DecodeParam("key", &key) != nil {
 		return
@@ -705,9 +705,10 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET    /v2/contracts/:id/revisions": srv.v2ContractsIDRevisionsHandler,
 		"POST   /v2/contracts":               srv.v2ContractsBatchHandler,
 
-		"GET    /pubkey/:key/v2/contracts": srv.pubkeyV2ContractsHandler,
-		"GET    /pubkey/:key/contracts":    srv.pubkeyContractsHandler,
-		"GET    /pubkey/:key/host":         srv.pubkeyHostHandler,
+		"GET    /v2/pubkey/:key/contracts": srv.v2PubkeyContractsHandler,
+
+		"GET    /pubkey/:key/contracts": srv.pubkeyContractsHandler,
+		"GET    /pubkey/:key/host":      srv.pubkeyHostHandler,
 
 		"GET    /metrics/block":     srv.blocksMetricsHandler,
 		"GET    /metrics/block/:id": srv.blocksMetricsIDHandler,
