@@ -293,12 +293,20 @@ func TestScan(t *testing.T) {
 
 		host0 := dbHosts[0]
 		testutil.Equal(t, "host0.LastAnnouncement", ts, host0.LastAnnouncement)
+		// settings should not be overwritten if there was not a successful scan
+		if !host0.RHPV4Settings.AcceptingContracts {
+			log.Fatal("AcceptingContracts = false on host that's supposed to be active")
+		}
 
 		host1 := dbHosts[1]
 		testutil.Equal(t, "host1.LastAnnouncement", ts, host1.LastAnnouncement)
 
 		host2 := dbHosts[2]
 		testutil.Equal(t, "host2.LastAnnouncement", ts, host2.LastAnnouncement)
+		// settings should not be overwritten if there was not a successful scan
+		if host2.Settings.SectorSize <= 0 {
+			log.Fatal("SectorSize = 0 on host that's supposed to be active")
+		}
 	}
 
 }
