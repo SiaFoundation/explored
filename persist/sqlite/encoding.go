@@ -10,6 +10,7 @@ import (
 
 	"go.sia.tech/core/rhp/v3"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/chain"
 )
 
 func encode(obj any) any {
@@ -29,6 +30,12 @@ func encode(obj any) any {
 	case rhp.SettingsID:
 		return obj[:]
 	case []types.Hash256:
+		var buf bytes.Buffer
+		e := types.NewEncoder(&buf)
+		types.EncodeSlice(e, obj)
+		e.Flush()
+		return buf.Bytes()
+	case []chain.NetAddress:
 		var buf bytes.Buffer
 		e := types.NewEncoder(&buf)
 		types.EncodeSlice(e, obj)
@@ -71,6 +78,10 @@ func (d *decodable) Scan(src any) error {
 			v.DecodeFrom(dec)
 			return dec.Err()
 		case *[]types.Hash256:
+			dec := types.NewBufDecoder(src)
+			types.DecodeSlice(dec, v)
+			return dec.Err()
+		case *[]chain.NetAddress:
 			dec := types.NewBufDecoder(src)
 			types.DecodeSlice(dec, v)
 			return dec.Err()

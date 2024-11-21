@@ -8,8 +8,10 @@ import (
 	"go.sia.tech/core/consensus"
 	rhpv2 "go.sia.tech/core/rhp/v2"
 	rhpv3 "go.sia.tech/core/rhp/v3"
+	rhpv4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
+	crhpv4 "go.sia.tech/coreutils/rhp/v4"
 )
 
 // A Source represents where a siacoin output came from.
@@ -166,7 +168,8 @@ type FileContractRevision struct {
 
 // A Transaction is a transaction that uses the wrapped types above.
 type Transaction struct {
-	ID                    types.TransactionID          `json:"id"`
+	ID types.TransactionID `json:"id"`
+
 	SiacoinInputs         []SiacoinInput               `json:"siacoinInputs,omitempty"`
 	SiacoinOutputs        []SiacoinOutput              `json:"siacoinOutputs,omitempty"`
 	SiafundInputs         []SiafundInput               `json:"siafundInputs,omitempty"`
@@ -181,12 +184,74 @@ type Transaction struct {
 	HostAnnouncements []chain.HostAnnouncement `json:"hostAnnouncements,omitempty"`
 }
 
-// A V2Transaction is a v2 transaction that uses the wrapped types above.
+// A V2FileContract is a v2 file contract.
+type V2FileContract struct {
+	TransactionID types.TransactionID `json:"transactionID"`
+
+	ConfirmationIndex         *types.ChainIndex    `json:"confirmationIndex"`
+	ConfirmationTransactionID *types.TransactionID `json:"confirmationTransactionID"`
+
+	ResolutionIndex         *types.ChainIndex    `json:"resolutionIndex"`
+	ResolutionTransactionID *types.TransactionID `json:"resolutionTransactionID"`
+
+	types.V2FileContractElement
+}
+
+// A V2FileContractRevision is a V2 file contract revision with the
+// explorer V2FileContract type.
+type V2FileContractRevision struct {
+	Parent   V2FileContract `json:"parent"`
+	Revision V2FileContract `json:"revision"`
+}
+
+// A V2HostAnnouncement is a types.V2HostAnnouncement list of net addresses
+// with the host public key attached.
+type V2HostAnnouncement struct {
+	PublicKey types.PublicKey `json:"publicKey"`
+	chain.V2HostAnnouncement
+}
+
+// A V2FileContractRenewal renews a file contract.
+type V2FileContractRenewal struct {
+	FinalRevision  V2FileContract `json:"finalRevision"`
+	NewContract    V2FileContract `json:"newContract"`
+	RenterRollover types.Currency `json:"renterRollover"`
+	HostRollover   types.Currency `json:"hostRollover"`
+
+	// signatures cover above fields
+	RenterSignature types.Signature `json:"renterSignature"`
+	HostSignature   types.Signature `json:"hostSignature"`
+}
+
+// A V2FileContractResolution closes a v2 file contract's payment channel.
+// There are four resolution types: renewwal, storage proof, finalization,
+// and expiration.
+type V2FileContractResolution struct {
+	Parent     V2FileContract `json:"parent"`
+	Type       string         `json:"string"`
+	Resolution any            `json:"resolution"`
+}
+
+// A V2Transaction is a V2 transaction that uses the wrapped types above.
 type V2Transaction struct {
-	ID            types.TransactionID `json:"id"`
+	ID types.TransactionID `json:"id"`
+
+	SiacoinInputs  []types.V2SiacoinInput `json:"siacoinInputs,omitempty"`
+	SiacoinOutputs []SiacoinOutput        `json:"siacoinOutputs,omitempty"`
+	SiafundInputs  []types.V2SiafundInput `json:"siafundInputs,omitempty"`
+	SiafundOutputs []SiafundOutput        `json:"siafundOutputs,omitempty"`
+
+	FileContracts           []V2FileContract           `json:"fileContracts,omitempty"`
+	FileContractRevisions   []V2FileContractRevision   `json:"fileContractRevisions,omitempty"`
+	FileContractResolutions []V2FileContractResolution `json:"fileContractResolutions,omitempty"`
+
+	Attestations  []types.Attestation `json:"attestations,omitempty"`
 	ArbitraryData []byte              `json:"arbitraryData,omitempty"`
 
-	HostAnnouncements []chain.HostAnnouncement `json:"hostAnnouncements,omitempty"`
+	NewFoundationAddress *types.Address `json:"newFoundationAddress,omitempty"`
+	MinerFee             types.Currency `json:"minerFee"`
+
+	HostAnnouncements []V2HostAnnouncement `json:"hostAnnouncements,omitempty"`
 }
 
 // V2BlockData is a struct containing the fields from types.V2BlockData and our
@@ -204,6 +269,7 @@ type Block struct {
 	ParentID     types.BlockID   `json:"parentID"`
 	Nonce        uint64          `json:"nonce"`
 	Timestamp    time.Time       `json:"timestamp"`
+	LeafIndex    uint64          `json:"leafIndex"`
 	MinerPayouts []SiacoinOutput `json:"minerPayouts"`
 	Transactions []Transaction   `json:"transactions"`
 
@@ -220,6 +286,8 @@ type Metrics struct {
 	SiafundPool types.Currency `json:"siafundPool"`
 	// Total announced hosts
 	TotalHosts uint64 `json:"totalHosts"`
+	// Number of leaves in the accumulator
+	NumLeaves uint64 `json:"numLeaves"`
 	// Number of active contracts
 	ActiveContracts uint64 `json:"activeContracts"`
 	// Number of failed contracts
@@ -243,13 +311,17 @@ type HostScan struct {
 
 	Settings   rhpv2.HostSettings   `json:"settings"`
 	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
+
+	RHPV4Settings rhpv4.HostSettings `json:"rhpV4Settings"`
 }
 
 // Host represents a host and the information gathered from scanning it.
 type Host struct {
-	PublicKey   types.PublicKey `json:"publicKey"`
-	NetAddress  string          `json:"netAddress"`
-	CountryCode string          `json:"countryCode"`
+	PublicKey      types.PublicKey    `json:"publicKey"`
+	NetAddress     string             `json:"netAddress"`
+	V2NetAddresses []chain.NetAddress `json:"v2NetAddresses,omitempty"`
+
+	CountryCode string `json:"countryCode"`
 
 	KnownSince             time.Time `json:"knownSince"`
 	LastScan               time.Time `json:"lastScan"`
@@ -261,6 +333,25 @@ type Host struct {
 
 	Settings   rhpv2.HostSettings   `json:"settings"`
 	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
+
+	RHPV4Settings rhpv4.HostSettings `json:"rhpV4Settings"`
+}
+
+// V2SiamuxAddr returns the `Address` of the first TCP siamux `NetAddress` it
+// finds in the host's list of net addresses.  The protocol for this address is
+// ProtocolTCPSiaMux.
+func (h Host) V2SiamuxAddr() (string, bool) {
+	for _, netAddr := range h.V2NetAddresses {
+		if netAddr.Protocol == crhpv4.ProtocolTCPSiaMux {
+			return netAddr.Address, true
+		}
+	}
+	return "", false
+}
+
+// IsV2 returns whether a host supports V2 or not.
+func (h Host) IsV2() bool {
+	return len(h.V2NetAddresses) > 0
 }
 
 // HostMetrics represents averages of scanned information from hosts.
