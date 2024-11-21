@@ -139,8 +139,8 @@ type ExtendedFileContract struct {
 
 	TransactionID types.TransactionID `json:"transactionID"`
 
-	ConfirmationIndex         *types.ChainIndex    `json:"confirmationIndex"`
-	ConfirmationTransactionID *types.TransactionID `json:"confirmationTransactionID"`
+	ConfirmationIndex         types.ChainIndex    `json:"confirmationIndex"`
+	ConfirmationTransactionID types.TransactionID `json:"confirmationTransactionID"`
 
 	ProofIndex         *types.ChainIndex    `json:"proofIndex"`
 	ProofTransactionID *types.TransactionID `json:"proofTransactionID"`
@@ -188,8 +188,8 @@ type Transaction struct {
 type V2FileContract struct {
 	TransactionID types.TransactionID `json:"transactionID"`
 
-	ConfirmationIndex         *types.ChainIndex    `json:"confirmationIndex"`
-	ConfirmationTransactionID *types.TransactionID `json:"confirmationTransactionID"`
+	ConfirmationIndex         types.ChainIndex    `json:"confirmationIndex"`
+	ConfirmationTransactionID types.TransactionID `json:"confirmationTransactionID"`
 
 	ResolutionIndex         *types.ChainIndex    `json:"resolutionIndex"`
 	ResolutionTransactionID *types.TransactionID `json:"resolutionTransactionID"`

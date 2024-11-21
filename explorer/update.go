@@ -180,7 +180,7 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 	for _, txn := range cau.Block.V2Transactions() {
 		txnID := txn.ID()
 		for i := range txn.FileContracts {
-			fcID := txn.V2FileContractID(txn.ID(), i)
+			fcID := txn.V2FileContractID(txnID, i)
 
 			v := v2FceMap[fcID]
 			v.ConfirmationTransactionID = &txnID
@@ -192,6 +192,13 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 			v := v2FceMap[fcID]
 			v.ResolutionTransactionID = &txnID
 			v2FceMap[fcID] = v
+
+			if _, ok := fcr.Resolution.(*types.V2FileContractRenewal); ok {
+				renewalID := fcID.V2RenewalID()
+				v := v2FceMap[renewalID]
+				v.ConfirmationTransactionID = &txnID
+				v2FceMap[renewalID] = v
+			}
 		}
 	}
 
