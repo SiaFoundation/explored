@@ -308,5 +308,4 @@ func TestScan(t *testing.T) {
 			log.Fatal("SectorSize = 0 on host that's supposed to be active")
 		}
 	}
-
 }
