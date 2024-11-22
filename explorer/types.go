@@ -354,6 +354,11 @@ func (h Host) IsV2() bool {
 	return len(h.V2NetAddresses) > 0
 }
 
+// IsScan returns whether a host object contains a successful scan or not.
+func (h Host) IsScan() bool {
+	return (h.Settings != rhpv2.HostSettings{}) || (h.PriceTable != rhpv3.HostPriceTable{}) || (h.RHPV4Settings != rhpv4.HostSettings{})
+}
+
 // HostMetrics represents averages of scanned information from hosts.
 type HostMetrics struct {
 	ActiveHosts uint64               `json:"activeHosts"`

@@ -7,10 +7,6 @@ import (
 	"errors"
 	"fmt"
 
-	rhpv2 "go.sia.tech/core/rhp/v2"
-	rhpv3 "go.sia.tech/core/rhp/v3"
-	rhpv4 "go.sia.tech/core/rhp/v4"
-
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
@@ -1146,7 +1142,7 @@ func addHosts(tx *txn, scans []explorer.Host) error {
 		s, p := scan.Settings, scan.PriceTable
 		sV4, pV4 := scan.RHPV4Settings, scan.RHPV4Settings.Prices
 
-		if (scan.Settings == rhpv2.HostSettings{}) && (scan.PriceTable == rhpv3.HostPriceTable{}) && (scan.RHPV4Settings == rhpv4.HostSettings{}) {
+		if !scan.IsScan() {
 			// Either we have an initial host announcement or the scan was
 			// unsuccessful.  In this case we do not overwrite the previous
 			// settings/price table data.
