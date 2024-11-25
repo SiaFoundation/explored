@@ -1,8 +1,8 @@
-package sqlite
+package sqlite_test
 
 import (
 	"context"
-	"errors"
+	"encoding/base64"
 	"net"
 	"path/filepath"
 	"sort"
@@ -21,35 +21,12 @@ import (
 	"go.sia.tech/explored/config"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/testutil"
+	"go.sia.tech/explored/persist/sqlite"
 	"lukechampine.com/frand"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 )
-
-func syncDB(t *testing.T, db *Store, cm *chain.Manager) {
-	index, err := db.Tip()
-	if err != nil && !errors.Is(err, explorer.ErrNoTip) {
-		t.Fatal(err)
-	}
-
-	for index != cm.Tip() {
-		crus, caus, err := cm.UpdatesSince(index, 1000)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if err := db.UpdateChainState(crus, caus); err != nil {
-			t.Fatal("failed to process updates:", err)
-		}
-		if len(crus) > 0 {
-			index = crus[len(crus)-1].State.Index
-		}
-		if len(caus) > 0 {
-			index = caus[len(caus)-1].State.Index
-		}
-	}
-}
 
 func startTestNode(tb testing.TB, n *consensus.Network, genesis types.Block) (*chain.Manager, *syncer.Syncer, *wallet.SingleAddressWallet) {
 	db, tipstate, err := chain.NewDBStore(chain.NewMemDB(), n, genesis)
@@ -122,13 +99,15 @@ func TestScan(t *testing.T) {
 	log := zaptest.NewLogger(t)
 	dir := t.TempDir()
 
-	db, err := OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
+	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
 
-	network, genesisBlock := ctestutil.Network()
+	network, genesisBlock := ctestutil.V2Network()
+	network.HardforkV2.AllowHeight = 1
+	network.HardforkV2.RequireHeight = 5
 
 	cm, s, w := startTestNode(t, network, genesisBlock)
 
@@ -155,10 +134,27 @@ func TestScan(t *testing.T) {
 	ss := ctestutil.NewEphemeralSectorStore()
 	c := ctestutil.NewEphemeralContractor(cm)
 
-	pk0 := types.GeneratePrivateKey()
-	pubkey0 := pk0.PublicKey()
+	// We do not have the private key to this host, so we copy their
+	// announcement data because we cannot sign an announcement as
+	// them.
+	var pubkey1 types.PublicKey
+	// pubkey of sia1.euregiohosting.nl:9982
+	if err := pubkey1.UnmarshalText([]byte(`ed25519:e89e13affe9d2ab4dc6f1e157376c60cdcadddf061ea78a52db68b63e6070ee4`)); err != nil {
+		t.Fatal(err)
+	}
+	// announcement copied from block 426479
+	announcement, err := base64.StdEncoding.DecodeString("SG9zdEFubm91bmNlbWVudBsAAAAAAAAAc2lhMS5ldXJlZ2lvaG9zdGluZy5ubDo5OTgyZWQyNTUxOQAAAAAAAAAAACAAAAAAAAAA6J4Tr/6dKrTcbx4Vc3bGDNyt3fBh6nilLbaLY+YHDuRQ49Qr0uy4nZJq3XVW/8kCsqnJFyQT4Zj/CcvC5fG5orVLwnVp2xYdn0nNvBdPNV9LzHborsYz4pep1ywwn40C")
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	v4Addr := testRenterHostPair(t, pk0, cm, s, w, c, sr, ss, zap.NewNop())
+	pk2 := types.GeneratePrivateKey()
+	pubkey2 := pk2.PublicKey()
+
+	pk3 := types.GeneratePrivateKey()
+	pubkey3 := pk3.PublicKey()
+
+	v4Addr := testRenterHostPair(t, pk3, cm, s, w, c, sr, ss, zap.NewNop())
 
 	cfg := config.Scanner{
 		Threads:             10,
@@ -175,136 +171,122 @@ func TestScan(t *testing.T) {
 	defer timeoutCancel()
 	defer e.Shutdown(timeoutCtx)
 
-	var pubkey1 types.PublicKey
-	if err := pubkey1.UnmarshalText([]byte(`ed25519:a90d3c26a22d66903c06a1bf869e14e829e95cfa25b6bf08189c98713fc92449`)); err != nil {
-		t.Fatal(err)
+	ha2 := chain.HostAnnouncement{
+		PublicKey:  pubkey2,
+		NetAddress: "example.com:9982",
 	}
-	pubkey2 := types.GeneratePrivateKey().PublicKey()
-
-	ts := types.CurrentTimestamp()
-	hosts := []explorer.Host{
-		{
-			PublicKey:        pubkey0,
-			V2NetAddresses:   []chain.NetAddress{{Protocol: crhpv4.ProtocolTCPSiaMux, Address: v4Addr}},
-			LastAnnouncement: ts,
-			KnownSince:       ts,
-		},
-		{
-			PublicKey:        pubkey1,
-			NetAddress:       "sia1.siahost.ca:9982",
-			LastAnnouncement: ts,
-			KnownSince:       ts,
-		},
-		{
-			PublicKey:        pubkey2,
-			NetAddress:       "example.com:9982",
-			LastAnnouncement: ts,
-			KnownSince:       ts,
+	txn1 := types.Transaction{
+		ArbitraryData: [][]byte{
+			announcement,
+			ha2.ToArbitraryData(pk2),
 		},
 	}
 
-	if err := db.transaction(func(tx *txn) error {
-		return addHosts(tx, hosts)
-	}); err != nil {
+	b1 := testutil.MineBlock(cm.TipState(), []types.Transaction{txn1}, types.VoidAddress)
+	if err := cm.AddBlocks([]types.Block{b1}); err != nil {
 		t.Fatal(err)
 	}
 
-	// explorer won't start scanning till a recent block is mined
-	b := testutil.MineBlock(cm.TipState(), nil, types.VoidAddress)
-	if err := cm.AddBlocks([]types.Block{b}); err != nil {
+	ha3 := chain.V2HostAnnouncement{{
+		Protocol: crhpv4.ProtocolTCPSiaMux,
+		Address:  v4Addr,
+	}}
+	txn2 := types.V2Transaction{
+		Attestations: []types.Attestation{ha3.ToAttestation(cm.TipState(), pk3)},
+	}
+	testutil.SignV2Transaction(cm.TipState(), pk3, &txn2)
+
+	b2 := testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn2}, types.VoidAddress)
+	if err := cm.AddBlocks([]types.Block{b2}); err != nil {
 		t.Fatal(err)
 	}
 
 	time.Sleep(4 * cfg.Timeout)
 
 	{
-		dbHosts, err := e.Hosts([]types.PublicKey{pubkey0, pubkey1, pubkey2})
+		dbHosts, err := e.Hosts([]types.PublicKey{pubkey3, pubkey2, pubkey1})
 		if err != nil {
 			t.Fatal(err)
 		}
 		testutil.Equal(t, "len(dbHosts)", 3, len(dbHosts))
 
-		sort.Slice(hosts, func(i, j int) bool {
-			return hosts[i].NetAddress < hosts[j].NetAddress
-		})
 		sort.Slice(dbHosts, func(i, j int) bool {
 			return dbHosts[i].NetAddress < dbHosts[j].NetAddress
 		})
 
-		host0 := dbHosts[0]
-		testutil.Equal(t, "host0.NetAddress", hosts[0].NetAddress, host0.NetAddress)
-		testutil.Equal(t, "host0.PublicKey", hosts[0].PublicKey, host0.PublicKey)
-		testutil.Equal(t, "host0.TotalScans", 1, host0.TotalScans)
-		testutil.Equal(t, "host0.SuccessfulInteractions", 1, host0.SuccessfulInteractions)
-		testutil.Equal(t, "host0.FailedInteractions", 0, host0.FailedInteractions)
-		testutil.Equal(t, "host0.LastScanSuccessful", true, host0.LastScanSuccessful)
-		testutil.Equal(t, "host0.LastAnnouncement", ts, host0.LastAnnouncement)
-		if !host0.RHPV4Settings.AcceptingContracts {
+		host1 := dbHosts[0]
+		testutil.Equal(t, "host1.V2NetAddresses", ha3, host1.V2NetAddresses)
+		testutil.Equal(t, "host1.PublicKey", pubkey3, host1.PublicKey)
+		testutil.Equal(t, "host1.TotalScans", 1, host1.TotalScans)
+		testutil.Equal(t, "host1.SuccessfulInteractions", 1, host1.SuccessfulInteractions)
+		testutil.Equal(t, "host1.FailedInteractions", 0, host1.FailedInteractions)
+		testutil.Equal(t, "host1.LastScanSuccessful", true, host1.LastScanSuccessful)
+		testutil.Equal(t, "host1.LastAnnouncement", b1.Timestamp, host1.LastAnnouncement)
+		if !host1.RHPV4Settings.AcceptingContracts {
 			log.Fatal("AcceptingContracts = false on host that's supposed to be active")
 		}
 
-		host1 := dbHosts[1]
-		testutil.Equal(t, "host1.NetAddress", hosts[1].NetAddress, host1.NetAddress)
-		testutil.Equal(t, "host1.PublicKey", hosts[1].PublicKey, host1.PublicKey)
-		testutil.Equal(t, "host1.TotalScans", 1, host1.TotalScans)
-		testutil.Equal(t, "host1.SuccessfulInteractions", 0, host1.SuccessfulInteractions)
-		testutil.Equal(t, "host1.FailedInteractions", 1, host1.FailedInteractions)
-		testutil.Equal(t, "host1.LastScanSuccessful", false, host1.LastScanSuccessful)
-		testutil.Equal(t, "host1.LastAnnouncement", ts, host1.LastAnnouncement)
-
-		host2 := dbHosts[2]
-		testutil.Equal(t, "host2.NetAddress", hosts[2].NetAddress, host2.NetAddress)
-		testutil.Equal(t, "host2.PublicKey", hosts[2].PublicKey, host2.PublicKey)
-		testutil.Equal(t, "host2.CountryCode", "CA", host2.CountryCode)
+		host2 := dbHosts[1]
+		testutil.Equal(t, "host2.NetAddress", ha2.NetAddress, host2.NetAddress)
+		testutil.Equal(t, "host2.PublicKey", ha2.PublicKey, host2.PublicKey)
 		testutil.Equal(t, "host2.TotalScans", 1, host2.TotalScans)
-		testutil.Equal(t, "host2.SuccessfulInteractions", 1, host2.SuccessfulInteractions)
-		testutil.Equal(t, "host2.FailedInteractions", 0, host2.FailedInteractions)
-		testutil.Equal(t, "host2.LastScanSuccessful", true, host2.LastScanSuccessful)
-		testutil.Equal(t, "host2.LastAnnouncement", ts, host2.LastAnnouncement)
-		if host2.Settings.SectorSize <= 0 {
+		testutil.Equal(t, "host2.SuccessfulInteractions", 0, host2.SuccessfulInteractions)
+		testutil.Equal(t, "host2.FailedInteractions", 1, host2.FailedInteractions)
+		testutil.Equal(t, "host2.LastScanSuccessful", false, host2.LastScanSuccessful)
+		testutil.Equal(t, "host2.LastAnnouncement", b1.Timestamp, host2.LastAnnouncement)
+
+		host3 := dbHosts[2]
+		testutil.Equal(t, "host3.NetAddress", "sia1.euregiohosting.nl:9982", host3.NetAddress)
+		testutil.Equal(t, "host3.PublicKey", pubkey1, host3.PublicKey)
+		testutil.Equal(t, "host3.CountryCode", "NL", host3.CountryCode)
+		testutil.Equal(t, "host3.TotalScans", 1, host3.TotalScans)
+		testutil.Equal(t, "host3.SuccessfulInteractions", 1, host3.SuccessfulInteractions)
+		testutil.Equal(t, "host3.FailedInteractions", 0, host3.FailedInteractions)
+		testutil.Equal(t, "host3.LastScanSuccessful", true, host3.LastScanSuccessful)
+		testutil.Equal(t, "host3.LastAnnouncement", b1.Timestamp, host3.LastAnnouncement)
+		if host3.Settings.SectorSize <= 0 {
 			log.Fatal("SectorSize = 0 on host that's supposed to be active")
 		}
 	}
 
-	ts = types.CurrentTimestamp()
-	for i := range hosts {
-		hosts[i].LastAnnouncement = ts
+	// add v1 host announcements again
+	b3 := testutil.MineBlock(cm.TipState(), []types.Transaction{txn1}, types.VoidAddress)
+	if err := cm.AddBlocks([]types.Block{b3}); err != nil {
+		t.Fatal(err)
 	}
-
-	if err := db.transaction(func(tx *txn) error {
-		return addHosts(tx, hosts)
-	}); err != nil {
+	// add v2 host announcements again
+	b4 := testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn2}, types.VoidAddress)
+	if err := cm.AddBlocks([]types.Block{b4}); err != nil {
 		t.Fatal(err)
 	}
 
+	time.Sleep(cfg.Timeout)
+
 	{
-		dbHosts, err := e.Hosts([]types.PublicKey{pubkey0, pubkey1, pubkey2})
+		dbHosts, err := e.Hosts([]types.PublicKey{pubkey3, pubkey2, pubkey1})
 		if err != nil {
 			t.Fatal(err)
 		}
 		testutil.Equal(t, "len(dbHosts)", 3, len(dbHosts))
 
-		sort.Slice(hosts, func(i, j int) bool {
-			return hosts[i].NetAddress < hosts[j].NetAddress
-		})
 		sort.Slice(dbHosts, func(i, j int) bool {
 			return dbHosts[i].NetAddress < dbHosts[j].NetAddress
 		})
 
-		host0 := dbHosts[0]
-		testutil.Equal(t, "host0.LastAnnouncement", ts, host0.LastAnnouncement)
+		host1 := dbHosts[0]
+		testutil.Equal(t, "host1.LastAnnouncement", b4.Timestamp, host1.LastAnnouncement)
 		// settings should not be overwritten if there was not a successful scan
-		if !host0.RHPV4Settings.AcceptingContracts {
+		if !host1.RHPV4Settings.AcceptingContracts {
 			log.Fatal("AcceptingContracts = false on host that's supposed to be active")
 		}
 
-		host1 := dbHosts[1]
-		testutil.Equal(t, "host1.LastAnnouncement", ts, host1.LastAnnouncement)
+		host2 := dbHosts[1]
+		testutil.Equal(t, "host2.LastAnnouncement", b3.Timestamp, host2.LastAnnouncement)
 
-		host2 := dbHosts[2]
-		testutil.Equal(t, "host2.LastAnnouncement", ts, host2.LastAnnouncement)
+		host3 := dbHosts[2]
+		testutil.Equal(t, "host3.LastAnnouncement", b3.Timestamp, host3.LastAnnouncement)
 		// settings should not be overwritten if there was not a successful scan
-		if host2.Settings.SectorSize <= 0 {
+		if host3.Settings.SectorSize <= 0 {
 			log.Fatal("SectorSize = 0 on host that's supposed to be active")
 		}
 	}
