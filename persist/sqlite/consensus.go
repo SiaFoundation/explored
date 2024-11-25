@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
@@ -318,6 +319,42 @@ func addTransactionFields(tx *txn, txns []types.Transaction, scDBIds map[types.S
 			return fmt.Errorf("failed to add file contract revisions: %w", err)
 		} else if err := addStorageProofs(tx, dbID.id, txn); err != nil {
 			return fmt.Errorf("failed to add storage proofs: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func addHostAnnouncements(tx *txn, timestamp time.Time, hostAnnouncements []chain.HostAnnouncement, v2HostAnnouncements []explorer.V2HostAnnouncement) error {
+	var hosts []explorer.Host
+	for _, announcement := range hostAnnouncements {
+		hosts = append(hosts, explorer.Host{
+			PublicKey:  announcement.PublicKey,
+			NetAddress: announcement.NetAddress,
+
+			KnownSince:       timestamp,
+			LastAnnouncement: timestamp,
+		})
+	}
+	if len(hosts) > 0 {
+		if err := addHosts(tx, hosts); err != nil {
+			return fmt.Errorf("failed to insert host info: %w", err)
+		}
+	}
+
+	var v2Hosts []explorer.Host
+	for _, announcement := range v2HostAnnouncements {
+		v2Hosts = append(v2Hosts, explorer.Host{
+			PublicKey:      announcement.PublicKey,
+			V2NetAddresses: []chain.NetAddress(announcement.V2HostAnnouncement),
+
+			KnownSince:       timestamp,
+			LastAnnouncement: timestamp,
+		})
+	}
+	if len(v2Hosts) > 0 {
+		if err := addHosts(tx, v2Hosts); err != nil {
+			return fmt.Errorf("failed to insert host info: %w", err)
 		}
 	}
 
@@ -648,52 +685,6 @@ func addEvents(tx *txn, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[exp
 		return fmt.Errorf("failed to prepare foundation subsidy event statement: %w", err)
 	}
 	defer foundationSubsidyEventStmt.Close()
-
-	// Insert/update host announcements if there are any.
-	// The loop below this one checks if we've already seen an event
-	// transaction with the same ID before it decides to insert it.  Here we
-	// want to insert regardless to update the last_announcement field in the
-	// event that we've seen this host before.  If the transaction pays a fee
-	// which most real transactions do then this unnecessary because the txn ID
-	// will be unique regardless due to the siacoin input but this is more
-	// technically correct and makes testing easier.
-	for _, event := range events {
-		switch v := event.Data.(type) {
-		case *explorer.EventTransaction:
-			var hosts []explorer.Host
-			for _, announcement := range v.HostAnnouncements {
-				hosts = append(hosts, explorer.Host{
-					PublicKey:  announcement.PublicKey,
-					NetAddress: announcement.NetAddress,
-
-					KnownSince:       event.Timestamp,
-					LastAnnouncement: event.Timestamp,
-				})
-			}
-			if len(hosts) > 0 {
-				if err := addHosts(tx, hosts); err != nil {
-					return fmt.Errorf("failed to insert host info: %w", err)
-				}
-			}
-
-		case *explorer.EventV2Transaction:
-			var hosts []explorer.Host
-			for _, announcement := range v.HostAnnouncements {
-				hosts = append(hosts, explorer.Host{
-					PublicKey:      announcement.PublicKey,
-					V2NetAddresses: []chain.NetAddress(announcement.V2HostAnnouncement),
-
-					KnownSince:       event.Timestamp,
-					LastAnnouncement: event.Timestamp,
-				})
-			}
-			if len(hosts) > 0 {
-				if err := addHosts(tx, hosts); err != nil {
-					return fmt.Errorf("failed to insert host info: %w", err)
-				}
-			}
-		}
-	}
 
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
@@ -1082,6 +1073,8 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to update state tree: %w", err)
 	} else if err := addMetrics(ut.tx, state); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update metrics: %w", err)
+	} else if err := addHostAnnouncements(ut.tx, state.Block.Timestamp, state.HostAnnouncements, state.V2HostAnnouncements); err != nil {
+		return fmt.Errorf("ApplyIndex: failed to add host announcements: %w", err)
 	} else if err := addEvents(ut.tx, scDBIds, fcDBIds, txnDBIds, v2TxnDBIds, state.Events); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add events: %w", err)
 	} else if err := updateFileContractIndices(ut.tx, false, state.Metrics.Index, state.FileContractElements); err != nil {
