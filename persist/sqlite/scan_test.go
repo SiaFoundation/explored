@@ -221,7 +221,8 @@ func TestScan(t *testing.T) {
 		testutil.Equal(t, "host1.SuccessfulInteractions", 1, host1.SuccessfulInteractions)
 		testutil.Equal(t, "host1.FailedInteractions", 0, host1.FailedInteractions)
 		testutil.Equal(t, "host1.LastScanSuccessful", true, host1.LastScanSuccessful)
-		testutil.Equal(t, "host1.LastAnnouncement", b1.Timestamp, host1.LastAnnouncement)
+		testutil.Equal(t, "host2.KnownSince", b2.Timestamp, host1.KnownSince)
+		testutil.Equal(t, "host1.LastAnnouncement", b2.Timestamp, host1.LastAnnouncement)
 		if !host1.RHPV4Settings.AcceptingContracts {
 			log.Fatal("AcceptingContracts = false on host that's supposed to be active")
 		}
@@ -233,6 +234,7 @@ func TestScan(t *testing.T) {
 		testutil.Equal(t, "host2.SuccessfulInteractions", 0, host2.SuccessfulInteractions)
 		testutil.Equal(t, "host2.FailedInteractions", 1, host2.FailedInteractions)
 		testutil.Equal(t, "host2.LastScanSuccessful", false, host2.LastScanSuccessful)
+		testutil.Equal(t, "host2.KnownSince", b1.Timestamp, host2.KnownSince)
 		testutil.Equal(t, "host2.LastAnnouncement", b1.Timestamp, host2.LastAnnouncement)
 
 		host3 := dbHosts[2]
@@ -243,6 +245,7 @@ func TestScan(t *testing.T) {
 		testutil.Equal(t, "host3.SuccessfulInteractions", 1, host3.SuccessfulInteractions)
 		testutil.Equal(t, "host3.FailedInteractions", 0, host3.FailedInteractions)
 		testutil.Equal(t, "host3.LastScanSuccessful", true, host3.LastScanSuccessful)
+		testutil.Equal(t, "host3.KnownSince", b1.Timestamp, host2.KnownSince)
 		testutil.Equal(t, "host3.LastAnnouncement", b1.Timestamp, host3.LastAnnouncement)
 		if host3.Settings.SectorSize <= 0 {
 			log.Fatal("SectorSize = 0 on host that's supposed to be active")
@@ -274,6 +277,7 @@ func TestScan(t *testing.T) {
 		})
 
 		host1 := dbHosts[0]
+		testutil.Equal(t, "host1.KnownSince", b2.Timestamp, host1.KnownSince)
 		testutil.Equal(t, "host1.LastAnnouncement", b4.Timestamp, host1.LastAnnouncement)
 		// settings should not be overwritten if there was not a successful scan
 		if !host1.RHPV4Settings.AcceptingContracts {
@@ -281,9 +285,11 @@ func TestScan(t *testing.T) {
 		}
 
 		host2 := dbHosts[1]
+		testutil.Equal(t, "host2.KnownSince", b1.Timestamp, host2.KnownSince)
 		testutil.Equal(t, "host2.LastAnnouncement", b3.Timestamp, host2.LastAnnouncement)
 
 		host3 := dbHosts[2]
+		testutil.Equal(t, "host3.KnownSince", b1.Timestamp, host3.KnownSince)
 		testutil.Equal(t, "host3.LastAnnouncement", b3.Timestamp, host3.LastAnnouncement)
 		// settings should not be overwritten if there was not a successful scan
 		if host3.Settings.SectorSize <= 0 {
