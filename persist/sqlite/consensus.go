@@ -326,7 +326,7 @@ func addTransactionFields(tx *txn, txns []types.Transaction, scDBIds map[types.S
 }
 
 func addHostAnnouncements(tx *txn, timestamp time.Time, hostAnnouncements []chain.HostAnnouncement, v2HostAnnouncements []explorer.V2HostAnnouncement) error {
-	var hosts []explorer.Host
+	hosts := make([]explorer.Host, 0, len(hostAnnouncements)+len(v2HostAnnouncements))
 	for _, announcement := range hostAnnouncements {
 		hosts = append(hosts, explorer.Host{
 			PublicKey:  announcement.PublicKey,
@@ -336,15 +336,8 @@ func addHostAnnouncements(tx *txn, timestamp time.Time, hostAnnouncements []chai
 			LastAnnouncement: timestamp,
 		})
 	}
-	if len(hosts) > 0 {
-		if err := addHosts(tx, hosts); err != nil {
-			return fmt.Errorf("failed to insert host info: %w", err)
-		}
-	}
-
-	var v2Hosts []explorer.Host
 	for _, announcement := range v2HostAnnouncements {
-		v2Hosts = append(v2Hosts, explorer.Host{
+		hosts = append(hosts, explorer.Host{
 			PublicKey:      announcement.PublicKey,
 			V2NetAddresses: []chain.NetAddress(announcement.V2HostAnnouncement),
 
@@ -352,13 +345,7 @@ func addHostAnnouncements(tx *txn, timestamp time.Time, hostAnnouncements []chai
 			LastAnnouncement: timestamp,
 		})
 	}
-	if len(v2Hosts) > 0 {
-		if err := addHosts(tx, v2Hosts); err != nil {
-			return fmt.Errorf("failed to insert host info: %w", err)
-		}
-	}
-
-	return nil
+	return addHosts(tx, hosts)
 }
 
 type balance struct {
@@ -1123,6 +1110,10 @@ func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
 }
 
 func addHosts(tx *txn, hosts []explorer.Host) error {
+	if len(hosts) == 0 {
+		return nil
+	}
+
 	stmt, err := tx.Prepare(`INSERT INTO host_info(public_key, net_address, country_code, known_since, last_scan, last_scan_successful, last_announcement, total_scans, successful_interactions, failed_interactions, settings_accepting_contracts, settings_max_download_batch_size, settings_max_duration, settings_max_revise_batch_size, settings_net_address, settings_remaining_storage, settings_sector_size, settings_total_storage, settings_address, settings_window_size, settings_collateral, settings_max_collateral, settings_base_rpc_price, settings_contract_price, settings_download_bandwidth_price, settings_sector_access_price, settings_storage_price, settings_upload_bandwidth_price, settings_ephemeral_account_expiry, settings_max_ephemeral_account_balance, settings_revision_number, settings_version, settings_release, settings_sia_mux_port, price_table_uid, price_table_validity, price_table_host_block_height, price_table_update_price_table_cost, price_table_account_balance_cost, price_table_fund_account_cost, price_table_latest_revision_cost, price_table_subscription_memory_cost, price_table_subscription_notification_cost, price_table_init_base_cost, price_table_memory_time_cost, price_table_download_bandwidth_cost, price_table_upload_bandwidth_cost, price_table_drop_sectors_base_cost, price_table_drop_sectors_unit_cost, price_table_has_sector_base_cost, price_table_read_base_cost, price_table_read_length_cost, price_table_renew_contract_cost, price_table_revision_base_cost, price_table_swap_sector_base_cost, price_table_write_base_cost, price_table_write_length_cost, price_table_write_store_cost, price_table_txn_fee_min_recommended, price_table_txn_fee_max_recommended, price_table_contract_price, price_table_collateral_cost, price_table_max_collateral, price_table_max_duration, price_table_window_size, price_table_registry_entries_left, price_table_registry_entries_total, rhp4_settings_protocol_version, rhp4_settings_release, rhp4_settings_wallet_address, rhp4_settings_accepting_contracts, rhp4_settings_max_collateral, rhp4_settings_max_collateral_duration, rhp4_settings_max_sector_duration, rhp4_settings_max_sector_batch_size, rhp4_settings_remaining_storage, rhp4_settings_total_storage, rhp4_prices_contract_price, rhp4_prices_collateral_price, rhp4_prices_storage_price, rhp4_prices_ingress_price, rhp4_prices_egress_price, rhp4_prices_free_sector_price, rhp4_prices_tip_height, rhp4_prices_valid_until, rhp4_prices_signature) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,$54,$55,$56,$57,$58,$59,$60,$61,$62,$63,$64,$65,$66,$67,$68,$69,$70,$71,$72,$73,$74,$75,$76,$77,$78,$79,$80,$81,$82,$83,$84,$85,$86) ON CONFLICT (public_key) DO UPDATE SET net_address = EXCLUDED.net_address, last_announcement = EXCLUDED.last_announcement`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare host_info stmt: %w", err)
