@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
@@ -322,6 +323,29 @@ func addTransactionFields(tx *txn, txns []types.Transaction, scDBIds map[types.S
 	}
 
 	return nil
+}
+
+func addHostAnnouncements(tx *txn, timestamp time.Time, hostAnnouncements []chain.HostAnnouncement, v2HostAnnouncements []explorer.V2HostAnnouncement) error {
+	hosts := make([]explorer.Host, 0, len(hostAnnouncements)+len(v2HostAnnouncements))
+	for _, announcement := range hostAnnouncements {
+		hosts = append(hosts, explorer.Host{
+			PublicKey:  announcement.PublicKey,
+			NetAddress: announcement.NetAddress,
+
+			KnownSince:       timestamp,
+			LastAnnouncement: timestamp,
+		})
+	}
+	for _, announcement := range v2HostAnnouncements {
+		hosts = append(hosts, explorer.Host{
+			PublicKey:      announcement.PublicKey,
+			V2NetAddresses: []chain.NetAddress(announcement.V2HostAnnouncement),
+
+			KnownSince:       timestamp,
+			LastAnnouncement: timestamp,
+		})
+	}
+	return addHosts(tx, hosts)
 }
 
 type balance struct {
@@ -671,40 +695,10 @@ func addEvents(tx *txn, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[exp
 			if _, err = transactionEventStmt.Exec(eventID, dbID, encode(v.Fee)); err != nil {
 				return fmt.Errorf("failed to insert transaction event: %w", err)
 			}
-			var hosts []explorer.Host
-			for _, announcement := range v.HostAnnouncements {
-				hosts = append(hosts, explorer.Host{
-					PublicKey:  announcement.PublicKey,
-					NetAddress: announcement.NetAddress,
-
-					KnownSince:       event.Timestamp,
-					LastAnnouncement: event.Timestamp,
-				})
-			}
-			if len(hosts) > 0 {
-				if err := addHosts(tx, hosts); err != nil {
-					return fmt.Errorf("failed to insert host info: %w", err)
-				}
-			}
 		case *explorer.EventV2Transaction:
 			dbID := v2TxnDBIds[types.TransactionID(event.ID)].id
 			if _, err = v2TransactionEventStmt.Exec(eventID, dbID); err != nil {
 				return fmt.Errorf("failed to insert transaction event: %w", err)
-			}
-			var hosts []explorer.Host
-			for _, announcement := range v.HostAnnouncements {
-				hosts = append(hosts, explorer.Host{
-					PublicKey:      announcement.PublicKey,
-					V2NetAddresses: []chain.NetAddress(announcement.V2HostAnnouncement),
-
-					KnownSince:       event.Timestamp,
-					LastAnnouncement: event.Timestamp,
-				})
-			}
-			if len(hosts) > 0 {
-				if err := addHosts(tx, hosts); err != nil {
-					return fmt.Errorf("failed to insert host info: %w", err)
-				}
 			}
 		case *explorer.EventMinerPayout:
 			_, err = minerPayoutEventStmt.Exec(eventID, scDBIds[types.SiacoinOutputID(event.ID)])
@@ -1066,6 +1060,8 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to update state tree: %w", err)
 	} else if err := addMetrics(ut.tx, state); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update metrics: %w", err)
+	} else if err := addHostAnnouncements(ut.tx, state.Block.Timestamp, state.HostAnnouncements, state.V2HostAnnouncements); err != nil {
+		return fmt.Errorf("ApplyIndex: failed to add host announcements: %w", err)
 	} else if err := addEvents(ut.tx, scDBIds, fcDBIds, txnDBIds, v2TxnDBIds, state.Events); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add events: %w", err)
 	} else if err := updateFileContractIndices(ut.tx, false, state.Metrics.Index, state.FileContractElements); err != nil {
@@ -1113,8 +1109,12 @@ func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
 	return nil
 }
 
-func addHosts(tx *txn, scans []explorer.Host) error {
-	stmt, err := tx.Prepare(`INSERT INTO host_info(public_key, net_address, country_code, known_since, last_scan, last_scan_successful, last_announcement, total_scans, successful_interactions, failed_interactions, settings_accepting_contracts, settings_max_download_batch_size, settings_max_duration, settings_max_revise_batch_size, settings_net_address, settings_remaining_storage, settings_sector_size, settings_total_storage, settings_address, settings_window_size, settings_collateral, settings_max_collateral, settings_base_rpc_price, settings_contract_price, settings_download_bandwidth_price, settings_sector_access_price, settings_storage_price, settings_upload_bandwidth_price, settings_ephemeral_account_expiry, settings_max_ephemeral_account_balance, settings_revision_number, settings_version, settings_release, settings_sia_mux_port, price_table_uid, price_table_validity, price_table_host_block_height, price_table_update_price_table_cost, price_table_account_balance_cost, price_table_fund_account_cost, price_table_latest_revision_cost, price_table_subscription_memory_cost, price_table_subscription_notification_cost, price_table_init_base_cost, price_table_memory_time_cost, price_table_download_bandwidth_cost, price_table_upload_bandwidth_cost, price_table_drop_sectors_base_cost, price_table_drop_sectors_unit_cost, price_table_has_sector_base_cost, price_table_read_base_cost, price_table_read_length_cost, price_table_renew_contract_cost, price_table_revision_base_cost, price_table_swap_sector_base_cost, price_table_write_base_cost, price_table_write_length_cost, price_table_write_store_cost, price_table_txn_fee_min_recommended, price_table_txn_fee_max_recommended, price_table_contract_price, price_table_collateral_cost, price_table_max_collateral, price_table_max_duration, price_table_window_size, price_table_registry_entries_left, price_table_registry_entries_total, rhp4_settings_protocol_version, rhp4_settings_release, rhp4_settings_wallet_address, rhp4_settings_accepting_contracts, rhp4_settings_max_collateral, rhp4_settings_max_collateral_duration, rhp4_settings_max_sector_duration, rhp4_settings_max_sector_batch_size, rhp4_settings_remaining_storage, rhp4_settings_total_storage, rhp4_prices_contract_price, rhp4_prices_collateral_price, rhp4_prices_storage_price, rhp4_prices_ingress_price, rhp4_prices_egress_price, rhp4_prices_free_sector_price, rhp4_prices_tip_height, rhp4_prices_valid_until, rhp4_prices_signature) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,$54,$55,$56,$57,$58,$59,$60,$61,$62,$63,$64,$65,$66,$67,$68,$69,$70,$71,$72,$73,$74,$75,$76,$77,$78,$79,$80,$81,$82,$83,$84,$85,$86) ON CONFLICT (public_key) DO UPDATE SET net_address = $2, country_code = $3, last_scan = $5, last_scan_successful = $6, last_announcement = CASE WHEN $7 > 0 THEN last_announcement ELSE $7 END, total_scans = $8, successful_interactions = $9, failed_interactions = failed_interactions + $10, settings_accepting_contracts = $11, settings_max_download_batch_size = $12, settings_max_duration = $13, settings_max_revise_batch_size = $14 , settings_net_address = $15, settings_remaining_storage = $16, settings_sector_size = $17, settings_total_storage = $18, settings_address = $19, settings_window_size = $20, settings_collateral = $21, settings_max_collateral = $22, settings_base_rpc_price = $23, settings_contract_price = $24, settings_download_bandwidth_price = $25, settings_sector_access_price = $26, settings_storage_price = $27, settings_upload_bandwidth_price = $28, settings_ephemeral_account_expiry = $29, settings_max_ephemeral_account_balance = $30, settings_revision_number = $31, settings_version = $32, settings_release = $33, settings_sia_mux_port = $34, price_table_uid = $35, price_table_validity = $36, price_table_host_block_height = $37, price_table_update_price_table_cost = $38, price_table_account_balance_cost = $39, price_table_fund_account_cost = $40, price_table_latest_revision_cost = $41, price_table_subscription_memory_cost = $42, price_table_subscription_notification_cost = $43, price_table_init_base_cost = $44, price_table_memory_time_cost = $45, price_table_download_bandwidth_cost = $46, price_table_upload_bandwidth_cost = $47, price_table_drop_sectors_base_cost = $48, price_table_drop_sectors_unit_cost = $49, price_table_has_sector_base_cost = $50, price_table_read_base_cost = $51, price_table_read_length_cost = $52, price_table_renew_contract_cost = $53, price_table_revision_base_cost = $54, price_table_swap_sector_base_cost = $55, price_table_write_base_cost = $56, price_table_write_length_cost = $57, price_table_write_store_cost = $58, price_table_txn_fee_min_recommended = $59, price_table_txn_fee_max_recommended = $60, price_table_contract_price = $61, price_table_collateral_cost = $62, price_table_max_collateral = $63, price_table_max_duration = $64, price_table_window_size = $65, price_table_registry_entries_left = $66, price_table_registry_entries_total = $67, rhp4_settings_protocol_version = $68, rhp4_settings_release = $69, rhp4_settings_wallet_address = $70, rhp4_settings_accepting_contracts = $71, rhp4_settings_max_collateral = $72, rhp4_settings_max_collateral_duration = $73, rhp4_settings_max_sector_duration = $74, rhp4_settings_max_sector_batch_size = $75, rhp4_settings_remaining_storage = $76, rhp4_settings_total_storage = $77, rhp4_prices_contract_price = $78, rhp4_prices_collateral_price = $79, rhp4_prices_storage_price = $80, rhp4_prices_ingress_price = $81, rhp4_prices_egress_price = $82, rhp4_prices_free_sector_price = $83, rhp4_prices_tip_height = $84, rhp4_prices_valid_until = $85, rhp4_prices_signature = $86`)
+func addHosts(tx *txn, hosts []explorer.Host) error {
+	if len(hosts) == 0 {
+		return nil
+	}
+
+	stmt, err := tx.Prepare(`INSERT INTO host_info(public_key, net_address, country_code, known_since, last_scan, last_scan_successful, last_announcement, total_scans, successful_interactions, failed_interactions, settings_accepting_contracts, settings_max_download_batch_size, settings_max_duration, settings_max_revise_batch_size, settings_net_address, settings_remaining_storage, settings_sector_size, settings_total_storage, settings_address, settings_window_size, settings_collateral, settings_max_collateral, settings_base_rpc_price, settings_contract_price, settings_download_bandwidth_price, settings_sector_access_price, settings_storage_price, settings_upload_bandwidth_price, settings_ephemeral_account_expiry, settings_max_ephemeral_account_balance, settings_revision_number, settings_version, settings_release, settings_sia_mux_port, price_table_uid, price_table_validity, price_table_host_block_height, price_table_update_price_table_cost, price_table_account_balance_cost, price_table_fund_account_cost, price_table_latest_revision_cost, price_table_subscription_memory_cost, price_table_subscription_notification_cost, price_table_init_base_cost, price_table_memory_time_cost, price_table_download_bandwidth_cost, price_table_upload_bandwidth_cost, price_table_drop_sectors_base_cost, price_table_drop_sectors_unit_cost, price_table_has_sector_base_cost, price_table_read_base_cost, price_table_read_length_cost, price_table_renew_contract_cost, price_table_revision_base_cost, price_table_swap_sector_base_cost, price_table_write_base_cost, price_table_write_length_cost, price_table_write_store_cost, price_table_txn_fee_min_recommended, price_table_txn_fee_max_recommended, price_table_contract_price, price_table_collateral_cost, price_table_max_collateral, price_table_max_duration, price_table_window_size, price_table_registry_entries_left, price_table_registry_entries_total, rhp4_settings_protocol_version, rhp4_settings_release, rhp4_settings_wallet_address, rhp4_settings_accepting_contracts, rhp4_settings_max_collateral, rhp4_settings_max_collateral_duration, rhp4_settings_max_sector_duration, rhp4_settings_max_sector_batch_size, rhp4_settings_remaining_storage, rhp4_settings_total_storage, rhp4_prices_contract_price, rhp4_prices_collateral_price, rhp4_prices_storage_price, rhp4_prices_ingress_price, rhp4_prices_egress_price, rhp4_prices_free_sector_price, rhp4_prices_tip_height, rhp4_prices_valid_until, rhp4_prices_signature) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,$54,$55,$56,$57,$58,$59,$60,$61,$62,$63,$64,$65,$66,$67,$68,$69,$70,$71,$72,$73,$74,$75,$76,$77,$78,$79,$80,$81,$82,$83,$84,$85,$86) ON CONFLICT (public_key) DO UPDATE SET net_address = EXCLUDED.net_address, last_announcement = EXCLUDED.last_announcement`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare host_info stmt: %w", err)
 	}
@@ -1132,18 +1132,22 @@ func addHosts(tx *txn, scans []explorer.Host) error {
 	}
 	defer addV2AddrStmt.Close()
 
-	for _, scan := range scans {
-		s, p := scan.Settings, scan.PriceTable
-		sV4, pV4 := scan.RHPV4Settings, scan.RHPV4Settings.Prices
-		if _, err := stmt.Exec(encode(scan.PublicKey), scan.NetAddress, scan.CountryCode, encode(scan.KnownSince), encode(scan.LastScan), scan.LastScanSuccessful, encode(scan.LastAnnouncement), scan.TotalScans, scan.SuccessfulInteractions, scan.FailedInteractions, s.AcceptingContracts, encode(s.MaxDownloadBatchSize), encode(s.MaxDuration), encode(s.MaxReviseBatchSize), s.NetAddress, encode(s.RemainingStorage), encode(s.SectorSize), encode(s.TotalStorage), encode(s.Address), encode(s.WindowSize), encode(s.Collateral), encode(s.MaxCollateral), encode(s.BaseRPCPrice), encode(s.ContractPrice), encode(s.DownloadBandwidthPrice), encode(s.SectorAccessPrice), encode(s.StoragePrice), encode(s.UploadBandwidthPrice), s.EphemeralAccountExpiry, encode(s.MaxEphemeralAccountBalance), encode(s.RevisionNumber), s.Version, s.Release, s.SiaMuxPort, encode(p.UID), p.Validity, encode(p.HostBlockHeight), encode(p.UpdatePriceTableCost), encode(p.AccountBalanceCost), encode(p.FundAccountCost), encode(p.LatestRevisionCost), encode(p.SubscriptionMemoryCost), encode(p.SubscriptionNotificationCost), encode(p.InitBaseCost), encode(p.MemoryTimeCost), encode(p.DownloadBandwidthCost), encode(p.UploadBandwidthCost), encode(p.DropSectorsBaseCost), encode(p.DropSectorsUnitCost), encode(p.HasSectorBaseCost), encode(p.ReadBaseCost), encode(p.ReadLengthCost), encode(p.RenewContractCost), encode(p.RevisionBaseCost), encode(p.SwapSectorBaseCost), encode(p.WriteBaseCost), encode(p.WriteLengthCost), encode(p.WriteStoreCost), encode(p.TxnFeeMinRecommended), encode(p.TxnFeeMaxRecommended), encode(p.ContractPrice), encode(p.CollateralCost), encode(p.MaxCollateral), encode(p.MaxDuration), encode(p.WindowSize), encode(p.RegistryEntriesLeft), encode(p.RegistryEntriesTotal), sV4.ProtocolVersion[:], sV4.Release, encode(sV4.WalletAddress), sV4.AcceptingContracts, encode(sV4.MaxCollateral), encode(sV4.MaxContractDuration), encode(sV4.MaxSectorDuration), encode(sV4.MaxSectorBatchSize), encode(sV4.RemainingStorage), encode(sV4.TotalStorage), encode(pV4.ContractPrice), encode(pV4.Collateral), encode(pV4.StoragePrice), encode(pV4.IngressPrice), encode(pV4.EgressPrice), encode(pV4.FreeSectorPrice), encode(pV4.TipHeight), encode(pV4.ValidUntil), encode(pV4.Signature)); err != nil {
+	for _, host := range hosts {
+		s, p := host.Settings, host.PriceTable
+		sV4, pV4 := host.RHPV4Settings, host.RHPV4Settings.Prices
+
+		if _, err := stmt.Exec(encode(host.PublicKey), host.NetAddress, host.CountryCode, encode(host.KnownSince), encode(host.LastScan), host.LastScanSuccessful, encode(host.LastAnnouncement), host.TotalScans, host.SuccessfulInteractions, host.FailedInteractions, s.AcceptingContracts, encode(s.MaxDownloadBatchSize), encode(s.MaxDuration), encode(s.MaxReviseBatchSize), s.NetAddress, encode(s.RemainingStorage), encode(s.SectorSize), encode(s.TotalStorage), encode(s.Address), encode(s.WindowSize), encode(s.Collateral), encode(s.MaxCollateral), encode(s.BaseRPCPrice), encode(s.ContractPrice), encode(s.DownloadBandwidthPrice), encode(s.SectorAccessPrice), encode(s.StoragePrice), encode(s.UploadBandwidthPrice), s.EphemeralAccountExpiry, encode(s.MaxEphemeralAccountBalance), encode(s.RevisionNumber), s.Version, s.Release, s.SiaMuxPort, encode(p.UID), p.Validity, encode(p.HostBlockHeight), encode(p.UpdatePriceTableCost), encode(p.AccountBalanceCost), encode(p.FundAccountCost), encode(p.LatestRevisionCost), encode(p.SubscriptionMemoryCost), encode(p.SubscriptionNotificationCost), encode(p.InitBaseCost), encode(p.MemoryTimeCost), encode(p.DownloadBandwidthCost), encode(p.UploadBandwidthCost), encode(p.DropSectorsBaseCost), encode(p.DropSectorsUnitCost), encode(p.HasSectorBaseCost), encode(p.ReadBaseCost), encode(p.ReadLengthCost), encode(p.RenewContractCost), encode(p.RevisionBaseCost), encode(p.SwapSectorBaseCost), encode(p.WriteBaseCost), encode(p.WriteLengthCost), encode(p.WriteStoreCost), encode(p.TxnFeeMinRecommended), encode(p.TxnFeeMaxRecommended), encode(p.ContractPrice), encode(p.CollateralCost), encode(p.MaxCollateral), encode(p.MaxDuration), encode(p.WindowSize), encode(p.RegistryEntriesLeft), encode(p.RegistryEntriesTotal), sV4.ProtocolVersion[:], sV4.Release, encode(sV4.WalletAddress), sV4.AcceptingContracts, encode(sV4.MaxCollateral), encode(sV4.MaxContractDuration), encode(sV4.MaxSectorDuration), encode(sV4.MaxSectorBatchSize), encode(sV4.RemainingStorage), encode(sV4.TotalStorage), encode(pV4.ContractPrice), encode(pV4.Collateral), encode(pV4.StoragePrice), encode(pV4.IngressPrice), encode(pV4.EgressPrice), encode(pV4.FreeSectorPrice), encode(pV4.TipHeight), encode(pV4.ValidUntil), encode(pV4.Signature)); err != nil {
 			return fmt.Errorf("failed to execute host_info stmt: %w", err)
 		}
-		if _, err := deleteV2AddrStmt.Exec(encode(scan.PublicKey)); err != nil {
-			return fmt.Errorf("failed to execute delete v2 net address stmt: %w", err)
-		}
-		for i, netAddr := range scan.V2NetAddresses {
-			if _, err := addV2AddrStmt.Exec(encode(scan.PublicKey), i, netAddr.Protocol, netAddr.Address); err != nil {
-				return fmt.Errorf("failed to execute add v2 net address stmt: %w", err)
+
+		if len(host.V2NetAddresses) > 0 {
+			if _, err := deleteV2AddrStmt.Exec(encode(host.PublicKey)); err != nil {
+				return fmt.Errorf("failed to execute delete v2 net address stmt: %w", err)
+			}
+			for i, netAddr := range host.V2NetAddresses {
+				if _, err := addV2AddrStmt.Exec(encode(host.PublicKey), i, netAddr.Protocol, netAddr.Address); err != nil {
+					return fmt.Errorf("failed to execute add v2 net address stmt: %w", err)
+				}
 			}
 		}
 	}
@@ -1151,22 +1155,29 @@ func addHosts(tx *txn, scans []explorer.Host) error {
 }
 
 func addHostScans(tx *txn, scans []explorer.HostScan) error {
-	stmt, err := tx.Prepare(`UPDATE host_info SET country_code = ?, last_scan = ?, last_scan_successful = ?, total_scans = total_scans + 1, successful_interactions = successful_interactions + ?, failed_interactions = failed_interactions + ?, settings_accepting_contracts = ?, settings_max_download_batch_size = ?, settings_max_duration = ?, settings_max_revise_batch_size = ?, settings_net_address = ?, settings_remaining_storage = ?, settings_sector_size = ?, settings_total_storage = ?, settings_address = ?, settings_window_size = ?, settings_collateral = ?, settings_max_collateral = ?, settings_base_rpc_price = ?, settings_contract_price = ?, settings_download_bandwidth_price = ?, settings_sector_access_price = ?, settings_storage_price = ?, settings_upload_bandwidth_price = ?, settings_ephemeral_account_expiry = ?, settings_max_ephemeral_account_balance = ?, settings_revision_number = ?, settings_version = ?, settings_release = ?, settings_sia_mux_port = ?, price_table_uid = ?, price_table_validity = ?, price_table_host_block_height = ?, price_table_update_price_table_cost = ?, price_table_account_balance_cost = ?, price_table_fund_account_cost = ?, price_table_latest_revision_cost = ?, price_table_subscription_memory_cost = ?, price_table_subscription_notification_cost = ?, price_table_init_base_cost = ?, price_table_memory_time_cost = ?, price_table_download_bandwidth_cost = ?, price_table_upload_bandwidth_cost = ?, price_table_drop_sectors_base_cost = ?, price_table_drop_sectors_unit_cost = ?, price_table_has_sector_base_cost = ?, price_table_read_base_cost = ?, price_table_read_length_cost = ?, price_table_renew_contract_cost = ?, price_table_revision_base_cost = ?, price_table_swap_sector_base_cost = ?, price_table_write_base_cost = ?, price_table_write_length_cost = ?, price_table_write_store_cost = ?, price_table_txn_fee_min_recommended = ?, price_table_txn_fee_max_recommended = ?, price_table_contract_price = ?, price_table_collateral_cost = ?, price_table_max_collateral = ?, price_table_max_duration = ?, price_table_window_size = ?, price_table_registry_entries_left = ?, price_table_registry_entries_total = ?, rhp4_settings_protocol_version = ?, rhp4_settings_release = ?, rhp4_settings_wallet_address = ?, rhp4_settings_accepting_contracts = ?, rhp4_settings_max_collateral = ?, rhp4_settings_max_collateral_duration = ?, rhp4_settings_max_sector_duration = ?, rhp4_settings_max_sector_batch_size = ?, rhp4_settings_remaining_storage = ?, rhp4_settings_total_storage = ?, rhp4_prices_contract_price = ?, rhp4_prices_collateral_price = ?, rhp4_prices_storage_price = ?, rhp4_prices_ingress_price = ?, rhp4_prices_egress_price = ?, rhp4_prices_free_sector_price = ?, rhp4_prices_tip_height = ?, rhp4_prices_valid_until = ?, rhp4_prices_signature = ? WHERE public_key = ?`)
+	unsuccessfulStmt, err := tx.Prepare(`UPDATE host_info SET last_scan = ?, last_scan_successful = 0, total_scans = total_scans + 1, failed_interactions = failed_interactions + 1 WHERE public_key = ?`)
 	if err != nil {
-		return err
+		return fmt.Errorf("addHostScans: failed to prepare unsuccessful statement: %w", err)
 	}
-	defer stmt.Close()
+	defer unsuccessfulStmt.Close()
+
+	successfulStmt, err := tx.Prepare(`UPDATE host_info SET country_code = ?, last_scan = ?, last_scan_successful = 1, total_scans = total_scans + 1, successful_interactions = successful_interactions + 1, settings_accepting_contracts = ?, settings_max_download_batch_size = ?, settings_max_duration = ?, settings_max_revise_batch_size = ?, settings_net_address = ?, settings_remaining_storage = ?, settings_sector_size = ?, settings_total_storage = ?, settings_address = ?, settings_window_size = ?, settings_collateral = ?, settings_max_collateral = ?, settings_base_rpc_price = ?, settings_contract_price = ?, settings_download_bandwidth_price = ?, settings_sector_access_price = ?, settings_storage_price = ?, settings_upload_bandwidth_price = ?, settings_ephemeral_account_expiry = ?, settings_max_ephemeral_account_balance = ?, settings_revision_number = ?, settings_version = ?, settings_release = ?, settings_sia_mux_port = ?, price_table_uid = ?, price_table_validity = ?, price_table_host_block_height = ?, price_table_update_price_table_cost = ?, price_table_account_balance_cost = ?, price_table_fund_account_cost = ?, price_table_latest_revision_cost = ?, price_table_subscription_memory_cost = ?, price_table_subscription_notification_cost = ?, price_table_init_base_cost = ?, price_table_memory_time_cost = ?, price_table_download_bandwidth_cost = ?, price_table_upload_bandwidth_cost = ?, price_table_drop_sectors_base_cost = ?, price_table_drop_sectors_unit_cost = ?, price_table_has_sector_base_cost = ?, price_table_read_base_cost = ?, price_table_read_length_cost = ?, price_table_renew_contract_cost = ?, price_table_revision_base_cost = ?, price_table_swap_sector_base_cost = ?, price_table_write_base_cost = ?, price_table_write_length_cost = ?, price_table_write_store_cost = ?, price_table_txn_fee_min_recommended = ?, price_table_txn_fee_max_recommended = ?, price_table_contract_price = ?, price_table_collateral_cost = ?, price_table_max_collateral = ?, price_table_max_duration = ?, price_table_window_size = ?, price_table_registry_entries_left = ?, price_table_registry_entries_total = ?, rhp4_settings_protocol_version = ?, rhp4_settings_release = ?, rhp4_settings_wallet_address = ?, rhp4_settings_accepting_contracts = ?, rhp4_settings_max_collateral = ?, rhp4_settings_max_collateral_duration = ?, rhp4_settings_max_sector_duration = ?, rhp4_settings_max_sector_batch_size = ?, rhp4_settings_remaining_storage = ?, rhp4_settings_total_storage = ?, rhp4_prices_contract_price = ?, rhp4_prices_collateral_price = ?, rhp4_prices_storage_price = ?, rhp4_prices_ingress_price = ?, rhp4_prices_egress_price = ?, rhp4_prices_free_sector_price = ?, rhp4_prices_tip_height = ?, rhp4_prices_valid_until = ?, rhp4_prices_signature = ? WHERE public_key = ?`)
+	if err != nil {
+		return fmt.Errorf("addHostScans: failed to prepare successful statement: %w", err)
+	}
+	defer successfulStmt.Close()
 
 	for _, scan := range scans {
-		successful, failed := 1, 0
-		if !scan.Success {
-			successful, failed = 0, 1
-		}
-
 		s, p := scan.Settings, scan.PriceTable
 		sV4, pV4 := scan.RHPV4Settings, scan.RHPV4Settings.Prices
-		if _, err := stmt.Exec(scan.CountryCode, encode(scan.Timestamp), scan.Success, successful, failed, s.AcceptingContracts, encode(s.MaxDownloadBatchSize), encode(s.MaxDuration), encode(s.MaxReviseBatchSize), s.NetAddress, encode(s.RemainingStorage), encode(s.SectorSize), encode(s.TotalStorage), encode(s.Address), encode(s.WindowSize), encode(s.Collateral), encode(s.MaxCollateral), encode(s.BaseRPCPrice), encode(s.ContractPrice), encode(s.DownloadBandwidthPrice), encode(s.SectorAccessPrice), encode(s.StoragePrice), encode(s.UploadBandwidthPrice), s.EphemeralAccountExpiry, encode(s.MaxEphemeralAccountBalance), encode(s.RevisionNumber), s.Version, s.Release, s.SiaMuxPort, encode(p.UID), p.Validity, encode(p.HostBlockHeight), encode(p.UpdatePriceTableCost), encode(p.AccountBalanceCost), encode(p.FundAccountCost), encode(p.LatestRevisionCost), encode(p.SubscriptionMemoryCost), encode(p.SubscriptionNotificationCost), encode(p.InitBaseCost), encode(p.MemoryTimeCost), encode(p.DownloadBandwidthCost), encode(p.UploadBandwidthCost), encode(p.DropSectorsBaseCost), encode(p.DropSectorsUnitCost), encode(p.HasSectorBaseCost), encode(p.ReadBaseCost), encode(p.ReadLengthCost), encode(p.RenewContractCost), encode(p.RevisionBaseCost), encode(p.SwapSectorBaseCost), encode(p.WriteBaseCost), encode(p.WriteLengthCost), encode(p.WriteStoreCost), encode(p.TxnFeeMinRecommended), encode(p.TxnFeeMaxRecommended), encode(p.ContractPrice), encode(p.CollateralCost), encode(p.MaxCollateral), encode(p.MaxDuration), encode(p.WindowSize), encode(p.RegistryEntriesLeft), encode(p.RegistryEntriesTotal), sV4.ProtocolVersion[:], sV4.Release, encode(sV4.WalletAddress), sV4.AcceptingContracts, encode(sV4.MaxCollateral), encode(sV4.MaxContractDuration), encode(sV4.MaxSectorDuration), encode(sV4.MaxSectorBatchSize), encode(sV4.RemainingStorage), encode(sV4.TotalStorage), encode(pV4.ContractPrice), encode(pV4.Collateral), encode(pV4.StoragePrice), encode(pV4.IngressPrice), encode(pV4.EgressPrice), encode(pV4.FreeSectorPrice), encode(pV4.TipHeight), encode(pV4.ValidUntil), encode(pV4.Signature), encode(scan.PublicKey)); err != nil {
-			return err
+		if scan.Success {
+			if _, err := successfulStmt.Exec(scan.CountryCode, encode(scan.Timestamp), s.AcceptingContracts, encode(s.MaxDownloadBatchSize), encode(s.MaxDuration), encode(s.MaxReviseBatchSize), s.NetAddress, encode(s.RemainingStorage), encode(s.SectorSize), encode(s.TotalStorage), encode(s.Address), encode(s.WindowSize), encode(s.Collateral), encode(s.MaxCollateral), encode(s.BaseRPCPrice), encode(s.ContractPrice), encode(s.DownloadBandwidthPrice), encode(s.SectorAccessPrice), encode(s.StoragePrice), encode(s.UploadBandwidthPrice), s.EphemeralAccountExpiry, encode(s.MaxEphemeralAccountBalance), encode(s.RevisionNumber), s.Version, s.Release, s.SiaMuxPort, encode(p.UID), p.Validity, encode(p.HostBlockHeight), encode(p.UpdatePriceTableCost), encode(p.AccountBalanceCost), encode(p.FundAccountCost), encode(p.LatestRevisionCost), encode(p.SubscriptionMemoryCost), encode(p.SubscriptionNotificationCost), encode(p.InitBaseCost), encode(p.MemoryTimeCost), encode(p.DownloadBandwidthCost), encode(p.UploadBandwidthCost), encode(p.DropSectorsBaseCost), encode(p.DropSectorsUnitCost), encode(p.HasSectorBaseCost), encode(p.ReadBaseCost), encode(p.ReadLengthCost), encode(p.RenewContractCost), encode(p.RevisionBaseCost), encode(p.SwapSectorBaseCost), encode(p.WriteBaseCost), encode(p.WriteLengthCost), encode(p.WriteStoreCost), encode(p.TxnFeeMinRecommended), encode(p.TxnFeeMaxRecommended), encode(p.ContractPrice), encode(p.CollateralCost), encode(p.MaxCollateral), encode(p.MaxDuration), encode(p.WindowSize), encode(p.RegistryEntriesLeft), encode(p.RegistryEntriesTotal), sV4.ProtocolVersion[:], sV4.Release, encode(sV4.WalletAddress), sV4.AcceptingContracts, encode(sV4.MaxCollateral), encode(sV4.MaxContractDuration), encode(sV4.MaxSectorDuration), encode(sV4.MaxSectorBatchSize), encode(sV4.RemainingStorage), encode(sV4.TotalStorage), encode(pV4.ContractPrice), encode(pV4.Collateral), encode(pV4.StoragePrice), encode(pV4.IngressPrice), encode(pV4.EgressPrice), encode(pV4.FreeSectorPrice), encode(pV4.TipHeight), encode(pV4.ValidUntil), encode(pV4.Signature), encode(scan.PublicKey)); err != nil {
+				return fmt.Errorf("addHostScans: failed to execute successful statement: %w", err)
+			}
+		} else {
+			if _, err := unsuccessfulStmt.Exec(encode(scan.Timestamp), encode(scan.PublicKey)); err != nil {
+				return fmt.Errorf("addHostScans: failed to execute unsuccessful statement: %w", err)
+			}
 		}
 	}
 	return nil

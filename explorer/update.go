@@ -52,6 +52,9 @@ type (
 		Metrics     Metrics
 		TreeUpdates []TreeNodeUpdate
 
+		HostAnnouncements   []chain.HostAnnouncement
+		V2HostAnnouncements []V2HostAnnouncement
+
 		NewSiacoinElements       []SiacoinOutput
 		SpentSiacoinElements     []SiacoinOutput
 		EphemeralSiacoinElements []SiacoinOutput
@@ -216,6 +219,28 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 		})
 	})
 
+	var hostAnnouncements []chain.HostAnnouncement
+	for _, txn := range cau.Block.Transactions {
+		for _, arb := range txn.ArbitraryData {
+			var ha chain.HostAnnouncement
+			if ha.FromArbitraryData(arb) {
+				hostAnnouncements = append(hostAnnouncements, ha)
+			}
+		}
+	}
+	var v2HostAnnouncements []V2HostAnnouncement
+	for _, txn := range cau.Block.V2Transactions() {
+		for _, a := range txn.Attestations {
+			var ha chain.V2HostAnnouncement
+			if ha.FromAttestation(a) == nil {
+				v2HostAnnouncements = append(v2HostAnnouncements, V2HostAnnouncement{
+					PublicKey:          a.PublicKey,
+					V2HostAnnouncement: ha,
+				})
+			}
+		}
+	}
+
 	events := AppliedEvents(cau.State, cau.Block, cau)
 
 	state := UpdateState{
@@ -224,6 +249,9 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 
 		Events:      events,
 		TreeUpdates: treeUpdates,
+
+		HostAnnouncements:   hostAnnouncements,
+		V2HostAnnouncements: v2HostAnnouncements,
 
 		NewSiacoinElements:       newSiacoinElements,
 		SpentSiacoinElements:     spentSiacoinElements,
@@ -391,24 +419,34 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 
 func updateMetrics(tx UpdateTx, s UpdateState, metrics Metrics) (Metrics, error) {
 	seenHosts := make(map[types.PublicKey]struct{})
-	for _, event := range s.Events {
-		if event.Data.EventType() == EventTypeTransaction {
-			txn := event.Data.(*EventTransaction)
-			for _, host := range txn.HostAnnouncements {
-				if _, ok := seenHosts[host.PublicKey]; ok {
-					continue
-				}
+	for _, host := range s.HostAnnouncements {
+		if _, ok := seenHosts[host.PublicKey]; ok {
+			continue
+		}
 
-				exists, err := tx.HostExists(host.PublicKey)
-				if err != nil {
-					return Metrics{}, err
-				}
-				if !exists {
-					// we haven't seen this host yet, increment count
-					metrics.TotalHosts++
-					seenHosts[host.PublicKey] = struct{}{}
-				}
-			}
+		exists, err := tx.HostExists(host.PublicKey)
+		if err != nil {
+			return Metrics{}, err
+		}
+		if !exists {
+			// we haven't seen this host yet, increment count
+			metrics.TotalHosts++
+			seenHosts[host.PublicKey] = struct{}{}
+		}
+	}
+	for _, host := range s.V2HostAnnouncements {
+		if _, ok := seenHosts[host.PublicKey]; ok {
+			continue
+		}
+
+		exists, err := tx.HostExists(host.PublicKey)
+		if err != nil {
+			return Metrics{}, err
+		}
+		if !exists {
+			// we haven't seen this host yet, increment count
+			metrics.TotalHosts++
+			seenHosts[host.PublicKey] = struct{}{}
 		}
 	}
 
