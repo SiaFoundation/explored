@@ -7,7 +7,7 @@ toolchain go1.23.2
 require (
 	github.com/ip2location/ip2location-go v8.3.0+incompatible
 	github.com/mattn/go-sqlite3 v1.14.24
-	go.sia.tech/core v0.6.2
+	go.sia.tech/core v0.6.3
 	go.sia.tech/coreutils v0.7.0
 	go.sia.tech/jape v0.12.1
 	go.uber.org/zap v1.27.0
