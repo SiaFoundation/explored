@@ -268,7 +268,7 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) []Event {
 	if ok {
 		addEvent(types.Hash256(outputID), cs.MaturityHeight(), &EventFoundationSubsidy{
 			SiacoinOutput: sce,
-		}, []types.Address{cs.FoundationPrimaryAddress})
+		}, []types.Address{cs.FoundationSubsidyAddress})
 	}
 
 	return events
