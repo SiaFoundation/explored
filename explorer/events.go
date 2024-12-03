@@ -1,6 +1,7 @@
 package explorer
 
 import (
+	"encoding/json"
 	"time"
 
 	"go.sia.tech/core/consensus"
@@ -35,6 +36,20 @@ type Event struct {
 	MaturityHeight uint64           `json:"maturityHeight"`
 	Addresses      []types.Address  `json:"addresses"`
 	Data           eventData        `json:"data"`
+}
+
+// MarshalJSON implements the json.Marshaler interface.
+func (e Event) MarshalJSON() ([]byte, error) {
+	type Alias Event
+
+	// Marshal a new struct with the additional `Type` field.
+	return json.Marshal(&struct {
+		Alias
+		Type string `json:"type"`
+	}{
+		Alias: Alias(e),
+		Type:  e.Data.EventType(),
+	})
 }
 
 // EventType implements Event.
