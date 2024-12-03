@@ -283,7 +283,7 @@ type Metrics struct {
 	// Current difficulty
 	Difficulty consensus.Work `json:"difficulty"`
 	// Siafund pool value
-	SiafundPool types.Currency `json:"siafundPool"`
+	SiafundTaxRevenue types.Currency `json:"siafundTaxRevenue"`
 	// Total announced hosts
 	TotalHosts uint64 `json:"totalHosts"`
 	// Number of leaves in the accumulator
