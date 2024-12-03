@@ -279,7 +279,7 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 	}
 	state.Metrics.Index = cau.State.Index
 	state.Metrics.Difficulty = cau.State.Difficulty
-	state.Metrics.SiafundPool = cau.State.SiafundPool
+	state.Metrics.SiafundTaxRevenue = cau.State.SiafundTaxRevenue
 	state.Metrics.NumLeaves = cau.State.Elements.NumLeaves
 
 	return tx.ApplyIndex(state)
