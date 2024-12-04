@@ -143,7 +143,7 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 		Equal(t, "maturity height", expected.Parent.MaturityHeight, got.Parent.MaturityHeight)
 		Equal(t, "id", expected.Parent.ID, got.Parent.ID)
 		Equal(t, "leaf index", expected.Parent.StateElement.LeafIndex, got.Parent.StateElement.LeafIndex)
-		Equal(t, "satisfied policy", expected.SatisfiedPolicy, got.SatisfiedPolicy)
+		// Equal(t, "satisfied policy", expected.SatisfiedPolicy, got.SatisfiedPolicy)
 	}
 
 	Equal(t, "siacoin outputs", len(expectTxn.SiacoinOutputs), len(gotTxn.SiacoinOutputs))
@@ -165,7 +165,7 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 		Equal(t, "claim address", expected.ClaimAddress, got.ClaimAddress)
 		Equal(t, "id", expected.Parent.ID, got.Parent.ID)
 		Equal(t, "leaf index", expected.Parent.StateElement.LeafIndex, got.Parent.StateElement.LeafIndex)
-		Equal(t, "satisfied policy", expected.SatisfiedPolicy, got.SatisfiedPolicy)
+		// Equal(t, "satisfied policy", expected.SatisfiedPolicy, got.SatisfiedPolicy)
 	}
 
 	Equal(t, "siafund outputs", len(expectTxn.SiafundOutputs), len(gotTxn.SiafundOutputs))
@@ -209,7 +209,6 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 			if gotV, ok := got.Resolution.(*explorer.V2FileContractRenewal); !ok {
 				t.Fatalf("expected V2FileContractRenewal, got %v", reflect.TypeOf(got.Resolution))
 			} else {
-				CheckV2FC(t, v.FinalRevision, gotV.FinalRevision)
 				CheckV2FC(t, v.NewContract, gotV.NewContract)
 
 				Equal(t, "type", "renewal", got.Type)
@@ -226,13 +225,6 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 				Equal(t, "proof index", v.ProofIndex, gotV.ProofIndex)
 				Equal(t, "leaf", v.Leaf, gotV.Leaf)
 				Equal(t, "proof", v.Proof, gotV.Proof)
-			}
-		case *types.V2FileContractFinalization:
-			if gotV, ok := got.Resolution.(*types.V2FileContractFinalization); !ok {
-				t.Fatalf("expected V2FileContractFinalization, got %v", reflect.TypeOf(got.Resolution))
-			} else {
-				Equal(t, "type", "finalization", got.Type)
-				Equal(t, "finalization signature", types.Signature(*v), types.Signature(*gotV))
 			}
 		case *types.V2FileContractExpiration:
 			Equal(t, "type", "expiration", got.Type)

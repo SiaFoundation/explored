@@ -271,7 +271,7 @@ func TestAPI(t *testing.T) {
 			testutil.Equal(t, "previous timestamps", cs.PrevTimestamps, resp.PrevTimestamps)
 			testutil.Equal(t, "depth", cs.Depth, resp.Depth)
 			testutil.Equal(t, "child target", cs.ChildTarget, resp.ChildTarget)
-			testutil.Equal(t, "siafund pool", cs.SiafundPool, resp.SiafundPool)
+			testutil.Equal(t, "siafund tax revenue", cs.SiafundTaxRevenue, resp.SiafundTaxRevenue)
 		}},
 		{"Tip", func(t *testing.T) {
 			resp, err := client.Tip()
@@ -292,7 +292,7 @@ func TestAPI(t *testing.T) {
 			cs := cm.TipState()
 			testutil.Equal(t, "index", cs.Index, resp.Index)
 			testutil.Equal(t, "difficulty", cs.Difficulty, resp.Difficulty)
-			testutil.Equal(t, "siafund pool", cs.SiafundPool, resp.SiafundPool)
+			testutil.Equal(t, "siafund tax revenue", cs.SiafundTaxRevenue, resp.SiafundTaxRevenue)
 			testutil.Equal(t, "total hosts", 1, resp.TotalHosts)
 			testutil.Equal(t, "active contracts", 1, resp.ActiveContracts)
 			testutil.Equal(t, "failed contracts", 0, resp.FailedContracts)
@@ -313,7 +313,7 @@ func TestAPI(t *testing.T) {
 			cs := cm.TipState()
 			testutil.Equal(t, "index", tip, resp.Index)
 			testutil.Equal(t, "difficulty", cs.Difficulty, resp.Difficulty)
-			testutil.Equal(t, "siafund pool", cs.SiafundPool, resp.SiafundPool)
+			testutil.Equal(t, "siafund tax revenue", cs.SiafundTaxRevenue, resp.SiafundTaxRevenue)
 			testutil.Equal(t, "total hosts", 0, resp.TotalHosts)
 			testutil.Equal(t, "active contracts", 1, resp.ActiveContracts)
 			testutil.Equal(t, "failed contracts", 0, resp.FailedContracts)

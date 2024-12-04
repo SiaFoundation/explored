@@ -433,11 +433,10 @@ func fillV2TransactionFileContractResolutions(tx *txn, dbIDs []int64, txns []exp
 	consolidatedStmt, err := tx.Prepare(`
         SELECT 
             parent_contract_id, resolution_type,
-            renewal_final_revision_contract_id, renewal_new_contract_id,
+            renewal_new_contract_id,
             renewal_renter_rollover, renewal_host_rollover,
             renewal_renter_signature, renewal_host_signature,
-            storage_proof_proof_index, storage_proof_leaf, storage_proof_proof,
-            finalization_signature
+            storage_proof_proof_index, storage_proof_leaf, storage_proof_proof
         FROM v2_transaction_file_contract_resolutions
         WHERE transaction_id = ?
         ORDER BY transaction_order
@@ -469,25 +468,21 @@ WHERE fc.id = ?`)
 				// all
 				var parentContractID, resolutionType int64
 				// renewal
-				var renewalFinalRevisionID, renewalNewContractID sql.NullInt64
+				var renewalNewContractID sql.NullInt64
 				var renewalRenterRollover, renewalHostRollover types.Currency
 				var renewalRenterSignature, renewalHostSignature types.Signature
 				// storage proof
 				var storageProofProofIndex types.ChainIndexElement
 				var storageProofProof []types.Hash256
 				var storageProofLeaf []byte
-				// finalization
-				var finalizationSignature types.Signature
 
 				// Scan all fields, some of which may be NULL
 				if err := rows.Scan(
 					&parentContractID, &resolutionType,
-					&renewalFinalRevisionID, &renewalNewContractID,
+					&renewalNewContractID,
 					decodeNull(&renewalRenterRollover), decodeNull(&renewalHostRollover),
 					decodeNull(&renewalRenterSignature), decodeNull(&renewalHostSignature),
-					decodeNull(&storageProofProofIndex), &storageProofLeaf, decodeNull(&storageProofProof),
-					decodeNull(&finalizationSignature),
-				); err != nil {
+					decodeNull(&storageProofProofIndex), &storageProofLeaf, decodeNull(&storageProofProof)); err != nil {
 					return fmt.Errorf("failed to scan resolution metadata: %w", err)
 				}
 
@@ -508,12 +503,6 @@ WHERE fc.id = ?`)
 						RenterSignature: renewalRenterSignature,
 						HostSignature:   renewalHostSignature,
 					}
-					if renewalFinalRevisionID.Valid {
-						renewal.FinalRevision, err = scanV2FileContract(fcStmt.QueryRow(renewalFinalRevisionID.Int64))
-						if err != nil {
-							return fmt.Errorf("failed to scan final revision: %w", err)
-						}
-					}
 					if renewalNewContractID.Valid {
 						renewal.NewContract, err = scanV2FileContract(fcStmt.QueryRow(renewalNewContractID.Int64))
 						if err != nil {
@@ -532,10 +521,7 @@ WHERE fc.id = ?`)
 
 					fcr.Type = "storageProof"
 					fcr.Resolution = proof
-				case 2: // V2FileContractFinalization
-					fcr.Type = "finalization"
-					fcr.Resolution = (*types.V2FileContractFinalization)(&finalizationSignature)
-				case 3: // V2FileContractExpiration
+				case 2: // V2FileContractExpiration
 					fcr.Type = "expiration"
 					fcr.Resolution = new(types.V2FileContractExpiration)
 				}

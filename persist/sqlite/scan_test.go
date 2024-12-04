@@ -119,8 +119,6 @@ func TestScan(t *testing.T) {
 		WalletAddress:       w.Address(),
 		MaxCollateral:       types.Siacoins(10000),
 		MaxContractDuration: 1000,
-		MaxSectorDuration:   3 * 144,
-		MaxSectorBatchSize:  100,
 		RemainingStorage:    100 * proto4.SectorSize,
 		TotalStorage:        100 * proto4.SectorSize,
 		Prices: proto4.HostPrices{

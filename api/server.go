@@ -39,7 +39,7 @@ type (
 		Addr() string
 		Peers() []*syncer.Peer
 		Connect(ctx context.Context, addr string) (*syncer.Peer, error)
-		BroadcastHeader(bh gateway.BlockHeader)
+		BroadcastHeader(bh types.BlockHeader)
 		BroadcastTransactionSet(txns []types.Transaction)
 		BroadcastV2TransactionSet(index types.ChainIndex, txns []types.V2Transaction)
 		BroadcastV2BlockOutline(bo gateway.V2BlockOutline)
@@ -146,12 +146,7 @@ func (s *server) syncerBroadcastBlockHandler(jc jape.Context) {
 		return
 	}
 	if b.V2 == nil {
-		s.s.BroadcastHeader(gateway.BlockHeader{
-			ParentID:   b.ParentID,
-			Nonce:      b.Nonce,
-			Timestamp:  b.Timestamp,
-			MerkleRoot: b.MerkleRoot(),
-		})
+		s.s.BroadcastHeader(b.Header())
 	} else {
 		s.s.BroadcastV2BlockOutline(gateway.OutlineBlock(b, s.cm.PoolTransactions(), s.cm.V2PoolTransactions()))
 	}
