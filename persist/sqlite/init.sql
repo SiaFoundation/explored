@@ -335,11 +335,10 @@ CREATE TABLE v2_transaction_file_contract_resolutions (
     transaction_order INTEGER NOT NULL,
     parent_contract_id INTEGER REFERENCES v2_file_contract_elements(id) ON DELETE CASCADE NOT NULL, -- add an index to all foreign keys
 
-    -- V2FileContractRenewal = 0, V2StorageProof = 1, V2FileContractFinalization = 2, V2FileContractExpiration = 3
+    -- V2FileContractRenewal = 0, V2StorageProof = 1, V2FileContractExpiration = 2
     resolution_type INTEGER NOT NULL,
 
     -- V2FileContractRenewal
-    renewal_final_revision_contract_id INTEGER REFERENCES v2_file_contract_elements(id) ON DELETE CASCADE,
     renewal_new_contract_id INTEGER REFERENCES v2_file_contract_elements(id) ON DELETE CASCADE,
     renewal_renter_rollover BLOB,
     renewal_host_rollover BLOB,
@@ -350,9 +349,6 @@ CREATE TABLE v2_transaction_file_contract_resolutions (
     storage_proof_proof_index BLOB,
     storage_proof_leaf BLOB,
     storage_proof_proof BLOB,
-
-    -- V2FileContractFinalization
-    finalization_signature BLOB,
 
     -- V2FileContractExpiration
     -- no fields
@@ -546,9 +542,7 @@ CREATE TABLE host_info (
     rhp4_settings_wallet_address BLOB NOT NULL,
     rhp4_settings_accepting_contracts INTEGER NOT NULL,
     rhp4_settings_max_collateral BLOB NOT NULL,
-    rhp4_settings_max_collateral_duration BLOB NOT NULL,
-    rhp4_settings_max_sector_duration BLOB NOT NULL,
-    rhp4_settings_max_sector_batch_size BLOB NOT NULL,
+    rhp4_settings_max_contract_duration BLOB NOT NULL,
     rhp4_settings_remaining_storage BLOB NOT NULL,
     rhp4_settings_total_storage BLOB NOT NULL,
     -- rhp4 prices

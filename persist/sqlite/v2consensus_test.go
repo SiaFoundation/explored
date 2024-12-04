@@ -1054,10 +1054,11 @@ func TestV2FileContractResolution(t *testing.T) {
 	v2FCNewContract := v2FC
 	v2FCNewContract.RevisionNumber = 10
 	renewal := &types.V2FileContractRenewal{
-		FinalRevision:  v2FCFinalRevision,
-		NewContract:    v2FCNewContract,
-		RenterRollover: types.ZeroCurrency,
-		HostRollover:   types.ZeroCurrency,
+		NewContract:       v2FCNewContract,
+		FinalRenterOutput: v2FCFinalRevision.RenterOutput,
+		FinalHostOutput:   v2FCFinalRevision.HostOutput,
+		RenterRollover:    types.ZeroCurrency,
+		HostRollover:      types.ZeroCurrency,
 	}
 	sce1 := getSCE(t, db, txn1.SiacoinOutputID(txn1.ID(), 0))
 	txn2 := types.V2Transaction{
@@ -1070,10 +1071,6 @@ func TestV2FileContractResolution(t *testing.T) {
 			Value:   sce1.SiacoinOutput.Value.Sub(fcOut),
 		}},
 		FileContractResolutions: []types.V2FileContractResolution{
-			{
-				Parent:     getFCE(t, db, v2FC0ID),
-				Resolution: new(types.V2FileContractFinalization),
-			},
 			{
 				Parent:     getFCE(t, db, v2FC1ID),
 				Resolution: renewal,
@@ -1098,11 +1095,6 @@ func TestV2FileContractResolution(t *testing.T) {
 		testutil.Equal(t, "confirmation transaction ID", txn1.ID(), dbTxns[0].FileContractResolutions[0].Parent.ConfirmationTransactionID)
 		testutil.Equal(t, "resolution index", cm.Tip(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionIndex)
 		testutil.Equal(t, "resolution transaction ID", txn2.ID(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionTransactionID)
-
-		testutil.Equal(t, "confirmation index", tip1, dbTxns[0].FileContractResolutions[1].Parent.ConfirmationIndex)
-		testutil.Equal(t, "confirmation transaction ID", txn1.ID(), dbTxns[0].FileContractResolutions[1].Parent.ConfirmationTransactionID)
-		testutil.Equal(t, "resolution index", cm.Tip(), *dbTxns[0].FileContractResolutions[1].Parent.ResolutionIndex)
-		testutil.Equal(t, "resolution transaction ID", txn2.ID(), *dbTxns[0].FileContractResolutions[1].Parent.ResolutionTransactionID)
 	}
 
 	b2 := testutil.MineV2Block(cm.TipState(), nil, types.VoidAddress)
@@ -1203,32 +1195,6 @@ func TestV2FileContractResolution(t *testing.T) {
 		testutil.CheckV2FC(t, txn1.FileContracts[1], fcs[1])
 		testutil.CheckV2FC(t, txn1.FileContracts[2], fcs[2])
 		testutil.CheckV2FC(t, txn1.FileContracts[3], fcs[3])
-	}
-
-	sce1 = getSCE(t, db, txn1.SiacoinOutputID(txn1.ID(), 0))
-	// renewal is not possible because proof window has opened at this point
-	txn2.SiacoinInputs = nil
-	txn2.SiacoinOutputs = nil
-	txn2.FileContractResolutions = txn2.FileContractResolutions[:1]
-	txn2.FileContractResolutions[0].Parent = getFCE(t, db, v2FC0ID)
-	// txn2.FileContractResolutions[1].Parent = getFCE(t, db, v2FC1ID)
-	testutil.SignV2TransactionWithContracts(cm.TipState(), pk1, renterPrivateKey, hostPrivateKey, &txn2)
-
-	if err := cm.AddBlocks([]types.Block{testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn2}, types.VoidAddress)}); err != nil {
-		t.Fatal(err)
-	}
-	syncDB(t, db, cm)
-
-	{
-		dbTxns, err := db.V2Transactions([]types.TransactionID{txn2.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.CheckV2Transaction(t, txn2, dbTxns[0])
-		testutil.Equal(t, "confirmation index", tip1, dbTxns[0].FileContractResolutions[0].Parent.ConfirmationIndex)
-		testutil.Equal(t, "confirmation transaction ID", txn1.ID(), dbTxns[0].FileContractResolutions[0].Parent.ConfirmationTransactionID)
-		testutil.Equal(t, "resolution index", cm.Tip(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionIndex)
-		testutil.Equal(t, "resolution transaction ID", txn2.ID(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionTransactionID)
 	}
 
 	tip, err := db.BestTip(v2FC3.ProofHeight)

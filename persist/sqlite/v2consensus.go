@@ -108,10 +108,6 @@ func updateV2FileContractElements(tx *txn, revert bool, index types.ChainIndex, 
 		for _, fcr := range txn.FileContractResolutions {
 			if v, ok := fcr.Resolution.(*types.V2FileContractRenewal); ok {
 				fcTxns[explorer.DBFileContract{
-					ID:             types.FileContractID(fcr.Parent.ID),
-					RevisionNumber: v.FinalRevision.RevisionNumber,
-				}] = id
-				fcTxns[explorer.DBFileContract{
 					ID:             types.FileContractID(fcr.Parent.ID).V2RenewalID(),
 					RevisionNumber: v.NewContract.RevisionNumber,
 				}] = id
@@ -219,20 +215,9 @@ func updateV2FileContractElements(tx *txn, revert bool, index types.ChainIndex, 
 				return nil, fmt.Errorf("updateV2FileContractElements: %w", err)
 			}
 		}
-		// Add the final revision and new renewal contracts
+		// Add the new renewal contracts
 		for _, fcr := range txn.FileContractResolutions {
 			if v, ok := fcr.Resolution.(*types.V2FileContractRenewal); ok {
-				{
-					fc := v.FinalRevision
-					fcID := types.FileContractID(fcr.Parent.ID)
-
-					// Add final revision, because the ApplyUpdate doesn't tell
-					// us about this case.  We set lastRevision to true here
-					// because this is the final revision.
-					if err := addFC(fcID, fcr.Parent.StateElement.LeafIndex, fc, nil, true); err != nil {
-						return nil, fmt.Errorf("updateV2FileContractElements: failed to add final revision: %w", err)
-					}
-				}
 				{
 					// Add NewContract if we have not seen it already.
 					// Only way this could happen is if the renewal is revised
@@ -444,7 +429,7 @@ func addV2FileContractRevisions(tx *txn, txnID int64, txn types.V2Transaction, d
 }
 
 func addV2FileContractResolutions(tx *txn, txnID int64, txn types.V2Transaction, dbIDs map[explorer.DBFileContract]int64) error {
-	renewalStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_resolutions(transaction_id, transaction_order, parent_contract_id, resolution_type, renewal_final_revision_contract_id, renewal_new_contract_id, renewal_renter_rollover, renewal_host_rollover, renewal_renter_signature, renewal_host_signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+	renewalStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_resolutions(transaction_id, transaction_order, parent_contract_id, resolution_type, renewal_new_contract_id, renewal_renter_rollover, renewal_host_rollover, renewal_renter_signature, renewal_host_signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("addV2FileContractResolutions: failed to prepare renewal statement: %w", err)
 	}
@@ -455,12 +440,6 @@ func addV2FileContractResolutions(tx *txn, txnID int64, txn types.V2Transaction,
 		return fmt.Errorf("addV2FileContractResolutions: failed to prepare storage proof statement: %w", err)
 	}
 	defer storageProofStmt.Close()
-
-	finalizationStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_resolutions(transaction_id, transaction_order, parent_contract_id, resolution_type, finalization_signature) VALUES (?, ?, ?, ?, ?)`)
-	if err != nil {
-		return fmt.Errorf("addV2FileContractResolutions: failed to prepare finalization statement: %w", err)
-	}
-	defer finalizationStmt.Close()
 
 	expirationStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_resolutions(transaction_id, transaction_order, parent_contract_id, resolution_type) VALUES (?, ?, ?, ?)`)
 	if err != nil {
@@ -479,14 +458,6 @@ func addV2FileContractResolutions(tx *txn, txnID int64, txn types.V2Transaction,
 
 		switch v := fcr.Resolution.(type) {
 		case *types.V2FileContractRenewal:
-			finalDBID, ok := dbIDs[explorer.DBFileContract{
-				ID:             types.FileContractID(fcr.Parent.ID),
-				RevisionNumber: v.FinalRevision.RevisionNumber,
-			}]
-			if !ok {
-				return errors.New("addV2FileContractResolutions: final dbID not in map")
-			}
-
 			newDBID, ok := dbIDs[explorer.DBFileContract{
 				ID:             types.FileContractID(fcr.Parent.ID).V2RenewalID(),
 				RevisionNumber: v.NewContract.RevisionNumber,
@@ -495,19 +466,15 @@ func addV2FileContractResolutions(tx *txn, txnID int64, txn types.V2Transaction,
 				return errors.New("addV2FileContractResolutions: renewal dbID not in map")
 			}
 
-			if _, err := renewalStmt.Exec(txnID, i, parentDBID, 0, finalDBID, newDBID, encode(v.RenterRollover), encode(v.HostRollover), encode(v.RenterSignature), encode(v.HostSignature)); err != nil {
+			if _, err := renewalStmt.Exec(txnID, i, parentDBID, 0, newDBID, encode(v.RenterRollover), encode(v.HostRollover), encode(v.RenterSignature), encode(v.HostSignature)); err != nil {
 				return fmt.Errorf("addV2FileContractResolutions: failed to execute renewal statement: %w", err)
 			}
 		case *types.V2StorageProof:
 			if _, err := storageProofStmt.Exec(txnID, i, parentDBID, 1, encode(v.ProofIndex), v.Leaf[:], encode(v.Proof)); err != nil {
 				return fmt.Errorf("addV2FileContractResolutions: failed to execute storage proof statement: %w", err)
 			}
-		case *types.V2FileContractFinalization:
-			if _, err := finalizationStmt.Exec(txnID, i, parentDBID, 2, encode(v)); err != nil {
-				return fmt.Errorf("addV2FileContractResolutions: failed to execute finalization statement: %w", err)
-			}
 		case *types.V2FileContractExpiration:
-			if _, err := expirationStmt.Exec(txnID, i, parentDBID, 3); err != nil {
+			if _, err := expirationStmt.Exec(txnID, i, parentDBID, 2); err != nil {
 				return fmt.Errorf("addV2FileContractResolutions: failed to execute expiration statement: %w", err)
 			}
 		}
