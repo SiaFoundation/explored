@@ -434,6 +434,8 @@ func fillV2TransactionFileContractResolutions(tx *txn, dbIDs []int64, txns []exp
         SELECT 
             parent_contract_id, resolution_type,
             renewal_new_contract_id,
+            renewal_final_renter_output_address, renewal_final_renter_output_value,
+            renewal_final_host_output_address, renewal_final_host_output_value,
             renewal_renter_rollover, renewal_host_rollover,
             renewal_renter_signature, renewal_host_signature,
             storage_proof_proof_index, storage_proof_leaf, storage_proof_proof
@@ -469,6 +471,7 @@ WHERE fc.id = ?`)
 				var parentContractID, resolutionType int64
 				// renewal
 				var renewalNewContractID sql.NullInt64
+				var finalRenterOutput, finalHostOutput types.SiacoinOutput
 				var renewalRenterRollover, renewalHostRollover types.Currency
 				var renewalRenterSignature, renewalHostSignature types.Signature
 				// storage proof
@@ -480,6 +483,8 @@ WHERE fc.id = ?`)
 				if err := rows.Scan(
 					&parentContractID, &resolutionType,
 					&renewalNewContractID,
+					decodeNull(&finalRenterOutput.Address), decodeNull(&finalRenterOutput.Value),
+					decodeNull(&finalHostOutput.Address), decodeNull(&finalHostOutput.Value),
 					decodeNull(&renewalRenterRollover), decodeNull(&renewalHostRollover),
 					decodeNull(&renewalRenterSignature), decodeNull(&renewalHostSignature),
 					decodeNull(&storageProofProofIndex), &storageProofLeaf, decodeNull(&storageProofProof)); err != nil {
@@ -498,10 +503,12 @@ WHERE fc.id = ?`)
 				switch resolutionType {
 				case 0: // V2FileContractRenewal
 					renewal := &explorer.V2FileContractRenewal{
-						RenterRollover:  renewalRenterRollover,
-						HostRollover:    renewalHostRollover,
-						RenterSignature: renewalRenterSignature,
-						HostSignature:   renewalHostSignature,
+						FinalRenterOutput: finalRenterOutput,
+						FinalHostOutput:   finalHostOutput,
+						RenterRollover:    renewalRenterRollover,
+						HostRollover:      renewalHostRollover,
+						RenterSignature:   renewalRenterSignature,
+						HostSignature:     renewalHostSignature,
 					}
 					if renewalNewContractID.Valid {
 						renewal.NewContract, err = scanV2FileContract(fcStmt.QueryRow(renewalNewContractID.Int64))

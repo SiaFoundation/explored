@@ -213,10 +213,11 @@ type V2HostAnnouncement struct {
 
 // A V2FileContractRenewal renews a file contract.
 type V2FileContractRenewal struct {
-	FinalRevision  V2FileContract `json:"finalRevision"`
-	NewContract    V2FileContract `json:"newContract"`
-	RenterRollover types.Currency `json:"renterRollover"`
-	HostRollover   types.Currency `json:"hostRollover"`
+	FinalRenterOutput types.SiacoinOutput `json:"finalRenterOutput"`
+	FinalHostOutput   types.SiacoinOutput `json:"finalHostOutput"`
+	RenterRollover    types.Currency      `json:"renterRollover"`
+	HostRollover      types.Currency      `json:"hostRollover"`
+	NewContract       V2FileContract      `json:"newContract"`
 
 	// signatures cover above fields
 	RenterSignature types.Signature `json:"renterSignature"`
