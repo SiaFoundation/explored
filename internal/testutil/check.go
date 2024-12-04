@@ -143,7 +143,10 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 		Equal(t, "maturity height", expected.Parent.MaturityHeight, got.Parent.MaturityHeight)
 		Equal(t, "id", expected.Parent.ID, got.Parent.ID)
 		Equal(t, "leaf index", expected.Parent.StateElement.LeafIndex, got.Parent.StateElement.LeafIndex)
-		// Equal(t, "satisfied policy", expected.SatisfiedPolicy, got.SatisfiedPolicy)
+		if len(got.SatisfiedPolicy.Preimages) == 0 {
+			got.SatisfiedPolicy.Preimages = nil
+		}
+		Equal(t, "satisfied policy", expected.SatisfiedPolicy, got.SatisfiedPolicy)
 	}
 
 	Equal(t, "siacoin outputs", len(expectTxn.SiacoinOutputs), len(gotTxn.SiacoinOutputs))
@@ -165,7 +168,10 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 		Equal(t, "claim address", expected.ClaimAddress, got.ClaimAddress)
 		Equal(t, "id", expected.Parent.ID, got.Parent.ID)
 		Equal(t, "leaf index", expected.Parent.StateElement.LeafIndex, got.Parent.StateElement.LeafIndex)
-		// Equal(t, "satisfied policy", expected.SatisfiedPolicy, got.SatisfiedPolicy)
+		if len(got.SatisfiedPolicy.Preimages) == 0 {
+			got.SatisfiedPolicy.Preimages = nil
+		}
+		Equal(t, "satisfied policy", expected.SatisfiedPolicy, got.SatisfiedPolicy)
 	}
 
 	Equal(t, "siafund outputs", len(expectTxn.SiafundOutputs), len(gotTxn.SiafundOutputs))
