@@ -340,6 +340,10 @@ CREATE TABLE v2_transaction_file_contract_resolutions (
 
     -- V2FileContractRenewal
     renewal_new_contract_id INTEGER REFERENCES v2_file_contract_elements(id) ON DELETE CASCADE,
+    renewal_final_renter_output_address BLOB,
+    renewal_final_renter_output_value BLOB,
+    renewal_final_host_output_address BLOB,
+    renewal_final_host_output_value BLOB,
     renewal_renter_rollover BLOB,
     renewal_host_rollover BLOB,
     renewal_renter_signature BLOB,

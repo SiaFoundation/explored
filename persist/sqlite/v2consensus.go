@@ -429,7 +429,7 @@ func addV2FileContractRevisions(tx *txn, txnID int64, txn types.V2Transaction, d
 }
 
 func addV2FileContractResolutions(tx *txn, txnID int64, txn types.V2Transaction, dbIDs map[explorer.DBFileContract]int64) error {
-	renewalStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_resolutions(transaction_id, transaction_order, parent_contract_id, resolution_type, renewal_new_contract_id, renewal_renter_rollover, renewal_host_rollover, renewal_renter_signature, renewal_host_signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+	renewalStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_resolutions(transaction_id, transaction_order, parent_contract_id, resolution_type, renewal_new_contract_id, renewal_final_renter_output_address, renewal_final_renter_output_value, renewal_final_host_output_address, renewal_final_host_output_value, renewal_renter_rollover, renewal_host_rollover, renewal_renter_signature, renewal_host_signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("addV2FileContractResolutions: failed to prepare renewal statement: %w", err)
 	}
@@ -466,7 +466,7 @@ func addV2FileContractResolutions(tx *txn, txnID int64, txn types.V2Transaction,
 				return errors.New("addV2FileContractResolutions: renewal dbID not in map")
 			}
 
-			if _, err := renewalStmt.Exec(txnID, i, parentDBID, 0, newDBID, encode(v.RenterRollover), encode(v.HostRollover), encode(v.RenterSignature), encode(v.HostSignature)); err != nil {
+			if _, err := renewalStmt.Exec(txnID, i, parentDBID, 0, newDBID, encode(v.FinalRenterOutput.Address), encode(v.FinalRenterOutput.Value), encode(v.FinalHostOutput.Address), encode(v.FinalHostOutput.Value), encode(v.RenterRollover), encode(v.HostRollover), encode(v.RenterSignature), encode(v.HostSignature)); err != nil {
 				return fmt.Errorf("addV2FileContractResolutions: failed to execute renewal statement: %w", err)
 			}
 		case *types.V2StorageProof:

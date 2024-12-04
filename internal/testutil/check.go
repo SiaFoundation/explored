@@ -218,6 +218,10 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 				CheckV2FC(t, v.NewContract, gotV.NewContract)
 
 				Equal(t, "type", "renewal", got.Type)
+				Equal(t, "final renter output address", v.FinalRenterOutput.Address, gotV.FinalRenterOutput.Address)
+				Equal(t, "final renter output value", v.FinalRenterOutput.Value, gotV.FinalRenterOutput.Value)
+				Equal(t, "final host output address", v.FinalHostOutput.Address, gotV.FinalHostOutput.Address)
+				Equal(t, "final host output value", v.FinalHostOutput.Value, gotV.FinalHostOutput.Value)
 				Equal(t, "renter rollover", v.RenterRollover, gotV.RenterRollover)
 				Equal(t, "host rollover", v.HostRollover, gotV.HostRollover)
 				Equal(t, "renter signature", v.RenterSignature, gotV.RenterSignature)
