@@ -173,8 +173,7 @@ func SignV2TransactionWithContracts(cs consensus.State, pk, renterPK, hostPK typ
 		txn.FileContractRevisions[i].Revision.HostSignature = hostPK.SignHash(cs.ContractSigHash(txn.FileContractRevisions[i].Revision))
 	}
 	for i := range txn.FileContractResolutions {
-		switch r := txn.FileContractResolutions[i].Resolution.(type) {
-		case *types.V2FileContractRenewal:
+		if r, ok := txn.FileContractResolutions[i].Resolution.(*types.V2FileContractRenewal); ok {
 			r.RenterSignature = renterPK.SignHash(cs.RenewalSigHash(*r))
 			r.HostSignature = hostPK.SignHash(cs.RenewalSigHash(*r))
 			r.NewContract.RenterSignature = renterPK.SignHash(cs.ContractSigHash(r.NewContract))
