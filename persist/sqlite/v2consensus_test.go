@@ -214,6 +214,7 @@ func TestV2FoundationAddress(t *testing.T) {
 	_, genesisBlock, cm, db := newStore(t, true, func(network *consensus.Network, genesisBlock types.Block) {
 		network.HardforkV2.AllowHeight = 1
 		network.HardforkV2.RequireHeight = 2
+		network.HardforkFoundation.FailsafeAddress = addr1
 		network.HardforkFoundation.PrimaryAddress = addr1
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
