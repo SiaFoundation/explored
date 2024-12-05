@@ -138,8 +138,7 @@ func NewExplorer(cm ChainManager, store Store, batchSize int, scanCfg config.Sca
 				e.log.Error("failed to get tip", zap.Error(err))
 			}
 			if err := e.syncStore(lastTip, batchSize); err != nil {
-				e.log.Error("failed to sync store", zap.Error(err))
-				panic(err)
+				e.log.Panic("failed to sync store", zap.Error(err))
 			}
 		}
 	}()
