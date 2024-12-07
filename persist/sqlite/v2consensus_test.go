@@ -10,6 +10,7 @@ import (
 	rhp2 "go.sia.tech/core/rhp/v2"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
+	"go.sia.tech/coreutils/wallet"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/testutil"
 )
@@ -295,10 +296,10 @@ func TestV2Attestations(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if v, ok := events[0].Data.(*explorer.EventV2Transaction); !ok {
+		if v, ok := events[0].Data.(wallet.EventV2Transaction); !ok {
 			t.Fatal("expected EventV2Transaction")
 		} else {
-			testutil.CheckV2Transaction(t, txn1, explorer.V2Transaction(*v))
+			testutil.Equal(t, "v2 transaction", txn1, types.V2Transaction(v))
 		}
 	}
 

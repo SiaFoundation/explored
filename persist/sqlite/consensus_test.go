@@ -2,8 +2,10 @@ package sqlite_test
 
 import (
 	"errors"
+	"log"
 	"math"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	"go.sia.tech/coreutils"
 	"go.sia.tech/coreutils/chain"
 	ctestutil "go.sia.tech/coreutils/testutil"
+	"go.sia.tech/coreutils/wallet"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/testutil"
 	"go.sia.tech/explored/persist/sqlite"
@@ -1619,10 +1622,11 @@ func TestHostAnnouncement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if v, ok := events[0].Data.(*explorer.EventTransaction); !ok {
-			t.Fatal("expected EventTransaction")
+		log.Printf("%v", reflect.TypeOf(events[0].Data))
+		if v, ok := events[0].Data.(wallet.EventV1Transaction); !ok {
+			t.Fatal("expected EventV1Transaction")
 		} else {
-			testutil.CheckTransaction(t, txn1, v.Transaction)
+			testutil.Equal(t, "transaction", txn1, v.Transaction)
 		}
 	}
 
