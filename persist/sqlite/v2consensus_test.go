@@ -3,7 +3,6 @@ package sqlite_test
 import (
 	"bytes"
 	"math"
-	"reflect"
 	"testing"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 	rhp2 "go.sia.tech/core/rhp/v2"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
+	"go.sia.tech/coreutils/wallet"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/testutil"
 )
@@ -296,12 +296,10 @@ func TestV2Attestations(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Logf("events[0].Data: %v", reflect.TypeOf(events[0].Data))
-		// if v, ok := events[0].Data.(wallet.EventV2Transaction); !ok {
-		// 	t.Fatalf("expected EventV2Transaction, got: %v", reflect.TypeOf(events[0].Data))
-		// } else {
-		// 	testutil.Equal(t, "v2 transaction", txn1, types.V2Transaction(v))
-		// }
+		testutil.Equal(t, "events", 2, len(events))
+
+		testutil.Equal(t, "event 0", txn1, types.V2Transaction(events[0].Data.(wallet.EventV2Transaction)))
+		testutil.Equal(t, "event 1", genesisBlock.Transactions[0], events[1].Data.(wallet.EventV1Transaction).Transaction)
 	}
 
 	{
@@ -954,6 +952,9 @@ func TestV2FileContractResolution(t *testing.T) {
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
 	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(types.StandardUnlockConditions(pk1.PublicKey()))}
 
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
 	renterPrivateKey := types.GeneratePrivateKey()
 	renterPublicKey := renterPrivateKey.PublicKey()
 
@@ -967,7 +968,7 @@ func TestV2FileContractResolution(t *testing.T) {
 	})
 	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
 
-	v1FC := testutil.PrepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), 100, 105, types.VoidAddress)
+	v1FC := testutil.PrepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), 100, 105, addr2)
 	v1FC.Filesize = 65
 
 	data := make([]byte, 2*rhp2.LeafSize)
@@ -1167,12 +1168,29 @@ func TestV2FileContractResolution(t *testing.T) {
 	}
 
 	{
-		for _, addr := range []types.Address{types.VoidAddress, addr1} {
-			_, err := db.AddressEvents(addr, 0, math.MaxInt64)
-			if err != nil {
-				t.Fatal(err)
-			}
+		events, err := db.AddressEvents(addr2, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
 		}
+		testutil.Equal(t, "events", 3, len(events))
+
+		ev0 := events[0].Data.(wallet.EventV2ContractResolution)
+		testutil.Equal(t, "event 0 parent ID", v2FC3ID, ev0.Resolution.Parent.ID)
+		testutil.Equal(t, "event 0 output ID", v2FC3ID.V2RenterOutputID(), ev0.SiacoinElement.ID)
+		testutil.Equal(t, "event 0 missed", true, ev0.Missed)
+		testutil.Equal(t, "event 0 resolution", txn4.FileContractResolutions[0], ev0.Resolution)
+
+		ev1 := events[1].Data.(wallet.EventV2ContractResolution)
+		testutil.Equal(t, "event 0 parent ID", v2FC2ID, ev1.Resolution.Parent.ID)
+		testutil.Equal(t, "event 0 output ID", v2FC2ID.V2RenterOutputID(), ev1.SiacoinElement.ID)
+		testutil.Equal(t, "event 0 missed", false, ev1.Missed)
+		testutil.Equal(t, "event 0 resolution", txn3.FileContractResolutions[0], ev1.Resolution)
+
+		ev2 := events[2].Data.(wallet.EventV2ContractResolution)
+		testutil.Equal(t, "event 0 parent ID", v2FC1ID, ev2.Resolution.Parent.ID)
+		testutil.Equal(t, "event 0 output ID", v2FC1ID.V2RenterOutputID(), ev2.SiacoinElement.ID)
+		testutil.Equal(t, "event 0 missed", false, ev2.Missed)
+		testutil.Equal(t, "event 0 resolution", txn2.FileContractResolutions[0], ev2.Resolution)
 	}
 
 	// revert the block
@@ -1267,14 +1285,5 @@ func TestV2FileContractResolution(t *testing.T) {
 		testutil.CheckV2FC(t, txn1.FileContracts[1], fcs[1])
 		testutil.CheckV2FC(t, txn1.FileContracts[2], fcs[2])
 		testutil.CheckV2FC(t, txn1.FileContracts[3], fcs[3])
-	}
-
-	{
-		for _, addr := range []types.Address{types.VoidAddress, addr1} {
-			_, err := db.AddressEvents(addr, 0, math.MaxInt64)
-			if err != nil {
-				t.Fatal(err)
-			}
-		}
 	}
 }

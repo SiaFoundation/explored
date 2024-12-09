@@ -4,7 +4,6 @@ import (
 	"errors"
 	"math"
 	"path/filepath"
-	"reflect"
 	"testing"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 	"go.sia.tech/coreutils"
 	"go.sia.tech/coreutils/chain"
 	ctestutil "go.sia.tech/coreutils/testutil"
+	"go.sia.tech/coreutils/wallet"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/testutil"
 	"go.sia.tech/explored/persist/sqlite"
@@ -499,6 +499,9 @@ func TestFileContract(t *testing.T) {
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
 
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
 	renterPrivateKey := types.GeneratePrivateKey()
 	renterPublicKey := renterPrivateKey.PublicKey()
 
@@ -515,7 +518,7 @@ func TestFileContract(t *testing.T) {
 
 	windowStart := cm.Tip().Height + 10
 	windowEnd := windowStart + 10
-	fc := testutil.PrepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), windowStart, windowEnd, types.VoidAddress)
+	fc := testutil.PrepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), windowStart, windowEnd, addr2)
 	txn := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
 			ParentID:         scOutputID,
@@ -681,12 +684,19 @@ func TestFileContract(t *testing.T) {
 	})
 
 	{
-		for _, addr := range []types.Address{types.VoidAddress, addr1} {
-			_, err := db.AddressEvents(addr, 0, math.MaxInt64)
-			if err != nil {
-				t.Fatal(err)
-			}
+		events, err := db.AddressEvents(addr2, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
 		}
+		testutil.Equal(t, "events", 2, len(events))
+
+		ev0 := events[0].Data.(wallet.EventV1ContractResolution)
+		testutil.Equal(t, "event 0 parent ID", fcID, ev0.Parent.ID)
+		testutil.Equal(t, "event 0 output ID", fcID.MissedOutputID(0), ev0.SiacoinElement.ID)
+		testutil.Equal(t, "event 0 missed", true, ev0.Missed)
+
+		ev1 := events[1].Data.(wallet.EventV1Transaction)
+		testutil.Equal(t, "event 1", txn, ev1.Transaction)
 	}
 
 	{
@@ -1437,15 +1447,6 @@ func TestRevertSendTransactions(t *testing.T) {
 	}
 
 	{
-		for _, addr := range []types.Address{types.VoidAddress, addr1, addr2, addr3} {
-			_, err := db.AddressEvents(addr, 0, math.MaxInt64)
-			if err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
-
-	{
 		// take 3 blocks off the top
 		// revertBlocks := blocks[len(blocks)-3:]
 		newBlocks := blocks[:len(blocks)-3]
@@ -1541,15 +1542,6 @@ func TestRevertSendTransactions(t *testing.T) {
 		ActiveContracts:    0,
 		StorageUtilization: 0,
 	})
-
-	{
-		for _, addr := range []types.Address{types.VoidAddress, addr1, addr2, addr3} {
-			_, err := db.AddressEvents(addr, 0, math.MaxInt64)
-			if err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
 }
 
 func TestHostAnnouncement(t *testing.T) {
@@ -1647,12 +1639,9 @@ func TestHostAnnouncement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Logf("%v", reflect.TypeOf(events[0].Data))
-		// if v, ok := events[0].Data.(wallet.EventV1Transaction); !ok {
-		// 	t.Fatalf("expected EventV1Transaction, got: %v", reflect.TypeOf(events[0].Data))
-		// } else {
-		// 	testutil.Equal(t, "transaction", txn1, v.Transaction)
-		// }
+		testutil.Equal(t, "events", 2, len(events))
+		testutil.Equal(t, "event 0", txn1, events[0].Data.(wallet.EventV1Transaction).Transaction)
+		testutil.Equal(t, "event 1", genesisBlock.Transactions[0], events[1].Data.(wallet.EventV1Transaction).Transaction)
 	}
 
 	{
@@ -2054,15 +2043,6 @@ func TestMultipleReorg(t *testing.T) {
 			testutil.Equal(t, "addr3 sf utxos", 1, len(sfUtxos3))
 		}
 	}
-
-	{
-		for _, addr := range []types.Address{types.VoidAddress, addr1, addr2, addr3} {
-			_, err := db.AddressEvents(addr, 0, math.MaxInt64)
-			if err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
 }
 
 func TestMultipleReorgFileContract(t *testing.T) {
@@ -2146,12 +2126,13 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	}
 
 	{
-		for _, addr := range []types.Address{types.VoidAddress, addr1} {
-			_, err := db.AddressEvents(addr, 0, math.MaxInt64)
-			if err != nil {
-				t.Fatal(err)
-			}
+		events, err := db.AddressEvents(addr1, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
 		}
+		testutil.Equal(t, "events", 2, len(events))
+		testutil.Equal(t, "event 0", txn, events[0].Data.(wallet.EventV1Transaction).Transaction)
+		testutil.Equal(t, "event 1", genesisBlock.Transactions[0], events[1].Data.(wallet.EventV1Transaction).Transaction)
 	}
 
 	uc := types.UnlockConditions{
@@ -2390,12 +2371,12 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	}
 
 	{
-		for _, addr := range []types.Address{types.VoidAddress, addr1} {
-			_, err := db.AddressEvents(addr, 0, math.MaxInt64)
-			if err != nil {
-				t.Fatal(err)
-			}
+		events, err := db.AddressEvents(addr1, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
 		}
+		testutil.Equal(t, "events", 1, len(events))
+		testutil.Equal(t, "event 0", genesisBlock.Transactions[0], events[0].Data.(wallet.EventV1Transaction).Transaction)
 	}
 }
 

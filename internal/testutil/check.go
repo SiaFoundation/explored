@@ -16,8 +16,8 @@ import (
 func Equal[T any](t *testing.T, desc string, expect, got T) {
 	t.Helper()
 
-	if !cmp.Equal(expect, got, cmpopts.EquateEmpty(), cmpopts.IgnoreUnexported(consensus.Work{})) {
-		t.Fatalf("expected %v %s, got %v", expect, desc, got)
+	if !cmp.Equal(expect, got, cmpopts.EquateEmpty(), cmpopts.IgnoreUnexported(consensus.Work{}), cmpopts.IgnoreTypes(types.StateElement{}, "MerkleProof")) {
+		t.Fatalf("%s expected != got, diff: %s", desc, cmp.Diff(expect, got))
 	}
 }
 

@@ -77,6 +77,7 @@ func explorerToTypesV2Resolution(e explorer.V2FileContractResolution) (fcr types
 			HostSignature:     v.HostSignature,
 		}
 	case *types.V2StorageProof:
+		fcr.Resolution = v
 	case *types.V2FileContractExpiration:
 		fcr.Resolution = v
 	default:
