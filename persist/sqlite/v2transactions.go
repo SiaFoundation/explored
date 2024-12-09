@@ -427,6 +427,75 @@ ORDER BY ts.transaction_order ASC`)
 	return nil
 }
 
+func scanResolution(fcStmt *stmt, s scanner) (explorer.V2FileContractResolution, error) {
+	// all
+	var parentContractID, resolutionType int64
+	// renewal
+	var renewalNewContractID sql.NullInt64
+	var finalRenterOutput, finalHostOutput types.SiacoinOutput
+	var renewalRenterRollover, renewalHostRollover types.Currency
+	var renewalRenterSignature, renewalHostSignature types.Signature
+	// storage proof
+	var storageProofProofIndex types.ChainIndexElement
+	var storageProofProof []types.Hash256
+	var storageProofLeaf []byte
+
+	// Scan all fields, some of which may be NULL
+	if err := s.Scan(
+		&parentContractID, &resolutionType,
+		&renewalNewContractID,
+		decodeNull(&finalRenterOutput.Address), decodeNull(&finalRenterOutput.Value),
+		decodeNull(&finalHostOutput.Address), decodeNull(&finalHostOutput.Value),
+		decodeNull(&renewalRenterRollover), decodeNull(&renewalHostRollover),
+		decodeNull(&renewalRenterSignature), decodeNull(&renewalHostSignature),
+		decodeNull(&storageProofProofIndex), &storageProofLeaf, decodeNull(&storageProofProof)); err != nil {
+		return explorer.V2FileContractResolution{}, fmt.Errorf("failed to scan resolution metadata: %w", err)
+	}
+
+	// Retrieve parent contract element
+	parent, err := scanV2FileContract(fcStmt.QueryRow(parentContractID))
+	if err != nil {
+		return explorer.V2FileContractResolution{}, fmt.Errorf("failed to scan file contract: %w", err)
+	}
+
+	fcr := explorer.V2FileContractResolution{
+		Parent: parent,
+	}
+	switch resolutionType {
+	case 0: // V2FileContractRenewal
+		renewal := &explorer.V2FileContractRenewal{
+			FinalRenterOutput: finalRenterOutput,
+			FinalHostOutput:   finalHostOutput,
+			RenterRollover:    renewalRenterRollover,
+			HostRollover:      renewalHostRollover,
+			RenterSignature:   renewalRenterSignature,
+			HostSignature:     renewalHostSignature,
+		}
+		if renewalNewContractID.Valid {
+			renewal.NewContract, err = scanV2FileContract(fcStmt.QueryRow(renewalNewContractID.Int64))
+			if err != nil {
+				return explorer.V2FileContractResolution{}, fmt.Errorf("failed to scan new contract: %w", err)
+			}
+		}
+
+		fcr.Type = "renewal"
+		fcr.Resolution = renewal
+	case 1: // V2StorageProof
+		proof := &types.V2StorageProof{
+			ProofIndex: storageProofProofIndex,
+			Proof:      storageProofProof,
+			Leaf:       [64]byte(storageProofLeaf),
+		}
+
+		fcr.Type = "storageProof"
+		fcr.Resolution = proof
+	case 2: // V2FileContractExpiration
+		fcr.Type = "expiration"
+		fcr.Resolution = new(types.V2FileContractExpiration)
+	}
+	return fcr, nil
+}
+
 // fillV2TransactionFileContractResolutions fills in the file contract
 // resolutions for each transaction.
 func fillV2TransactionFileContractResolutions(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
@@ -467,74 +536,13 @@ WHERE fc.id = ?`)
 			defer rows.Close()
 
 			for rows.Next() {
-				// all
-				var parentContractID, resolutionType int64
-				// renewal
-				var renewalNewContractID sql.NullInt64
-				var finalRenterOutput, finalHostOutput types.SiacoinOutput
-				var renewalRenterRollover, renewalHostRollover types.Currency
-				var renewalRenterSignature, renewalHostSignature types.Signature
-				// storage proof
-				var storageProofProofIndex types.ChainIndexElement
-				var storageProofProof []types.Hash256
-				var storageProofLeaf []byte
-
-				// Scan all fields, some of which may be NULL
-				if err := rows.Scan(
-					&parentContractID, &resolutionType,
-					&renewalNewContractID,
-					decodeNull(&finalRenterOutput.Address), decodeNull(&finalRenterOutput.Value),
-					decodeNull(&finalHostOutput.Address), decodeNull(&finalHostOutput.Value),
-					decodeNull(&renewalRenterRollover), decodeNull(&renewalHostRollover),
-					decodeNull(&renewalRenterSignature), decodeNull(&renewalHostSignature),
-					decodeNull(&storageProofProofIndex), &storageProofLeaf, decodeNull(&storageProofProof)); err != nil {
-					return fmt.Errorf("failed to scan resolution metadata: %w", err)
-				}
-
-				// Retrieve parent contract element
-				parent, err := scanV2FileContract(fcStmt.QueryRow(parentContractID))
+				resolution, err := scanResolution(fcStmt, rows)
 				if err != nil {
-					return fmt.Errorf("failed to scan file contract: %w", err)
-				}
-
-				fcr := explorer.V2FileContractResolution{
-					Parent: parent,
-				}
-				switch resolutionType {
-				case 0: // V2FileContractRenewal
-					renewal := &explorer.V2FileContractRenewal{
-						FinalRenterOutput: finalRenterOutput,
-						FinalHostOutput:   finalHostOutput,
-						RenterRollover:    renewalRenterRollover,
-						HostRollover:      renewalHostRollover,
-						RenterSignature:   renewalRenterSignature,
-						HostSignature:     renewalHostSignature,
-					}
-					if renewalNewContractID.Valid {
-						renewal.NewContract, err = scanV2FileContract(fcStmt.QueryRow(renewalNewContractID.Int64))
-						if err != nil {
-							return fmt.Errorf("failed to scan new contract: %w", err)
-						}
-					}
-
-					fcr.Type = "renewal"
-					fcr.Resolution = renewal
-				case 1: // V2StorageProof
-					proof := &types.V2StorageProof{
-						ProofIndex: storageProofProofIndex,
-						Proof:      storageProofProof,
-						Leaf:       [64]byte(storageProofLeaf),
-					}
-
-					fcr.Type = "storageProof"
-					fcr.Resolution = proof
-				case 2: // V2FileContractExpiration
-					fcr.Type = "expiration"
-					fcr.Resolution = new(types.V2FileContractExpiration)
+					return fmt.Errorf("failed to scan resolution: %w", err)
 				}
 
 				// Append the resolution to the transaction.
-				txns[i].FileContractResolutions = append(txns[i].FileContractResolutions, fcr)
+				txns[i].FileContractResolutions = append(txns[i].FileContractResolutions, resolution)
 			}
 			return nil
 		}()

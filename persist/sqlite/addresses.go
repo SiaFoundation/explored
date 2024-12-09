@@ -28,8 +28,7 @@ SELECT
 		WHEN last_chain_index.height < b.height THEN 0
 		ELSE last_chain_index.height - b.height
 	END AS confirmations,
-	ev.event_type,
-	ev.event_data
+	ev.event_type
 FROM events ev INDEXED BY events_maturity_height_id_idx -- force the index to prevent temp-btree sorts
 INNER JOIN event_addresses ea ON (ev.id = ea.event_id)
 INNER JOIN address_balance sa ON (ea.address_id = sa.id)
@@ -46,7 +45,7 @@ LIMIT $2 OFFSET $3`
 		defer rows.Close()
 
 		for rows.Next() {
-			event, _, err := scanEvent(rows)
+			event, _, err := scanEvent(tx, rows)
 			if err != nil {
 				return fmt.Errorf("failed to scan event: %w", err)
 			}

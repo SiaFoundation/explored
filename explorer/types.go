@@ -225,8 +225,7 @@ type V2FileContractRenewal struct {
 }
 
 // A V2FileContractResolution closes a v2 file contract's payment channel.
-// There are four resolution types: renewwal, storage proof, finalization,
-// and expiration.
+// There are three resolution types: renewwal, storage proof, and expiration.
 type V2FileContractResolution struct {
 	Parent     V2FileContract `json:"parent"`
 	Type       string         `json:"string"`

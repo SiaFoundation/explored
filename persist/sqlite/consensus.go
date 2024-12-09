@@ -1,7 +1,6 @@
 package sqlite
 
 import (
-	"bytes"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -626,7 +625,7 @@ func addEvents(tx *txn, bid types.BlockID, scDBIds map[types.SiacoinOutputID]int
 		return nil
 	}
 
-	insertEventStmt, err := tx.Prepare(`INSERT INTO events (event_id, maturity_height, date_created, event_type, event_data, block_id) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (event_id) DO NOTHING RETURNING id`)
+	insertEventStmt, err := tx.Prepare(`INSERT INTO events (event_id, maturity_height, date_created, event_type, block_id) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (event_id) DO NOTHING RETURNING id`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare event statement: %w", err)
 	}
@@ -674,19 +673,9 @@ func addEvents(tx *txn, bid types.BlockID, scDBIds map[types.SiacoinOutputID]int
 	}
 	defer v2ContractResolutionEventStmt.Close()
 
-	var buf bytes.Buffer
-	enc := types.NewEncoder(&buf)
 	for _, event := range events {
-		buf.Reset()
-		ev, ok := event.Data.(types.EncoderTo)
-		if !ok {
-			panic("event data does not implement types.EncoderTo") // developer error
-		}
-		ev.EncodeTo(enc)
-		enc.Flush()
-
 		var eventID int64
-		err = insertEventStmt.QueryRow(encode(event.ID), event.MaturityHeight, encode(event.Timestamp), event.Type, buf.Bytes(), encode(bid)).Scan(&eventID)
+		err = insertEventStmt.QueryRow(encode(event.ID), event.MaturityHeight, encode(event.Timestamp), event.Type, encode(bid)).Scan(&eventID)
 		if errors.Is(err, sql.ErrNoRows) {
 			continue // skip if the event already exists
 		} else if err != nil {
@@ -1066,12 +1055,12 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to update metrics: %w", err)
 	} else if err := addHostAnnouncements(ut.tx, state.Block.Timestamp, state.HostAnnouncements, state.V2HostAnnouncements); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add host announcements: %w", err)
-	} else if err := addEvents(ut.tx, state.Block.ID(), scDBIds, sfDBIds, fcDBIds, v2FcDBIds, txnDBIds, v2TxnDBIds, state.Events); err != nil {
-		return fmt.Errorf("ApplyIndex: failed to add events: %w", err)
 	} else if err := updateFileContractIndices(ut.tx, false, state.Metrics.Index, state.FileContractElements); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update file contract element indices: %w", err)
 	} else if err := updateV2FileContractIndices(ut.tx, false, state.Metrics.Index, state.V2FileContractElements); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update v2 file contract element indices: %w", err)
+	} else if err := addEvents(ut.tx, state.Block.ID(), scDBIds, sfDBIds, fcDBIds, v2FcDBIds, txnDBIds, v2TxnDBIds, state.Events); err != nil {
+		return fmt.Errorf("ApplyIndex: failed to add events: %w", err)
 	}
 
 	return nil

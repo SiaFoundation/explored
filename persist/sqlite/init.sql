@@ -385,8 +385,7 @@ CREATE TABLE events (
 	event_id BLOB UNIQUE NOT NULL,
 	maturity_height INTEGER NOT NULL,
 	date_created INTEGER NOT NULL,
-	event_type TEXT NOT NULL,
-	event_data BLOB NOT NULL
+	event_type TEXT NOT NULL
 );
 CREATE INDEX events_block_id_idx ON events (block_id);
 CREATE INDEX events_maturity_height_id_idx ON events (maturity_height DESC, id DESC);
