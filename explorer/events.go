@@ -90,7 +90,7 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) (events []
 	// handle v1 transactions
 	for _, txn := range b.Transactions {
 		addresses := make(map[types.Address]struct{})
-		e := &EventV1Transaction{
+		e := EventV1Transaction{
 			Transaction:          txn,
 			SpentSiacoinElements: make([]types.SiacoinElement, 0, len(txn.SiacoinInputs)),
 			SpentSiafundElements: make([]types.SiafundElement, 0, len(txn.SiafundInputs)),

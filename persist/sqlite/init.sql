@@ -400,6 +400,35 @@ CREATE INDEX event_addresses_event_id_idx ON event_addresses (event_id);
 CREATE INDEX event_addresses_address_id_idx ON event_addresses (address_id);
 CREATE INDEX event_addresses_event_id_address_id_idx ON event_addresses (event_id, address_id);
 
+CREATE TABLE v1_transaction_events (
+    event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
+    transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL
+);
+
+CREATE TABLE v2_transaction_events (
+    event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
+    transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL
+);
+
+CREATE TABLE payout_events (
+    event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
+    output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL
+);
+
+CREATE TABLE v1_contract_resolution_events (
+    event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
+    parent_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL,
+    output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL,
+    missed INTEGER NOT NULL
+);
+
+CREATE TABLE v2_contract_resolution_events (
+    event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
+    parent_id INTEGER REFERENCES v2_file_contract_elements(id) ON DELETE CASCADE NOT NULL,
+    output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL,
+    missed INTEGER NOT NULL
+);
+
 CREATE TABLE v2_file_contract_elements (
     id INTEGER PRIMARY KEY,
     block_id BLOB REFERENCES blocks(id) ON DELETE CASCADE NOT NULL,
