@@ -36,6 +36,9 @@ func (s *Store) HostMetrics() (result explorer.HostMetrics, err error) {
 				return fmt.Errorf("failed to scan host: %w", err)
 			}
 
+			result.TotalStorage += host.Settings.TotalStorage
+			result.RemainingStorage += host.Settings.RemainingStorage
+
 			result.Settings.MaxDownloadBatchSize += host.Settings.MaxDownloadBatchSize
 			result.Settings.MaxDuration += host.Settings.MaxDuration
 			result.Settings.MaxReviseBatchSize += host.Settings.MaxReviseBatchSize
