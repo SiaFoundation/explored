@@ -357,7 +357,14 @@ func (h Host) IsV2() bool {
 
 // HostMetrics represents averages of scanned information from hosts.
 type HostMetrics struct {
-	ActiveHosts uint64               `json:"activeHosts"`
-	Settings    rhpv2.HostSettings   `json:"settings"`
-	PriceTable  rhpv3.HostPriceTable `json:"priceTable"`
+	// Number of hosts that were up as of there last scan
+	ActiveHosts uint64 `json:"activeHosts"`
+	// Total storage of all active hosts, in bytes
+	TotalStorage uint64 `json:"totalStorage"`
+	// Remaining storage of all active hosts, in bytes (storage utilization is
+	// equal to TotalStorage - RemainingStorage)
+	RemainingStorage uint64 `json:"remainingStorage"`
+
+	Settings   rhpv2.HostSettings   `json:"settings"`
+	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
 }
