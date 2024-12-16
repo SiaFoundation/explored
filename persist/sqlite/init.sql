@@ -381,44 +381,51 @@ CREATE TABLE state_tree (
 
 CREATE TABLE events (
 	id INTEGER PRIMARY KEY,
+	block_id BLOB NOT NULL REFERENCES blocks(id) ON DELETE CASCADE,
 	event_id BLOB UNIQUE NOT NULL,
 	maturity_height INTEGER NOT NULL,
 	date_created INTEGER NOT NULL,
-	event_type TEXT NOT NULL,
-	block_id BLOB NOT NULL REFERENCES blocks(id) ON DELETE CASCADE, -- add an index to all foreign keys
-	height INTEGER NOT NULL
+	event_type TEXT NOT NULL
 );
-CREATE INDEX events_block_id_height_index ON events(block_id, height);
+CREATE INDEX events_block_id_idx ON events (block_id);
+CREATE INDEX events_maturity_height_id_idx ON events (maturity_height DESC, id DESC);
 
 CREATE TABLE event_addresses (
-	event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-	address_id INTEGER NOT NULL REFERENCES address_balance(id),
+	event_id INTEGER NOT NULL REFERENCES events (id) ON DELETE CASCADE,
+	address_id INTEGER NOT NULL REFERENCES address_balance (id),
 	PRIMARY KEY (event_id, address_id)
 );
-CREATE INDEX event_addresses_event_id_index ON event_addresses(event_id);
-CREATE INDEX event_addresses_address_id_index ON event_addresses(address_id);
+CREATE INDEX event_addresses_event_id_idx ON event_addresses (event_id);
+CREATE INDEX event_addresses_address_id_idx ON event_addresses (address_id);
+CREATE INDEX event_addresses_event_id_address_id_idx ON event_addresses (event_id, address_id);
 
-CREATE TABLE transaction_events (
+CREATE TABLE v1_transaction_events (
     event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
-    transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
-    fee BLOB NOT NULL
+    transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL
 );
 
-CREATE TABLE contract_payout_events (
+CREATE TABLE v2_transaction_events (
     event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
+    transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL
+);
+
+CREATE TABLE payout_events (
+    event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
+    output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL
+);
+
+CREATE TABLE v1_contract_resolution_events (
+    event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
+    parent_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL,
     output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL,
-    contract_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL,
     missed INTEGER NOT NULL
 );
 
-CREATE TABLE miner_payout_events (
+CREATE TABLE v2_contract_resolution_events (
     event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
-    output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL
-);
-
-CREATE TABLE foundation_subsidy_events (
-    event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
-    output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL
+    parent_id INTEGER REFERENCES v2_file_contract_elements(id) ON DELETE CASCADE NOT NULL,
+    output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL,
+    missed INTEGER NOT NULL
 );
 
 CREATE TABLE v2_file_contract_elements (
@@ -463,11 +470,6 @@ CREATE TABLE v2_last_contract_revision (
     resolution_transaction_id BLOB REFERENCES v2_transactions(transaction_id),
 
     contract_element_id INTEGER UNIQUE REFERENCES v2_file_contract_elements(id) ON DELETE CASCADE NOT NULL
-);
-
-CREATE TABLE v2_transaction_events (
-    event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
-    transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL
 );
 
 CREATE TABLE host_info (

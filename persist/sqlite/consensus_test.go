@@ -498,6 +498,9 @@ func TestFileContract(t *testing.T) {
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
 
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
 	renterPrivateKey := types.GeneratePrivateKey()
 	renterPublicKey := renterPrivateKey.PublicKey()
 
@@ -514,7 +517,7 @@ func TestFileContract(t *testing.T) {
 
 	windowStart := cm.Tip().Height + 10
 	windowEnd := windowStart + 10
-	fc := testutil.PrepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), windowStart, windowEnd, types.VoidAddress)
+	fc := testutil.PrepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), windowStart, windowEnd, addr2)
 	txn := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
 			ParentID:         scOutputID,
@@ -678,6 +681,22 @@ func TestFileContract(t *testing.T) {
 		SuccessfulContracts: 0,
 		StorageUtilization:  0,
 	})
+
+	{
+		events, err := db.AddressEvents(addr2, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "events", 2, len(events))
+
+		ev0 := events[0].Data.(explorer.EventV1ContractResolution)
+		testutil.Equal(t, "event 0 parent ID", fcID, ev0.Parent.ID)
+		testutil.Equal(t, "event 0 output ID", fcID.MissedOutputID(0), ev0.SiacoinElement.ID)
+		testutil.Equal(t, "event 0 missed", true, ev0.Missed)
+
+		ev1 := events[1].Data.(explorer.EventV1Transaction)
+		testutil.CheckTransaction(t, txn, ev1.Transaction)
+	}
 
 	{
 		dbFCs, err := db.Contracts([]types.FileContractID{fcID})
@@ -1623,11 +1642,9 @@ func TestHostAnnouncement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if v, ok := events[0].Data.(*explorer.EventTransaction); !ok {
-			t.Fatal("expected EventTransaction")
-		} else {
-			testutil.CheckTransaction(t, txn1, v.Transaction)
-		}
+		testutil.Equal(t, "events", 2, len(events))
+		testutil.CheckTransaction(t, txn1, events[0].Data.(explorer.EventV1Transaction).Transaction)
+		testutil.CheckTransaction(t, genesisBlock.Transactions[0], events[1].Data.(explorer.EventV1Transaction).Transaction)
 	}
 
 	{
@@ -2111,6 +2128,16 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		testutil.CheckFC(t, false, false, false, fc, txns[0].FileContracts[0])
 	}
 
+	{
+		events, err := db.AddressEvents(addr1, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "events", 2, len(events))
+		testutil.CheckTransaction(t, txn, events[0].Data.(explorer.EventV1Transaction).Transaction)
+		testutil.CheckTransaction(t, genesisBlock.Transactions[0], events[1].Data.(explorer.EventV1Transaction).Transaction)
+	}
+
 	uc := types.UnlockConditions{
 		PublicKeys: []types.UnlockKey{
 			renterPublicKey.UnlockKey(),
@@ -2344,6 +2371,15 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		CheckMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts: 0,
 		})
+	}
+
+	{
+		events, err := db.AddressEvents(addr1, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "events", 1, len(events))
+		testutil.CheckTransaction(t, genesisBlock.Transactions[0], events[0].Data.(explorer.EventV1Transaction).Transaction)
 	}
 }
 
