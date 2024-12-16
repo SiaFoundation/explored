@@ -1,11 +1,11 @@
 package sqlite
 
 import (
-	"bytes"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"reflect"
 	"time"
 
 	"go.sia.tech/core/types"
@@ -620,18 +620,18 @@ func addSiafundElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 	return sfDBIds, nil
 }
 
-func addEvents(tx *txn, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[explorer.DBFileContract]int64, txnDBIds map[types.TransactionID]txnDBId, v2TxnDBIds map[types.TransactionID]txnDBId, events []explorer.Event) error {
+func addEvents(tx *txn, bid types.BlockID, scDBIds map[types.SiacoinOutputID]int64, sfDBIds map[types.SiafundOutputID]int64, fcDBIds map[explorer.DBFileContract]int64, v2FcDBIds map[explorer.DBFileContract]int64, txnDBIds map[types.TransactionID]txnDBId, v2TxnDBIds map[types.TransactionID]txnDBId, events []explorer.Event) error {
 	if len(events) == 0 {
 		return nil
 	}
 
-	insertEventStmt, err := tx.Prepare(`INSERT INTO events (event_id, maturity_height, date_created, event_type, block_id, height) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (event_id) DO NOTHING RETURNING id`)
+	insertEventStmt, err := tx.Prepare(`INSERT INTO events (event_id, maturity_height, date_created, event_type, block_id) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (event_id) DO NOTHING RETURNING id`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare event statement: %w", err)
 	}
 	defer insertEventStmt.Close()
 
-	addrStmt, err := tx.Prepare(`INSERT INTO address_balance (address, siacoin_balance, immature_siacoin_balance, siafund_balance) VALUES ($1, $2, $3, 0) ON CONFLICT (address) DO UPDATE SET address=EXCLUDED.address RETURNING id`)
+	addrStmt, err := tx.Prepare(`INSERT INTO address_balance (address, siacoin_balance, immature_siacoin_balance, siafund_balance) VALUES ($1, $2, $2, 0) ON CONFLICT (address) DO UPDATE SET address=EXCLUDED.address RETURNING id`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare address statement: %w", err)
 	}
@@ -643,11 +643,11 @@ func addEvents(tx *txn, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[exp
 	}
 	defer relevantAddrStmt.Close()
 
-	transactionEventStmt, err := tx.Prepare(`INSERT INTO transaction_events (event_id, transaction_id, fee) VALUES (?, ?, ?)`)
+	v1TransactionEventStmt, err := tx.Prepare(`INSERT INTO v1_transaction_events (event_id, transaction_id) VALUES (?, ?)`)
 	if err != nil {
-		return fmt.Errorf("failed to prepare transaction event statement: %w", err)
+		return fmt.Errorf("failed to prepare v1 transaction event statement: %w", err)
 	}
-	defer transactionEventStmt.Close()
+	defer v1TransactionEventStmt.Close()
 
 	v2TransactionEventStmt, err := tx.Prepare(`INSERT INTO v2_transaction_events (event_id, transaction_id) VALUES (?, ?)`)
 	if err != nil {
@@ -655,72 +655,41 @@ func addEvents(tx *txn, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[exp
 	}
 	defer v2TransactionEventStmt.Close()
 
-	minerPayoutEventStmt, err := tx.Prepare(`INSERT INTO miner_payout_events (event_id, output_id) VALUES (?, ?)`)
+	payoutEventStmt, err := tx.Prepare(`INSERT INTO payout_events (event_id, output_id) VALUES (?, ?)`)
 	if err != nil {
-		return fmt.Errorf("failed to prepare miner payout event statement: %w", err)
+		return fmt.Errorf("failed to prepare minerpayout event statement: %w", err)
 	}
-	defer minerPayoutEventStmt.Close()
+	defer payoutEventStmt.Close()
 
-	contractPayoutEventStmt, err := tx.Prepare(`INSERT INTO contract_payout_events (event_id, output_id, contract_id, missed) VALUES (?, ?, ?, ?)`)
+	v1ContractResolutionEventStmt, err := tx.Prepare(`INSERT INTO v1_contract_resolution_events (event_id, output_id, parent_id, missed) VALUES (?, ?, ?, ?)`)
 	if err != nil {
-		return fmt.Errorf("failed to prepare contract payout event statement: %w", err)
+		return fmt.Errorf("failed to prepare v1 contract resolution event statement: %w", err)
 	}
-	defer contractPayoutEventStmt.Close()
+	defer v1ContractResolutionEventStmt.Close()
 
-	foundationSubsidyEventStmt, err := tx.Prepare(`INSERT INTO foundation_subsidy_events (event_id, output_id) VALUES (?, ?)`)
+	v2ContractResolutionEventStmt, err := tx.Prepare(`INSERT INTO v2_contract_resolution_events (event_id, output_id, parent_id, missed) VALUES (?, ?, ?, ?)`)
 	if err != nil {
-		return fmt.Errorf("failed to prepare foundation subsidy event statement: %w", err)
+		return fmt.Errorf("failed to prepare v2 contract resolution event statement: %w", err)
 	}
-	defer foundationSubsidyEventStmt.Close()
+	defer v2ContractResolutionEventStmt.Close()
 
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
 	for _, event := range events {
-		buf.Reset()
-		if err := enc.Encode(event.Data); err != nil {
-			return fmt.Errorf("failed to encode event: %w", err)
-		}
-
 		var eventID int64
-		err = insertEventStmt.QueryRow(encode(event.ID), event.MaturityHeight, encode(event.Timestamp), event.Data.EventType(), encode(event.Index.ID), event.Index.Height).Scan(&eventID)
+		err = insertEventStmt.QueryRow(encode(event.ID), event.MaturityHeight, encode(event.Timestamp), event.Type, encode(bid)).Scan(&eventID)
 		if errors.Is(err, sql.ErrNoRows) {
 			continue // skip if the event already exists
 		} else if err != nil {
 			return fmt.Errorf("failed to add event: %w", err)
 		}
 
-		switch v := event.Data.(type) {
-		case *explorer.EventTransaction:
-			dbID := txnDBIds[types.TransactionID(event.ID)].id
-			if _, err = transactionEventStmt.Exec(eventID, dbID, encode(v.Fee)); err != nil {
-				return fmt.Errorf("failed to insert transaction event: %w", err)
-			}
-		case *explorer.EventV2Transaction:
-			dbID := v2TxnDBIds[types.TransactionID(event.ID)].id
-			if _, err = v2TransactionEventStmt.Exec(eventID, dbID); err != nil {
-				return fmt.Errorf("failed to insert transaction event: %w", err)
-			}
-		case *explorer.EventMinerPayout:
-			_, err = minerPayoutEventStmt.Exec(eventID, scDBIds[types.SiacoinOutputID(event.ID)])
-		case *explorer.EventContractPayout:
-			_, err = contractPayoutEventStmt.Exec(eventID, scDBIds[v.SiacoinOutput.ID], fcDBIds[explorer.DBFileContract{ID: v.FileContract.ID, RevisionNumber: v.FileContract.FileContract.RevisionNumber}], v.Missed)
-		case *explorer.EventFoundationSubsidy:
-			_, err = foundationSubsidyEventStmt.Exec(eventID, scDBIds[types.SiacoinOutputID(event.ID)])
-		default:
-			return errors.New("unknown event type")
-		}
-		if err != nil {
-			return fmt.Errorf("failed to insert %s event: %w", event.Data.EventType(), err)
-		}
-
 		used := make(map[types.Address]bool)
-		for _, addr := range event.Addresses {
+		for _, addr := range event.Relevant {
 			if used[addr] {
 				continue
 			}
 
 			var addressID int64
-			err = addrStmt.QueryRow(encode(addr), encode(types.ZeroCurrency), encode(types.ZeroCurrency)).Scan(&addressID)
+			err = addrStmt.QueryRow(encode(addr), encode(types.ZeroCurrency)).Scan(&addressID)
 			if err != nil {
 				return fmt.Errorf("failed to get address: %w", err)
 			}
@@ -731,6 +700,33 @@ func addEvents(tx *txn, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[exp
 			}
 
 			used[addr] = true
+		}
+
+		switch v := event.Data.(type) {
+		case explorer.EventV1Transaction:
+			dbID := txnDBIds[types.TransactionID(event.ID)].id
+			if _, err = v1TransactionEventStmt.Exec(eventID, dbID); err != nil {
+				return fmt.Errorf("failed to insert transaction event: %w", err)
+			}
+		case explorer.EventV2Transaction:
+			dbID := v2TxnDBIds[types.TransactionID(event.ID)].id
+			if _, err = v2TransactionEventStmt.Exec(eventID, dbID); err != nil {
+				return fmt.Errorf("failed to insert transaction event: %w", err)
+			}
+		case explorer.EventPayout:
+			_, err = payoutEventStmt.Exec(eventID, scDBIds[types.SiacoinOutputID(event.ID)])
+		case explorer.EventV1ContractResolution:
+			ddd := explorer.DBFileContract{ID: v.Parent.ID, RevisionNumber: v.Parent.RevisionNumber}
+			log.Printf("scDBIDs[%+v] = %v, fcDBIds[%+v] = %d", v.SiacoinElement.ID, scDBIds[v.SiacoinElement.ID], ddd, fcDBIds[ddd])
+
+			_, err = v1ContractResolutionEventStmt.Exec(eventID, scDBIds[v.SiacoinElement.ID], fcDBIds[explorer.DBFileContract{ID: v.Parent.ID, RevisionNumber: v.Parent.RevisionNumber}], v.Missed)
+		case explorer.EventV2ContractResolution:
+			_, err = v2ContractResolutionEventStmt.Exec(eventID, scDBIds[v.SiacoinElement.ID], v2FcDBIds[explorer.DBFileContract{ID: v.Resolution.Parent.ID, RevisionNumber: v.Resolution.Parent.V2FileContract.RevisionNumber}], v.Missed)
+		default:
+			return fmt.Errorf("unknown event type: %T", reflect.TypeOf(event.Data))
+		}
+		if err != nil {
+			return fmt.Errorf("failed to insert %v event: %w", reflect.TypeOf(event.Data), err)
 		}
 	}
 	return nil
@@ -1062,12 +1058,12 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to update metrics: %w", err)
 	} else if err := addHostAnnouncements(ut.tx, state.Block.Timestamp, state.HostAnnouncements, state.V2HostAnnouncements); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add host announcements: %w", err)
-	} else if err := addEvents(ut.tx, scDBIds, fcDBIds, txnDBIds, v2TxnDBIds, state.Events); err != nil {
-		return fmt.Errorf("ApplyIndex: failed to add events: %w", err)
 	} else if err := updateFileContractIndices(ut.tx, false, state.Metrics.Index, state.FileContractElements); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update file contract element indices: %w", err)
 	} else if err := updateV2FileContractIndices(ut.tx, false, state.Metrics.Index, state.V2FileContractElements); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update v2 file contract element indices: %w", err)
+	} else if err := addEvents(ut.tx, state.Block.ID(), scDBIds, sfDBIds, fcDBIds, v2FcDBIds, txnDBIds, v2TxnDBIds, state.Events); err != nil {
+		return fmt.Errorf("ApplyIndex: failed to add events: %w", err)
 	}
 
 	return nil

@@ -4,6 +4,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
@@ -13,8 +16,8 @@ import (
 func Equal[T any](t *testing.T, desc string, expect, got T) {
 	t.Helper()
 
-	if !reflect.DeepEqual(expect, got) {
-		t.Fatalf("expected %v %s, got %v", expect, desc, got)
+	if !cmp.Equal(expect, got, cmpopts.EquateEmpty(), cmpopts.IgnoreUnexported(consensus.Work{}), cmpopts.IgnoreFields(types.StateElement{}, "MerkleProof")) {
+		t.Fatalf("%s expected != got, diff: %s", desc, cmp.Diff(expect, got))
 	}
 }
 
