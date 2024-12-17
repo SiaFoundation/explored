@@ -264,3 +264,9 @@ func (c *Client) Search(id types.Hash256) (resp explorer.SearchType, err error) 
 	err = c.c.GET(fmt.Sprintf("/search/%s", id.String()), &resp)
 	return
 }
+
+// HostsList searches the hosts by the given criteria.
+func (c *Client) HostsList(params explorer.HostQuery, sortBy explorer.HostSortColumn, dir explorer.HostSortDir, offset, limit uint64) (resp []explorer.Host, err error) {
+	err = c.c.POST(fmt.Sprintf("/hosts/list?sort=%s&dir=%s&offset=%d&limit=%d", sortBy, dir, offset, limit), params, &resp)
+	return
+}
