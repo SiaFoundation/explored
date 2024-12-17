@@ -397,6 +397,7 @@ const (
 
 // HostQuery defines the filter and sort parameters for querying hosts.
 type HostQuery struct {
+	V2                   bool
 	MinUptime            float64
 	MinDuration          uint64
 	MaxStoragePrice      types.Currency

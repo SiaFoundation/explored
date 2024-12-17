@@ -3,6 +3,7 @@ package sqlite_test
 import (
 	"context"
 	"encoding/base64"
+	"math"
 	"net"
 	"path/filepath"
 	"sort"
