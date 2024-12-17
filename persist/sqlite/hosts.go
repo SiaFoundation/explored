@@ -118,32 +118,61 @@ func (s *Store) HostsForScanning(maxLastScan, minLastAnnouncement time.Time, off
 	return
 }
 
+// QueryHosts implements explorer.Store.
 func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortColumn, dir explorer.HostSortDir, offset, limit uint64) (result []explorer.Host, err error) {
+	var args []any
 	var filters []string
-	var args []interface{}
+
+	if params.V2 {
+		filters = append(filters, `v2 = 1`)
+	} else {
+		filters = append(filters, `v2 = 0`)
+	}
+
+	const uptimeValue = `(successful_interactions * 1.0 / MAX(1, total_scans))`
 	if params.MinUptime > 0 {
-		filters = append(filters, "(successful_interactions * 1.0 / MAX(1, total_scans)) >= ?")
+		filters = append(filters, uptimeValue+" >= ?")
 		args = append(args, params.MinUptime/100.0)
 	}
 	if params.MinDuration > 0 {
-		filters = append(filters, "(settings_max_duration >= ? OR (v2 = TRUE AND rhp4_settings_max_contract_duration >= ?))")
-		args = append(args, encode(params.MinDuration), encode(params.MinDuration))
+		if params.V2 {
+			filters = append(filters, "rhp4_settings_max_contract_duration >= ?")
+		} else {
+			filters = append(filters, "settings_max_duration >= ?")
+		}
+		args = append(args, encode(params.MinDuration))
 	}
 	if !params.MaxStoragePrice.IsZero() {
-		filters = append(filters, "(settings_storage_price <= ? OR (v2 = TRUE AND rhp4_prices_storage_price <= ?))")
-		args = append(args, encode(params.MaxStoragePrice), encode(params.MaxStoragePrice))
+		if params.V2 {
+			filters = append(filters, "rhp4_prices_storage_price <= ?")
+		} else {
+			filters = append(filters, "settings_storage_price <= ?")
+		}
+		args = append(args, encode(params.MaxStoragePrice))
 	}
 	if !params.MaxContractPrice.IsZero() {
-		filters = append(filters, "(settings_contract_price <= ? OR (v2 = TRUE AND rhp4_prices_contract_price <= ?))")
-		args = append(args, encode(params.MaxContractPrice), encode(params.MaxContractPrice))
+		if params.V2 {
+			filters = append(filters, "rhp4_prices_contract_price <= ?")
+		} else {
+			filters = append(filters, "settings_contract_price <= ?")
+		}
+		args = append(args, encode(params.MaxContractPrice))
 	}
 	if !params.MaxUploadPrice.IsZero() {
-		filters = append(filters, "(settings_upload_bandwidth_price <= ? OR (v2 = TRUE AND rhp4_prices_ingress_price <= ?))")
-		args = append(args, encode(params.MaxUploadPrice), encode(params.MaxUploadPrice))
+		if params.V2 {
+			filters = append(filters, "rhp4_prices_ingress_price <= ?")
+		} else {
+			filters = append(filters, "settings_upload_bandwidth_price <= ?")
+		}
+		args = append(args, encode(params.MaxUploadPrice))
 	}
 	if !params.MaxDownloadPrice.IsZero() {
-		filters = append(filters, "(settings_download_bandwidth_price <= ? OR (v2 = TRUE AND rhp4_prices_egress_price <= ?))")
-		args = append(args, encode(params.MaxDownloadPrice), encode(params.MaxDownloadPrice))
+		if params.V2 {
+			filters = append(filters, "rhp4_prices_egress_price <= ?")
+		} else {
+			filters = append(filters, "settings_download_bandwidth_price <= ?")
+		}
+		args = append(args, encode(params.MaxDownloadPrice))
 	}
 	if !params.MaxBaseRPCPrice.IsZero() {
 		filters = append(filters, "settings_base_rpc_price <= ?")
@@ -154,7 +183,11 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 		args = append(args, encode(params.MaxSectorAccessPrice))
 	}
 	if params.AcceptContracts {
-		filters = append(filters, "settings_accepting_contracts = 1")
+		if params.V2 {
+			filters = append(filters, "rhp4_settings_accepting_contracts = 1")
+		} else {
+			filters = append(filters, "settings_accepting_contracts = 1")
+		}
 	}
 	if params.Online {
 		filters = append(filters, "last_scan_successful = 1")
@@ -169,22 +202,50 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 		sortColumn = "net_address"
 	case explorer.HostSortPublicKey:
 		sortColumn = "public_key"
-	case explorer.HostSortAcceptingContracts:
-		sortColumn = "settings_accepting_contracts"
 	case explorer.HostSortUptime:
-		sortColumn = "uptime"
+		sortColumn = uptimeValue
+	case explorer.HostSortAcceptingContracts:
+		if params.V2 {
+			sortColumn = "rhp4_settings_accepting_contracts"
+		} else {
+			sortColumn = "settings_accepting_contracts"
+		}
 	case explorer.HostSortStoragePrice:
-		sortColumn = "settings_storage_price"
+		if params.V2 {
+			sortColumn = "rhp4_prices_storage_price"
+		} else {
+			sortColumn = "settings_storage_price"
+		}
 	case explorer.HostSortContractPrice:
-		sortColumn = "settings_contract_price"
+		if params.V2 {
+			sortColumn = "rhp4_prices_contract_price"
+		} else {
+			sortColumn = "settings_contract_price"
+		}
 	case explorer.HostSortDownloadPrice:
-		sortColumn = "settings_download_bandwidth_price"
+		if params.V2 {
+			sortColumn = "rhp4_prices_egress_price"
+		} else {
+			sortColumn = "settings_download_bandwidth_price"
+		}
 	case explorer.HostSortUploadPrice:
-		sortColumn = "settings_upload_bandwidth_price"
+		if params.V2 {
+			sortColumn = "rhp4_prices_ingress_price"
+		} else {
+			sortColumn = "settings_upload_bandwidth_price"
+		}
 	case explorer.HostSortUsedStorage:
-		sortColumn = "settings_total_storage - settings_remaining_storage"
+		if params.V2 {
+			sortColumn = "rhp4_settings_total_storage - rhp4_settings_remaining_storage"
+		} else {
+			sortColumn = "settings_total_storage - settings_remaining_storage"
+		}
 	case explorer.HostSortTotalStorage:
-		sortColumn = "settings_total_storage"
+		if params.V2 {
+			sortColumn = "rhp4_settings_total_storage"
+		} else {
+			sortColumn = "settings_total_storage"
+		}
 	default:
 		panic("invalid sort column")
 	}
@@ -194,9 +255,9 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 		whereClause = "WHERE " + strings.Join(filters, " AND ")
 	}
 	query := fmt.Sprintf(`
-        SELECT public_key,net_address,country_code,known_since,last_scan,last_scan_successful,last_announcement,total_scans,successful_interactions,failed_interactions,settings_accepting_contracts,settings_max_download_batch_size,settings_max_duration,settings_max_revise_batch_size,settings_net_address,settings_remaining_storage,settings_sector_size,settings_total_storage,settings_address,settings_window_size,settings_collateral,settings_max_collateral,settings_base_rpc_price,settings_contract_price,settings_download_bandwidth_price,settings_sector_access_price,settings_storage_price,settings_upload_bandwidth_price,settings_ephemeral_account_expiry,settings_max_ephemeral_account_balance,settings_revision_number,settings_version,settings_release,settings_sia_mux_port,price_table_uid,price_table_validity,price_table_host_block_height,price_table_update_price_table_cost,price_table_account_balance_cost,price_table_fund_account_cost,price_table_latest_revision_cost,price_table_subscription_memory_cost,price_table_subscription_notification_cost,price_table_init_base_cost,price_table_memory_time_cost,price_table_download_bandwidth_cost,price_table_upload_bandwidth_cost,price_table_drop_sectors_base_cost,price_table_drop_sectors_unit_cost,price_table_has_sector_base_cost,price_table_read_base_cost,price_table_read_length_cost,price_table_renew_contract_cost,price_table_revision_base_cost,price_table_swap_sector_base_cost,price_table_write_base_cost,price_table_write_length_cost,price_table_write_store_cost,price_table_txn_fee_min_recommended,price_table_txn_fee_max_recommended,price_table_contract_price,price_table_collateral_cost,price_table_max_collateral,price_table_max_duration,price_table_window_size,price_table_registry_entries_left,price_table_registry_entries_total,rhp4_settings_protocol_version,rhp4_settings_release,rhp4_settings_wallet_address,rhp4_settings_accepting_contracts,rhp4_settings_max_collateral,rhp4_settings_max_contract_duration,rhp4_settings_remaining_storage,rhp4_settings_total_storage,rhp4_prices_contract_price,rhp4_prices_collateral_price,rhp4_prices_storage_price,rhp4_prices_ingress_price,rhp4_prices_egress_price,rhp4_prices_free_sector_price,rhp4_prices_tip_height,rhp4_prices_valid_until,rhp4_prices_signature FROM host_info
+        SELECT public_key,v2,net_address,country_code,known_since,last_scan,last_scan_successful,last_announcement,total_scans,successful_interactions,failed_interactions,settings_accepting_contracts,settings_max_download_batch_size,settings_max_duration,settings_max_revise_batch_size,settings_net_address,settings_remaining_storage,settings_sector_size,settings_total_storage,settings_address,settings_window_size,settings_collateral,settings_max_collateral,settings_base_rpc_price,settings_contract_price,settings_download_bandwidth_price,settings_sector_access_price,settings_storage_price,settings_upload_bandwidth_price,settings_ephemeral_account_expiry,settings_max_ephemeral_account_balance,settings_revision_number,settings_version,settings_release,settings_sia_mux_port,price_table_uid,price_table_validity,price_table_host_block_height,price_table_update_price_table_cost,price_table_account_balance_cost,price_table_fund_account_cost,price_table_latest_revision_cost,price_table_subscription_memory_cost,price_table_subscription_notification_cost,price_table_init_base_cost,price_table_memory_time_cost,price_table_download_bandwidth_cost,price_table_upload_bandwidth_cost,price_table_drop_sectors_base_cost,price_table_drop_sectors_unit_cost,price_table_has_sector_base_cost,price_table_read_base_cost,price_table_read_length_cost,price_table_renew_contract_cost,price_table_revision_base_cost,price_table_swap_sector_base_cost,price_table_write_base_cost,price_table_write_length_cost,price_table_write_store_cost,price_table_txn_fee_min_recommended,price_table_txn_fee_max_recommended,price_table_contract_price,price_table_collateral_cost,price_table_max_collateral,price_table_max_duration,price_table_window_size,price_table_registry_entries_left,price_table_registry_entries_total,rhp4_settings_protocol_version,rhp4_settings_release,rhp4_settings_wallet_address,rhp4_settings_accepting_contracts,rhp4_settings_max_collateral,rhp4_settings_max_contract_duration,rhp4_settings_remaining_storage,rhp4_settings_total_storage,rhp4_prices_contract_price,rhp4_prices_collateral_price,rhp4_prices_storage_price,rhp4_prices_ingress_price,rhp4_prices_egress_price,rhp4_prices_free_sector_price,rhp4_prices_tip_height,rhp4_prices_valid_until,rhp4_prices_signature FROM host_info
         %s
-        ORDER BY (%s) (%s)
+        ORDER BY (%s) %s
         LIMIT ? OFFSET ?`,
 		whereClause, sortColumn, dir,
 	)
@@ -210,6 +271,7 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 
 		rows, err := tx.Query(query, args...)
 		if err != nil {
+			panic(err)
 			return err
 		}
 		defer rows.Close()

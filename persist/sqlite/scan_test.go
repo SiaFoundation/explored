@@ -3,6 +3,7 @@ package sqlite_test
 import (
 	"context"
 	"encoding/base64"
+	"math"
 	"net"
 	"path/filepath"
 	"sort"
@@ -293,5 +294,124 @@ func TestScan(t *testing.T) {
 		if host3.Settings.SectorSize <= 0 {
 			log.Fatal("SectorSize = 0 on host that's supposed to be active")
 		}
+	}
+
+	{
+		dbHosts, err := e.QueryHosts(explorer.HostQuery{V2: true}, explorer.HostSortAcceptingContracts, explorer.HostSortAsc, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(dbHosts)", 1, len(dbHosts))
+		testutil.Equal(t, "host1.PublicKey", pubkey3, dbHosts[0].PublicKey)
+		testutil.Equal(t, "host1.RHPV4Settings.AcceptingContracts", true, dbHosts[0].RHPV4Settings.AcceptingContracts)
+	}
+
+	{
+		dbHosts, err := e.QueryHosts(explorer.HostQuery{V2: false}, explorer.HostSortAcceptingContracts, explorer.HostSortAsc, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(dbHosts)", 2, len(dbHosts))
+
+		testutil.Equal(t, "host1.PublicKey", pubkey2, dbHosts[0].PublicKey)
+		testutil.Equal(t, "host1.Settings.AcceptingContracts", false, dbHosts[0].Settings.AcceptingContracts)
+
+		testutil.Equal(t, "host2.PublicKey", pubkey1, dbHosts[1].PublicKey)
+		testutil.Equal(t, "host2.Settings.AcceptingContracts", true, dbHosts[1].Settings.AcceptingContracts)
+	}
+
+	{
+		dbHosts, err := e.QueryHosts(explorer.HostQuery{V2: false}, explorer.HostSortAcceptingContracts, explorer.HostSortDesc, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(dbHosts)", 2, len(dbHosts))
+
+		testutil.Equal(t, "host1.PublicKey", pubkey1, dbHosts[0].PublicKey)
+		testutil.Equal(t, "host1.Settings.AcceptingContracts", true, dbHosts[0].Settings.AcceptingContracts)
+
+		testutil.Equal(t, "host2.PublicKey", pubkey2, dbHosts[1].PublicKey)
+		testutil.Equal(t, "host2.Settings.AcceptingContracts", false, dbHosts[1].Settings.AcceptingContracts)
+	}
+
+	{
+		dbHosts, err := e.QueryHosts(explorer.HostQuery{V2: false}, explorer.HostSortUploadPrice, explorer.HostSortAsc, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(dbHosts)", 2, len(dbHosts))
+
+		testutil.Equal(t, "host1.PublicKey", pubkey2, dbHosts[0].PublicKey)
+		testutil.Equal(t, "host1.Settings.AcceptingContracts", false, dbHosts[0].Settings.AcceptingContracts)
+
+		testutil.Equal(t, "host2.PublicKey", pubkey1, dbHosts[1].PublicKey)
+		testutil.Equal(t, "host2.Settings.AcceptingContracts", true, dbHosts[1].Settings.AcceptingContracts)
+	}
+
+	{
+		dbHosts, err := e.QueryHosts(explorer.HostQuery{V2: false, Online: true}, explorer.HostSortUploadPrice, explorer.HostSortAsc, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(dbHosts)", 1, len(dbHosts))
+
+		testutil.Equal(t, "host1.PublicKey", pubkey1, dbHosts[0].PublicKey)
+		testutil.Equal(t, "host1.Settings.AcceptingContracts", true, dbHosts[0].Settings.AcceptingContracts)
+	}
+
+	{
+		dbHosts, err := e.QueryHosts(explorer.HostQuery{V2: false, MinDuration: 10}, explorer.HostSortUploadPrice, explorer.HostSortAsc, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(dbHosts)", 1, len(dbHosts))
+
+		testutil.Equal(t, "host1.PublicKey", pubkey1, dbHosts[0].PublicKey)
+		testutil.Equal(t, "host1.Settings.AcceptingContracts", true, dbHosts[0].Settings.AcceptingContracts)
+	}
+
+	{
+		dbHosts, err := e.QueryHosts(explorer.HostQuery{V2: false, MinDuration: math.MaxUint64}, explorer.HostSortUploadPrice, explorer.HostSortAsc, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(dbHosts)", 0, len(dbHosts))
+	}
+
+	{
+		dbHosts, err := e.QueryHosts(explorer.HostQuery{V2: true, MinDuration: 10}, explorer.HostSortAcceptingContracts, explorer.HostSortAsc, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(dbHosts)", 1, len(dbHosts))
+		testutil.Equal(t, "host1.PublicKey", pubkey3, dbHosts[0].PublicKey)
+		testutil.Equal(t, "host1.RHPV4Settings.AcceptingContracts", true, dbHosts[0].RHPV4Settings.AcceptingContracts)
+	}
+
+	{
+		dbHosts, err := e.QueryHosts(explorer.HostQuery{V2: true, MinDuration: math.MaxUint64}, explorer.HostSortAcceptingContracts, explorer.HostSortAsc, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(dbHosts)", 0, len(dbHosts))
+	}
+
+	{
+		dbHosts, err := e.QueryHosts(explorer.HostQuery{V2: false, MinUptime: 100.0}, explorer.HostSortAcceptingContracts, explorer.HostSortAsc, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(dbHosts)", 1, len(dbHosts))
+
+		testutil.Equal(t, "host1.PublicKey", pubkey1, dbHosts[0].PublicKey)
+		testutil.Equal(t, "host1.Settings.AcceptingContracts", true, dbHosts[0].Settings.AcceptingContracts)
+	}
+
+	{
+		dbHosts, err := e.QueryHosts(explorer.HostQuery{V2: false, MinUptime: 100.1}, explorer.HostSortAcceptingContracts, explorer.HostSortAsc, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(dbHosts)", 0, len(dbHosts))
 	}
 }

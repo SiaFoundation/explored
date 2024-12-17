@@ -67,6 +67,7 @@ type Store interface {
 	SiafundElements(ids []types.SiafundOutputID) (result []SiafundOutput, err error)
 
 	Hosts(pks []types.PublicKey) ([]Host, error)
+	QueryHosts(params HostQuery, sortBy HostSortColumn, dir HostSortDir, offset, limit uint64) ([]Host, error)
 	HostsForScanning(maxLastScan, minLastAnnouncement time.Time, offset, limit uint64) ([]Host, error)
 }
 
@@ -294,6 +295,11 @@ func (e *Explorer) SiafundElements(ids []types.SiafundOutputID) (result []Siafun
 // Hosts returns the hosts with the specified public keys.
 func (e *Explorer) Hosts(pks []types.PublicKey) ([]Host, error) {
 	return e.s.Hosts(pks)
+}
+
+// QueryHosts returns the hosts with the specified public keys.
+func (e *Explorer) QueryHosts(params HostQuery, sortBy HostSortColumn, dir HostSortDir, offset, limit uint64) ([]Host, error) {
+	return e.s.QueryHosts(params, sortBy, dir, offset, limit)
 }
 
 // Search returns the element type (address, block, transaction, contract ID)
