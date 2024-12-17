@@ -197,7 +197,7 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 	var sortColumn string
 	switch sortBy {
 	case explorer.HostSortDateCreated:
-		sortColumn = "last_announcement"
+		sortColumn = "known_since"
 	case explorer.HostSortNetAddress:
 		sortColumn = "net_address"
 	case explorer.HostSortPublicKey:
