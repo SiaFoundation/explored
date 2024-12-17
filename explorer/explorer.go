@@ -297,7 +297,8 @@ func (e *Explorer) Hosts(pks []types.PublicKey) ([]Host, error) {
 	return e.s.Hosts(pks)
 }
 
-// QueryHosts returns the hosts with the specified public keys.
+// QueryHosts returns the hosts matching the query parameters in the order
+// specified by dir.
 func (e *Explorer) QueryHosts(params HostQuery, sortBy HostSortColumn, dir HostSortDir, offset, limit uint64) ([]Host, error) {
 	return e.s.QueryHosts(params, sortBy, dir, offset, limit)
 }
