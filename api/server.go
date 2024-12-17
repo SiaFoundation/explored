@@ -71,6 +71,7 @@ type (
 		Search(id types.Hash256) (explorer.SearchType, error)
 
 		Hosts(pks []types.PublicKey) ([]explorer.Host, error)
+		QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortColumn, dir explorer.HostSortDir, offset, limit uint64) ([]explorer.Host, error)
 	}
 )
 
@@ -628,6 +629,31 @@ func (s *server) pubkeyHostHandler(jc jape.Context) {
 	jc.Encode(hosts[0])
 }
 
+func (s *server) hostsListHandler(jc jape.Context) {
+	var params explorer.HostQuery
+	if jc.Decode(&params) != nil {
+		return
+	}
+
+	limit := uint64(100)
+	offset := uint64(0)
+	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
+		return
+	}
+
+	dir := explorer.HostSortAsc
+	sortBy := explorer.HostSortDateCreated
+	if jc.DecodeForm("dir", &dir) != nil || jc.DecodeForm("sort", &sortBy) != nil {
+		return
+	}
+
+	hosts, err := s.e.QueryHosts(params, sortBy, dir, offset, limit)
+	if jc.Check("failed to query hosts", err) != nil {
+		return
+	}
+	jc.Encode(hosts)
+}
+
 func (s *server) searchIDHandler(jc jape.Context) {
 	const maxLen = len(types.Hash256{})
 
@@ -708,6 +734,8 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET    /metrics/block":     srv.blocksMetricsHandler,
 		"GET    /metrics/block/:id": srv.blocksMetricsIDHandler,
 		"GET    /metrics/host":      srv.hostMetricsHandler,
+
+		"POST   /hosts/list": srv.hostsListHandler,
 
 		"GET    /search/:id": srv.searchIDHandler,
 	})
