@@ -118,7 +118,8 @@ func (s *Store) HostsForScanning(maxLastScan, minLastAnnouncement time.Time, lim
 	return
 }
 
-// QueryHosts implements explorer.Store.
+// QueryHosts returns the hosts matching the query parameters in the order
+// specified by dir.
 func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortColumn, dir explorer.HostSortDir, offset, limit uint64) (result []explorer.Host, err error) {
 	var args []any
 	var filters []string
@@ -271,7 +272,6 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 
 		rows, err := tx.Query(query, args...)
 		if err != nil {
-			panic(err)
 			return err
 		}
 		defer rows.Close()

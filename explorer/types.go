@@ -375,7 +375,9 @@ type HostMetrics struct {
 type HostSortDir string
 
 const (
-	HostSortAsc  HostSortDir = "ASC"
+	// HostSortAsc means sorting in ascending order.
+	HostSortAsc HostSortDir = "ASC"
+	// HostSortDesc means sorting in descending order.
 	HostSortDesc HostSortDir = "DESC"
 )
 
@@ -406,17 +408,28 @@ func (h *HostSortDir) UnmarshalText(data []byte) error {
 type HostSortColumn string
 
 const (
-	HostSortDateCreated        HostSortColumn = "date_created"
-	HostSortNetAddress         HostSortColumn = "net_address"
-	HostSortPublicKey          HostSortColumn = "public_key"
+	// HostSortDateCreated sorts hosts in the order they were first announced.
+	HostSortDateCreated HostSortColumn = "date_created"
+	// HostSortNetAddress sorts hosts by their net address.
+	HostSortNetAddress HostSortColumn = "net_address"
+	// HostSortPublicKey sorts hosts by their public key
+	HostSortPublicKey HostSortColumn = "public_key"
+	// HostSortAcceptingContracts sorts hosts by whether they accept contracts.
 	HostSortAcceptingContracts HostSortColumn = "accepting_contracts"
-	HostSortUptime             HostSortColumn = "uptime"
-	HostSortStoragePrice       HostSortColumn = "storage_price"
-	HostSortContractPrice      HostSortColumn = "contract_price"
-	HostSortDownloadPrice      HostSortColumn = "download_price"
-	HostSortUploadPrice        HostSortColumn = "upload_price"
-	HostSortUsedStorage        HostSortColumn = "used_storage"
-	HostSortTotalStorage       HostSortColumn = "total_storage"
+	// HostSortUptime sorts hosts by their uptime.
+	HostSortUptime HostSortColumn = "uptime"
+	// HostSortStoragePrice sorts hosts by their storage price.
+	HostSortStoragePrice HostSortColumn = "storage_price"
+	// HostSortContractPrice sorts hosts by their contract price.
+	HostSortContractPrice HostSortColumn = "contract_price"
+	// HostSortDownloadPrice sorts hosts by their download price.
+	HostSortDownloadPrice HostSortColumn = "download_price"
+	// HostSortUploadPrice sorts hosts by their upload price.
+	HostSortUploadPrice HostSortColumn = "upload_price"
+	// HostSortUsedStorage sorts hosts by their used storage.
+	HostSortUsedStorage HostSortColumn = "used_storage"
+	// HostSortTotalStorage sorts hosts by their total storage.
+	HostSortTotalStorage HostSortColumn = "total_storage"
 )
 
 // MarshalText implements encoding.TextMarshaler.
