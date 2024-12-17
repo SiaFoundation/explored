@@ -3,6 +3,7 @@ package explorer
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"go.sia.tech/core/consensus"
@@ -378,22 +379,88 @@ const (
 	HostSortDesc HostSortDir = "DESC"
 )
 
+// MarshalText implements encoding.TextMarshaler.
+func (h HostSortDir) MarshalText() ([]byte, error) {
+	switch h {
+	case HostSortAsc, HostSortDesc:
+		return []byte(h), nil
+	default:
+		return nil, fmt.Errorf("invalid HostSortDir: %s", h)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (h *HostSortDir) UnmarshalText(data []byte) error {
+	switch string(data) {
+	case string(HostSortAsc):
+		*h = HostSortAsc
+	case string(HostSortDesc):
+		*h = HostSortDesc
+	default:
+		return fmt.Errorf("invalid HostSortDir: %s", data)
+	}
+	return nil
+}
+
 // HostSortColumn represents the sorting column for host filtering.
-type HostSortColumn int
+type HostSortColumn string
 
 const (
-	HostSortDateCreated = iota
-	HostSortNetAddress
-	HostSortPublicKey
-	HostSortAcceptingContracts
-	HostSortUptime
-	HostSortStoragePrice
-	HostSortContractPrice
-	HostSortDownloadPrice
-	HostSortUploadPrice
-	HostSortUsedStorage
-	HostSortTotalStorage
+	HostSortDateCreated        HostSortColumn = "date_created"
+	HostSortNetAddress         HostSortColumn = "net_address"
+	HostSortPublicKey          HostSortColumn = "public_key"
+	HostSortAcceptingContracts HostSortColumn = "accepting_contracts"
+	HostSortUptime             HostSortColumn = "uptime"
+	HostSortStoragePrice       HostSortColumn = "storage_price"
+	HostSortContractPrice      HostSortColumn = "contract_price"
+	HostSortDownloadPrice      HostSortColumn = "download_price"
+	HostSortUploadPrice        HostSortColumn = "upload_price"
+	HostSortUsedStorage        HostSortColumn = "used_storage"
+	HostSortTotalStorage       HostSortColumn = "total_storage"
 )
+
+// MarshalText implements encoding.TextMarshaler.
+func (h HostSortColumn) MarshalText() ([]byte, error) {
+	switch h {
+	case HostSortDateCreated, HostSortNetAddress, HostSortPublicKey, HostSortAcceptingContracts,
+		HostSortUptime, HostSortStoragePrice, HostSortContractPrice, HostSortDownloadPrice,
+		HostSortUploadPrice, HostSortUsedStorage, HostSortTotalStorage:
+		return []byte(h), nil
+	default:
+		return nil, fmt.Errorf("invalid HostSortColumn: %s", h)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (h *HostSortColumn) UnmarshalText(data []byte) error {
+	switch string(data) {
+	case string(HostSortDateCreated):
+		*h = HostSortDateCreated
+	case string(HostSortNetAddress):
+		*h = HostSortNetAddress
+	case string(HostSortPublicKey):
+		*h = HostSortPublicKey
+	case string(HostSortAcceptingContracts):
+		*h = HostSortAcceptingContracts
+	case string(HostSortUptime):
+		*h = HostSortUptime
+	case string(HostSortStoragePrice):
+		*h = HostSortStoragePrice
+	case string(HostSortContractPrice):
+		*h = HostSortContractPrice
+	case string(HostSortDownloadPrice):
+		*h = HostSortDownloadPrice
+	case string(HostSortUploadPrice):
+		*h = HostSortUploadPrice
+	case string(HostSortUsedStorage):
+		*h = HostSortUsedStorage
+	case string(HostSortTotalStorage):
+		*h = HostSortTotalStorage
+	default:
+		return fmt.Errorf("invalid HostSortColumn: %s", data)
+	}
+	return nil
+}
 
 // HostQuery defines the filter and sort parameters for querying hosts.
 type HostQuery struct {
