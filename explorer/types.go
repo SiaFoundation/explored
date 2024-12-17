@@ -319,6 +319,7 @@ type HostScan struct {
 // Host represents a host and the information gathered from scanning it.
 type Host struct {
 	PublicKey      types.PublicKey    `json:"publicKey"`
+	V2             bool               `json:"v2"`
 	NetAddress     string             `json:"netAddress"`
 	V2NetAddresses []chain.NetAddress `json:"v2NetAddresses,omitempty"`
 
@@ -367,4 +368,43 @@ type HostMetrics struct {
 
 	Settings   rhpv2.HostSettings   `json:"settings"`
 	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
+}
+
+// HostSortDir represents the sorting direction for host filtering.
+type HostSortDir string
+
+const (
+	HostSortAsc  HostSortDir = "ASC"
+	HostSortDesc HostSortDir = "DESC"
+)
+
+// HostSortColumn represents the sorting column for host filtering.
+type HostSortColumn int
+
+const (
+	HostSortDateCreated = iota
+	HostSortNetAddress
+	HostSortPublicKey
+	HostSortAcceptingContracts
+	HostSortUptime
+	HostSortStoragePrice
+	HostSortContractPrice
+	HostSortDownloadPrice
+	HostSortUploadPrice
+	HostSortUsedStorage
+	HostSortTotalStorage
+)
+
+// HostQuery defines the filter and sort parameters for querying hosts.
+type HostQuery struct {
+	MinUptime            float64
+	MinDuration          uint64
+	MaxStoragePrice      types.Currency
+	MaxContractPrice     types.Currency
+	MaxUploadPrice       types.Currency
+	MaxDownloadPrice     types.Currency
+	MaxBaseRPCPrice      types.Currency
+	MaxSectorAccessPrice types.Currency
+	AcceptContracts      bool
+	Online               bool
 }
