@@ -2,6 +2,8 @@ package api
 
 import (
 	"fmt"
+	"net/url"
+	"strconv"
 
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
@@ -262,5 +264,16 @@ func (c *Client) HostMetrics() (resp explorer.HostMetrics, err error) {
 // Search returns what type of object an ID is.
 func (c *Client) Search(id types.Hash256) (resp explorer.SearchType, err error) {
 	err = c.c.GET(fmt.Sprintf("/search/%s", id.String()), &resp)
+	return
+}
+
+// HostsList searches the hosts by the given criteria.
+func (c *Client) HostsList(params explorer.HostQuery, sortBy explorer.HostSortColumn, dir explorer.HostSortDir, offset, limit uint64) (resp []explorer.Host, err error) {
+	v := url.Values{}
+	v.Add("sort", string(sortBy))
+	v.Add("dir", string(dir))
+	v.Add("offset", strconv.FormatUint(offset, 10))
+	v.Add("limit", strconv.FormatUint(limit, 10))
+	err = c.c.POST("/hosts?"+v.Encode(), params, &resp)
 	return
 }

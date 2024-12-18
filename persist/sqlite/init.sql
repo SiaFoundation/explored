@@ -472,6 +472,7 @@ CREATE TABLE v2_transaction_events (
 
 CREATE TABLE host_info (
     public_key BLOB PRIMARY KEY NOT NULL,
+    v2 INTEGER NOT NULL,
     net_address TEXT NOT NULL,
     country_code TEXT NOT NULL,
     known_since INTEGER NOT NULL,
