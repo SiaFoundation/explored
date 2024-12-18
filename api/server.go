@@ -641,7 +641,7 @@ func (s *server) pubkeyHostHandler(jc jape.Context) {
 	jc.Encode(hosts[0])
 }
 
-func (s *server) hostsListHandler(jc jape.Context) {
+func (s *server) hostsHandler(jc jape.Context) {
 	var params explorer.HostQuery
 	if jc.Decode(&params) != nil {
 		return
@@ -750,7 +750,7 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET    /metrics/block/:id": srv.blocksMetricsIDHandler,
 		"GET    /metrics/host":      srv.hostMetricsHandler,
 
-		"POST   /hosts/list": srv.hostsListHandler,
+		"POST   /hosts": srv.hostsHandler,
 
 		"GET    /search/:id": srv.searchIDHandler,
 	})
