@@ -79,6 +79,11 @@ const (
 	maxIDs = 5000
 )
 
+const (
+	defaultLimit = 100
+	maxLimit     = 500
+)
+
 var (
 	// ErrTransactionNotFound is returned by /transactions/:id when we are
 	// unable to find the transaction with that `id`.
@@ -293,14 +298,13 @@ func (s *server) transactionsIDIndicesHandler(jc jape.Context) {
 		return
 	}
 
-	limit := uint64(100)
+	limit := defaultLimit
 	offset := uint64(0)
 	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
 		return
 	}
-
-	if limit > 500 {
-		limit = 500
+	if limit > maxLimit {
+		limit = maxLimit
 	}
 
 	indices, err := s.e.TransactionChainIndices(id, offset, limit)
@@ -347,14 +351,13 @@ func (s *server) v2TransactionsIDIndicesHandler(jc jape.Context) {
 		return
 	}
 
-	limit := uint64(100)
+	limit := defaultLimit
 	offset := uint64(0)
 	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
 		return
 	}
-
-	if limit > 500 {
-		limit = 500
+	if limit > maxLimit {
+		limit = maxLimit
 	}
 
 	indices, err := s.e.V2TransactionChainIndices(id, offset, limit)
@@ -386,10 +389,13 @@ func (s *server) addressessAddressUtxosSiacoinHandler(jc jape.Context) {
 		return
 	}
 
-	limit := uint64(100)
+	limit := defaultLimit
 	offset := uint64(0)
 	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
 		return
+	}
+	if limit > maxLimit {
+		limit = maxLimit
 	}
 
 	outputs, err := s.e.UnspentSiacoinOutputs(address, offset, limit)
@@ -405,10 +411,13 @@ func (s *server) addressessAddressUtxosSiafundHandler(jc jape.Context) {
 		return
 	}
 
-	limit := uint64(100)
+	limit := defaultLimit
 	offset := uint64(0)
 	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
 		return
+	}
+	if limit > maxLimit {
+		limit = maxLimit
 	}
 
 	outputs, err := s.e.UnspentSiafundOutputs(address, offset, limit)
@@ -442,10 +451,13 @@ func (s *server) addressessAddressEventsHandler(jc jape.Context) {
 		return
 	}
 
-	limit := uint64(100)
+	limit := defaultLimit
 	offset := uint64(0)
 	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
 		return
+	}
+	if limit > maxLimit {
+		limit = maxLimit
 	}
 
 	events, err := s.e.AddressEvents(address, offset, limit)
@@ -635,10 +647,13 @@ func (s *server) hostsListHandler(jc jape.Context) {
 		return
 	}
 
-	limit := uint64(100)
+	limit := defaultLimit
 	offset := uint64(0)
 	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
 		return
+	}
+	if limit > maxLimit {
+		limit = maxLimit
 	}
 
 	dir := explorer.HostSortAsc
