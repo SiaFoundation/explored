@@ -42,7 +42,7 @@ func startTestNode(tb testing.TB, n *consensus.Network, genesis types.Block) (*c
 	}
 	tb.Cleanup(func() { syncerListener.Close() })
 
-	s := syncer.New(syncerListener, cm, ctestutil.NewMemPeerStore(), gateway.Header{
+	s := syncer.New(syncerListener, cm, ctestutil.NewEphemeralPeerStore(), gateway.Header{
 		GenesisID:  genesis.ID(),
 		UniqueID:   gateway.GenerateUniqueID(),
 		NetAddress: "localhost:1234",
@@ -87,9 +87,17 @@ func startTestNode(tb testing.TB, n *consensus.Network, genesis types.Block) (*c
 	return cm, s, w
 }
 
-func testRenterHostPair(tb testing.TB, hostKey types.PrivateKey, cm crhpv4.ChainManager, s crhpv4.Syncer, w crhpv4.Wallet, c crhpv4.Contractor, sr crhpv4.Settings, ss crhpv4.Sectors, log *zap.Logger) string {
-	rs := crhpv4.NewServer(hostKey, cm, s, c, w, sr, ss, crhpv4.WithContractProofWindowBuffer(10), crhpv4.WithPriceTableValidity(2*time.Minute))
-	return ctestutil.ServeSiaMux(tb, rs, log.Named("siamux"))
+func testRenterHostPair(tb testing.TB, hostKey types.PrivateKey, cm crhpv4.ChainManager, s crhpv4.Syncer, w crhpv4.Wallet, c crhpv4.Contractor, sr crhpv4.Settings, ss crhpv4.Sectors, log *zap.Logger) (string, crhpv4.TransportClient) {
+	rs := crhpv4.NewServer(hostKey, cm, s, c, w, sr, ss, crhpv4.WithPriceTableValidity(2*time.Minute))
+	hostAddr := ctestutil.ServeSiaMux(tb, rs, log.Named("siamux"))
+
+	transport, err := crhpv4.DialSiaMux(context.Background(), hostAddr, hostKey.PublicKey())
+	if err != nil {
+		tb.Fatal(err)
+	}
+	tb.Cleanup(func() { transport.Close() })
+
+	return hostAddr, transport
 }
 
 func TestScan(t *testing.T) {
@@ -153,7 +161,7 @@ func TestScan(t *testing.T) {
 	pk3 := types.GeneratePrivateKey()
 	pubkey3 := pk3.PublicKey()
 
-	v4Addr := testRenterHostPair(t, pk3, cm, s, w, c, sr, ss, zap.NewNop())
+	v4Addr, _ := testRenterHostPair(t, pk3, cm, s, w, c, sr, ss, zap.NewNop())
 
 	cfg := config.Scanner{
 		Threads:             10,
