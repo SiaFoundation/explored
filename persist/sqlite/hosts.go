@@ -248,7 +248,7 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 			sortColumn = "settings_total_storage"
 		}
 	default:
-		panic("invalid sort column")
+		return nil, fmt.Errorf("invalid sort column: %s", sortBy)
 	}
 
 	whereClause := ""

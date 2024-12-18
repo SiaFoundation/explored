@@ -80,8 +80,8 @@ const (
 )
 
 const (
-	defaultLimit = 100
-	maxLimit     = 500
+	defaultLimit uint64 = 100
+	maxLimit     uint64 = 500
 )
 
 var (
