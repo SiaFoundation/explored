@@ -275,9 +275,8 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) (events []
 			panic("unknown resolution type")
 		}
 
-		efc := V2FileContract{V2FileContractElement: fce}
-		{
-			element := sces[types.FileContractID(fce.ID).V2HostOutputID()]
+		addV2Resolution := func(element types.SiacoinElement) {
+			efc := V2FileContract{V2FileContractElement: fce}
 			addEvent(types.Hash256(element.ID), element.MaturityHeight, wallet.EventTypeV2ContractResolution, EventV2ContractResolution{
 				Resolution: V2FileContractResolution{
 					Parent:     efc,
@@ -286,21 +285,10 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) (events []
 				},
 				SiacoinElement: SiacoinOutput{SiacoinElement: element},
 				Missed:         missed,
-			}, []types.Address{fce.V2FileContract.HostOutput.Address})
+			}, []types.Address{element.SiacoinOutput.Address})
 		}
-
-		{
-			element := sces[types.FileContractID(fce.ID).V2RenterOutputID()]
-			addEvent(types.Hash256(element.ID), element.MaturityHeight, wallet.EventTypeV2ContractResolution, EventV2ContractResolution{
-				Resolution: V2FileContractResolution{
-					Parent:     efc,
-					Type:       typ,
-					Resolution: res,
-				},
-				SiacoinElement: SiacoinOutput{SiacoinElement: element},
-				Missed:         missed,
-			}, []types.Address{fce.V2FileContract.RenterOutput.Address})
-		}
+		addV2Resolution(sces[types.FileContractID(fce.ID).V2RenterOutputID()])
+		addV2Resolution(sces[types.FileContractID(fce.ID).V2HostOutputID()])
 	})
 
 	// handle block rewards
