@@ -491,6 +491,7 @@ CREATE TABLE host_info (
     settings_remaining_storage BLOB NOT NULL,
     settings_sector_size BLOB NOT NULL,
     settings_total_storage BLOB NOT NULL,
+    settings_used_storage BLOB NOT NULL, -- needed so we can sort by this because there's no clean way of subtracting binary encoded uint64s (total and remaining storage) in sqlite
     settings_address BLOB NOT NULL,
     settings_window_size BLOB NOT NULL,
     settings_collateral BLOB NOT NULL,
@@ -550,6 +551,7 @@ CREATE TABLE host_info (
     rhp4_settings_max_contract_duration BLOB NOT NULL,
     rhp4_settings_remaining_storage BLOB NOT NULL,
     rhp4_settings_total_storage BLOB NOT NULL,
+    rhp4_settings_used_storage BLOB NOT NULL, -- needed so we can sort by this because there's no clean way of subtracting binary encoded uint64s (total and remaining storage) in sqlite
     -- rhp4 prices
     rhp4_prices_contract_price BLOB NOT NULL,
     rhp4_prices_collateral_price BLOB NOT NULL,

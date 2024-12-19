@@ -237,9 +237,9 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 		}
 	case explorer.HostSortUsedStorage:
 		if params.V2 {
-			sortColumn = "rhp4_settings_total_storage - rhp4_settings_remaining_storage"
+			sortColumn = "rhp4_settings_used_storage"
 		} else {
-			sortColumn = "settings_total_storage - settings_remaining_storage"
+			sortColumn = "settings_used_storage"
 		}
 	case explorer.HostSortTotalStorage:
 		if params.V2 {
