@@ -340,6 +340,55 @@ func TestQueryHosts(t *testing.T) {
 			dir:    explorer.HostSortAsc,
 			want:   []types.PublicKey{pk4, pk3},
 		},
+
+		{
+			name: "v1 asc UsedStorage",
+			query: explorer.HostQuery{
+				V2: false,
+			},
+			sortBy: explorer.HostSortUsedStorage,
+			dir:    explorer.HostSortAsc,
+			want:   []types.PublicKey{pk2, pk1},
+		},
+		{
+			name: "v2 asc UsedStorage",
+			query: explorer.HostQuery{
+				V2: true,
+			},
+			sortBy: explorer.HostSortUsedStorage,
+			dir:    explorer.HostSortAsc,
+			want:   []types.PublicKey{pk4, pk3},
+		},
+		{
+			name: "v2 asc UsedStorage offset 1",
+			query: explorer.HostQuery{
+				V2: true,
+			},
+			offset: 1,
+			sortBy: explorer.HostSortUsedStorage,
+			dir:    explorer.HostSortAsc,
+			want:   []types.PublicKey{pk3},
+		},
+		{
+			name: "v2 desc UsedStorage offset 1",
+			query: explorer.HostQuery{
+				V2: true,
+			},
+			offset: 1,
+			sortBy: explorer.HostSortUsedStorage,
+			dir:    explorer.HostSortDesc,
+			want:   []types.PublicKey{pk4},
+		},
+		{
+			name: "v2 desc UsedStorage offset 2",
+			query: explorer.HostQuery{
+				V2: true,
+			},
+			offset: 2,
+			sortBy: explorer.HostSortUsedStorage,
+			dir:    explorer.HostSortDesc,
+			want:   []types.PublicKey{},
+		},
 	}
 
 	for _, tt := range tests {
