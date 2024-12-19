@@ -19,10 +19,6 @@ type (
 	// siafund elements.
 	EventV1Transaction struct {
 		Transaction Transaction `json:"transaction"`
-		// v1 siacoin inputs do not describe the value of the spent utxo
-		SpentSiacoinElements []SiacoinOutput `json:"spentSiacoinElements,omitempty"`
-		// v1 siafund inputs do not describe the value of the spent utxo
-		SpentSiafundElements []SiacoinOutput `json:"spentSiafundElements,omitempty"`
 	}
 
 	// An EventV1ContractResolution represents a file contract payout from a v1
@@ -122,7 +118,6 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) (events []
 				continue
 			}
 
-			// e.SpentSiacoinElements = append(e.SpentSiacoinElements, sce)
 			addresses[sce.SiacoinOutput.Address] = struct{}{}
 		}
 		for _, sco := range txn.SiacoinOutputs {
@@ -135,7 +130,6 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) (events []
 				continue
 			}
 
-			// e.SpentSiafundElements = append(e.SpentSiafundElements, sfe)
 			addresses[sfe.SiafundOutput.Address] = struct{}{}
 
 			sce, ok := sces[sfi.ParentID.ClaimOutputID()]
