@@ -71,11 +71,17 @@ type (
 		Search(id types.Hash256) (explorer.SearchType, error)
 
 		Hosts(pks []types.PublicKey) ([]explorer.Host, error)
+		QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortColumn, dir explorer.HostSortDir, offset, limit uint64) ([]explorer.Host, error)
 	}
 )
 
 const (
 	maxIDs = 5000
+)
+
+const (
+	defaultLimit uint64 = 100
+	maxLimit     uint64 = 500
 )
 
 var (
@@ -292,14 +298,13 @@ func (s *server) transactionsIDIndicesHandler(jc jape.Context) {
 		return
 	}
 
-	limit := uint64(100)
+	limit := defaultLimit
 	offset := uint64(0)
 	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
 		return
 	}
-
-	if limit > 500 {
-		limit = 500
+	if limit > maxLimit {
+		limit = maxLimit
 	}
 
 	indices, err := s.e.TransactionChainIndices(id, offset, limit)
@@ -346,14 +351,13 @@ func (s *server) v2TransactionsIDIndicesHandler(jc jape.Context) {
 		return
 	}
 
-	limit := uint64(100)
+	limit := defaultLimit
 	offset := uint64(0)
 	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
 		return
 	}
-
-	if limit > 500 {
-		limit = 500
+	if limit > maxLimit {
+		limit = maxLimit
 	}
 
 	indices, err := s.e.V2TransactionChainIndices(id, offset, limit)
@@ -385,10 +389,13 @@ func (s *server) addressessAddressUtxosSiacoinHandler(jc jape.Context) {
 		return
 	}
 
-	limit := uint64(100)
+	limit := defaultLimit
 	offset := uint64(0)
 	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
 		return
+	}
+	if limit > maxLimit {
+		limit = maxLimit
 	}
 
 	outputs, err := s.e.UnspentSiacoinOutputs(address, offset, limit)
@@ -404,10 +411,13 @@ func (s *server) addressessAddressUtxosSiafundHandler(jc jape.Context) {
 		return
 	}
 
-	limit := uint64(100)
+	limit := defaultLimit
 	offset := uint64(0)
 	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
 		return
+	}
+	if limit > maxLimit {
+		limit = maxLimit
 	}
 
 	outputs, err := s.e.UnspentSiafundOutputs(address, offset, limit)
@@ -441,10 +451,13 @@ func (s *server) addressessAddressEventsHandler(jc jape.Context) {
 		return
 	}
 
-	limit := uint64(100)
+	limit := defaultLimit
 	offset := uint64(0)
 	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
 		return
+	}
+	if limit > maxLimit {
+		limit = maxLimit
 	}
 
 	events, err := s.e.AddressEvents(address, offset, limit)
@@ -628,6 +641,34 @@ func (s *server) pubkeyHostHandler(jc jape.Context) {
 	jc.Encode(hosts[0])
 }
 
+func (s *server) hostsHandler(jc jape.Context) {
+	var params explorer.HostQuery
+	if jc.Decode(&params) != nil {
+		return
+	}
+
+	limit := defaultLimit
+	offset := uint64(0)
+	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
+		return
+	}
+	if limit > maxLimit {
+		limit = maxLimit
+	}
+
+	dir := explorer.HostSortAsc
+	sortBy := explorer.HostSortDateCreated
+	if jc.DecodeForm("dir", &dir) != nil || jc.DecodeForm("sort", &sortBy) != nil {
+		return
+	}
+
+	hosts, err := s.e.QueryHosts(params, sortBy, dir, offset, limit)
+	if jc.Check("failed to query hosts", err) != nil {
+		return
+	}
+	jc.Encode(hosts)
+}
+
 func (s *server) searchIDHandler(jc jape.Context) {
 	const maxLen = len(types.Hash256{})
 
@@ -708,6 +749,8 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"GET    /metrics/block":     srv.blocksMetricsHandler,
 		"GET    /metrics/block/:id": srv.blocksMetricsIDHandler,
 		"GET    /metrics/host":      srv.hostMetricsHandler,
+
+		"POST   /hosts": srv.hostsHandler,
 
 		"GET    /search/:id": srv.searchIDHandler,
 	})
