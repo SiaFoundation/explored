@@ -376,9 +376,9 @@ type HostSortDir string
 
 const (
 	// HostSortAsc means sorting in ascending order.
-	HostSortAsc HostSortDir = "ASC"
+	HostSortAsc HostSortDir = "asc"
 	// HostSortDesc means sorting in descending order.
-	HostSortDesc HostSortDir = "DESC"
+	HostSortDesc HostSortDir = "desc"
 )
 
 // MarshalText implements encoding.TextMarshaler.
@@ -477,7 +477,8 @@ func (h *HostSortColumn) UnmarshalText(data []byte) error {
 
 // HostQuery defines the filter and sort parameters for querying hosts.
 type HostQuery struct {
-	V2                   bool
+	V2                   *bool
+	PublicKeys           []types.PublicKey
 	MinUptime            float64
 	MinDuration          uint64
 	MaxStoragePrice      types.Currency
@@ -486,6 +487,6 @@ type HostQuery struct {
 	MaxDownloadPrice     types.Currency
 	MaxBaseRPCPrice      types.Currency
 	MaxSectorAccessPrice types.Currency
-	AcceptContracts      bool
-	Online               bool
+	AcceptContracts      *bool
+	Online               *bool
 }

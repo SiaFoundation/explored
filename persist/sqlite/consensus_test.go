@@ -1536,6 +1536,10 @@ func TestHostAnnouncement(t *testing.T) {
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
 
+	hostPubkeys := func(pks []types.PublicKey) ([]explorer.Host, error) {
+		return db.QueryHosts(explorer.HostQuery{PublicKeys: pks}, explorer.HostSortPublicKey, explorer.HostSortAsc, 0, math.MaxInt64)
+	}
+
 	txn1 := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
 			ParentID:         genesisBlock.Transactions[0].SiacoinOutputID(0),
@@ -1658,7 +1662,7 @@ func TestHostAnnouncement(t *testing.T) {
 	testutil.Equal(t, "len(hosts)", 3, len(hosts))
 
 	{
-		scans, err := db.Hosts([]types.PublicKey{hosts[0].PublicKey})
+		scans, err := hostPubkeys([]types.PublicKey{hosts[0].PublicKey})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1681,7 +1685,7 @@ func TestHostAnnouncement(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		scans, err := db.Hosts([]types.PublicKey{hosts[0].PublicKey})
+		scans, err := hostPubkeys([]types.PublicKey{hosts[0].PublicKey})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1700,7 +1704,7 @@ func TestHostAnnouncement(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		scans, err := db.Hosts([]types.PublicKey{hosts[0].PublicKey})
+		scans, err := hostPubkeys([]types.PublicKey{hosts[0].PublicKey})
 		if err != nil {
 			t.Fatal(err)
 		}

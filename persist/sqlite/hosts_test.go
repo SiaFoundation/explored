@@ -39,7 +39,7 @@ func TestQueryHosts(t *testing.T) {
 			V2:                     false,
 			NetAddress:             "host1.com:9982",
 			CountryCode:            "US",
-			KnownSince:             tm.Add(-2 * time.Hour),
+			KnownSince:             tm.Add(-4 * time.Hour),
 			LastScan:               tm,
 			LastScanSuccessful:     true,
 			SuccessfulInteractions: 75,
@@ -62,7 +62,7 @@ func TestQueryHosts(t *testing.T) {
 			V2:                     false,
 			NetAddress:             "host2.com:9982",
 			CountryCode:            "US",
-			KnownSince:             tm.Add(-time.Hour),
+			KnownSince:             tm.Add(-3 * time.Hour),
 			LastScan:               tm,
 			LastScanSuccessful:     true,
 			SuccessfulInteractions: 90,
@@ -83,9 +83,9 @@ func TestQueryHosts(t *testing.T) {
 		{
 			PublicKey:              pk3,
 			V2:                     true,
-			V2NetAddresses:         []chain.NetAddress{{Protocol: crhpv4.ProtocolTCPSiaMux, Address: "host4.com:9982"}},
+			V2NetAddresses:         []chain.NetAddress{{Protocol: crhpv4.ProtocolTCPSiaMux, Address: "host3.com:9982"}},
 			CountryCode:            "DE",
-			KnownSince:             tm.Add(-time.Hour),
+			KnownSince:             tm.Add(-2 * time.Hour),
 			LastScan:               tm,
 			LastScanSuccessful:     false,
 			SuccessfulInteractions: 95,
@@ -108,14 +108,14 @@ func TestQueryHosts(t *testing.T) {
 			V2:                     true,
 			V2NetAddresses:         []chain.NetAddress{{Protocol: crhpv4.ProtocolTCPSiaMux, Address: "host4.com:9982"}},
 			CountryCode:            "DE",
-			KnownSince:             tm.Add(-2 * time.Hour),
+			KnownSince:             tm.Add(-1 * time.Hour),
 			LastScan:               tm,
 			LastScanSuccessful:     false,
 			SuccessfulInteractions: 75,
 			TotalScans:             100,
 			RHPV4Settings: rhpv4.HostSettings{
 				AcceptingContracts:  false,
-				MaxContractDuration: 1000,
+				MaxContractDuration: 10000,
 				TotalStorage:        1000,
 				RemainingStorage:    500,
 				Prices: rhpv4.HostPrices{
@@ -135,6 +135,7 @@ func TestQueryHosts(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	trueBool, falseBool := true, false
 	tests := []struct {
 		name   string
 		query  explorer.HostQuery
@@ -144,9 +145,38 @@ func TestQueryHosts(t *testing.T) {
 		want   []types.PublicKey // Expected host public keys in order
 	}{
 		{
+			name:   "all hosts",
+			query:  explorer.HostQuery{},
+			sortBy: explorer.HostSortDateCreated,
+			dir:    explorer.HostSortAsc,
+			want:   []types.PublicKey{pk1, pk2, pk3, pk4},
+		},
+		{
+			name:   "all hosts pubkey",
+			query:  explorer.HostQuery{PublicKeys: []types.PublicKey{pk1, pk2, pk3, pk4}},
+			sortBy: explorer.HostSortDateCreated,
+			dir:    explorer.HostSortAsc,
+			want:   []types.PublicKey{pk1, pk2, pk3, pk4},
+		},
+		{
+			name:   "all hosts accepting contracts",
+			query:  explorer.HostQuery{AcceptContracts: &trueBool},
+			sortBy: explorer.HostSortDateCreated,
+			dir:    explorer.HostSortAsc,
+			want:   []types.PublicKey{pk1, pk3},
+		},
+		{
+			name:   "all hosts pubkey accepting contracts",
+			query:  explorer.HostQuery{AcceptContracts: &trueBool, PublicKeys: []types.PublicKey{pk1, pk2, pk3, pk4}},
+			sortBy: explorer.HostSortDateCreated,
+			dir:    explorer.HostSortAsc,
+			want:   []types.PublicKey{pk1, pk3},
+		},
+
+		{
 			name: "v1 asc AcceptingContracts",
 			query: explorer.HostQuery{
-				V2: false,
+				V2: &falseBool,
 			},
 			sortBy: explorer.HostSortAcceptingContracts,
 			dir:    explorer.HostSortAsc,
@@ -155,7 +185,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v2 asc AcceptingContracts",
 			query: explorer.HostQuery{
-				V2: true,
+				V2: &trueBool,
 			},
 			sortBy: explorer.HostSortAcceptingContracts,
 			dir:    explorer.HostSortAsc,
@@ -164,7 +194,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v1 desc AcceptingContracts",
 			query: explorer.HostQuery{
-				V2: false,
+				V2: &falseBool,
 			},
 			sortBy: explorer.HostSortAcceptingContracts,
 			dir:    explorer.HostSortDesc,
@@ -173,7 +203,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v1 desc AcceptingContracts offset",
 			query: explorer.HostQuery{
-				V2: false,
+				V2: &falseBool,
 			},
 			offset: 1,
 			sortBy: explorer.HostSortAcceptingContracts,
@@ -183,7 +213,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v2 desc AcceptingContracts",
 			query: explorer.HostQuery{
-				V2: true,
+				V2: &trueBool,
 			},
 			sortBy: explorer.HostSortAcceptingContracts,
 			dir:    explorer.HostSortDesc,
@@ -192,7 +222,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v2 desc AcceptingContracts offset",
 			query: explorer.HostQuery{
-				V2: true,
+				V2: &trueBool,
 			},
 			offset: 1,
 			sortBy: explorer.HostSortAcceptingContracts,
@@ -203,7 +233,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v1 asc DateCreated",
 			query: explorer.HostQuery{
-				V2: false,
+				V2: &falseBool,
 			},
 			sortBy: explorer.HostSortDateCreated,
 			dir:    explorer.HostSortAsc,
@@ -212,18 +242,18 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v2 asc DateCreated",
 			query: explorer.HostQuery{
-				V2: true,
+				V2: &trueBool,
 			},
 			sortBy: explorer.HostSortDateCreated,
 			dir:    explorer.HostSortAsc,
-			want:   []types.PublicKey{pk4, pk3},
+			want:   []types.PublicKey{pk3, pk4},
 		},
 
 		// host1.com:9982 < host2.com:9982
 		{
 			name: "v1 asc NetAddress",
 			query: explorer.HostQuery{
-				V2: false,
+				V2: &falseBool,
 			},
 			sortBy: explorer.HostSortNetAddress,
 			dir:    explorer.HostSortAsc,
@@ -233,7 +263,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v1 asc Uptime",
 			query: explorer.HostQuery{
-				V2: false,
+				V2: &falseBool,
 			},
 			sortBy: explorer.HostSortUptime,
 			dir:    explorer.HostSortAsc,
@@ -242,7 +272,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v2 asc Uptime",
 			query: explorer.HostQuery{
-				V2: true,
+				V2: &trueBool,
 			},
 			sortBy: explorer.HostSortUptime,
 			dir:    explorer.HostSortAsc,
@@ -252,7 +282,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v1 asc StoragePrice",
 			query: explorer.HostQuery{
-				V2: false,
+				V2: &falseBool,
 			},
 			sortBy: explorer.HostSortStoragePrice,
 			dir:    explorer.HostSortAsc,
@@ -261,7 +291,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v2 asc StoragePrice",
 			query: explorer.HostQuery{
-				V2: true,
+				V2: &trueBool,
 			},
 			sortBy: explorer.HostSortStoragePrice,
 			dir:    explorer.HostSortAsc,
@@ -270,7 +300,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v1 asc ContractPrice",
 			query: explorer.HostQuery{
-				V2: false,
+				V2: &falseBool,
 			},
 			sortBy: explorer.HostSortContractPrice,
 			dir:    explorer.HostSortAsc,
@@ -279,7 +309,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v2 asc ContractPrice",
 			query: explorer.HostQuery{
-				V2: true,
+				V2: &trueBool,
 			},
 			sortBy: explorer.HostSortContractPrice,
 			dir:    explorer.HostSortAsc,
@@ -288,7 +318,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v1 asc DownloadPrice",
 			query: explorer.HostQuery{
-				V2: false,
+				V2: &falseBool,
 			},
 			sortBy: explorer.HostSortDownloadPrice,
 			dir:    explorer.HostSortAsc,
@@ -297,7 +327,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v2 asc DownloadPrice",
 			query: explorer.HostQuery{
-				V2: true,
+				V2: &trueBool,
 			},
 			sortBy: explorer.HostSortDownloadPrice,
 			dir:    explorer.HostSortAsc,
@@ -306,7 +336,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v1 asc UploadPrice",
 			query: explorer.HostQuery{
-				V2: false,
+				V2: &falseBool,
 			},
 			sortBy: explorer.HostSortUploadPrice,
 			dir:    explorer.HostSortAsc,
@@ -315,7 +345,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v2 asc UploadPrice",
 			query: explorer.HostQuery{
-				V2: true,
+				V2: &trueBool,
 			},
 			sortBy: explorer.HostSortUploadPrice,
 			dir:    explorer.HostSortAsc,
@@ -325,7 +355,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v1 asc TotalStorage",
 			query: explorer.HostQuery{
-				V2: false,
+				V2: &falseBool,
 			},
 			sortBy: explorer.HostSortTotalStorage,
 			dir:    explorer.HostSortAsc,
@@ -334,7 +364,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v2 asc TotalStorage",
 			query: explorer.HostQuery{
-				V2: true,
+				V2: &trueBool,
 			},
 			sortBy: explorer.HostSortTotalStorage,
 			dir:    explorer.HostSortAsc,
@@ -344,7 +374,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v1 asc UsedStorage",
 			query: explorer.HostQuery{
-				V2: false,
+				V2: &falseBool,
 			},
 			sortBy: explorer.HostSortUsedStorage,
 			dir:    explorer.HostSortAsc,
@@ -353,7 +383,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v2 asc UsedStorage",
 			query: explorer.HostQuery{
-				V2: true,
+				V2: &trueBool,
 			},
 			sortBy: explorer.HostSortUsedStorage,
 			dir:    explorer.HostSortAsc,
@@ -362,7 +392,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v2 asc UsedStorage offset 1",
 			query: explorer.HostQuery{
-				V2: true,
+				V2: &trueBool,
 			},
 			offset: 1,
 			sortBy: explorer.HostSortUsedStorage,
@@ -372,7 +402,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v2 desc UsedStorage offset 1",
 			query: explorer.HostQuery{
-				V2: true,
+				V2: &trueBool,
 			},
 			offset: 1,
 			sortBy: explorer.HostSortUsedStorage,
@@ -382,12 +412,53 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v2 desc UsedStorage offset 2",
 			query: explorer.HostQuery{
-				V2: true,
+				V2: &trueBool,
 			},
 			offset: 2,
 			sortBy: explorer.HostSortUsedStorage,
 			dir:    explorer.HostSortDesc,
 			want:   []types.PublicKey{},
+		},
+
+		{
+			name: "v1 min duration 1000",
+			query: explorer.HostQuery{
+				V2:          &falseBool,
+				MinDuration: 1000,
+			},
+			sortBy: explorer.HostSortAcceptingContracts,
+			dir:    explorer.HostSortDesc,
+			want:   []types.PublicKey{pk1, pk2},
+		},
+		{
+			name: "v1 min duration 5000",
+			query: explorer.HostQuery{
+				V2:          &falseBool,
+				MinDuration: 5000,
+			},
+			sortBy: explorer.HostSortAcceptingContracts,
+			dir:    explorer.HostSortDesc,
+			want:   []types.PublicKey{pk2},
+		},
+		{
+			name: "v2 min duration 1000",
+			query: explorer.HostQuery{
+				V2:          &trueBool,
+				MinDuration: 1000,
+			},
+			sortBy: explorer.HostSortAcceptingContracts,
+			dir:    explorer.HostSortDesc,
+			want:   []types.PublicKey{pk3, pk4},
+		},
+		{
+			name: "v2 min duration 5000",
+			query: explorer.HostQuery{
+				V2:          &trueBool,
+				MinDuration: 5000,
+			},
+			sortBy: explorer.HostSortAcceptingContracts,
+			dir:    explorer.HostSortDesc,
+			want:   []types.PublicKey{pk4},
 		},
 	}
 
