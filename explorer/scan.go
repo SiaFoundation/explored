@@ -169,6 +169,7 @@ func (e *Explorer) addHostScans(hosts chan Host) {
 	defer locator.Close()
 
 	worker := func() {
+		e.log.Info("Worker started")
 		var scans []HostScan
 		for host := range hosts {
 			if e.isClosed() {
@@ -176,10 +177,10 @@ func (e *Explorer) addHostScans(hosts chan Host) {
 			}
 
 			var scan HostScan
-			var addr string
-			var ok bool
 			var err error
 
+			var ok bool
+			addr := host.NetAddress
 			if host.IsV2() {
 				addr, ok = host.V2SiamuxAddr()
 				if !ok {
@@ -204,6 +205,7 @@ func (e *Explorer) addHostScans(hosts chan Host) {
 			scans = append(scans, scan)
 		}
 
+		e.log.Info("Adding worker scans")
 		if err := e.s.AddHostScans(scans); err != nil {
 			e.log.Error("Failed to add host scans to DB", zap.Error(err))
 		}
@@ -221,6 +223,7 @@ func (e *Explorer) addHostScans(hosts chan Host) {
 
 	// wait until they're done
 	wg.Wait()
+	e.log.Info("Workers done")
 }
 
 func (e *Explorer) isClosed() bool {
@@ -270,6 +273,7 @@ func (e *Explorer) scanHosts() {
 
 	for !e.isClosed() {
 		// fetch hosts
+		e.log.Info("Starting scan")
 		hosts := make(chan Host, scanBatchSize)
 		e.wg.Add(1)
 		go func() {
@@ -298,10 +302,12 @@ func (e *Explorer) scanHosts() {
 		}
 
 		// pause
+		e.log.Info("Got through all the hosts, sleeping")
 		select {
 		case <-e.ctx.Done():
 			return
 		case <-time.After(30 * time.Second):
 		}
+		e.log.Info("Done sleeping")
 	}
 }
