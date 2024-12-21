@@ -251,6 +251,7 @@ func (e *Explorer) fetchHosts(hosts chan Host) {
 		} else if len(batch) < scanBatchSize {
 			exhausted = true
 		}
+		offset += len(batch)
 
 		for _, host := range batch {
 			select {
