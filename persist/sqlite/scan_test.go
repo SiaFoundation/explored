@@ -207,6 +207,45 @@ func TestScan(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	for {
+		tip, err := e.Tip()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if tip != cm.Tip() {
+			time.Sleep(time.Second)
+		} else {
+			break
+		}
+	}
+
+	{
+		lastScanCutoff := time.Now().Add(-cfg.MaxLastScan)
+		lastAnnouncementCutoff := time.Now().Add(-cfg.MinLastAnnouncement)
+
+		dbHosts, err := db.HostsForScanning(lastScanCutoff, lastAnnouncementCutoff, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(hostsForScanning)", 3, len(dbHosts))
+
+		sort.Slice(dbHosts, func(i, j int) bool {
+			return dbHosts[i].NetAddress < dbHosts[j].NetAddress
+		})
+
+		host1 := dbHosts[0]
+		testutil.Equal(t, "host1.V2NetAddresses", ha3, host1.V2NetAddresses)
+		testutil.Equal(t, "host1.PublicKey", pubkey3, host1.PublicKey)
+
+		host2 := dbHosts[1]
+		testutil.Equal(t, "host2.NetAddress", ha2.NetAddress, host2.NetAddress)
+		testutil.Equal(t, "host2.PublicKey", ha2.PublicKey, host2.PublicKey)
+
+		host3 := dbHosts[2]
+		testutil.Equal(t, "host3.NetAddress", "sia1.euregiohosting.nl:9982", host3.NetAddress)
+		testutil.Equal(t, "host3.PublicKey", pubkey1, host3.PublicKey)
+	}
+
 	time.Sleep(4 * cfg.Timeout)
 
 	{
@@ -301,5 +340,16 @@ func TestScan(t *testing.T) {
 		if host3.Settings.SectorSize <= 0 {
 			log.Fatal("SectorSize = 0 on host that's supposed to be active")
 		}
+	}
+
+	{
+		lastScanCutoff := time.Now().Add(-cfg.MaxLastScan)
+		lastAnnouncementCutoff := time.Now().Add(-cfg.MinLastAnnouncement)
+
+		hosts, err := db.HostsForScanning(lastScanCutoff, lastAnnouncementCutoff, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(hostsForScanning)", 0, len(hosts))
 	}
 }
