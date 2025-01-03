@@ -3,6 +3,7 @@ package explorer
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"go.sia.tech/core/consensus"
@@ -319,6 +320,7 @@ type HostScan struct {
 // Host represents a host and the information gathered from scanning it.
 type Host struct {
 	PublicKey      types.PublicKey    `json:"publicKey"`
+	V2             bool               `json:"v2"`
 	NetAddress     string             `json:"netAddress"`
 	V2NetAddresses []chain.NetAddress `json:"v2NetAddresses,omitempty"`
 
@@ -367,4 +369,124 @@ type HostMetrics struct {
 
 	Settings   rhpv2.HostSettings   `json:"settings"`
 	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
+}
+
+// HostSortDir represents the sorting direction for host filtering.
+type HostSortDir string
+
+const (
+	// HostSortAsc means sorting in ascending order.
+	HostSortAsc HostSortDir = "asc"
+	// HostSortDesc means sorting in descending order.
+	HostSortDesc HostSortDir = "desc"
+)
+
+// MarshalText implements encoding.TextMarshaler.
+func (h HostSortDir) MarshalText() ([]byte, error) {
+	switch h {
+	case HostSortAsc, HostSortDesc:
+		return []byte(h), nil
+	default:
+		return nil, fmt.Errorf("invalid HostSortDir: %s", h)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (h *HostSortDir) UnmarshalText(data []byte) error {
+	switch string(data) {
+	case string(HostSortAsc):
+		*h = HostSortAsc
+	case string(HostSortDesc):
+		*h = HostSortDesc
+	default:
+		return fmt.Errorf("invalid HostSortDir: %s", data)
+	}
+	return nil
+}
+
+// HostSortColumn represents the sorting column for host filtering.
+type HostSortColumn string
+
+const (
+	// HostSortDateCreated sorts hosts in the order they were first announced.
+	HostSortDateCreated HostSortColumn = "date_created"
+	// HostSortNetAddress sorts hosts by their net address.
+	HostSortNetAddress HostSortColumn = "net_address"
+	// HostSortPublicKey sorts hosts by their public key
+	HostSortPublicKey HostSortColumn = "public_key"
+	// HostSortAcceptingContracts sorts hosts by whether they accept contracts.
+	HostSortAcceptingContracts HostSortColumn = "accepting_contracts"
+	// HostSortUptime sorts hosts by their uptime.
+	HostSortUptime HostSortColumn = "uptime"
+	// HostSortStoragePrice sorts hosts by their storage price.
+	HostSortStoragePrice HostSortColumn = "storage_price"
+	// HostSortContractPrice sorts hosts by their contract price.
+	HostSortContractPrice HostSortColumn = "contract_price"
+	// HostSortDownloadPrice sorts hosts by their download price.
+	HostSortDownloadPrice HostSortColumn = "download_price"
+	// HostSortUploadPrice sorts hosts by their upload price.
+	HostSortUploadPrice HostSortColumn = "upload_price"
+	// HostSortUsedStorage sorts hosts by their used storage.
+	HostSortUsedStorage HostSortColumn = "used_storage"
+	// HostSortTotalStorage sorts hosts by their total storage.
+	HostSortTotalStorage HostSortColumn = "total_storage"
+)
+
+// MarshalText implements encoding.TextMarshaler.
+func (h HostSortColumn) MarshalText() ([]byte, error) {
+	switch h {
+	case HostSortDateCreated, HostSortNetAddress, HostSortPublicKey, HostSortAcceptingContracts,
+		HostSortUptime, HostSortStoragePrice, HostSortContractPrice, HostSortDownloadPrice,
+		HostSortUploadPrice, HostSortUsedStorage, HostSortTotalStorage:
+		return []byte(h), nil
+	default:
+		return nil, fmt.Errorf("invalid HostSortColumn: %s", h)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (h *HostSortColumn) UnmarshalText(data []byte) error {
+	switch string(data) {
+	case string(HostSortDateCreated):
+		*h = HostSortDateCreated
+	case string(HostSortNetAddress):
+		*h = HostSortNetAddress
+	case string(HostSortPublicKey):
+		*h = HostSortPublicKey
+	case string(HostSortAcceptingContracts):
+		*h = HostSortAcceptingContracts
+	case string(HostSortUptime):
+		*h = HostSortUptime
+	case string(HostSortStoragePrice):
+		*h = HostSortStoragePrice
+	case string(HostSortContractPrice):
+		*h = HostSortContractPrice
+	case string(HostSortDownloadPrice):
+		*h = HostSortDownloadPrice
+	case string(HostSortUploadPrice):
+		*h = HostSortUploadPrice
+	case string(HostSortUsedStorage):
+		*h = HostSortUsedStorage
+	case string(HostSortTotalStorage):
+		*h = HostSortTotalStorage
+	default:
+		return fmt.Errorf("invalid HostSortColumn: %s", data)
+	}
+	return nil
+}
+
+// HostQuery defines the filter and sort parameters for querying hosts.
+type HostQuery struct {
+	V2                   *bool
+	PublicKeys           []types.PublicKey
+	MinUptime            float64
+	MinDuration          uint64
+	MaxStoragePrice      types.Currency
+	MaxContractPrice     types.Currency
+	MaxUploadPrice       types.Currency
+	MaxDownloadPrice     types.Currency
+	MaxBaseRPCPrice      types.Currency
+	MaxSectorAccessPrice types.Currency
+	AcceptContracts      *bool
+	Online               *bool
 }
