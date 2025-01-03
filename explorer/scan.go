@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"sync"
 	"time"
 
 	crhpv2 "go.sia.tech/core/rhp/v2"
@@ -184,7 +183,6 @@ func (e *Explorer) scanHosts() {
 	}
 	defer locator.Close()
 
-	var wg sync.WaitGroup
 	for !e.isClosed() {
 		lastScanCutoff := time.Now().Add(-e.scanCfg.MaxLastScan)
 		lastAnnouncementCutoff := time.Now().Add(-e.scanCfg.MinLastAnnouncement)
@@ -205,9 +203,9 @@ func (e *Explorer) scanHosts() {
 
 		results := make([]HostScan, len(batch))
 		for i, host := range batch {
-			wg.Add(1)
+			e.wg.Add(1)
 			go func(i int, host Host) {
-				defer wg.Done()
+				defer e.wg.Done()
 
 				var err error
 				if len(host.V2NetAddresses) > 0 {
@@ -226,7 +224,7 @@ func (e *Explorer) scanHosts() {
 				}
 			}(i, host)
 		}
-		wg.Wait()
+		e.wg.Wait()
 
 		if err := e.s.AddHostScans(results); err != nil {
 			e.log.Info("failed to add host scans to DB:", zap.Error(err))
