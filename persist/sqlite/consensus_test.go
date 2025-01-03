@@ -1651,7 +1651,7 @@ func TestHostAnnouncement(t *testing.T) {
 	}
 
 	ts := time.Unix(0, 0)
-	hosts, err := db.HostsForScanning(ts, ts, 0, 100)
+	hosts, err := db.HostsForScanning(ts, ts, 100)
 	if err != nil {
 		t.Fatal(err)
 	}

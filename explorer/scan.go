@@ -159,104 +159,12 @@ func (e *Explorer) scanV2Host(locator geoip.Locator, host Host) (HostScan, error
 	}, nil
 }
 
-func (e *Explorer) addHostScans(hosts chan Host) {
-	// use default included ip2location database
-	locator, err := geoip.NewIP2LocationLocator("")
-	if err != nil {
-		e.log.Error("Failed to create geoip database", zap.Error(err))
-		return
-	}
-	defer locator.Close()
-
-	worker := func() {
-		var scans []HostScan
-		for host := range hosts {
-			if e.isClosed() {
-				break
-			}
-
-			var scan HostScan
-			var addr string
-			var ok bool
-			var err error
-
-			if host.IsV2() {
-				addr, ok = host.V2SiamuxAddr()
-				if !ok {
-					e.log.Debug("Host did not have any v2 siamux net addresses in its announcement, unable to scan", zap.Stringer("pk", host.PublicKey))
-					continue
-				}
-				scan, err = e.scanV2Host(locator, host)
-			} else {
-				scan, err = e.scanV1Host(locator, host)
-			}
-			if err != nil {
-				scans = append(scans, HostScan{
-					PublicKey: host.PublicKey,
-					Success:   false,
-					Timestamp: types.CurrentTimestamp(),
-				})
-				e.log.Debug("Scanning host failed", zap.String("addr", addr), zap.Stringer("pk", host.PublicKey), zap.Error(err))
-				continue
-			}
-
-			e.log.Debug("Scanning host succeeded", zap.String("addr", addr), zap.Stringer("pk", host.PublicKey))
-			scans = append(scans, scan)
-		}
-
-		if err := e.s.AddHostScans(scans); err != nil {
-			e.log.Error("Failed to add host scans to DB", zap.Error(err))
-		}
-	}
-
-	// launch all workers
-	var wg sync.WaitGroup
-	for t := 0; t < e.scanCfg.Threads; t++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			worker()
-		}()
-	}
-
-	// wait until they're done
-	wg.Wait()
-}
-
 func (e *Explorer) isClosed() bool {
 	select {
 	case <-e.ctx.Done():
 		return true
 	default:
 		return false
-	}
-}
-
-func (e *Explorer) fetchHosts(hosts chan Host) {
-	var exhausted bool
-	offset := 0
-
-	t := types.CurrentTimestamp()
-	cutoff := t.Add(-e.scanCfg.MaxLastScan)
-	lastAnnouncement := t.Add(-e.scanCfg.MinLastAnnouncement)
-
-	for !exhausted && !e.isClosed() {
-		batch, err := e.s.HostsForScanning(cutoff, lastAnnouncement, uint64(offset), scanBatchSize)
-		if err != nil {
-			e.log.Error("failed to get hosts for scanning", zap.Error(err))
-			return
-		} else if len(batch) < scanBatchSize {
-			exhausted = true
-		}
-		offset += len(batch)
-
-		for _, host := range batch {
-			select {
-			case <-e.ctx.Done():
-				return
-			case hosts <- host:
-			}
-		}
 	}
 }
 
@@ -269,40 +177,60 @@ func (e *Explorer) scanHosts() {
 	}
 	e.log.Info("Syncing complete, will begin scanning hosts")
 
+	locator, err := geoip.NewIP2LocationLocator("")
+	if err != nil {
+		e.log.Info("failed to create geoip database:", zap.Error(err))
+		return
+	}
+	defer locator.Close()
+
+	var wg sync.WaitGroup
 	for !e.isClosed() {
-		// fetch hosts
-		hosts := make(chan Host, scanBatchSize)
-		e.wg.Add(1)
-		go func() {
-			defer e.wg.Done()
-			e.fetchHosts(hosts)
-			close(hosts)
-		}()
+		lastScanCutoff := time.Now().Add(-e.scanCfg.MaxLastScan)
+		lastAnnouncementCutoff := time.Now().Add(-e.scanCfg.MinLastAnnouncement)
 
-		// scan hosts
-		e.wg.Add(1)
-		go func() {
-			defer e.wg.Done()
-			e.addHostScans(hosts)
-		}()
-
-		// wait for scans to complete
-		waitChan := make(chan struct{})
-		go func() {
-			e.wg.Wait()
-			close(waitChan)
-		}()
-		select {
-		case <-waitChan:
-		case <-e.ctx.Done():
+		batch, err := e.s.HostsForScanning(lastScanCutoff, lastAnnouncementCutoff, scanBatchSize)
+		if err != nil {
+			e.log.Info("failed to get hosts for scanning:", zap.Error(err))
 			return
+		} else if len(batch) == 0 {
+			select {
+			case <-e.ctx.Done():
+				e.log.Info("shutdown:", zap.Error(e.ctx.Err()))
+				return
+			case <-time.After(15 * time.Second):
+				continue // check again
+			}
 		}
 
-		// pause
-		select {
-		case <-e.ctx.Done():
+		results := make([]HostScan, len(batch))
+		for i, host := range batch {
+			wg.Add(1)
+			go func(i int, host Host) {
+				defer wg.Done()
+
+				var err error
+				if len(host.V2NetAddresses) > 0 {
+					results[i], err = e.scanV2Host(locator, host)
+				} else {
+					results[i], err = e.scanV1Host(locator, host)
+				}
+				if err != nil {
+					e.log.Debug("host scan failed", zap.Stringer("pk", host.PublicKey), zap.Error(err))
+					results[i] = HostScan{
+						PublicKey: host.PublicKey,
+						Success:   false,
+						Timestamp: types.CurrentTimestamp(),
+					}
+					return
+				}
+			}(i, host)
+		}
+		wg.Wait()
+
+		if err := e.s.AddHostScans(results); err != nil {
+			e.log.Info("failed to add host scans to DB:", zap.Error(err))
 			return
-		case <-time.After(30 * time.Second):
 		}
 	}
 }
