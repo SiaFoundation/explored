@@ -5,6 +5,7 @@ go 1.23.1
 toolchain go1.23.2
 
 require (
+	github.com/google/go-cmp v0.6.0
 	github.com/ip2location/ip2location-go v8.3.0+incompatible
 	github.com/mattn/go-sqlite3 v1.14.24
 	go.sia.tech/core v0.9.0
