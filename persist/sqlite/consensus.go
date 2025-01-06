@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"reflect"
 	"time"
 
@@ -716,9 +715,6 @@ func addEvents(tx *txn, bid types.BlockID, scDBIds map[types.SiacoinOutputID]int
 		case explorer.EventPayout:
 			_, err = payoutEventStmt.Exec(eventID, scDBIds[types.SiacoinOutputID(event.ID)])
 		case explorer.EventV1ContractResolution:
-			ddd := explorer.DBFileContract{ID: v.Parent.ID, RevisionNumber: v.Parent.RevisionNumber}
-			log.Printf("scDBIDs[%+v] = %v, fcDBIds[%+v] = %d", v.SiacoinElement.ID, scDBIds[v.SiacoinElement.ID], ddd, fcDBIds[ddd])
-
 			_, err = v1ContractResolutionEventStmt.Exec(eventID, scDBIds[v.SiacoinElement.ID], fcDBIds[explorer.DBFileContract{ID: v.Parent.ID, RevisionNumber: v.Parent.RevisionNumber}], v.Missed)
 		case explorer.EventV2ContractResolution:
 			_, err = v2ContractResolutionEventStmt.Exec(eventID, scDBIds[v.SiacoinElement.ID], v2FcDBIds[explorer.DBFileContract{ID: v.Resolution.Parent.ID, RevisionNumber: v.Resolution.Parent.V2FileContract.RevisionNumber}], v.Missed)
