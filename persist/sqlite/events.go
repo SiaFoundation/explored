@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/wallet"
@@ -151,4 +152,80 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 	}
 
 	return
+}
+
+// UnconfirmedEvents annotates a list of unconfirmed transactions.
+func (s *Store) UnconfirmedEvents(index types.ChainIndex, timestamp time.Time, v1 []types.Transaction, v2 []types.V2Transaction) (events []explorer.Event, err error) {
+	addEvent := func(id types.Hash256, maturityHeight uint64, eventType string, v explorer.EventData, relevant []types.Address) {
+		// dedup relevant addresses
+		seen := make(map[types.Address]bool)
+		unique := relevant[:0]
+		for _, addr := range relevant {
+			if !seen[addr] {
+				unique = append(unique, addr)
+				seen[addr] = true
+			}
+		}
+
+		events = append(events, explorer.Event{
+			ID:             id,
+			Timestamp:      timestamp,
+			Index:          index,
+			MaturityHeight: maturityHeight,
+			Relevant:       unique,
+			Type:           eventType,
+			Data:           v,
+		})
+	}
+
+	for _, txn := range v1 {
+		addresses := make(map[types.Address]struct{})
+		for _, sci := range txn.SiacoinInputs {
+			addresses[sci.UnlockConditions.UnlockHash()] = struct{}{}
+		}
+		for _, sco := range txn.SiacoinOutputs {
+			addresses[sco.Address] = struct{}{}
+		}
+		for _, sfi := range txn.SiafundInputs {
+			addresses[sfi.UnlockConditions.UnlockHash()] = struct{}{}
+		}
+		for _, sfo := range txn.SiafundOutputs {
+			addresses[sfo.Address] = struct{}{}
+		}
+
+		relevant := make([]types.Address, 0, len(addresses))
+		for addr := range addresses {
+			relevant = append(relevant, addr)
+		}
+
+		ev := explorer.EventV1Transaction{explorer.CoreToExplorerV1Transaction(txn)}
+		addEvent(types.Hash256(txn.ID()), index.Height, wallet.EventTypeV1Transaction, ev, relevant) // transaction maturity height is the current block height
+	}
+
+	// handle v2 transactions
+	for _, txn := range v2 {
+		addresses := make(map[types.Address]struct{})
+		for _, sci := range txn.SiacoinInputs {
+			addresses[sci.Parent.SiacoinOutput.Address] = struct{}{}
+		}
+		for _, sco := range txn.SiacoinOutputs {
+			addresses[sco.Address] = struct{}{}
+		}
+		for _, sfi := range txn.SiafundInputs {
+			addresses[sfi.Parent.SiafundOutput.Address] = struct{}{}
+		}
+		for _, sco := range txn.SiafundOutputs {
+			addresses[sco.Address] = struct{}{}
+		}
+
+		relevant := make([]types.Address, 0, len(addresses))
+		for addr := range addresses {
+			relevant = append(relevant, addr)
+		}
+
+		ev := explorer.EventV2Transaction(explorer.CoreToExplorerV2Transaction(txn))
+		addEvent(types.Hash256(txn.ID()), index.Height, wallet.EventTypeV2Transaction, ev, relevant) // transaction maturity height is the current block height
+	}
+
+	return nil, nil
 }

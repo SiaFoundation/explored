@@ -62,6 +62,7 @@ type (
 		UnspentSiacoinOutputs(address types.Address, offset, limit uint64) ([]explorer.SiacoinOutput, error)
 		UnspentSiafundOutputs(address types.Address, offset, limit uint64) ([]explorer.SiafundOutput, error)
 		AddressEvents(address types.Address, offset, limit uint64) (events []explorer.Event, err error)
+		AddressUnconfirmedEvents(address types.Address) ([]explorer.Event, error)
 		Contracts(ids []types.FileContractID) (result []explorer.ExtendedFileContract, err error)
 		ContractsKey(key types.PublicKey) (result []explorer.ExtendedFileContract, err error)
 		ContractRevisions(id types.FileContractID) (result []explorer.ExtendedFileContract, err error)
@@ -468,6 +469,20 @@ func (s *server) addressessAddressEventsHandler(jc jape.Context) {
 	jc.Encode(events)
 }
 
+func (s *server) addressessAddressEventsUnconfirmedHandler(jc jape.Context) {
+	var address types.Address
+	if jc.DecodeParam("address", &address) != nil {
+		return
+	}
+
+	events, err := s.e.AddressUnconfirmedEvents(address)
+	if jc.Check("failed to get unconfirmed address events", err) != nil {
+		return
+	}
+
+	jc.Encode(events)
+}
+
 func (s *server) outputsSiacoinHandler(jc jape.Context) {
 	var id types.SiacoinOutputID
 	if jc.DecodeParam("id", &id) != nil {
@@ -725,10 +740,11 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"POST   /v2/transactions":             srv.v2TransactionsBatchHandler,
 		"GET    /v2/transactions/:id/indices": srv.v2TransactionsIDIndicesHandler,
 
-		"GET    /addresses/:address/utxos/siacoin": srv.addressessAddressUtxosSiacoinHandler,
-		"GET    /addresses/:address/utxos/siafund": srv.addressessAddressUtxosSiafundHandler,
-		"GET    /addresses/:address/events":        srv.addressessAddressEventsHandler,
-		"GET    /addresses/:address/balance":       srv.addressessAddressBalanceHandler,
+		"GET    /addresses/:address/utxos/siacoin":      srv.addressessAddressUtxosSiacoinHandler,
+		"GET    /addresses/:address/utxos/siafund":      srv.addressessAddressUtxosSiafundHandler,
+		"GET    /addresses/:address/events":             srv.addressessAddressEventsHandler,
+		"GET    /addresses/:address/events/unconfirmed": srv.addressessAddressEventsUnconfirmedHandler,
+		"GET    /addresses/:address/balance":            srv.addressessAddressBalanceHandler,
 
 		"GET    /outputs/siacoin/:id": srv.outputsSiacoinHandler,
 		"GET    /outputs/siafund/:id": srv.outputsSiafundHandler,
