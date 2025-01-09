@@ -1183,7 +1183,7 @@ func TestV2FileContractResolution(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Equal(t, "events", 3, len(events))
+		testutil.Equal(t, "events", 7, len(events))
 
 		ev0 := events[0].Data.(explorer.EventV2ContractResolution)
 		testutil.Equal(t, "event 0 parent ID", v2FC3ID, ev0.Resolution.Parent.ID)
@@ -1220,6 +1220,18 @@ func TestV2FileContractResolution(t *testing.T) {
 			}
 			testutil.Equal(t, "event 2 resolution", dbTxns[0].FileContractResolutions[0], ev2.Resolution)
 		}
+
+		ev3 := events[3].Data.(explorer.EventV2Transaction)
+		testutil.CheckV2Transaction(t, txn4, explorer.V2Transaction(ev3))
+
+		ev4 := events[4].Data.(explorer.EventV2Transaction)
+		testutil.CheckV2Transaction(t, txn3, explorer.V2Transaction(ev4))
+
+		ev5 := events[5].Data.(explorer.EventV2Transaction)
+		testutil.CheckV2Transaction(t, txn2, explorer.V2Transaction(ev5))
+
+		ev6 := events[6].Data.(explorer.EventV2Transaction)
+		testutil.CheckV2Transaction(t, txn1, explorer.V2Transaction(ev6))
 	}
 
 	// revert the block

@@ -179,50 +179,14 @@ func (s *Store) UnconfirmedEvents(index types.ChainIndex, timestamp time.Time, v
 	}
 
 	for _, txn := range v1 {
-		addresses := make(map[types.Address]struct{})
-		for _, sci := range txn.SiacoinInputs {
-			addresses[sci.UnlockConditions.UnlockHash()] = struct{}{}
-		}
-		for _, sco := range txn.SiacoinOutputs {
-			addresses[sco.Address] = struct{}{}
-		}
-		for _, sfi := range txn.SiafundInputs {
-			addresses[sfi.UnlockConditions.UnlockHash()] = struct{}{}
-		}
-		for _, sfo := range txn.SiafundOutputs {
-			addresses[sfo.Address] = struct{}{}
-		}
-
-		relevant := make([]types.Address, 0, len(addresses))
-		for addr := range addresses {
-			relevant = append(relevant, addr)
-		}
-
+		relevant := explorer.RelevantAddressesV1(txn)
 		ev := explorer.EventV1Transaction{explorer.CoreToExplorerV1Transaction(txn)}
 		addEvent(types.Hash256(txn.ID()), index.Height, wallet.EventTypeV1Transaction, ev, relevant) // transaction maturity height is the current block height
 	}
 
 	// handle v2 transactions
 	for _, txn := range v2 {
-		addresses := make(map[types.Address]struct{})
-		for _, sci := range txn.SiacoinInputs {
-			addresses[sci.Parent.SiacoinOutput.Address] = struct{}{}
-		}
-		for _, sco := range txn.SiacoinOutputs {
-			addresses[sco.Address] = struct{}{}
-		}
-		for _, sfi := range txn.SiafundInputs {
-			addresses[sfi.Parent.SiafundOutput.Address] = struct{}{}
-		}
-		for _, sco := range txn.SiafundOutputs {
-			addresses[sco.Address] = struct{}{}
-		}
-
-		relevant := make([]types.Address, 0, len(addresses))
-		for addr := range addresses {
-			relevant = append(relevant, addr)
-		}
-
+		relevant := explorer.RelevantAddressesV2(txn)
 		ev := explorer.EventV2Transaction(explorer.CoreToExplorerV2Transaction(txn))
 		addEvent(types.Hash256(txn.ID()), index.Height, wallet.EventTypeV2Transaction, ev, relevant) // transaction maturity height is the current block height
 	}

@@ -74,6 +74,86 @@ type ChainUpdate interface {
 	ForEachV2FileContractElement(func(fce types.V2FileContractElement, created bool, rev *types.V2FileContractElement, res types.V2FileContractResolutionType))
 }
 
+// RelevantAddressesV1 returns all the relevant addresses to a V1 transaction.
+func RelevantAddressesV1(txn types.Transaction) []types.Address {
+	addresses := make(map[types.Address]struct{})
+	for _, sco := range txn.SiacoinOutputs {
+		addresses[sco.Address] = struct{}{}
+	}
+	for _, sci := range txn.SiacoinInputs {
+		addresses[sci.UnlockConditions.UnlockHash()] = struct{}{}
+	}
+	for _, sfo := range txn.SiafundOutputs {
+		addresses[sfo.Address] = struct{}{}
+	}
+	for _, sfi := range txn.SiafundInputs {
+		addresses[sfi.UnlockConditions.UnlockHash()] = struct{}{}
+	}
+	for _, fc := range txn.FileContracts {
+		for _, vpo := range fc.ValidProofOutputs {
+			addresses[vpo.Address] = struct{}{}
+		}
+		for _, mpo := range fc.MissedProofOutputs {
+			addresses[mpo.Address] = struct{}{}
+		}
+	}
+	for _, fcr := range txn.FileContractRevisions {
+		for _, vpo := range fcr.FileContract.ValidProofOutputs {
+			addresses[vpo.Address] = struct{}{}
+		}
+		for _, mpo := range fcr.FileContract.MissedProofOutputs {
+			addresses[mpo.Address] = struct{}{}
+		}
+	}
+
+	relevant := make([]types.Address, 0, len(addresses))
+	for addr := range addresses {
+		relevant = append(relevant, addr)
+	}
+	return relevant
+}
+
+// RelevantAddressesV2 returns all the relevant addresses to a V1 transaction.
+func RelevantAddressesV2(txn types.V2Transaction) []types.Address {
+	addresses := make(map[types.Address]struct{})
+	for _, sco := range txn.SiacoinOutputs {
+		addresses[sco.Address] = struct{}{}
+	}
+	for _, sci := range txn.SiacoinInputs {
+		addresses[sci.Parent.SiacoinOutput.Address] = struct{}{}
+	}
+	for _, sfo := range txn.SiafundOutputs {
+		addresses[sfo.Address] = struct{}{}
+	}
+	for _, sfi := range txn.SiafundInputs {
+		addresses[sfi.Parent.SiafundOutput.Address] = struct{}{}
+	}
+	for _, fc := range txn.FileContracts {
+		addresses[fc.HostOutput.Address] = struct{}{}
+		addresses[fc.RenterOutput.Address] = struct{}{}
+	}
+	for _, fcr := range txn.FileContractRevisions {
+		addresses[fcr.Parent.V2FileContract.HostOutput.Address] = struct{}{}
+		addresses[fcr.Parent.V2FileContract.RenterOutput.Address] = struct{}{}
+		addresses[fcr.Revision.HostOutput.Address] = struct{}{}
+		addresses[fcr.Revision.RenterOutput.Address] = struct{}{}
+	}
+	for _, fcr := range txn.FileContractResolutions {
+		addresses[fcr.Parent.V2FileContract.HostOutput.Address] = struct{}{}
+		addresses[fcr.Parent.V2FileContract.RenterOutput.Address] = struct{}{}
+		if v, ok := fcr.Resolution.(*types.V2FileContractRenewal); ok {
+			addresses[v.NewContract.HostOutput.Address] = struct{}{}
+			addresses[v.NewContract.RenterOutput.Address] = struct{}{}
+		}
+	}
+
+	relevant := make([]types.Address, 0, len(addresses))
+	for addr := range addresses {
+		relevant = append(relevant, addr)
+	}
+	return relevant
+}
+
 // CoreToExplorerV1Transaction converts a core/types.Transaction to an
 // event.Transaction. Fields we do not have information are unfilled in the
 // return value.
@@ -302,25 +382,7 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) (events []
 
 	// handle v1 transactions
 	for _, txn := range b.Transactions {
-		addresses := make(map[types.Address]struct{})
-		for _, sci := range txn.SiacoinInputs {
-			sce, ok := sces[sci.ParentID]
-			if !ok {
-				continue
-			}
-
-			addresses[sce.SiacoinOutput.Address] = struct{}{}
-		}
-		for _, sco := range txn.SiacoinOutputs {
-			addresses[sco.Address] = struct{}{}
-		}
 		for _, sfi := range txn.SiafundInputs {
-			sfe, ok := sfes[sfi.ParentID]
-			if !ok {
-				continue
-			}
-			addresses[sfe.SiafundOutput.Address] = struct{}{}
-
 			sce, ok := sces[sfi.ParentID.ClaimOutputID()]
 			if ok {
 				addEvent(types.Hash256(sce.ID), sce.MaturityHeight, wallet.EventTypeSiafundClaim, EventPayout{
@@ -328,45 +390,16 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) (events []
 				}, []types.Address{sfi.ClaimAddress})
 			}
 		}
-		for _, sfo := range txn.SiafundOutputs {
-			addresses[sfo.Address] = struct{}{}
-		}
-		for _, fc := range txn.FileContracts {
-			addresses[fc.UnlockHash] = struct{}{}
-			for _, vpo := range fc.ValidProofOutputs {
-				addresses[vpo.Address] = struct{}{}
-			}
-			for _, mpo := range fc.MissedProofOutputs {
-				addresses[mpo.Address] = struct{}{}
-			}
-		}
 
-		// skip transactions with no relevant addresses
-		if len(addresses) == 0 {
-			continue
-		}
-
+		relevant := RelevantAddressesV1(txn)
 		ev := EventV1Transaction{CoreToExplorerV1Transaction(txn)}
-		relevant := make([]types.Address, 0, len(addresses))
-		for addr := range addresses {
-			relevant = append(relevant, addr)
-		}
 
 		addEvent(types.Hash256(txn.ID()), cs.Index.Height, wallet.EventTypeV1Transaction, ev, relevant) // transaction maturity height is the current block height
 	}
 
 	// handle v2 transactions
 	for _, txn := range b.V2Transactions() {
-		addresses := make(map[types.Address]struct{})
-		for _, sci := range txn.SiacoinInputs {
-			addresses[sci.Parent.SiacoinOutput.Address] = struct{}{}
-		}
-		for _, sco := range txn.SiacoinOutputs {
-			addresses[sco.Address] = struct{}{}
-		}
 		for _, sfi := range txn.SiafundInputs {
-			addresses[sfi.Parent.SiafundOutput.Address] = struct{}{}
-
 			sfe, ok := sces[types.SiafundOutputID(sfi.Parent.ID).V2ClaimOutputID()]
 			if ok {
 				addEvent(types.Hash256(sfe.ID), sfe.MaturityHeight, wallet.EventTypeSiafundClaim, EventPayout{
@@ -374,15 +407,9 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) (events []
 				}, []types.Address{sfi.ClaimAddress})
 			}
 		}
-		for _, sco := range txn.SiafundOutputs {
-			addresses[sco.Address] = struct{}{}
-		}
 
+		relevant := RelevantAddressesV2(txn)
 		ev := EventV2Transaction(CoreToExplorerV2Transaction(txn))
-		relevant := make([]types.Address, 0, len(addresses))
-		for addr := range addresses {
-			relevant = append(relevant, addr)
-		}
 		addEvent(types.Hash256(txn.ID()), cs.Index.Height, wallet.EventTypeV2Transaction, ev, relevant) // transaction maturity height is the current block height
 	}
 
