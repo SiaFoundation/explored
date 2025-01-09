@@ -99,11 +99,11 @@ const (
 type ResolutionType string
 
 const (
-	// A ResolutionTypeRenewal represents a file contract renewal.
+	// ResolutionTypeRenewal represents a file contract renewal.
 	ResolutionTypeRenewal ResolutionType = "renewal"
-	// A ResolutionTypeStorageProof represents submission of a storage proof.
+	// ResolutionTypeStorageProof represents submission of a storage proof.
 	ResolutionTypeStorageProof ResolutionType = "storageProof"
-	// A ResolutionTypeExpiration represents the expiration of a contract.
+	// ResolutionTypeExpiration represents the expiration of a contract.
 	ResolutionTypeExpiration ResolutionType = "expiration"
 )
 
