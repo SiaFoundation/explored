@@ -178,18 +178,100 @@ func (s *Store) UnconfirmedEvents(index types.ChainIndex, timestamp time.Time, v
 		})
 	}
 
+	var scIDs []types.SiacoinOutputID
 	for _, txn := range v1 {
+		for _, sci := range txn.SiacoinInputs {
+			scIDs = append(scIDs, sci.ParentID)
+		}
+	}
+	sces, err := s.SiacoinElements(scIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve sces: %w", err)
+	}
+	sceCache := make(map[types.SiacoinOutputID]explorer.SiacoinOutput)
+	for _, sce := range sces {
+		sceCache[sce.ID] = sce
+	}
+
+	var sfIDs []types.SiafundOutputID
+	for _, txn := range v1 {
+		for _, sfi := range txn.SiafundInputs {
+			sfIDs = append(sfIDs, sfi.ParentID)
+		}
+	}
+	sfes, err := s.SiafundElements(sfIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve sfes: %w", err)
+	}
+
+	sfeCache := make(map[types.SiafundOutputID]explorer.SiafundOutput)
+	for _, sfe := range sfes {
+		sfeCache[sfe.ID] = sfe
+	}
+
+	for _, txn := range v1 {
+		id := txn.ID()
+		evTxn := explorer.CoreToExplorerV1Transaction(txn)
+		for i := range evTxn.SiacoinInputs {
+			sci := &evTxn.SiacoinInputs[i]
+			sce, ok := sceCache[sci.ParentID]
+			if !ok {
+				// We could have an ephemeral output, which SiacoinElements
+				// won't return because it hasn't been in a block yet.  In
+				// which case this is not erroneous, and we should just leave
+				// these details unfilled.
+				continue
+			}
+			sci.Address = sce.SiacoinElement.SiacoinOutput.Address
+			sci.Value = sce.SiacoinElement.SiacoinOutput.Value
+		}
+		for i := range evTxn.SiafundInputs {
+			sfi := &evTxn.SiafundInputs[i]
+			sfe, ok := sfeCache[sfi.ParentID]
+			if !ok {
+				// We could have an ephemeral output, which SiacoinElements
+				// won't return because it hasn't been in a block yet.  In
+				// which case this is not erroneous, and we should just leave
+				// these details unfilled.
+				continue
+			}
+			sfi.Address = sfe.SiafundElement.SiafundOutput.Address
+			sfi.Value = sfe.SiafundElement.SiafundOutput.Value
+		}
+		for i := range evTxn.FileContracts {
+			fc := &evTxn.FileContracts[i]
+			fc.ConfirmationIndex = index
+			fc.ConfirmationTransactionID = id
+		}
+		for i := range evTxn.FileContractRevisions {
+			fcr := &evTxn.FileContractRevisions[i]
+			fcr.ExtendedFileContract.ConfirmationIndex = index
+			fcr.ExtendedFileContract.ConfirmationTransactionID = id
+		}
 		relevant := explorer.RelevantAddressesV1(txn)
-		ev := explorer.EventV1Transaction{explorer.CoreToExplorerV1Transaction(txn)}
+		ev := explorer.EventV1Transaction{Transaction: evTxn}
 		addEvent(types.Hash256(txn.ID()), index.Height, wallet.EventTypeV1Transaction, ev, relevant) // transaction maturity height is the current block height
 	}
 
 	// handle v2 transactions
 	for _, txn := range v2 {
+		id := txn.ID()
+		evTxn := explorer.CoreToExplorerV2Transaction(txn)
+		for i := range evTxn.FileContracts {
+			fc := &evTxn.FileContracts[i]
+			fc.ConfirmationIndex = index
+			fc.ConfirmationTransactionID = id
+		}
+		for i := range evTxn.FileContractRevisions {
+			fcr := &evTxn.FileContractRevisions[i]
+			fcr.Revision.ConfirmationIndex = index
+			fcr.Revision.ConfirmationTransactionID = id
+		}
+
 		relevant := explorer.RelevantAddressesV2(txn)
-		ev := explorer.EventV2Transaction(explorer.CoreToExplorerV2Transaction(txn))
+		ev := explorer.EventV2Transaction(evTxn)
 		addEvent(types.Hash256(txn.ID()), index.Height, wallet.EventTypeV2Transaction, ev, relevant) // transaction maturity height is the current block height
 	}
 
-	return nil, nil
+	return
 }
