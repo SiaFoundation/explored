@@ -1,6 +1,8 @@
 package explorer
 
 import (
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"go.sia.tech/core/consensus"
@@ -65,6 +67,56 @@ func (EventV1Transaction) isEvent() bool        { return true }
 func (EventV1ContractResolution) isEvent() bool { return true }
 func (EventV2Transaction) isEvent() bool        { return true }
 func (EventV2ContractResolution) isEvent() bool { return true }
+
+// UnmarshalJSON implements the json.Unmarshaler interface.
+func (e *Event) UnmarshalJSON(b []byte) error {
+	var je struct {
+		ID             types.Hash256    `json:"id"`
+		Index          types.ChainIndex `json:"index"`
+		Timestamp      time.Time        `json:"timestamp"`
+		MaturityHeight uint64           `json:"maturityHeight"`
+		Type           string           `json:"type"`
+		Data           json.RawMessage  `json:"data"`
+		Relevant       []types.Address  `json:"relevant,omitempty"`
+	}
+	if err := json.Unmarshal(b, &je); err != nil {
+		return err
+	}
+
+	e.ID = je.ID
+	e.Index = je.Index
+	e.Timestamp = je.Timestamp
+	e.MaturityHeight = je.MaturityHeight
+	e.Type = je.Type
+	e.Relevant = je.Relevant
+
+	var err error
+	switch je.Type {
+	case wallet.EventTypeMinerPayout, wallet.EventTypeFoundationSubsidy, wallet.EventTypeSiafundClaim:
+		var data EventPayout
+		err = json.Unmarshal(je.Data, &data)
+		e.Data = data
+	case wallet.EventTypeV1ContractResolution:
+		var data EventV1ContractResolution
+		err = json.Unmarshal(je.Data, &data)
+		e.Data = data
+	case wallet.EventTypeV2ContractResolution:
+		var data EventV2ContractResolution
+		err = json.Unmarshal(je.Data, &data)
+		e.Data = data
+	case wallet.EventTypeV1Transaction:
+		var data EventV1Transaction
+		err = json.Unmarshal(je.Data, &data)
+		e.Data = data
+	case wallet.EventTypeV2Transaction:
+		var data EventV2Transaction
+		err = json.Unmarshal(je.Data, &data)
+		e.Data = data
+	default:
+		return fmt.Errorf("unknown event type: %v", je.Type)
+	}
+	return err
+}
 
 // A ChainUpdate is a set of changes to the consensus state.
 type ChainUpdate interface {

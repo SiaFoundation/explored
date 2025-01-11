@@ -414,15 +414,15 @@ func TestAPI(t *testing.T) {
 		}},
 		// There is an issue with JSON unmarshaling of events.
 		// TODO: fix when explorer.Events are replaced with wallet.Events
-		// {
-		// 	resp, err := client.AddressEvents(addr1, 0, 500)
-		// 	if err != nil {
-		// 		t.Fatal(err)
-		// 	}
-		// 	if len(resp) == 0 {
-		// 		t.Fatal("no events for addr1")
-		// 	}
-		// }
+		{"Events", func(t *testing.T) {
+			resp, err := client.AddressEvents(addr1, 0, 500)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(resp) == 0 {
+				t.Fatal("no events for addr1")
+			}
+		}},
 		{"Contract", func(t *testing.T) {
 			resp, err := client.Contract(txn1.FileContractID(0))
 			if err != nil {

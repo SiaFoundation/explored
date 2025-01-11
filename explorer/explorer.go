@@ -61,6 +61,7 @@ type Store interface {
 	UnspentSiafundOutputs(address types.Address, offset, limit uint64) ([]SiafundOutput, error)
 	UnconfirmedEvents(index types.ChainIndex, timestamp time.Time, v1 []types.Transaction, v2 []types.V2Transaction) (annotated []Event, err error)
 	AddressEvents(address types.Address, offset, limit uint64) (events []Event, err error)
+	Events([]types.Hash256) ([]Event, error)
 	Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 	Contracts(ids []types.FileContractID) (result []ExtendedFileContract, err error)
 	ContractsKey(key types.PublicKey) (result []ExtendedFileContract, err error)
@@ -326,9 +327,19 @@ func (e *Explorer) AddressUnconfirmedEvents(address types.Address) ([]Event, err
 	return events, nil
 }
 
+// UnconfirmedEvents annotates a list of unconfirmed transactions.
+func (e *Explorer) UnconfirmedEvents(index types.ChainIndex, timestamp time.Time, v1 []types.Transaction, v2 []types.V2Transaction) ([]Event, error) {
+	return e.s.UnconfirmedEvents(index, timestamp, v1, v2)
+}
+
 // AddressEvents returns the events of a single address.
 func (e *Explorer) AddressEvents(address types.Address, offset, limit uint64) (events []Event, err error) {
 	return e.s.AddressEvents(address, offset, limit)
+}
+
+// Events returns the events with the specified IDs.
+func (e *Explorer) Events(ids []types.Hash256) ([]Event, error) {
+	return e.s.Events(ids)
 }
 
 // Balance returns the balance of an address.
