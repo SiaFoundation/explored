@@ -5,6 +5,7 @@ import (
 	"errors"
 )
 
+// An ExchangeRateSource returns the price of 1 unit of an asset in USD.
 type ExchangeRateSource interface {
 	Last() (float64, error)
 	Start(ctx context.Context)
@@ -15,6 +16,8 @@ type averager struct {
 	sources       []ExchangeRateSource
 }
 
+// NewAverager returns an exchange rate source that averages multiple exchange
+// rates.
 func NewAverager(ignoreOnError bool, sources ...ExchangeRateSource) ExchangeRateSource {
 	return &averager{
 		ignoreOnError: ignoreOnError,

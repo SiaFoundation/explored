@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	// CoinGeckoPair is the ID of Siacoin in CoinGecko
+	// CoinGeckoSicaoinPair is the ID of Siacoin in CoinGecko
 	CoinGeckoSicaoinPair = "siacoin"
 )
 
@@ -67,6 +67,7 @@ type coinGecko struct {
 	err  error
 }
 
+// NewCoinGecko returns an ExchangeRateSource that gets data from CoinGecko.
 func NewCoinGecko(apiKey string, pair string, refresh time.Duration) ExchangeRateSource {
 	return &coinGecko{
 		pair:    pair,

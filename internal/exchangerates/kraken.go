@@ -75,6 +75,7 @@ type kraken struct {
 	err  error
 }
 
+// NewKraken returns an ExchangeRateSource that gets data from Kraken.
 func NewKraken(pair string, refresh time.Duration) ExchangeRateSource {
 	return &kraken{
 		pair:    pair,
