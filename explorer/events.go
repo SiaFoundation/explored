@@ -286,6 +286,9 @@ func CoreToExplorerV1Transaction(txn types.Transaction) (result Transaction) {
 	for _, arb := range txn.ArbitraryData {
 		result.ArbitraryData = append(result.ArbitraryData, arb)
 	}
+	for _, sig := range txn.Signatures {
+		result.Signatures = append(result.Signatures, sig)
+	}
 
 	return
 }

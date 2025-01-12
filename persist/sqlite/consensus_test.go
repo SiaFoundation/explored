@@ -702,6 +702,20 @@ func TestFileContract(t *testing.T) {
 	}
 
 	{
+		events, err := db.Events([]types.Hash256{types.Hash256(reviseTxn.ID()), types.Hash256(txn.ID())})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "events", 2, len(events))
+
+		ev0 := events[0].Data.(explorer.EventV1Transaction)
+		testutil.CheckTransaction(t, reviseTxn, ev0.Transaction)
+
+		ev1 := events[1].Data.(explorer.EventV1Transaction)
+		testutil.CheckTransaction(t, txn, ev1.Transaction)
+	}
+
+	{
 		dbFCs, err := db.Contracts([]types.FileContractID{fcID})
 		if err != nil {
 			t.Fatal(err)

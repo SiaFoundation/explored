@@ -1234,6 +1234,26 @@ func TestV2FileContractResolution(t *testing.T) {
 		testutil.CheckV2Transaction(t, txn1, explorer.V2Transaction(ev6))
 	}
 
+	{
+		events, err := db.Events([]types.Hash256{types.Hash256(txn4.ID()), types.Hash256(txn3.ID()), types.Hash256(txn2.ID()), types.Hash256(txn1.ID())})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "events", 4, len(events))
+
+		ev0 := events[0].Data.(explorer.EventV2Transaction)
+		testutil.CheckV2Transaction(t, txn4, explorer.V2Transaction(ev0))
+
+		ev1 := events[1].Data.(explorer.EventV2Transaction)
+		testutil.CheckV2Transaction(t, txn3, explorer.V2Transaction(ev1))
+
+		ev2 := events[2].Data.(explorer.EventV2Transaction)
+		testutil.CheckV2Transaction(t, txn2, explorer.V2Transaction(ev2))
+
+		ev3 := events[3].Data.(explorer.EventV2Transaction)
+		testutil.CheckV2Transaction(t, txn1, explorer.V2Transaction(ev3))
+	}
+
 	// revert the block
 	{
 		state := prevState
