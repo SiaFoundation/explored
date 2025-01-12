@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+const (
+	// KrakenSiacoinPair is the ID of Siacoin in Kraken
+	KrakenSiacoinPair = "SCUSD"
+)
+
 type krakenAPI struct {
 	client http.Client
 }
@@ -90,6 +95,9 @@ func (k *kraken) Start(ctx context.Context) {
 			k.rate, k.err = k.client.ticker(k.pair)
 			k.mu.Unlock()
 		case <-ctx.Done():
+			k.mu.Lock()
+			k.err = ctx.Err()
+			k.mu.Unlock()
 			return
 		}
 	}
