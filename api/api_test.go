@@ -200,7 +200,7 @@ func TestAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Unconfirmed transaction
+	// Unconfirmed transaction relevant to addr1
 	txn3 := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
 			ParentID:         txn1.SiacoinOutputID(0),
@@ -213,7 +213,7 @@ func TestAPI(t *testing.T) {
 	}
 	testutil.SignTransaction(cm.TipState(), pk1, &txn3)
 
-	// Other unconfirmed transctions
+	// Other unconfirmed transaction
 	txn4 := types.Transaction{}
 	if _, err := cm.AddPoolTransactions([]types.Transaction{txn3, txn4}); err != nil {
 		t.Fatal(err)
