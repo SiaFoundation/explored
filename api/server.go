@@ -17,8 +17,8 @@ import (
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/syncer"
 	"go.sia.tech/explored/build"
+	"go.sia.tech/explored/exchangerates"
 	"go.sia.tech/explored/explorer"
-	"go.sia.tech/explored/internal/exchangerates"
 )
 
 type (
