@@ -83,7 +83,8 @@ func TestAverager(t *testing.T) {
 		time.Sleep(2 * interval)
 
 		_, err := averager.Last()
-		// should get error because errorsource will fail
+		// Should get an error because the errorSource will fail
+		// (ignoreOnError = false)
 		if err == nil {
 			t.Fatal("should have gotten error for averager with error source")
 		}
@@ -97,8 +98,8 @@ func TestAverager(t *testing.T) {
 
 		time.Sleep(2 * interval)
 
-		// should not get an error because the errorsource will just be ignored
-		// if at least one other source works
+		// Should not get an error because the errorSource will just be ignored
+		// if at least one other source works (ignoreOnError = true)
 		price, err := averager.Last()
 		if err != nil {
 			t.Fatal(err)
