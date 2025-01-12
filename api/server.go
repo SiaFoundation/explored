@@ -18,6 +18,7 @@ import (
 	"go.sia.tech/coreutils/syncer"
 	"go.sia.tech/explored/build"
 	"go.sia.tech/explored/explorer"
+	"go.sia.tech/explored/internal/exchangerates"
 )
 
 type (
@@ -111,6 +112,7 @@ type server struct {
 	cm ChainManager
 	e  Explorer
 	s  Syncer
+	ex exchangerates.ExchangeRateSource
 
 	startTime time.Time
 }
@@ -690,12 +692,21 @@ func (s *server) searchIDHandler(jc jape.Context) {
 	jc.Encode(result)
 }
 
+func (s *server) exchangeRateHandler(jc jape.Context) {
+	price, err := s.ex.Last()
+	if jc.Check("failed to get exchange rate", err) != nil {
+		return
+	}
+	jc.Encode(price)
+}
+
 // NewServer returns an HTTP handler that serves the explored API.
-func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
+func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.ExchangeRateSource) http.Handler {
 	srv := server{
 		cm:        cm,
 		e:         e,
 		s:         s,
+		ex:        ex,
 		startTime: time.Now().UTC(),
 	}
 	return jape.Mux(map[string]jape.Handler{
@@ -753,5 +764,7 @@ func NewServer(e Explorer, cm ChainManager, s Syncer) http.Handler {
 		"POST   /hosts": srv.hostsHandler,
 
 		"GET    /search/:id": srv.searchIDHandler,
+
+		"GET    /exchangerate": srv.exchangeRateHandler,
 	})
 }

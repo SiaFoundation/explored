@@ -20,6 +20,7 @@ import (
 	"go.sia.tech/explored/build"
 	"go.sia.tech/explored/config"
 	"go.sia.tech/explored/explorer"
+	"go.sia.tech/explored/internal/exchangerates"
 	"go.sia.tech/explored/internal/testutil"
 	"go.sia.tech/explored/persist/sqlite"
 	"go.uber.org/zap/zaptest"
@@ -69,7 +70,11 @@ func newExplorer(t *testing.T, network *consensus.Network, genesisBlock types.Bl
 }
 
 func newServer(t *testing.T, cm *chain.Manager, e *explorer.Explorer, listenAddr string) (*http.Server, error) {
-	api := api.NewServer(e, cm, &syncer.Syncer{})
+	ctx, cancel := context.WithCancel(context.Background())
+	ex := exchangerates.NewKraken(exchangerates.KrakenSiacoinPair, time.Second)
+	go ex.Start(ctx)
+
+	api := api.NewServer(e, cm, &syncer.Syncer{}, ex)
 	server := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasPrefix(r.URL.Path, "/api") {
@@ -90,6 +95,7 @@ func newServer(t *testing.T, cm *chain.Manager, e *explorer.Explorer, listenAddr
 	t.Cleanup(func() {
 		server.Close()
 		httpListener.Close()
+		cancel()
 	})
 	go func() {
 		server.Serve(httpListener)
@@ -466,6 +472,16 @@ func TestAPI(t *testing.T) {
 				t.Fatal(err)
 			}
 			testutil.Equal(t, "search type", explorer.SearchTypeContract, resp)
+		}},
+		{"Exchange rate", func(t *testing.T) {
+			resp, err := client.ExchangeRate()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if resp <= 0 {
+				t.Fatal("exchange rate should be positive")
+			}
+			t.Logf("Exchange rate: %f", resp)
 		}},
 	}
 

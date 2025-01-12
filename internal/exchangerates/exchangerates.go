@@ -11,12 +11,14 @@ type ExchangeRateSource interface {
 }
 
 type averager struct {
-	sources []ExchangeRateSource
+	ignoreOnError bool
+	sources       []ExchangeRateSource
 }
 
-func NewAverager(sources ...ExchangeRateSource) ExchangeRateSource {
+func NewAverager(ignoreOnError bool, sources ...ExchangeRateSource) ExchangeRateSource {
 	return &averager{
-		sources: sources,
+		ignoreOnError: ignoreOnError,
+		sources:       sources,
 	}
 }
 
@@ -34,7 +36,7 @@ func (a *averager) Last() (float64, error) {
 		if v, err := a.sources[i].Last(); err == nil {
 			sum += v
 			count++
-		} else {
+		} else if !a.ignoreOnError {
 			return 0, err
 		}
 	}

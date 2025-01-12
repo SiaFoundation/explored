@@ -25,6 +25,7 @@ import (
 	"go.sia.tech/explored/build"
 	"go.sia.tech/explored/config"
 	"go.sia.tech/explored/explorer"
+	"go.sia.tech/explored/internal/exchangerates"
 	"go.sia.tech/explored/internal/syncerutil"
 	"go.sia.tech/explored/persist/sqlite"
 	"go.uber.org/zap"
@@ -262,7 +263,15 @@ func runRootCmd(ctx context.Context, log *zap.Logger) error {
 	defer timeoutCancel()
 	defer e.Shutdown(timeoutCtx)
 
-	api := api.NewServer(e, cm, s)
+	var sources []exchangerates.ExchangeRateSource
+	sources = append(sources, exchangerates.NewKraken(exchangerates.KrakenSiacoinPair, 3*time.Second))
+	if apiKey := os.Getenv("COINGECKO_API_KEY"); apiKey != "" {
+		sources = append(sources, exchangerates.NewCoinGecko(apiKey, exchangerates.CoinGeckoSicaoinPair, 3*time.Second))
+	}
+	ex := exchangerates.NewAverager(false, sources...)
+	go ex.Start(ctx)
+
+	api := api.NewServer(e, cm, s, ex)
 	server := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasPrefix(r.URL.Path, "/api") {
