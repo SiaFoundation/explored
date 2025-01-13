@@ -167,7 +167,7 @@ func RelevantAddressesV1(txn types.Transaction) []types.Address {
 	return relevant
 }
 
-// RelevantAddressesV2 returns all the relevant addresses to a V1 transaction.
+// RelevantAddressesV2 returns all the relevant addresses to a V2 transaction.
 func RelevantAddressesV2(txn types.V2Transaction) []types.Address {
 	addresses := make(map[types.Address]struct{})
 	for _, sco := range txn.SiacoinOutputs {
