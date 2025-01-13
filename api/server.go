@@ -502,28 +502,15 @@ func (s *server) eventsIDHandler(jc jape.Context) {
 		return
 	}
 
-	{
-		v1, v2 := s.cm.PoolTransactions(), s.cm.V2PoolTransactions()
-
-		relevantV1 := v1[:0]
-		for _, txn := range v1 {
-			relevantV1 = append(relevantV1, txn)
-		}
-
-		relevantV2 := v2[:0]
-		for _, txn := range v2 {
-			relevantV2 = append(relevantV2, txn)
-		}
-
-		events, err := s.e.UnconfirmedEvents(types.ChainIndex{}, types.CurrentTimestamp(), relevantV1, relevantV2)
-		if jc.Check("failed to annotate events", err) != nil {
+	v1, v2 := s.cm.PoolTransactions(), s.cm.V2PoolTransactions()
+	events, err = s.e.UnconfirmedEvents(types.ChainIndex{}, types.CurrentTimestamp(), v1, v2)
+	if jc.Check("failed to annotate events", err) != nil {
+		return
+	}
+	for _, event := range events {
+		if event.ID == id {
+			jc.Encode(event)
 			return
-		}
-		for _, event := range events {
-			if event.ID == id {
-				jc.Encode(event)
-				return
-			}
 		}
 	}
 
