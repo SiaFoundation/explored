@@ -9,7 +9,7 @@ require (
 	github.com/ip2location/ip2location-go v8.3.0+incompatible
 	github.com/mattn/go-sqlite3 v1.14.24
 	go.sia.tech/core v0.9.0
-	go.sia.tech/coreutils v0.9.0
+	go.sia.tech/coreutils v0.9.1
 	go.sia.tech/jape v0.12.1
 	go.uber.org/zap v1.27.0
 	gopkg.in/yaml.v3 v3.0.1
