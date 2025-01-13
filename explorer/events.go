@@ -73,6 +73,7 @@ func (e *Event) UnmarshalJSON(b []byte) error {
 	var je struct {
 		ID             types.Hash256    `json:"id"`
 		Index          types.ChainIndex `json:"index"`
+		Confirmations  uint64           `json:"confirmations"`
 		Timestamp      time.Time        `json:"timestamp"`
 		MaturityHeight uint64           `json:"maturityHeight"`
 		Type           string           `json:"type"`
@@ -85,6 +86,7 @@ func (e *Event) UnmarshalJSON(b []byte) error {
 
 	e.ID = je.ID
 	e.Index = je.Index
+	e.Confirmations = je.Confirmations
 	e.Timestamp = je.Timestamp
 	e.MaturityHeight = je.MaturityHeight
 	e.Type = je.Type
