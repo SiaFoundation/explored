@@ -28,6 +28,9 @@ var (
 
 // A ChainManager manages the consensus state
 type ChainManager interface {
+	PoolTransactions() []types.Transaction
+	V2PoolTransactions() []types.V2Transaction
+
 	Tip() types.ChainIndex
 	TipState() consensus.State
 	BestIndex(height uint64) (types.ChainIndex, bool)
@@ -56,7 +59,9 @@ type Store interface {
 	V2TransactionChainIndices(txid types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error)
 	UnspentSiacoinOutputs(address types.Address, offset, limit uint64) ([]SiacoinOutput, error)
 	UnspentSiafundOutputs(address types.Address, offset, limit uint64) ([]SiafundOutput, error)
+	UnconfirmedEvents(index types.ChainIndex, timestamp time.Time, v1 []types.Transaction, v2 []types.V2Transaction) (annotated []Event, err error)
 	AddressEvents(address types.Address, offset, limit uint64) (events []Event, err error)
+	Events([]types.Hash256) ([]Event, error)
 	Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 	Contracts(ids []types.FileContractID) (result []ExtendedFileContract, err error)
 	ContractsKey(key types.PublicKey) (result []ExtendedFileContract, err error)
@@ -240,9 +245,101 @@ func (e *Explorer) UnspentSiafundOutputs(address types.Address, offset, limit ui
 	return e.s.UnspentSiafundOutputs(address, offset, limit)
 }
 
+// AddressUnconfirmedEvents returns the unconfirmed events for a single address.
+func (e *Explorer) AddressUnconfirmedEvents(address types.Address) ([]Event, error) {
+	relevantV1Txn := func(txn types.Transaction) bool {
+		for _, output := range txn.SiacoinOutputs {
+			if output.Address == address {
+				return true
+			}
+		}
+		for _, input := range txn.SiacoinInputs {
+			if input.UnlockConditions.UnlockHash() == address {
+				return true
+			}
+		}
+		for _, output := range txn.SiafundOutputs {
+			if output.Address == address {
+				return true
+			}
+		}
+		for _, input := range txn.SiafundInputs {
+			if input.UnlockConditions.UnlockHash() == address {
+				return true
+			}
+		}
+		return false
+	}
+	relevantV2Txn := func(txn types.V2Transaction) bool {
+		for _, output := range txn.SiacoinOutputs {
+			if output.Address == address {
+				return true
+			}
+		}
+		for _, input := range txn.SiacoinInputs {
+			if input.Parent.SiacoinOutput.Address == address {
+				return true
+			}
+		}
+		for _, output := range txn.SiafundOutputs {
+			if output.Address == address {
+				return true
+			}
+		}
+		for _, input := range txn.SiafundInputs {
+			if input.Parent.SiafundOutput.Address == address {
+				return true
+			}
+		}
+		return false
+	}
+
+	index := e.cm.Tip()
+	index.Height++
+	index.ID = types.BlockID{}
+	timestamp := time.Now()
+
+	v1, v2 := e.cm.PoolTransactions(), e.cm.V2PoolTransactions()
+
+	relevantV1 := v1[:0]
+	for _, txn := range v1 {
+		if !relevantV1Txn(txn) {
+			continue
+		}
+		relevantV1 = append(relevantV1, txn)
+	}
+
+	relevantV2 := v2[:0]
+	for _, txn := range v2 {
+		if !relevantV2Txn(txn) {
+			continue
+		}
+		relevantV2 = append(relevantV2, txn)
+	}
+
+	events, err := e.s.UnconfirmedEvents(index, timestamp, relevantV1, relevantV2)
+	if err != nil {
+		return nil, err
+	}
+	for i := range events {
+		events[i].Relevant = []types.Address{address}
+	}
+	return events, nil
+}
+
+// UnconfirmedEvents annotates a list of unconfirmed transactions.
+func (e *Explorer) UnconfirmedEvents(index types.ChainIndex, timestamp time.Time, v1 []types.Transaction, v2 []types.V2Transaction) ([]Event, error) {
+	return e.s.UnconfirmedEvents(index, timestamp, v1, v2)
+}
+
 // AddressEvents returns the events of a single address.
 func (e *Explorer) AddressEvents(address types.Address, offset, limit uint64) (events []Event, err error) {
 	return e.s.AddressEvents(address, offset, limit)
+}
+
+// Events returns the events with the specified IDs.
+func (e *Explorer) Events(ids []types.Hash256) ([]Event, error) {
+	return e.s.Events(ids)
 }
 
 // Balance returns the balance of an address.

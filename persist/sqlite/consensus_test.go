@@ -687,12 +687,29 @@ func TestFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Equal(t, "events", 2, len(events))
+		testutil.Equal(t, "events", 3, len(events))
 
 		ev0 := events[0].Data.(explorer.EventV1ContractResolution)
 		testutil.Equal(t, "event 0 parent ID", fcID, ev0.Parent.ID)
 		testutil.Equal(t, "event 0 output ID", fcID.MissedOutputID(0), ev0.SiacoinElement.ID)
 		testutil.Equal(t, "event 0 missed", true, ev0.Missed)
+
+		ev1 := events[1].Data.(explorer.EventV1Transaction)
+		testutil.CheckTransaction(t, reviseTxn, ev1.Transaction)
+
+		ev2 := events[2].Data.(explorer.EventV1Transaction)
+		testutil.CheckTransaction(t, txn, ev2.Transaction)
+	}
+
+	{
+		events, err := db.Events([]types.Hash256{types.Hash256(reviseTxn.ID()), types.Hash256(txn.ID())})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "events", 2, len(events))
+
+		ev0 := events[0].Data.(explorer.EventV1Transaction)
+		testutil.CheckTransaction(t, reviseTxn, ev0.Transaction)
 
 		ev1 := events[1].Data.(explorer.EventV1Transaction)
 		testutil.CheckTransaction(t, txn, ev1.Transaction)

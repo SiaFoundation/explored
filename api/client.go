@@ -181,6 +181,18 @@ func (c *Client) AddressEvents(address types.Address, offset, limit uint64) (res
 	return
 }
 
+// AddressUnconfirmedEvents returns the specified address' unconfirmed events.
+func (c *Client) AddressUnconfirmedEvents(address types.Address) (resp []explorer.Event, err error) {
+	err = c.c.GET(fmt.Sprintf("/addresses/%s/events/unconfirmed", address), &resp)
+	return
+}
+
+// Event returns the specified event.
+func (c *Client) Event(id types.Hash256) (resp explorer.Event, err error) {
+	err = c.c.GET(fmt.Sprintf("/events/%s", id), &resp)
+	return
+}
+
 // AddressBalance returns the specified address' balance.
 func (c *Client) AddressBalance(address types.Address) (resp AddressBalanceResponse, err error) {
 	err = c.c.GET(fmt.Sprintf("/addresses/%s/balance", address), &resp)

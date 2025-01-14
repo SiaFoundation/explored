@@ -63,6 +63,9 @@ type (
 		UnspentSiacoinOutputs(address types.Address, offset, limit uint64) ([]explorer.SiacoinOutput, error)
 		UnspentSiafundOutputs(address types.Address, offset, limit uint64) ([]explorer.SiafundOutput, error)
 		AddressEvents(address types.Address, offset, limit uint64) (events []explorer.Event, err error)
+		AddressUnconfirmedEvents(address types.Address) ([]explorer.Event, error)
+		Events(ids []types.Hash256) ([]explorer.Event, error)
+		UnconfirmedEvents(index types.ChainIndex, timestamp time.Time, v1 []types.Transaction, v2 []types.V2Transaction) ([]explorer.Event, error)
 		Contracts(ids []types.FileContractID) (result []explorer.ExtendedFileContract, err error)
 		ContractsKey(key types.PublicKey) (result []explorer.ExtendedFileContract, err error)
 		ContractRevisions(id types.FileContractID) (result []explorer.ExtendedFileContract, err error)
@@ -98,6 +101,9 @@ var (
 	// ErrHostNotFound is returned by /pubkey/:key/host when we are unable to
 	// find the host with the pubkey `key`.
 	ErrHostNotFound = errors.New("no host found")
+	// ErrEventNotFound is returned by /events/:id when we can't find the event
+	// with the id `id`.
+	ErrEventNotFound = errors.New("no event found")
 
 	// ErrNoSearchResults is returned by /search/:id when we do not find any
 	// elements with that ID.
@@ -470,6 +476,49 @@ func (s *server) addressessAddressEventsHandler(jc jape.Context) {
 	jc.Encode(events)
 }
 
+func (s *server) addressessAddressEventsUnconfirmedHandler(jc jape.Context) {
+	var address types.Address
+	if jc.DecodeParam("address", &address) != nil {
+		return
+	}
+
+	events, err := s.e.AddressUnconfirmedEvents(address)
+	if jc.Check("failed to get unconfirmed address events", err) != nil {
+		return
+	}
+
+	jc.Encode(events)
+}
+
+func (s *server) eventsIDHandler(jc jape.Context) {
+	var id types.Hash256
+	if jc.DecodeParam("id", &id) != nil {
+		return
+	}
+
+	events, err := s.e.Events([]types.Hash256{id})
+	if err != nil {
+		return
+	} else if len(events) > 0 {
+		jc.Encode(events[0])
+		return
+	}
+
+	v1, v2 := s.cm.PoolTransactions(), s.cm.V2PoolTransactions()
+	events, err = s.e.UnconfirmedEvents(types.ChainIndex{}, types.CurrentTimestamp(), v1, v2)
+	if jc.Check("failed to annotate events", err) != nil {
+		return
+	}
+	for _, event := range events {
+		if event.ID == id {
+			jc.Encode(event)
+			return
+		}
+	}
+
+	jc.Error(ErrEventNotFound, http.StatusNotFound)
+}
+
 func (s *server) outputsSiacoinHandler(jc jape.Context) {
 	var id types.SiacoinOutputID
 	if jc.DecodeParam("id", &id) != nil {
@@ -736,10 +785,13 @@ func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.ExchangeR
 		"POST   /v2/transactions":             srv.v2TransactionsBatchHandler,
 		"GET    /v2/transactions/:id/indices": srv.v2TransactionsIDIndicesHandler,
 
-		"GET    /addresses/:address/utxos/siacoin": srv.addressessAddressUtxosSiacoinHandler,
-		"GET    /addresses/:address/utxos/siafund": srv.addressessAddressUtxosSiafundHandler,
-		"GET    /addresses/:address/events":        srv.addressessAddressEventsHandler,
-		"GET    /addresses/:address/balance":       srv.addressessAddressBalanceHandler,
+		"GET    /addresses/:address/utxos/siacoin":      srv.addressessAddressUtxosSiacoinHandler,
+		"GET    /addresses/:address/utxos/siafund":      srv.addressessAddressUtxosSiafundHandler,
+		"GET    /addresses/:address/events":             srv.addressessAddressEventsHandler,
+		"GET    /addresses/:address/events/unconfirmed": srv.addressessAddressEventsUnconfirmedHandler,
+		"GET    /addresses/:address/balance":            srv.addressessAddressBalanceHandler,
+
+		"GET    /events/:id": srv.eventsIDHandler,
 
 		"GET    /outputs/siacoin/:id": srv.outputsSiacoinHandler,
 		"GET    /outputs/siafund/:id": srv.outputsSiafundHandler,
