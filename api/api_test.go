@@ -200,6 +200,25 @@ func TestAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Unconfirmed transaction relevant to addr1
+	txn3 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         txn1.SiacoinOutputID(0),
+			UnlockConditions: unlockConditions,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: types.VoidAddress,
+			Value:   txn1.SiacoinOutputs[0].Value,
+		}},
+	}
+	testutil.SignTransaction(cm.TipState(), pk1, &txn3)
+
+	// Other unconfirmed transaction
+	txn4 := types.Transaction{}
+	if _, err := cm.AddPoolTransactions([]types.Transaction{txn3, txn4}); err != nil {
+		t.Fatal(err)
+	}
+
 	// Ensure explorer has time to add blocks
 	time.Sleep(2 * time.Second)
 
@@ -412,17 +431,52 @@ func TestAPI(t *testing.T) {
 			testutil.Equal(t, "immature siacoins", types.ZeroCurrency, resp.ImmatureSiacoins)
 			testutil.Equal(t, "unspent siafunds", txn2.SiafundOutputs[1].Value, resp.UnspentSiafunds)
 		}},
-		// There is an issue with JSON unmarshaling of events.
-		// TODO: fix when explorer.Events are replaced with wallet.Events
-		// {
-		// 	resp, err := client.AddressEvents(addr1, 0, 500)
-		// 	if err != nil {
-		// 		t.Fatal(err)
-		// 	}
-		// 	if len(resp) == 0 {
-		// 		t.Fatal("no events for addr1")
-		// 	}
-		// }
+		{"AddressEvents", func(t *testing.T) {
+			resp, err := client.AddressEvents(addr1, 0, 500)
+			if err != nil {
+				t.Fatal(err)
+			}
+			testutil.Equal(t, "events", 3, len(resp))
+
+			ev0 := resp[0].Data.(explorer.EventV1Transaction)
+			testutil.CheckTransaction(t, txn2, ev0.Transaction)
+
+			ev1 := resp[1].Data.(explorer.EventV1Transaction)
+			testutil.CheckTransaction(t, txn1, ev1.Transaction)
+
+			ev2 := resp[2].Data.(explorer.EventV1Transaction)
+			testutil.CheckTransaction(t, genesisBlock.Transactions[0], ev2.Transaction)
+		}},
+		{"Event", func(t *testing.T) {
+			resp, err := client.Event(types.Hash256(txn2.ID()))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ev := resp.Data.(explorer.EventV1Transaction)
+			testutil.CheckTransaction(t, txn2, ev.Transaction)
+		}},
+		{"Event unconfirmed", func(t *testing.T) {
+			resp, err := client.Event(types.Hash256(txn3.ID()))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ev := resp.Data.(explorer.EventV1Transaction)
+			ev.Transaction.SiacoinOutputs[0].Source = explorer.SourceTransaction
+			testutil.CheckTransaction(t, txn3, ev.Transaction)
+		}},
+		{"Address event unconfirmed", func(t *testing.T) {
+			resp, err := client.AddressUnconfirmedEvents(addr1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			testutil.Equal(t, "events", 1, len(resp))
+
+			ev := resp[0].Data.(explorer.EventV1Transaction)
+			ev.Transaction.SiacoinOutputs[0].Source = explorer.SourceTransaction
+			testutil.CheckTransaction(t, txn3, ev.Transaction)
+		}},
 		{"Contract", func(t *testing.T) {
 			resp, err := client.Contract(txn1.FileContractID(0))
 			if err != nil {

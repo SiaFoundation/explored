@@ -95,6 +95,18 @@ const (
 	SearchTypeContract SearchType = "contract"
 )
 
+// A ResolutionType represents the type of a v2 file contract resolution.
+type ResolutionType string
+
+const (
+	// ResolutionTypeRenewal represents a file contract renewal.
+	ResolutionTypeRenewal ResolutionType = "renewal"
+	// ResolutionTypeStorageProof represents submission of a storage proof.
+	ResolutionTypeStorageProof ResolutionType = "storageProof"
+	// ResolutionTypeExpiration represents the expiration of a contract.
+	ResolutionTypeExpiration ResolutionType = "expiration"
+)
+
 // A SiacoinInput is a types.SiacoinInput with information about the parent
 // value.
 type SiacoinInput struct {
@@ -230,7 +242,7 @@ type V2FileContractRenewal struct {
 // and expiration.
 type V2FileContractResolution struct {
 	Parent     V2FileContract `json:"parent"`
-	Type       string         `json:"string"`
+	Type       ResolutionType `json:"string"`
 	Resolution any            `json:"resolution"`
 }
 

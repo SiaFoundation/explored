@@ -517,7 +517,7 @@ WHERE fc.id = ?`)
 						}
 					}
 
-					fcr.Type = "renewal"
+					fcr.Type = explorer.ResolutionTypeRenewal
 					fcr.Resolution = renewal
 				case 1: // V2StorageProof
 					proof := &types.V2StorageProof{
@@ -526,10 +526,10 @@ WHERE fc.id = ?`)
 						Leaf:       [64]byte(storageProofLeaf),
 					}
 
-					fcr.Type = "storageProof"
+					fcr.Type = explorer.ResolutionTypeStorageProof
 					fcr.Resolution = proof
 				case 2: // V2FileContractExpiration
-					fcr.Type = "expiration"
+					fcr.Type = explorer.ResolutionTypeExpiration
 					fcr.Resolution = new(types.V2FileContractExpiration)
 				}
 

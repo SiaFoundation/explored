@@ -1,10 +1,13 @@
 package explorer
 
 import (
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/coreutils/wallet"
 )
 
@@ -65,12 +68,337 @@ func (EventV1ContractResolution) isEvent() bool { return true }
 func (EventV2Transaction) isEvent() bool        { return true }
 func (EventV2ContractResolution) isEvent() bool { return true }
 
+// UnmarshalJSON implements the json.Unmarshaler interface.
+func (e *Event) UnmarshalJSON(b []byte) error {
+	var je struct {
+		ID             types.Hash256    `json:"id"`
+		Index          types.ChainIndex `json:"index"`
+		Confirmations  uint64           `json:"confirmations"`
+		Timestamp      time.Time        `json:"timestamp"`
+		MaturityHeight uint64           `json:"maturityHeight"`
+		Type           string           `json:"type"`
+		Data           json.RawMessage  `json:"data"`
+		Relevant       []types.Address  `json:"relevant,omitempty"`
+	}
+	if err := json.Unmarshal(b, &je); err != nil {
+		return err
+	}
+
+	e.ID = je.ID
+	e.Index = je.Index
+	e.Confirmations = je.Confirmations
+	e.Timestamp = je.Timestamp
+	e.MaturityHeight = je.MaturityHeight
+	e.Type = je.Type
+	e.Relevant = je.Relevant
+
+	var err error
+	switch je.Type {
+	case wallet.EventTypeMinerPayout, wallet.EventTypeFoundationSubsidy, wallet.EventTypeSiafundClaim:
+		var data EventPayout
+		err = json.Unmarshal(je.Data, &data)
+		e.Data = data
+	case wallet.EventTypeV1ContractResolution:
+		var data EventV1ContractResolution
+		err = json.Unmarshal(je.Data, &data)
+		e.Data = data
+	case wallet.EventTypeV2ContractResolution:
+		var data EventV2ContractResolution
+		err = json.Unmarshal(je.Data, &data)
+		e.Data = data
+	case wallet.EventTypeV1Transaction:
+		var data EventV1Transaction
+		err = json.Unmarshal(je.Data, &data)
+		e.Data = data
+	case wallet.EventTypeV2Transaction:
+		var data EventV2Transaction
+		err = json.Unmarshal(je.Data, &data)
+		e.Data = data
+	default:
+		return fmt.Errorf("unknown event type: %v", je.Type)
+	}
+	return err
+}
+
 // A ChainUpdate is a set of changes to the consensus state.
 type ChainUpdate interface {
 	ForEachSiacoinElement(func(sce types.SiacoinElement, created, spent bool))
 	ForEachSiafundElement(func(sfe types.SiafundElement, created, spent bool))
 	ForEachFileContractElement(func(fce types.FileContractElement, created bool, rev *types.FileContractElement, resolved, valid bool))
 	ForEachV2FileContractElement(func(fce types.V2FileContractElement, created bool, rev *types.V2FileContractElement, res types.V2FileContractResolutionType))
+}
+
+// RelevantAddressesV1 returns all the relevant addresses to a V1 transaction.
+func RelevantAddressesV1(txn types.Transaction) []types.Address {
+	addresses := make(map[types.Address]struct{})
+	for _, sco := range txn.SiacoinOutputs {
+		addresses[sco.Address] = struct{}{}
+	}
+	for _, sci := range txn.SiacoinInputs {
+		addresses[sci.UnlockConditions.UnlockHash()] = struct{}{}
+	}
+	for _, sfo := range txn.SiafundOutputs {
+		addresses[sfo.Address] = struct{}{}
+	}
+	for _, sfi := range txn.SiafundInputs {
+		addresses[sfi.UnlockConditions.UnlockHash()] = struct{}{}
+	}
+	for _, fc := range txn.FileContracts {
+		for _, vpo := range fc.ValidProofOutputs {
+			addresses[vpo.Address] = struct{}{}
+		}
+		for _, mpo := range fc.MissedProofOutputs {
+			addresses[mpo.Address] = struct{}{}
+		}
+	}
+	for _, fcr := range txn.FileContractRevisions {
+		for _, vpo := range fcr.FileContract.ValidProofOutputs {
+			addresses[vpo.Address] = struct{}{}
+		}
+		for _, mpo := range fcr.FileContract.MissedProofOutputs {
+			addresses[mpo.Address] = struct{}{}
+		}
+	}
+
+	relevant := make([]types.Address, 0, len(addresses))
+	for addr := range addresses {
+		relevant = append(relevant, addr)
+	}
+	return relevant
+}
+
+// RelevantAddressesV2 returns all the relevant addresses to a V2 transaction.
+func RelevantAddressesV2(txn types.V2Transaction) []types.Address {
+	addresses := make(map[types.Address]struct{})
+	for _, sco := range txn.SiacoinOutputs {
+		addresses[sco.Address] = struct{}{}
+	}
+	for _, sci := range txn.SiacoinInputs {
+		addresses[sci.Parent.SiacoinOutput.Address] = struct{}{}
+	}
+	for _, sfo := range txn.SiafundOutputs {
+		addresses[sfo.Address] = struct{}{}
+	}
+	for _, sfi := range txn.SiafundInputs {
+		addresses[sfi.Parent.SiafundOutput.Address] = struct{}{}
+	}
+	for _, fc := range txn.FileContracts {
+		addresses[fc.HostOutput.Address] = struct{}{}
+		addresses[fc.RenterOutput.Address] = struct{}{}
+	}
+	for _, fcr := range txn.FileContractRevisions {
+		addresses[fcr.Parent.V2FileContract.HostOutput.Address] = struct{}{}
+		addresses[fcr.Parent.V2FileContract.RenterOutput.Address] = struct{}{}
+		addresses[fcr.Revision.HostOutput.Address] = struct{}{}
+		addresses[fcr.Revision.RenterOutput.Address] = struct{}{}
+	}
+	for _, fcr := range txn.FileContractResolutions {
+		addresses[fcr.Parent.V2FileContract.HostOutput.Address] = struct{}{}
+		addresses[fcr.Parent.V2FileContract.RenterOutput.Address] = struct{}{}
+		if v, ok := fcr.Resolution.(*types.V2FileContractRenewal); ok {
+			addresses[v.NewContract.HostOutput.Address] = struct{}{}
+			addresses[v.NewContract.RenterOutput.Address] = struct{}{}
+		}
+	}
+
+	relevant := make([]types.Address, 0, len(addresses))
+	for addr := range addresses {
+		relevant = append(relevant, addr)
+	}
+	return relevant
+}
+
+// CoreToExplorerV1Transaction converts a core/types.Transaction to an
+// event.Transaction. Fields we do not have information are unfilled in the
+// return value.
+func CoreToExplorerV1Transaction(txn types.Transaction) (result Transaction) {
+	result.ID = txn.ID()
+
+	coreToExplorerFC := func(fcID types.FileContractID, fc types.FileContract) ExtendedFileContract {
+		efc := ExtendedFileContract{
+			ConfirmationTransactionID: result.ID,
+			ID:                        fcID,
+			Filesize:                  fc.Filesize,
+			FileMerkleRoot:            fc.FileMerkleRoot,
+			WindowStart:               fc.WindowStart,
+			WindowEnd:                 fc.WindowEnd,
+			Payout:                    fc.Payout,
+			UnlockHash:                fc.UnlockHash,
+			RevisionNumber:            fc.RevisionNumber,
+		}
+		for j, vpo := range fc.ValidProofOutputs {
+			efc.ValidProofOutputs = append(efc.ValidProofOutputs, ContractSiacoinOutput{
+				ID:            fcID.ValidOutputID(j),
+				SiacoinOutput: vpo,
+			})
+		}
+		for j, mpo := range fc.MissedProofOutputs {
+			efc.MissedProofOutputs = append(efc.MissedProofOutputs, ContractSiacoinOutput{
+				ID:            fcID.MissedOutputID(j),
+				SiacoinOutput: mpo,
+			})
+		}
+		return efc
+	}
+
+	for _, sci := range txn.SiacoinInputs {
+		result.SiacoinInputs = append(result.SiacoinInputs, SiacoinInput{
+			SiacoinInput: sci,
+		})
+	}
+	for i, sco := range txn.SiacoinOutputs {
+		sce := types.SiacoinElement{
+			ID:            txn.SiacoinOutputID(i),
+			SiacoinOutput: sco,
+		}
+		result.SiacoinOutputs = append(result.SiacoinOutputs, SiacoinOutput{
+			SiacoinElement: sce,
+		})
+	}
+	for _, sfi := range txn.SiafundInputs {
+		result.SiafundInputs = append(result.SiafundInputs, SiafundInput{
+			SiafundInput: sfi,
+		})
+	}
+	for i, sfo := range txn.SiafundOutputs {
+		sfe := types.SiafundElement{
+			ID:            txn.SiafundOutputID(i),
+			SiafundOutput: sfo,
+		}
+		result.SiafundOutputs = append(result.SiafundOutputs, SiafundOutput{
+			SiafundElement: sfe,
+		})
+	}
+	for i, fc := range txn.FileContracts {
+		result.FileContracts = append(result.FileContracts, coreToExplorerFC(txn.FileContractID(i), fc))
+	}
+	for _, fcr := range txn.FileContractRevisions {
+		result.FileContractRevisions = append(result.FileContractRevisions, FileContractRevision{
+			ParentID:             fcr.ParentID,
+			UnlockConditions:     fcr.UnlockConditions,
+			ExtendedFileContract: coreToExplorerFC(fcr.ParentID, fcr.FileContract),
+		})
+	}
+	for _, sp := range txn.StorageProofs {
+		result.StorageProofs = append(result.StorageProofs, sp)
+	}
+	for _, fee := range txn.MinerFees {
+		result.MinerFees = append(result.MinerFees, fee)
+	}
+	for _, arb := range txn.ArbitraryData {
+		result.ArbitraryData = append(result.ArbitraryData, arb)
+	}
+	for _, sig := range txn.Signatures {
+		result.Signatures = append(result.Signatures, sig)
+	}
+
+	return
+}
+
+// CoreToExplorerV2Transaction converts a core/types.V2Transaction to an
+// event.V2Transaction. Fields we do not have information are unfilled in the
+// return value.
+func CoreToExplorerV2Transaction(txn types.V2Transaction) (result V2Transaction) {
+	result.ID = txn.ID()
+	coreToExplorerFC := func(fcID types.FileContractID, fc types.V2FileContract) V2FileContract {
+		fce := types.V2FileContractElement{
+			ID:             fcID,
+			V2FileContract: fc,
+		}
+
+		return V2FileContract{
+			TransactionID:             result.ID,
+			ConfirmationTransactionID: result.ID,
+			V2FileContractElement:     fce,
+		}
+	}
+
+	for _, sci := range txn.SiacoinInputs {
+		result.SiacoinInputs = append(result.SiacoinInputs, sci)
+	}
+	for i, sco := range txn.SiacoinOutputs {
+		sce := types.SiacoinElement{
+			ID:            txn.SiacoinOutputID(result.ID, i),
+			SiacoinOutput: sco,
+		}
+		result.SiacoinOutputs = append(result.SiacoinOutputs, SiacoinOutput{
+			SiacoinElement: sce,
+		})
+	}
+	for _, sfi := range txn.SiafundInputs {
+		result.SiafundInputs = append(result.SiafundInputs, sfi)
+	}
+	for i, sfo := range txn.SiafundOutputs {
+		sfe := types.SiafundElement{
+			ID:            txn.SiafundOutputID(result.ID, i),
+			SiafundOutput: sfo,
+		}
+		result.SiafundOutputs = append(result.SiafundOutputs, SiafundOutput{
+			SiafundElement: sfe,
+		})
+	}
+	for i, fc := range txn.FileContracts {
+		result.FileContracts = append(result.FileContracts, coreToExplorerFC(txn.V2FileContractID(result.ID, i), fc))
+	}
+	for _, fcr := range txn.FileContractRevisions {
+		parent := coreToExplorerFC(fcr.Parent.ID, fcr.Parent.V2FileContract)
+		parent.V2FileContractElement.StateElement = fcr.Parent.StateElement
+		result.FileContractRevisions = append(result.FileContractRevisions, V2FileContractRevision{
+			Parent:   parent,
+			Revision: coreToExplorerFC(fcr.Parent.ID, fcr.Revision),
+		})
+	}
+	for _, fcr := range txn.FileContractResolutions {
+		parent := coreToExplorerFC(fcr.Parent.ID, fcr.Parent.V2FileContract)
+		parent.V2FileContractElement.StateElement = fcr.Parent.StateElement
+
+		var res any
+		var typ ResolutionType
+		switch v := fcr.Resolution.(type) {
+		case *types.V2FileContractRenewal:
+			res = V2FileContractRenewal{
+				FinalRenterOutput: v.FinalRenterOutput,
+				FinalHostOutput:   v.FinalHostOutput,
+				RenterRollover:    v.RenterRollover,
+				HostRollover:      v.HostRollover,
+				NewContract:       coreToExplorerFC(fcr.Parent.ID.V2RenewalID(), v.NewContract),
+
+				RenterSignature: v.RenterSignature,
+				HostSignature:   v.HostSignature,
+			}
+			typ = ResolutionTypeRenewal
+		case *types.V2StorageProof:
+			res = v
+			typ = ResolutionTypeStorageProof
+		case *types.V2FileContractExpiration:
+			res = v
+			typ = ResolutionTypeExpiration
+		}
+		result.FileContractResolutions = append(result.FileContractResolutions, V2FileContractResolution{
+			Parent:     parent,
+			Type:       typ,
+			Resolution: res,
+		})
+	}
+
+	for _, attestation := range txn.Attestations {
+		result.Attestations = append(result.Attestations, attestation)
+
+		var ha chain.V2HostAnnouncement
+		if ha.FromAttestation(attestation) == nil {
+			result.HostAnnouncements = append(result.HostAnnouncements, V2HostAnnouncement{
+				V2HostAnnouncement: ha,
+				PublicKey:          attestation.PublicKey,
+			})
+		}
+	}
+	for _, arb := range txn.ArbitraryData {
+		result.ArbitraryData = append(result.ArbitraryData, arb)
+	}
+	result.NewFoundationAddress = txn.NewFoundationAddress
+	result.MinerFee = txn.MinerFee
+
+	return
 }
 
 // AppliedEvents extracts a list of relevant events from a chain update.
@@ -111,27 +439,7 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) (events []
 
 	// handle v1 transactions
 	for _, txn := range b.Transactions {
-		addresses := make(map[types.Address]struct{})
-		for _, sci := range txn.SiacoinInputs {
-			sce, ok := sces[sci.ParentID]
-			if !ok {
-				continue
-			}
-
-			addresses[sce.SiacoinOutput.Address] = struct{}{}
-		}
-		for _, sco := range txn.SiacoinOutputs {
-			addresses[sco.Address] = struct{}{}
-		}
-
 		for _, sfi := range txn.SiafundInputs {
-			sfe, ok := sfes[sfi.ParentID]
-			if !ok {
-				continue
-			}
-
-			addresses[sfe.SiafundOutput.Address] = struct{}{}
-
 			sce, ok := sces[sfi.ParentID.ClaimOutputID()]
 			if ok {
 				addEvent(types.Hash256(sce.ID), sce.MaturityHeight, wallet.EventTypeSiafundClaim, EventPayout{
@@ -139,62 +447,26 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) (events []
 				}, []types.Address{sfi.ClaimAddress})
 			}
 		}
-		for _, sfo := range txn.SiafundOutputs {
-			addresses[sfo.Address] = struct{}{}
-		}
 
-		for _, fc := range txn.FileContracts {
-			addresses[fc.UnlockHash] = struct{}{}
-			for _, vpo := range fc.ValidProofOutputs {
-				addresses[vpo.Address] = struct{}{}
-			}
-			for _, mpo := range fc.MissedProofOutputs {
-				addresses[mpo.Address] = struct{}{}
-			}
-		}
-		// skip transactions with no relevant addresses
-		if len(addresses) == 0 {
-			continue
-		}
-
-		var ev EventV1Transaction
-		relevant := make([]types.Address, 0, len(addresses))
-		for addr := range addresses {
-			relevant = append(relevant, addr)
-		}
+		relevant := RelevantAddressesV1(txn)
+		ev := EventV1Transaction{CoreToExplorerV1Transaction(txn)}
 
 		addEvent(types.Hash256(txn.ID()), cs.Index.Height, wallet.EventTypeV1Transaction, ev, relevant) // transaction maturity height is the current block height
 	}
 
 	// handle v2 transactions
 	for _, txn := range b.V2Transactions() {
-		addresses := make(map[types.Address]struct{})
-		for _, sci := range txn.SiacoinInputs {
-			addresses[sci.Parent.SiacoinOutput.Address] = struct{}{}
-		}
-		for _, sco := range txn.SiacoinOutputs {
-			addresses[sco.Address] = struct{}{}
-		}
 		for _, sfi := range txn.SiafundInputs {
-			addresses[sfi.Parent.SiafundOutput.Address] = struct{}{}
-
-			sce, ok := sces[types.SiafundOutputID(sfi.Parent.ID).V2ClaimOutputID()]
+			sfe, ok := sces[types.SiafundOutputID(sfi.Parent.ID).V2ClaimOutputID()]
 			if ok {
-				addEvent(types.Hash256(sce.ID), sce.MaturityHeight, wallet.EventTypeSiafundClaim, EventPayout{
-					SiacoinElement: SiacoinOutput{SiacoinElement: sce},
+				addEvent(types.Hash256(sfe.ID), sfe.MaturityHeight, wallet.EventTypeSiafundClaim, EventPayout{
+					SiacoinElement: SiacoinOutput{SiacoinElement: sfe},
 				}, []types.Address{sfi.ClaimAddress})
 			}
 		}
-		for _, sco := range txn.SiafundOutputs {
-			addresses[sco.Address] = struct{}{}
-		}
 
-		// ev := EventV2Transaction(txn)
-		var ev EventV2Transaction
-		relevant := make([]types.Address, 0, len(addresses))
-		for addr := range addresses {
-			relevant = append(relevant, addr)
-		}
+		relevant := RelevantAddressesV2(txn)
+		ev := EventV2Transaction(CoreToExplorerV2Transaction(txn))
 		addEvent(types.Hash256(txn.ID()), cs.Index.Height, wallet.EventTypeV2Transaction, ev, relevant) // transaction maturity height is the current block height
 	}
 
@@ -263,14 +535,14 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) (events []
 			missed = true
 		}
 
-		var typ string
+		var typ ResolutionType
 		switch res.(type) {
 		case *types.V2FileContractRenewal:
-			typ = "renewal"
+			typ = ResolutionTypeRenewal
 		case *types.V2StorageProof:
-			typ = "storageProof"
+			typ = ResolutionTypeStorageProof
 		case *types.V2FileContractExpiration:
-			typ = "expiration"
+			typ = ResolutionTypeStorageProof
 		default:
 			panic("unknown resolution type")
 		}
