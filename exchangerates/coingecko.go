@@ -5,15 +5,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
 )
 
 const (
-	// CoinGeckoSicaoinPair is the ID of Siacoin in CoinGecko
-	CoinGeckoSicaoinPair = "siacoin"
+	// CoinGeckoTokenSiacoin is the token ID of Siacoin in CoinGecko
+	CoinGeckoTokenSiacoin = "siacoin"
+)
+
+const (
+	// CoinGeckoCurrencyUSD is the name of US dollars in CoinGecko.
+	CoinGeckoCurrencyUSD = "usd"
+	// CoinGeckoCurrencyEUR is the name of euros in CoinGecko.
+	CoinGeckoCurrencyEUR = "eur"
 )
 
 type coinGeckoAPI struct {
@@ -26,15 +32,14 @@ func newcoinGeckoAPI(apiKey string) *coinGeckoAPI {
 	return &coinGeckoAPI{apiKey: apiKey}
 }
 
-type coinGeckoPriceResponse map[string]struct {
-	USD float64 `json:"usd"`
-}
+type coinGeckoPriceResponse map[string]map[string]float64
 
 // See https://docs.coingecko.com/reference/simple-price
-func (k *coinGeckoAPI) ticker(pair string) (float64, error) {
-	pair = strings.ToLower(pair)
+func (k *coinGeckoAPI) ticker(currency, token string) (float64, error) {
+	currency = strings.ToLower(currency)
+	token = strings.ToLower(token)
 
-	request, err := http.NewRequest(http.MethodGet, "https://api.coingecko.com/api/v3/simple/price?vs_currencies=usd&ids="+url.PathEscape(pair), nil)
+	request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://api.coingecko.com/api/v3/simple/price?vs_currencies=%s&ids=%s", currency, token), nil)
 	if err != nil {
 		return 0, err
 	}
@@ -45,22 +50,29 @@ func (k *coinGeckoAPI) ticker(pair string) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
+	defer response.Body.Close()
+
 	var parsed coinGeckoPriceResponse
 	if err := json.NewDecoder(response.Body).Decode(&parsed); err != nil {
 		return 0, err
 	}
 
-	price, ok := parsed[pair]
+	asset, ok := parsed[token]
 	if !ok {
-		return 0, fmt.Errorf("no asset %s", pair)
+		return 0, fmt.Errorf("no asset %s", token)
 	}
-	return price.USD, nil
+	price, ok := asset[currency]
+	if !ok {
+		return 0, fmt.Errorf("no currency %s", currency)
+	}
+	return price, nil
 }
 
 type coinGecko struct {
-	pair    string
-	refresh time.Duration
-	client  *coinGeckoAPI
+	currency string
+	token    string
+	refresh  time.Duration
+	client   *coinGeckoAPI
 
 	mu   sync.Mutex
 	rate float64
@@ -68,11 +80,12 @@ type coinGecko struct {
 }
 
 // NewCoinGecko returns an ExchangeRateSource that gets data from CoinGecko.
-func NewCoinGecko(apiKey string, pair string, refresh time.Duration) ExchangeRateSource {
+func NewCoinGecko(apiKey, currency, token string, refresh time.Duration) ExchangeRateSource {
 	return &coinGecko{
-		pair:    pair,
-		refresh: refresh,
-		client:  newcoinGeckoAPI(apiKey),
+		currency: currency,
+		token:    token,
+		refresh:  refresh,
+		client:   newcoinGeckoAPI(apiKey),
 	}
 }
 
@@ -85,7 +98,7 @@ func (c *coinGecko) Start(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			c.mu.Lock()
-			c.rate, c.err = c.client.ticker(c.pair)
+			c.rate, c.err = c.client.ticker(c.currency, c.token)
 			c.mu.Unlock()
 		case <-ctx.Done():
 			c.mu.Lock()

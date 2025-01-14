@@ -290,8 +290,8 @@ func (c *Client) HostsList(params explorer.HostQuery, sortBy explorer.HostSortCo
 	return
 }
 
-// ExchangeRate returns the value of 1 SC in USD.
-func (c *Client) ExchangeRate() (resp float64, err error) {
-	err = c.c.GET("/exchangerate", &resp)
+// ExchangeRate returns the value of 1 SC in the specified currency.
+func (c *Client) ExchangeRate(currency string) (resp float64, err error) {
+	err = c.c.GET(fmt.Sprintf("/exchangerate?currency=%s", currency), &resp)
 	return
 }

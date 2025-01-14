@@ -115,10 +115,10 @@ var (
 )
 
 type server struct {
-	cm ChainManager
-	e  Explorer
-	s  Syncer
-	ex exchangerates.ExchangeRateSource
+	cm  ChainManager
+	e   Explorer
+	s   Syncer
+	exs map[string]exchangerates.ExchangeRateSource
 
 	startTime time.Time
 }
@@ -742,7 +742,19 @@ func (s *server) searchIDHandler(jc jape.Context) {
 }
 
 func (s *server) exchangeRateHandler(jc jape.Context) {
-	price, err := s.ex.Last()
+	var currency string
+	if jc.DecodeForm("currency", &currency) != nil {
+		return
+	}
+
+	currency = strings.ToUpper(currency)
+	ex, ok := s.exs[currency]
+	if !ok {
+		jc.Error(fmt.Errorf("currency not supported: %s", currency), http.StatusNotFound)
+		return
+	}
+
+	price, err := ex.Last()
 	if jc.Check("failed to get exchange rate", err) != nil {
 		return
 	}
@@ -750,12 +762,12 @@ func (s *server) exchangeRateHandler(jc jape.Context) {
 }
 
 // NewServer returns an HTTP handler that serves the explored API.
-func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.ExchangeRateSource) http.Handler {
+func NewServer(e Explorer, cm ChainManager, s Syncer, exs map[string]exchangerates.ExchangeRateSource) http.Handler {
 	srv := server{
 		cm:        cm,
 		e:         e,
 		s:         s,
-		ex:        ex,
+		exs:       exs,
 		startTime: time.Now().UTC(),
 	}
 	return jape.Mux(map[string]jape.Handler{

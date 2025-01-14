@@ -12,7 +12,7 @@ func TestKraken(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	kraken := NewKraken(KrakenSiacoinPair, interval)
+	kraken := NewKraken(KrakenPairSiacoinUSD, interval)
 	go kraken.Start(ctx)
 
 	time.Sleep(2 * interval)

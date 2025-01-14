@@ -13,8 +13,10 @@ import (
 )
 
 const (
-	// KrakenSiacoinPair is the ID of Siacoin in Kraken
-	KrakenSiacoinPair = "SCUSD"
+	// KrakenSiacoinUSDPair is the ID of SC/USD pair in Kraken
+	KrakenPairSiacoinUSD = "SCUSD"
+	// KrakenSiacoinEURPair is the ID of SC/EUR pair in Kraken
+	KrakenPairSiacoinEUR = "SCEUR"
 )
 
 type krakenAPI struct {
@@ -47,6 +49,7 @@ func (k *krakenAPI) ticker(pair string) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
+	defer response.Body.Close()
 
 	var parsed krakenPriceResponse
 	if err := json.NewDecoder(response.Body).Decode(&parsed); err != nil {

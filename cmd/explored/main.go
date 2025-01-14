@@ -50,6 +50,9 @@ var cfg = config.Config{
 		MaxLastScan:         3 * time.Hour,
 		MinLastAnnouncement: 90 * 24 * time.Hour,
 	},
+	ExchangeRates: config.ExchangeRates{
+		Refresh: 3 * time.Second,
+	},
 	Consensus: config.Consensus{
 		Network: "mainnet",
 	},
@@ -263,15 +266,24 @@ func runRootCmd(ctx context.Context, log *zap.Logger) error {
 	defer timeoutCancel()
 	defer e.Shutdown(timeoutCtx)
 
-	var sources []exchangerates.ExchangeRateSource
-	sources = append(sources, exchangerates.NewKraken(exchangerates.KrakenSiacoinPair, 3*time.Second))
+	var sourcesUSD, sourcesEUR []exchangerates.ExchangeRateSource
+	sourcesUSD = append(sourcesUSD, exchangerates.NewKraken(exchangerates.KrakenPairSiacoinUSD, cfg.ExchangeRates.Refresh))
+	sourcesEUR = append(sourcesEUR, exchangerates.NewKraken(exchangerates.KrakenPairSiacoinEUR, cfg.ExchangeRates.Refresh))
 	if apiKey := os.Getenv("COINGECKO_API_KEY"); apiKey != "" {
-		sources = append(sources, exchangerates.NewCoinGecko(apiKey, exchangerates.CoinGeckoSicaoinPair, 3*time.Second))
+		sourcesUSD = append(sourcesUSD, exchangerates.NewCoinGecko(apiKey, exchangerates.CoinGeckoCurrencyUSD, exchangerates.CoinGeckoTokenSiacoin, cfg.ExchangeRates.Refresh))
+		sourcesEUR = append(sourcesEUR, exchangerates.NewCoinGecko(apiKey, exchangerates.CoinGeckoCurrencyEUR, exchangerates.CoinGeckoTokenSiacoin, cfg.ExchangeRates.Refresh))
 	}
-	ex := exchangerates.NewAverager(false, sources...)
-	go ex.Start(ctx)
 
-	api := api.NewServer(e, cm, s, ex)
+	exUSD := exchangerates.NewAverager(false, sourcesUSD...)
+	exEUR := exchangerates.NewAverager(false, sourcesEUR...)
+	go exUSD.Start(ctx)
+	go exEUR.Start(ctx)
+	exs := map[string]exchangerates.ExchangeRateSource{
+		"USD": exUSD,
+		"EUR": exEUR,
+	}
+
+	api := api.NewServer(e, cm, s, exs)
 	server := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasPrefix(r.URL.Path, "/api") {
