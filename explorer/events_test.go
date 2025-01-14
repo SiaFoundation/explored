@@ -2,13 +2,13 @@ package explorer_test
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/wallet"
 	"go.sia.tech/explored/explorer"
-	"go.sia.tech/explored/internal/testutil"
 )
 
 func TestEventMarshalling(t *testing.T) {
@@ -43,7 +43,7 @@ func TestEventMarshalling(t *testing.T) {
 			ID:            id,
 			Index:         index,
 			Confirmations: 20,
-			Type:          "v1Transaction",
+			Type:          wallet.EventTypeV1Transaction,
 			Data: explorer.EventV1Transaction{
 				Transaction: explorer.Transaction{
 					SiacoinOutputs: []explorer.SiacoinOutput{sco},
@@ -57,7 +57,7 @@ func TestEventMarshalling(t *testing.T) {
 			ID:            id,
 			Index:         index,
 			Confirmations: 30,
-			Type:          "v1ContractResolution",
+			Type:          wallet.EventTypeV1ContractResolution,
 			Data: explorer.EventV1ContractResolution{
 				SiacoinElement: sco,
 				Missed:         true,
@@ -70,7 +70,7 @@ func TestEventMarshalling(t *testing.T) {
 			ID:            id,
 			Index:         index,
 			Confirmations: 40,
-			Type:          "v2ContractResolution",
+			Type:          wallet.EventTypeV2ContractResolution,
 			Data: explorer.EventV2ContractResolution{
 				SiacoinElement: sco,
 				Missed:         true,
@@ -83,7 +83,7 @@ func TestEventMarshalling(t *testing.T) {
 			ID:            id,
 			Index:         index,
 			Confirmations: 50,
-			Type:          "v2Transaction",
+			Type:          wallet.EventTypeV2Transaction,
 			Data: explorer.EventV2Transaction(explorer.V2Transaction{
 				SiacoinOutputs: []explorer.SiacoinOutput{sco},
 			}),
@@ -104,13 +104,29 @@ func TestEventMarshalling(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		testutil.Equal(t, "ID", event.ID, unmarshalled.ID)
-		testutil.Equal(t, "Index", event.Index, unmarshalled.Index)
-		testutil.Equal(t, "Confirmations", event.Confirmations, unmarshalled.Confirmations)
-		testutil.Equal(t, "Type", event.Type, unmarshalled.Type)
-		testutil.Equal(t, "MaturityHeight", event.MaturityHeight, unmarshalled.MaturityHeight)
-		testutil.Equal(t, "Timestamp", event.Timestamp, unmarshalled.Timestamp)
-		testutil.Equal(t, "Relevant", event.Relevant, unmarshalled.Relevant)
-		testutil.Equal(t, "Data", event.Data, unmarshalled.Data)
+		if event.ID != unmarshalled.ID {
+			t.Errorf("ID: expected %v, got %v", event.ID, unmarshalled.ID)
+		}
+		if event.Index != unmarshalled.Index {
+			t.Errorf("Index: expected %v, got %v", event.Index, unmarshalled.Index)
+		}
+		if event.Confirmations != unmarshalled.Confirmations {
+			t.Errorf("Confirmations: expected %d, got %d", event.Confirmations, unmarshalled.Confirmations)
+		}
+		if event.Type != unmarshalled.Type {
+			t.Errorf("Type: expected %s, got %s", event.Type, unmarshalled.Type)
+		}
+		if event.MaturityHeight != unmarshalled.MaturityHeight {
+			t.Errorf("MaturityHeight: expected %d, got %d", event.MaturityHeight, unmarshalled.MaturityHeight)
+		}
+		if !event.Timestamp.Equal(unmarshalled.Timestamp) {
+			t.Errorf("Timestamp: expected %v, got %v", event.Timestamp, unmarshalled.Timestamp)
+		}
+		if !reflect.DeepEqual(event.Relevant, unmarshalled.Relevant) {
+			t.Errorf("Relevant: expected %v, got %v", event.Relevant, unmarshalled.Relevant)
+		}
+		if !reflect.DeepEqual(event.Data, unmarshalled.Data) {
+			t.Errorf("Data: expected %v, got %v", event.Data, unmarshalled.Data)
+		}
 	}
 }
