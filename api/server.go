@@ -746,6 +746,10 @@ func (s *server) exchangeRateHandler(jc jape.Context) {
 	if jc.DecodeForm("currency", &currency) != nil {
 		return
 	}
+	if currency == "" {
+		jc.Error(errors.New("provide a currency value such as USD or EUR"), http.StatusNotFound)
+		return
+	}
 
 	currency = strings.ToUpper(currency)
 	ex, ok := s.exs[currency]

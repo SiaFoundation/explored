@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	// KrakenSiacoinUSDPair is the ID of SC/USD pair in Kraken
+	// KrakenPairSiacoinUSD is the ID of SC/USD pair in Kraken
 	KrakenPairSiacoinUSD = "SCUSD"
-	// KrakenSiacoinEURPair is the ID of SC/EUR pair in Kraken
+	// KrakenPairSiacoinEUR is the ID of SC/EUR pair in Kraken
 	KrakenPairSiacoinEUR = "SCEUR"
 )
 
