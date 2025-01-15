@@ -35,11 +35,11 @@ func newcoinGeckoAPI(apiKey string) *coinGeckoAPI {
 type coinGeckoPriceResponse map[string]map[string]float64
 
 // See https://docs.coingecko.com/reference/simple-price
-func (k *coinGeckoAPI) ticker(currency, token string) (float64, error) {
+func (k *coinGeckoAPI) ticker(ctx context.Context, currency, token string) (float64, error) {
 	currency = strings.ToLower(currency)
 	token = strings.ToLower(token)
 
-	request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://api.coingecko.com/api/v3/simple/price?vs_currencies=%s&ids=%s", currency, token), nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("https://api.coingecko.com/api/v3/simple/price?vs_currencies=%s&ids=%s", currency, token), nil)
 	if err != nil {
 		return 0, err
 	}
@@ -98,7 +98,7 @@ func (c *coinGecko) Start(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			c.mu.Lock()
-			c.rate, c.err = c.client.ticker(c.currency, c.token)
+			c.rate, c.err = c.client.ticker(ctx, c.currency, c.token)
 			c.mu.Unlock()
 		case <-ctx.Done():
 			c.mu.Lock()

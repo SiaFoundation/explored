@@ -43,9 +43,14 @@ func newKrakenAPI() *krakenAPI {
 }
 
 // See https://docs.kraken.com/api/docs/rest-api/get-ticker-information
-func (k *krakenAPI) ticker(pair string) (float64, error) {
+func (k *krakenAPI) ticker(ctx context.Context, pair string) (float64, error) {
 	pair = strings.ToUpper(pair)
-	response, err := k.client.Get("https://api.kraken.com/0/public/Ticker?pair=" + url.PathEscape(pair))
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.kraken.com/0/public/Ticker?pair="+url.PathEscape(pair), nil)
+	if err != nil {
+		return 0, err
+	}
+	response, err := k.client.Do(request)
 	if err != nil {
 		return 0, err
 	}
@@ -96,7 +101,7 @@ func (k *kraken) Start(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			k.mu.Lock()
-			k.rate, k.err = k.client.ticker(k.pair)
+			k.rate, k.err = k.client.ticker(ctx, k.pair)
 			k.mu.Unlock()
 		case <-ctx.Done():
 			k.mu.Lock()
