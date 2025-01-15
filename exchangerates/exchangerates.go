@@ -5,9 +5,18 @@ import (
 	"errors"
 )
 
+const (
+	// CurrencyUSD represents US dollars
+	CurrencyUSD = "USD"
+	// CurrencyEUR represents euros
+	CurrencyEUR = "EUR"
+	// CurrencyBTC represents bitcoin
+	CurrencyBTC = "BTC"
+)
+
 // An ExchangeRateSource returns the price of 1 unit of an asset in USD.
 type ExchangeRateSource interface {
-	Last() (float64, error)
+	Last(currency string) (float64, error)
 	Start(ctx context.Context)
 }
 
@@ -36,10 +45,10 @@ func (a *averager) Start(ctx context.Context) {
 }
 
 // Last implements ExchangeRateSource.
-func (a *averager) Last() (float64, error) {
+func (a *averager) Last(currency string) (float64, error) {
 	sum, count := 0.0, 0.0
 	for i := range a.sources {
-		if v, err := a.sources[i].Last(); err == nil {
+		if v, err := a.sources[i].Last(currency); err == nil {
 			if v != 0 {
 				sum += v
 				count++

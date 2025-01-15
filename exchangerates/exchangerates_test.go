@@ -13,7 +13,7 @@ type constantPriceSource struct {
 
 func (c *constantPriceSource) Start(ctx context.Context) {}
 
-func (c *constantPriceSource) Last() (float64, error) {
+func (c *constantPriceSource) Last(string) (float64, error) {
 	return c.x, nil
 }
 
@@ -25,12 +25,13 @@ type errorPriceSource struct{}
 
 func (c *errorPriceSource) Start(ctx context.Context) {}
 
-func (c *errorPriceSource) Last() (float64, error) {
+func (c *errorPriceSource) Last(string) (float64, error) {
 	return -1, errors.New("error")
 }
 
 func TestAverager(t *testing.T) {
 	const interval = time.Second
+	const usd = "USD"
 
 	const (
 		p1 = 1.0
@@ -58,7 +59,7 @@ func TestAverager(t *testing.T) {
 		go averager.Start(ctx)
 
 		time.Sleep(2 * interval)
-		_, err = averager.Last()
+		_, err = averager.Last(usd)
 		// should get error: "no sources working"
 		if err == nil {
 			t.Fatal("should have gotten error for averager with no sources")
@@ -76,7 +77,7 @@ func TestAverager(t *testing.T) {
 
 		time.Sleep(2 * interval)
 
-		price, err := averager.Last()
+		price, err := averager.Last(usd)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -98,7 +99,7 @@ func TestAverager(t *testing.T) {
 
 		time.Sleep(2 * interval)
 
-		_, err = averager.Last()
+		_, err = averager.Last(usd)
 		// Should get an error because the errorSource will fail
 		// (ignoreOnError = false)
 		if err == nil {
@@ -119,7 +120,7 @@ func TestAverager(t *testing.T) {
 
 		// Should not get an error because the errorSource will just be ignored
 		// if at least one other source works (ignoreOnError = true)
-		price, err := averager.Last()
+		price, err := averager.Last(usd)
 		if err != nil {
 			t.Fatal(err)
 		}

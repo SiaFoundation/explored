@@ -266,30 +266,27 @@ func runRootCmd(ctx context.Context, log *zap.Logger) error {
 	defer timeoutCancel()
 	defer e.Shutdown(timeoutCtx)
 
-	var sourcesUSD, sourcesEUR []exchangerates.ExchangeRateSource
-	sourcesUSD = append(sourcesUSD, exchangerates.NewKraken(exchangerates.KrakenPairSiacoinUSD, cfg.ExchangeRates.Refresh))
-	sourcesEUR = append(sourcesEUR, exchangerates.NewKraken(exchangerates.KrakenPairSiacoinEUR, cfg.ExchangeRates.Refresh))
+	var sources []exchangerates.ExchangeRateSource
+	sources = append(sources, exchangerates.NewKraken(map[string]string{
+		exchangerates.CurrencyUSD: exchangerates.KrakenPairSiacoinUSD,
+		exchangerates.CurrencyEUR: exchangerates.KrakenPairSiacoinEUR,
+		exchangerates.CurrencyBTC: exchangerates.KrakenPairSiacoinBTC,
+	}, cfg.ExchangeRates.Refresh))
 	if apiKey := os.Getenv("COINGECKO_API_KEY"); apiKey != "" {
-		sourcesUSD = append(sourcesUSD, exchangerates.NewCoinGecko(apiKey, exchangerates.CoinGeckoCurrencyUSD, exchangerates.CoinGeckoTokenSiacoin, cfg.ExchangeRates.Refresh))
-		sourcesEUR = append(sourcesEUR, exchangerates.NewCoinGecko(apiKey, exchangerates.CoinGeckoCurrencyEUR, exchangerates.CoinGeckoTokenSiacoin, cfg.ExchangeRates.Refresh))
+		sources = append(sources, exchangerates.NewCoinGecko(apiKey, map[string]string{
+			exchangerates.CurrencyUSD: exchangerates.CoinGeckoCurrencyUSD,
+			exchangerates.CurrencyEUR: exchangerates.CoinGeckoCurrencyEUR,
+			exchangerates.CurrencyBTC: exchangerates.CoinGeckoCurrencyBTC,
+		}, exchangerates.CoinGeckoTokenSiacoin, cfg.ExchangeRates.Refresh))
 	}
 
-	exUSD, err := exchangerates.NewAverager(false, sourcesUSD...)
+	ex, err := exchangerates.NewAverager(false, sources...)
 	if err != nil {
-		return fmt.Errorf("failed to create USD source: %w", err)
+		return fmt.Errorf("failed to create exchange rate source: %w", err)
 	}
-	exEUR, err := exchangerates.NewAverager(false, sourcesEUR...)
-	if err != nil {
-		return fmt.Errorf("failed to create EUR source: %w", err)
-	}
-	go exUSD.Start(ctx)
-	go exEUR.Start(ctx)
-	exs := map[string]exchangerates.ExchangeRateSource{
-		"USD": exUSD,
-		"EUR": exEUR,
-	}
+	go ex.Start(ctx)
 
-	api := api.NewServer(e, cm, s, exs)
+	api := api.NewServer(e, cm, s, ex)
 	server := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasPrefix(r.URL.Path, "/api") {

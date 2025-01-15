@@ -20,72 +20,73 @@ const (
 	CoinGeckoCurrencyUSD = "usd"
 	// CoinGeckoCurrencyEUR is the name of euros in CoinGecko.
 	CoinGeckoCurrencyEUR = "eur"
+	// CoinGeckoCurrencyBTC is the name of bitcoin in CoinGecko.
+	CoinGeckoCurrencyBTC = "btc"
 )
 
 type coinGeckoAPI struct {
 	apiKey string
-
 	client http.Client
 }
 
-func newcoinGeckoAPI(apiKey string) *coinGeckoAPI {
+func newCoinGeckoAPI(apiKey string) *coinGeckoAPI {
 	return &coinGeckoAPI{apiKey: apiKey}
 }
 
 type coinGeckoPriceResponse map[string]map[string]float64
 
 // See https://docs.coingecko.com/reference/simple-price
-func (k *coinGeckoAPI) ticker(ctx context.Context, currency, token string) (float64, error) {
-	currency = strings.ToLower(currency)
+func (c *coinGeckoAPI) tickers(ctx context.Context, currencies []string, token string) (map[string]float64, error) {
+	vsCurrencies := strings.ToLower(strings.Join(currencies, ","))
 	token = strings.ToLower(token)
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("https://api.coingecko.com/api/v3/simple/price?vs_currencies=%s&ids=%s", currency, token), nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf(
+		"https://api.coingecko.com/api/v3/simple/price?vs_currencies=%s&ids=%s",
+		vsCurrencies, token), nil)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	request.Header.Set("accept", "application/json")
-	request.Header.Set("x-cg-demo-api-key", k.apiKey)
+	request.Header.Set("x-cg-demo-api-key", c.apiKey)
 
-	response, err := k.client.Do(request)
+	response, err := c.client.Do(request)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	defer response.Body.Close()
 
 	var parsed coinGeckoPriceResponse
 	if err := json.NewDecoder(response.Body).Decode(&parsed); err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	asset, ok := parsed[token]
 	if !ok {
-		return 0, fmt.Errorf("no asset %s", token)
+		return nil, fmt.Errorf("no asset %s", token)
 	}
-	price, ok := asset[currency]
-	if !ok {
-		return 0, fmt.Errorf("no currency %s", currency)
-	}
-	return price, nil
+
+	return asset, nil
 }
 
 type coinGecko struct {
-	currency string
-	token    string
-	refresh  time.Duration
-	client   *coinGeckoAPI
+	token   string
+	pairMap map[string]string // User-specified currency -> CoinGecko currency
+	refresh time.Duration
+	client  *coinGeckoAPI
 
-	mu   sync.Mutex
-	rate float64
-	err  error
+	mu    sync.Mutex
+	rates map[string]float64 // CoinGecko currency -> rate
+	err   error
 }
 
-// NewCoinGecko returns an ExchangeRateSource that gets data from CoinGecko.
-func NewCoinGecko(apiKey, currency, token string, refresh time.Duration) ExchangeRateSource {
+// NewCoinGecko creates an ExchangeRateSource with user-specified mappings
+func NewCoinGecko(apiKey string, pairMap map[string]string, token string, refresh time.Duration) ExchangeRateSource {
 	return &coinGecko{
-		currency: currency,
-		token:    token,
-		refresh:  refresh,
-		client:   newcoinGeckoAPI(apiKey),
+		token:   token,
+		pairMap: pairMap,
+		refresh: refresh,
+		client:  newCoinGeckoAPI(apiKey),
+		rates:   make(map[string]float64),
 	}
 }
 
@@ -94,14 +95,20 @@ func (c *coinGecko) Start(ctx context.Context) {
 	ticker := time.NewTicker(c.refresh)
 	defer ticker.Stop()
 
+	var currencies []string
+	for _, coinGeckoCurrency := range c.pairMap {
+		currencies = append(currencies, coinGeckoCurrency)
+	}
+
 	c.mu.Lock()
-	c.rate, c.err = c.client.ticker(ctx, c.currency, c.token)
+	c.rates, c.err = c.client.tickers(ctx, currencies, c.token)
 	c.mu.Unlock()
+
 	for {
 		select {
 		case <-ticker.C:
 			c.mu.Lock()
-			c.rate, c.err = c.client.ticker(ctx, c.currency, c.token)
+			c.rates, c.err = c.client.tickers(ctx, currencies, c.token)
 			c.mu.Unlock()
 		case <-ctx.Done():
 			c.mu.Lock()
@@ -112,10 +119,19 @@ func (c *coinGecko) Start(ctx context.Context) {
 	}
 }
 
-// Last implements ExchangeRateSource
-func (c *coinGecko) Last() (rate float64, err error) {
+// Last implements ExchangeRateSource.
+func (c *coinGecko) Last(currency string) (float64, error) {
 	c.mu.Lock()
-	rate, err = c.rate, c.err
-	c.mu.Unlock()
-	return
+	defer c.mu.Unlock()
+
+	coinGeckoCurrency, exists := c.pairMap[currency]
+	if !exists {
+		return 0, fmt.Errorf("currency %s not mapped to a CoinGecko currency", currency)
+	}
+
+	rate, ok := c.rates[coinGeckoCurrency]
+	if !ok {
+		return 0, fmt.Errorf("rate for currency %s not available", currency)
+	}
+	return rate, c.err
 }

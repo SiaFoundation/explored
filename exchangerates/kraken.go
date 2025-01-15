@@ -17,6 +17,8 @@ const (
 	KrakenPairSiacoinUSD = "SCUSD"
 	// KrakenPairSiacoinEUR is the ID of SC/EUR pair in Kraken
 	KrakenPairSiacoinEUR = "SCEUR"
+	// KrakenPairSiacoinBTC is the ID of SC/BTC pair in Kraken
+	KrakenPairSiacoinBTC = "SCXBT"
 )
 
 type krakenAPI struct {
@@ -26,15 +28,7 @@ type krakenAPI struct {
 type krakenPriceResponse struct {
 	Error  []any `json:"error"`
 	Result map[string]struct {
-		A []string `json:"a"`
 		B []string `json:"b"`
-		C []string `json:"c"`
-		V []string `json:"v"`
-		P []string `json:"p"`
-		T []int    `json:"t"`
-		L []string `json:"l"`
-		H []string `json:"h"`
-		O string   `json:"o"`
 	} `json:"result"`
 }
 
@@ -42,53 +36,56 @@ func newKrakenAPI() *krakenAPI {
 	return &krakenAPI{}
 }
 
-// See https://docs.kraken.com/api/docs/rest-api/get-ticker-information
-func (k *krakenAPI) ticker(ctx context.Context, pair string) (float64, error) {
-	pair = strings.ToUpper(pair)
-
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.kraken.com/0/public/Ticker?pair="+url.PathEscape(pair), nil)
+func (k *krakenAPI) tickers(ctx context.Context, pairs []string) (map[string]float64, error) {
+	pairParam := strings.Join(pairs, ",")
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.kraken.com/0/public/Ticker?pair="+url.PathEscape(pairParam), nil)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
+
 	response, err := k.client.Do(request)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	defer response.Body.Close()
 
 	var parsed krakenPriceResponse
 	if err := json.NewDecoder(response.Body).Decode(&parsed); err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	p := parsed.Result[pair]
-	if len(p.B) == 0 {
-		return 0, fmt.Errorf("no asset %s", pair)
-	}
-	price, err := strconv.ParseFloat(p.B[0], 64)
-	if err != nil {
-		return 0, err
+	rates := make(map[string]float64)
+	for pair, data := range parsed.Result {
+		if len(data.B) == 0 {
+			continue
+		}
+		price, err := strconv.ParseFloat(data.B[0], 64)
+		if err != nil {
+			return nil, err
+		}
+		rates[pair] = price
 	}
 
-	return price, nil
+	return rates, nil
 }
 
 type kraken struct {
-	pair    string
+	pairMap map[string]string // User-specified currency -> Kraken pair
 	refresh time.Duration
 	client  *krakenAPI
 
-	mu   sync.Mutex
-	rate float64
-	err  error
+	mu    sync.Mutex
+	rates map[string]float64 // Kraken pair -> rate
+	err   error
 }
 
 // NewKraken returns an ExchangeRateSource that gets data from Kraken.
-func NewKraken(pair string, refresh time.Duration) ExchangeRateSource {
+func NewKraken(pairMap map[string]string, refresh time.Duration) ExchangeRateSource {
 	return &kraken{
-		pair:    pair,
+		pairMap: pairMap,
 		refresh: refresh,
 		client:  newKrakenAPI(),
+		rates:   make(map[string]float64),
 	}
 }
 
@@ -97,14 +94,20 @@ func (k *kraken) Start(ctx context.Context) {
 	ticker := time.NewTicker(k.refresh)
 	defer ticker.Stop()
 
+	var krakenPairs []string
+	for _, krakenPair := range k.pairMap {
+		krakenPairs = append(krakenPairs, krakenPair)
+	}
+
 	k.mu.Lock()
-	k.rate, k.err = k.client.ticker(ctx, k.pair)
+	k.rates, k.err = k.client.tickers(ctx, krakenPairs)
 	k.mu.Unlock()
+
 	for {
 		select {
 		case <-ticker.C:
 			k.mu.Lock()
-			k.rate, k.err = k.client.ticker(ctx, k.pair)
+			k.rates, k.err = k.client.tickers(ctx, krakenPairs)
 			k.mu.Unlock()
 		case <-ctx.Done():
 			k.mu.Lock()
@@ -115,10 +118,19 @@ func (k *kraken) Start(ctx context.Context) {
 	}
 }
 
-// Last implements ExchangeRateSource
-func (k *kraken) Last() (rate float64, err error) {
+// Last implements ExchangeRateSource.
+func (k *kraken) Last(currency string) (float64, error) {
 	k.mu.Lock()
-	rate, err = k.rate, k.err
-	k.mu.Unlock()
-	return
+	defer k.mu.Unlock()
+
+	krakenPair, exists := k.pairMap[currency]
+	if !exists {
+		return 0, fmt.Errorf("currency %s not mapped to a Kraken pair", currency)
+	}
+
+	rate, ok := k.rates[krakenPair]
+	if !ok {
+		return 0, fmt.Errorf("rate for pair %s not available", krakenPair)
+	}
+	return rate, k.err
 }

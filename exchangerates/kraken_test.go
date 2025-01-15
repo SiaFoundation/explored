@@ -12,15 +12,26 @@ func TestKraken(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	kraken := NewKraken(KrakenPairSiacoinUSD, interval)
+	kraken := NewKraken(map[string]string{
+		CurrencyUSD: KrakenPairSiacoinUSD,
+		CurrencyEUR: KrakenPairSiacoinEUR,
+	}, interval)
 	go kraken.Start(ctx)
 
 	time.Sleep(2 * interval)
-	price, err := kraken.Last()
-	if err != nil {
+	if price, err := kraken.Last("USD"); err != nil {
 		t.Fatal(err)
-	}
-	if price <= 0.0 {
+	} else if price <= 0.0 {
 		t.Fatalf("invalid price: %f", price)
+	}
+
+	if price, err := kraken.Last("EUR"); err != nil {
+		t.Fatal(err)
+	} else if price <= 0.0 {
+		t.Fatalf("invalid price: %f", price)
+	}
+
+	if _, err := kraken.Last("UNK"); err == nil {
+		t.Fatal("should fail for unmapped currency")
 	}
 }

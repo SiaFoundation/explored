@@ -71,12 +71,11 @@ func newExplorer(t *testing.T, network *consensus.Network, genesisBlock types.Bl
 
 func newServer(t *testing.T, cm *chain.Manager, e *explorer.Explorer, listenAddr string) (*http.Server, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	ex := exchangerates.NewKraken(exchangerates.KrakenPairSiacoinUSD, time.Second)
+	ex := exchangerates.NewKraken(map[string]string{
+		exchangerates.CurrencyUSD: exchangerates.KrakenPairSiacoinUSD}, time.Second)
 	go ex.Start(ctx)
 
-	api := api.NewServer(e, cm, &syncer.Syncer{}, map[string]exchangerates.ExchangeRateSource{
-		"USD": ex,
-	})
+	api := api.NewServer(e, cm, &syncer.Syncer{}, ex)
 	server := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasPrefix(r.URL.Path, "/api") {
