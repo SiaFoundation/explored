@@ -40,8 +40,10 @@ func (a *averager) Last() (float64, error) {
 	sum, count := 0.0, 0.0
 	for i := range a.sources {
 		if v, err := a.sources[i].Last(); err == nil {
-			sum += v
-			count++
+			if v != 0 {
+				sum += v
+				count++
+			}
 		} else if !a.ignoreOnError {
 			return 0, err
 		}
