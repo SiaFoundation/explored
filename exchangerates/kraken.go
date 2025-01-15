@@ -97,6 +97,9 @@ func (k *kraken) Start(ctx context.Context) {
 	ticker := time.NewTicker(k.refresh)
 	defer ticker.Stop()
 
+	k.mu.Lock()
+	k.rate, k.err = k.client.ticker(ctx, k.pair)
+	k.mu.Unlock()
 	for {
 		select {
 		case <-ticker.C:

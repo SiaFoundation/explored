@@ -94,6 +94,9 @@ func (c *coinGecko) Start(ctx context.Context) {
 	ticker := time.NewTicker(c.refresh)
 	defer ticker.Stop()
 
+	c.mu.Lock()
+	c.rate, c.err = c.client.ticker(ctx, c.currency, c.token)
+	c.mu.Unlock()
 	for {
 		select {
 		case <-ticker.C:
