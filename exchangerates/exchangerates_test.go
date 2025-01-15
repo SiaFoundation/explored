@@ -43,12 +43,22 @@ func TestAverager(t *testing.T) {
 	errorSource := &errorPriceSource{}
 
 	{
+		_, err := NewAverager(true)
+		if err == nil {
+			t.Fatal("should have gotten error for averager with no sources")
+		}
+	}
+
+	{
 		ctx, cancel := context.WithCancel(context.Background())
-		averager := NewAverager(false)
+		averager, err := NewAverager(true, errorSource, errorSource, errorSource)
+		if err != nil {
+			t.Fatal(err)
+		}
 		go averager.Start(ctx)
 
 		time.Sleep(2 * interval)
-		_, err := averager.Last()
+		_, err = averager.Last()
 		// should get error: "no sources working"
 		if err == nil {
 			t.Fatal("should have gotten error for averager with no sources")
@@ -58,7 +68,10 @@ func TestAverager(t *testing.T) {
 
 	{
 		ctx, cancel := context.WithCancel(context.Background())
-		averager := NewAverager(false, s1, s2, s3)
+		averager, err := NewAverager(false, s1, s2, s3)
+		if err != nil {
+			t.Fatal(err)
+		}
 		go averager.Start(ctx)
 
 		time.Sleep(2 * interval)
@@ -77,12 +90,15 @@ func TestAverager(t *testing.T) {
 
 	{
 		ctx, cancel := context.WithCancel(context.Background())
-		averager := NewAverager(false, s1, s2, s3, errorSource)
+		averager, err := NewAverager(false, s1, s2, s3, errorSource)
+		if err != nil {
+			t.Fatal(err)
+		}
 		go averager.Start(ctx)
 
 		time.Sleep(2 * interval)
 
-		_, err := averager.Last()
+		_, err = averager.Last()
 		// Should get an error because the errorSource will fail
 		// (ignoreOnError = false)
 		if err == nil {
@@ -93,7 +109,10 @@ func TestAverager(t *testing.T) {
 
 	{
 		ctx, cancel := context.WithCancel(context.Background())
-		averager := NewAverager(true, s1, s2, s3, errorSource)
+		averager, err := NewAverager(true, s1, s2, s3, errorSource)
+		if err != nil {
+			t.Fatal(err)
+		}
 		go averager.Start(ctx)
 
 		time.Sleep(2 * interval)

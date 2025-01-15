@@ -18,11 +18,14 @@ type averager struct {
 
 // NewAverager returns an exchange rate source that averages multiple exchange
 // rates.
-func NewAverager(ignoreOnError bool, sources ...ExchangeRateSource) ExchangeRateSource {
+func NewAverager(ignoreOnError bool, sources ...ExchangeRateSource) (ExchangeRateSource, error) {
+	if len(sources) == 0 {
+		return nil, errors.New("no sources provided")
+	}
 	return &averager{
 		ignoreOnError: ignoreOnError,
 		sources:       sources,
-	}
+	}, nil
 }
 
 // Start implements ExchangeRateSource.
