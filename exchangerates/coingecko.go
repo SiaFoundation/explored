@@ -20,8 +20,20 @@ const (
 	CoinGeckoCurrencyUSD = "usd"
 	// CoinGeckoCurrencyEUR is the name of euros in CoinGecko.
 	CoinGeckoCurrencyEUR = "eur"
-	// CoinGeckoCurrencyBTC is the name of bitcoin in CoinGecko.
+	// CoinGeckoCurrencyCAD is the name of Canadian dollars in CoinGecko.
+	CoinGeckoCurrencyCAD = "cad"
+	// CoinGeckoCurrencyAUD is the name of Australian dollars in CoinGecko.
+	CoinGeckoCurrencyAUD = "aud"
+	// CoinGeckoCurrencyGBP is the name of British pounds in CoinGecko.
+	CoinGeckoCurrencyGBP = "gbp"
+	// CoinGeckoCurrencyJPY is the name of Japanese yen in CoinGecko.
+	CoinGeckoCurrencyJPY = "jpy"
+	// CoinGeckoCurrencyCNY is the name of Chinese yuan in CoinGecko.
+	CoinGeckoCurrencyCNY = "cny"
+	// CoinGeckoCurrencyBTC is the name of Bitcoin in CoinGecko.
 	CoinGeckoCurrencyBTC = "btc"
+	// CoinGeckoCurrencyETH is the name of Ethereum in CoinGecko.
+	CoinGeckoCurrencyETH = "eth"
 )
 
 type coinGeckoAPI struct {

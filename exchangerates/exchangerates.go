@@ -6,12 +6,24 @@ import (
 )
 
 const (
-	// CurrencyUSD represents US dollars
+	// CurrencyUSD represents US dollars.
 	CurrencyUSD = "USD"
-	// CurrencyEUR represents euros
+	// CurrencyEUR represents euros.
 	CurrencyEUR = "EUR"
-	// CurrencyBTC represents bitcoin
+	// CurrencyCAD represents Canadian dollars.
+	CurrencyCAD = "CAD"
+	// CurrencyAUD represents Australian dollars.
+	CurrencyAUD = "AUD"
+	// CurrencyGBP represents British pounds.
+	CurrencyGBP = "GBP"
+	// CurrencyJPY represents Japanese yen.
+	CurrencyJPY = "JPY"
+	// CurrencyCNY represents Chinese yuan.
+	CurrencyCNY = "CNY"
+	// CurrencyBTC represents Bitcoin.
 	CurrencyBTC = "BTC"
+	// CurrencyETH represents Ethereum.
+	CurrencyETH = "ETH"
 )
 
 // An ExchangeRateSource returns the price of 1 unit of an asset in USD.

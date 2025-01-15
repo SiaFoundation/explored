@@ -276,11 +276,17 @@ func runRootCmd(ctx context.Context, log *zap.Logger) error {
 		sources = append(sources, exchangerates.NewCoinGecko(apiKey, map[string]string{
 			exchangerates.CurrencyUSD: exchangerates.CoinGeckoCurrencyUSD,
 			exchangerates.CurrencyEUR: exchangerates.CoinGeckoCurrencyEUR,
+			exchangerates.CurrencyCAD: exchangerates.CoinGeckoCurrencyCAD,
+			exchangerates.CurrencyAUD: exchangerates.CoinGeckoCurrencyAUD,
+			exchangerates.CurrencyGBP: exchangerates.CoinGeckoCurrencyGBP,
+			exchangerates.CurrencyJPY: exchangerates.CoinGeckoCurrencyJPY,
+			exchangerates.CurrencyCNY: exchangerates.CoinGeckoCurrencyCNY,
+			exchangerates.CurrencyETH: exchangerates.CoinGeckoCurrencyETH,
 			exchangerates.CurrencyBTC: exchangerates.CoinGeckoCurrencyBTC,
 		}, exchangerates.CoinGeckoTokenSiacoin, cfg.ExchangeRates.Refresh))
 	}
 
-	ex, err := exchangerates.NewAverager(false, sources...)
+	ex, err := exchangerates.NewAverager(true, sources...)
 	if err != nil {
 		return fmt.Errorf("failed to create exchange rate source: %w", err)
 	}
