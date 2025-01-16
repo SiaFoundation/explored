@@ -3,132 +3,142 @@ package exchangerates
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 )
 
-type constantPriceSource struct {
+type constantExchangeRateSource struct {
 	x float64
+
+	mu   sync.Mutex
+	rate float64
 }
 
-func (c *constantPriceSource) Start(ctx context.Context) {}
-
-func (c *constantPriceSource) Last(string) (float64, error) {
-	return c.x, nil
+func (c *constantExchangeRateSource) Start(ctx context.Context) {
+	c.mu.Lock()
+	c.rate = c.x
+	c.mu.Unlock()
 }
 
-func newConstantPriceSource(x float64) *constantPriceSource {
-	return &constantPriceSource{x: x}
+func (c *constantExchangeRateSource) Last(string) (rate float64, err error) {
+	c.mu.Lock()
+	rate, err = c.rate, nil
+	c.mu.Unlock()
+	return
 }
 
-type errorPriceSource struct{}
+func newConstantExchangeRateSource(x float64) *constantExchangeRateSource {
+	return &constantExchangeRateSource{x: x}
+}
 
-func (c *errorPriceSource) Start(ctx context.Context) {}
+type errorExchangeRateSource struct{}
 
-func (c *errorPriceSource) Last(string) (float64, error) {
+func (c *errorExchangeRateSource) Start(ctx context.Context) {}
+
+func (c *errorExchangeRateSource) Last(string) (float64, error) {
 	return -1, errors.New("error")
+}
+
+func TestAveragerLastBeforeStart(t *testing.T) {
+	averager, err := NewAverager(false, newConstantExchangeRateSource(1.0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := averager.Last(CurrencyUSD); err == nil {
+		t.Fatal("should be error if we call Last before Start")
+	}
 }
 
 func TestAverager(t *testing.T) {
 	const interval = time.Second
-	const usd = "USD"
 
 	const (
 		p1 = 1.0
 		p2 = 10.0
 		p3 = 100.0
 	)
-	s1 := newConstantPriceSource(p1)
-	s2 := newConstantPriceSource(p2)
-	s3 := newConstantPriceSource(p3)
-	errorSource := &errorPriceSource{}
+	s1 := newConstantExchangeRateSource(p1)
+	s2 := newConstantExchangeRateSource(p2)
+	s3 := newConstantExchangeRateSource(p3)
+	errorSource := &errorExchangeRateSource{}
 
-	{
-		_, err := NewAverager(true)
-		if err == nil {
-			t.Fatal("should have gotten error for averager with no sources")
-		}
+	tests := []struct {
+		name          string
+		ignoreOnError bool
+		sources       []ExchangeRateSource
+		expectedPrice float64
+		expectError   bool
+		errorMessage  string
+	}{
+		{
+			name:          "No sources provided",
+			ignoreOnError: true,
+			sources:       nil,
+			expectError:   true,
+			errorMessage:  "Should have gotten error for averager with no sources",
+		},
+		{
+			name:          "All sources fail",
+			ignoreOnError: true,
+			sources:       []ExchangeRateSource{errorSource, errorSource, errorSource},
+			expectError:   true,
+			errorMessage:  "Should have gotten error for averager with no working sources",
+		},
+		{
+			name:          "Valid sources without errors",
+			ignoreOnError: false,
+			sources:       []ExchangeRateSource{s1, s2, s3},
+			expectedPrice: (p1 + p2 + p3) / 3,
+			expectError:   false,
+		},
+		{
+			name:          "One error source without ignoreOnError",
+			ignoreOnError: false,
+			sources:       []ExchangeRateSource{s1, s2, s3, errorSource},
+			expectError:   true,
+			errorMessage:  "Should have gotten error for averager with error source and ignoreOnError disabled",
+		},
+		{
+			name:          "One error source with ignoreOnError",
+			ignoreOnError: true,
+			sources:       []ExchangeRateSource{s1, s2, s3, errorSource},
+			expectedPrice: (p1 + p2 + p3) / 3,
+			expectError:   false,
+		},
 	}
 
-	{
-		ctx, cancel := context.WithCancel(context.Background())
-		averager, err := NewAverager(true, errorSource, errorSource, errorSource)
-		if err != nil {
-			t.Fatal(err)
-		}
-		go averager.Start(ctx)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
-		time.Sleep(2 * interval)
-		_, err = averager.Last(usd)
-		// should get error: "no sources working"
-		if err == nil {
-			t.Fatal("should have gotten error for averager with no sources")
-		}
-		cancel()
-	}
+			averager, err := NewAverager(tt.ignoreOnError, tt.sources...)
+			if err != nil {
+				if !tt.expectError {
+					t.Fatal(err)
+				}
+				return
+			}
+			go averager.Start(ctx)
 
-	{
-		ctx, cancel := context.WithCancel(context.Background())
-		averager, err := NewAverager(false, s1, s2, s3)
-		if err != nil {
-			t.Fatal(err)
-		}
-		go averager.Start(ctx)
+			time.Sleep(2 * interval)
 
-		time.Sleep(2 * interval)
+			price, err := averager.Last(CurrencyUSD)
+			if tt.expectError {
+				if err == nil {
+					t.Fatal(tt.errorMessage)
+				}
+				return
+			}
 
-		price, err := averager.Last(usd)
-		if err != nil {
-			t.Fatal(err)
-		}
+			if err != nil {
+				t.Fatal(err)
+			}
 
-		const expect = ((p1 + p2 + p3) / 3)
-		if price != expect {
-			t.Fatalf("wrong price, got %v, expected %v", price, expect)
-		}
-		cancel()
-	}
-
-	{
-		ctx, cancel := context.WithCancel(context.Background())
-		averager, err := NewAverager(false, s1, s2, s3, errorSource)
-		if err != nil {
-			t.Fatal(err)
-		}
-		go averager.Start(ctx)
-
-		time.Sleep(2 * interval)
-
-		_, err = averager.Last(usd)
-		// Should get an error because the errorSource will fail
-		// (ignoreOnError = false)
-		if err == nil {
-			t.Fatal("should have gotten error for averager with error source")
-		}
-		cancel()
-	}
-
-	{
-		ctx, cancel := context.WithCancel(context.Background())
-		averager, err := NewAverager(true, s1, s2, s3, errorSource)
-		if err != nil {
-			t.Fatal(err)
-		}
-		go averager.Start(ctx)
-
-		time.Sleep(2 * interval)
-
-		// Should not get an error because the errorSource will just be ignored
-		// if at least one other source works (ignoreOnError = true)
-		price, err := averager.Last(usd)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		const expect = ((p1 + p2 + p3) / 3)
-		if price != expect {
-			t.Fatalf("wrong price, got %v, expected %v", price, expect)
-		}
-		cancel()
+			if price != tt.expectedPrice {
+				t.Fatalf("wrong price, got %v, expected %v", price, tt.expectedPrice)
+			}
+		})
 	}
 }
