@@ -726,16 +726,17 @@ func (s *server) searchIDHandler(jc jape.Context) {
 	// get everything after separator if there is one
 	split := strings.Split(jc.PathParam("id"), ":")
 	id, err := hex.DecodeString(split[len(split)-1])
-	if jc.Check("failed to decode hex", err) != nil {
+	if err != nil {
+		jc.Error(errors.New("failed to decode hex"), http.StatusBadRequest)
 		return
 	}
 
 	trunc := id[:maxLen]
 	result, err := s.e.Search(types.Hash256(trunc))
-	if jc.Check("failed to search ID", err) != nil {
-		return
-	} else if result == explorer.SearchTypeInvalid {
+	if err == explorer.ErrNoSearchResults {
 		jc.Error(ErrNoSearchResults, http.StatusNotFound)
+		return
+	} else if jc.Check("failed to search ID", err) != nil {
 		return
 	}
 	jc.Encode(result)

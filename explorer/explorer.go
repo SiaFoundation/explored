@@ -24,6 +24,10 @@ var (
 	// ErrContractNotFound is returned when ContractRevisions is unable to find
 	// the specified contract ID.
 	ErrContractNotFound = errors.New("contract not found")
+
+	// ErrNoSearchResults is returned when Search is unable to find anything
+	// with the specified ID.
+	ErrNoSearchResults = errors.New("no search results")
 )
 
 // A ChainManager manages the consensus state
@@ -459,5 +463,5 @@ func (e *Explorer) Search(id types.Hash256) (SearchType, error) {
 		return SearchTypeHost, nil
 	}
 
-	return SearchTypeInvalid, errors.New("no such element")
+	return SearchTypeInvalid, ErrNoSearchResults
 }

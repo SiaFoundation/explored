@@ -528,6 +528,13 @@ func TestAPI(t *testing.T) {
 			}
 			testutil.Equal(t, "search type", explorer.SearchTypeContract, resp)
 		}},
+		{"Search host", func(t *testing.T) {
+			resp, err := client.Search(types.Hash256(pk1.PublicKey()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			testutil.Equal(t, "search type", explorer.SearchTypeHost, resp)
+		}},
 		{"Exchange rate", func(t *testing.T) {
 			resp, err := client.ExchangeRate("USD")
 			if err != nil {
