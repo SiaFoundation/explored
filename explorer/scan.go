@@ -226,7 +226,7 @@ func (e *Explorer) scanHosts() {
 		}
 		e.wg.Wait()
 
-		if err := e.s.AddHostScans(results); err != nil {
+		if err := e.s.AddHostScans(e.scanCfg.MaxLastScan, results); err != nil {
 			e.log.Info("failed to add host scans to DB:", zap.Error(err))
 			return
 		}

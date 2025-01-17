@@ -1148,7 +1148,7 @@ func addHosts(tx *txn, hosts []explorer.Host) error {
 	return nil
 }
 
-func addHostScans(tx *txn, scans []explorer.HostScan) error {
+func addHostScans(tx *txn, backoffInterval time.Duration, scans []explorer.HostScan) error {
 	unsuccessfulStmt, err := tx.Prepare(`UPDATE host_info SET last_scan = ?, last_scan_successful = 0, next_scan = next_scan + ? * (1 << (failed_interactions_streak + 1)), total_scans = total_scans + 1, failed_interactions = failed_interactions + 1, failed_interactions_streak = failed_interactions_streak + 1 WHERE public_key = ?`)
 	if err != nil {
 		return fmt.Errorf("addHostScans: failed to prepare unsuccessful statement: %w", err)
@@ -1161,16 +1161,15 @@ func addHostScans(tx *txn, scans []explorer.HostScan) error {
 	}
 	defer successfulStmt.Close()
 
-	const interval = int64(3 * time.Hour)
 	for _, scan := range scans {
 		s, p := scan.Settings, scan.PriceTable
 		sV4, pV4 := scan.RHPV4Settings, scan.RHPV4Settings.Prices
 		if scan.Success {
-			if _, err := successfulStmt.Exec(scan.CountryCode, encode(scan.Timestamp), interval, s.AcceptingContracts, encode(s.MaxDownloadBatchSize), encode(s.MaxDuration), encode(s.MaxReviseBatchSize), s.NetAddress, encode(s.RemainingStorage), encode(s.SectorSize), encode(s.TotalStorage), encode(s.TotalStorage-s.RemainingStorage), encode(s.Address), encode(s.WindowSize), encode(s.Collateral), encode(s.MaxCollateral), encode(s.BaseRPCPrice), encode(s.ContractPrice), encode(s.DownloadBandwidthPrice), encode(s.SectorAccessPrice), encode(s.StoragePrice), encode(s.UploadBandwidthPrice), s.EphemeralAccountExpiry, encode(s.MaxEphemeralAccountBalance), encode(s.RevisionNumber), s.Version, s.Release, s.SiaMuxPort, encode(p.UID), p.Validity, encode(p.HostBlockHeight), encode(p.UpdatePriceTableCost), encode(p.AccountBalanceCost), encode(p.FundAccountCost), encode(p.LatestRevisionCost), encode(p.SubscriptionMemoryCost), encode(p.SubscriptionNotificationCost), encode(p.InitBaseCost), encode(p.MemoryTimeCost), encode(p.DownloadBandwidthCost), encode(p.UploadBandwidthCost), encode(p.DropSectorsBaseCost), encode(p.DropSectorsUnitCost), encode(p.HasSectorBaseCost), encode(p.ReadBaseCost), encode(p.ReadLengthCost), encode(p.RenewContractCost), encode(p.RevisionBaseCost), encode(p.SwapSectorBaseCost), encode(p.WriteBaseCost), encode(p.WriteLengthCost), encode(p.WriteStoreCost), encode(p.TxnFeeMinRecommended), encode(p.TxnFeeMaxRecommended), encode(p.ContractPrice), encode(p.CollateralCost), encode(p.MaxCollateral), encode(p.MaxDuration), encode(p.WindowSize), encode(p.RegistryEntriesLeft), encode(p.RegistryEntriesTotal), sV4.ProtocolVersion[:], sV4.Release, encode(sV4.WalletAddress), sV4.AcceptingContracts, encode(sV4.MaxCollateral), encode(sV4.MaxContractDuration), encode(sV4.RemainingStorage), encode(sV4.TotalStorage), encode(sV4.TotalStorage-sV4.RemainingStorage), encode(pV4.ContractPrice), encode(pV4.Collateral), encode(pV4.StoragePrice), encode(pV4.IngressPrice), encode(pV4.EgressPrice), encode(pV4.FreeSectorPrice), encode(pV4.TipHeight), encode(pV4.ValidUntil), encode(pV4.Signature), encode(scan.PublicKey)); err != nil {
+			if _, err := successfulStmt.Exec(scan.CountryCode, encode(scan.Timestamp), backoffInterval, s.AcceptingContracts, encode(s.MaxDownloadBatchSize), encode(s.MaxDuration), encode(s.MaxReviseBatchSize), s.NetAddress, encode(s.RemainingStorage), encode(s.SectorSize), encode(s.TotalStorage), encode(s.TotalStorage-s.RemainingStorage), encode(s.Address), encode(s.WindowSize), encode(s.Collateral), encode(s.MaxCollateral), encode(s.BaseRPCPrice), encode(s.ContractPrice), encode(s.DownloadBandwidthPrice), encode(s.SectorAccessPrice), encode(s.StoragePrice), encode(s.UploadBandwidthPrice), s.EphemeralAccountExpiry, encode(s.MaxEphemeralAccountBalance), encode(s.RevisionNumber), s.Version, s.Release, s.SiaMuxPort, encode(p.UID), p.Validity, encode(p.HostBlockHeight), encode(p.UpdatePriceTableCost), encode(p.AccountBalanceCost), encode(p.FundAccountCost), encode(p.LatestRevisionCost), encode(p.SubscriptionMemoryCost), encode(p.SubscriptionNotificationCost), encode(p.InitBaseCost), encode(p.MemoryTimeCost), encode(p.DownloadBandwidthCost), encode(p.UploadBandwidthCost), encode(p.DropSectorsBaseCost), encode(p.DropSectorsUnitCost), encode(p.HasSectorBaseCost), encode(p.ReadBaseCost), encode(p.ReadLengthCost), encode(p.RenewContractCost), encode(p.RevisionBaseCost), encode(p.SwapSectorBaseCost), encode(p.WriteBaseCost), encode(p.WriteLengthCost), encode(p.WriteStoreCost), encode(p.TxnFeeMinRecommended), encode(p.TxnFeeMaxRecommended), encode(p.ContractPrice), encode(p.CollateralCost), encode(p.MaxCollateral), encode(p.MaxDuration), encode(p.WindowSize), encode(p.RegistryEntriesLeft), encode(p.RegistryEntriesTotal), sV4.ProtocolVersion[:], sV4.Release, encode(sV4.WalletAddress), sV4.AcceptingContracts, encode(sV4.MaxCollateral), encode(sV4.MaxContractDuration), encode(sV4.RemainingStorage), encode(sV4.TotalStorage), encode(sV4.TotalStorage-sV4.RemainingStorage), encode(pV4.ContractPrice), encode(pV4.Collateral), encode(pV4.StoragePrice), encode(pV4.IngressPrice), encode(pV4.EgressPrice), encode(pV4.FreeSectorPrice), encode(pV4.TipHeight), encode(pV4.ValidUntil), encode(pV4.Signature), encode(scan.PublicKey)); err != nil {
 				return fmt.Errorf("addHostScans: failed to execute successful statement: %w", err)
 			}
 		} else {
-			if _, err := unsuccessfulStmt.Exec(encode(scan.Timestamp), interval, encode(scan.PublicKey)); err != nil {
+			if _, err := unsuccessfulStmt.Exec(encode(scan.Timestamp), backoffInterval, encode(scan.PublicKey)); err != nil {
 				return fmt.Errorf("addHostScans: failed to execute unsuccessful statement: %w", err)
 			}
 		}
@@ -1179,9 +1178,9 @@ func addHostScans(tx *txn, scans []explorer.HostScan) error {
 }
 
 // AddHostScans implements explorer.Store
-func (s *Store) AddHostScans(scans []explorer.HostScan) error {
+func (s *Store) AddHostScans(backoffInterval time.Duration, scans []explorer.HostScan) error {
 	return s.transaction(func(tx *txn) error {
-		return addHostScans(tx, scans)
+		return addHostScans(tx, backoffInterval, scans)
 	})
 }
 

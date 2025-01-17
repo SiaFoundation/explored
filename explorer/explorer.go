@@ -45,7 +45,7 @@ type Store interface {
 	Close() error
 
 	UpdateChainState(reverted []chain.RevertUpdate, applied []chain.ApplyUpdate) error
-	AddHostScans(scans []HostScan) error
+	AddHostScans(backoffInterval time.Duration, scans []HostScan) error
 
 	Tip() (types.ChainIndex, error)
 	Block(id types.BlockID) (Block, error)
