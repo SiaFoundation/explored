@@ -220,10 +220,10 @@ func TestScan(t *testing.T) {
 	}
 
 	{
-		lastScanCutoff := time.Now().Add(-cfg.MaxLastScan)
-		lastAnnouncementCutoff := time.Now().Add(-cfg.MinLastAnnouncement)
+		now := types.CurrentTimestamp()
+		lastAnnouncementCutoff := now.Add(-cfg.MinLastAnnouncement)
 
-		dbHosts, err := db.HostsForScanning(lastScanCutoff, lastAnnouncementCutoff, 100)
+		dbHosts, err := db.HostsForScanning(now, lastAnnouncementCutoff, 100)
 		if err != nil {
 			t.Fatal(err)
 		}

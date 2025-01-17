@@ -1688,8 +1688,7 @@ func TestHostAnnouncement(t *testing.T) {
 		testutil.CheckTransaction(t, txn3, dbTxns[0])
 	}
 
-	ts := time.Unix(0, 0)
-	hosts, err := db.HostsForScanning(ts, ts, 100)
+	hosts, err := db.HostsForScanning(types.CurrentTimestamp(), time.Unix(0, 0), 100)
 	if err != nil {
 		t.Fatal(err)
 	}

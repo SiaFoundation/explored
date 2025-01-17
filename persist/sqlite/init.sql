@@ -486,7 +486,7 @@ CREATE TABLE host_info (
     successful_interactions INTEGER NOT NULL,
     failed_interactions INTEGER NOT NULL,
 	-- number of failed interactions since the last successful interaction
-	failed_interactions_streak INTEGER NOT NULL,
+    failed_interactions_streak INTEGER NOT NULL,
     -- settings
     settings_accepting_contracts INTEGER NOT NULL,
     settings_max_download_batch_size BLOB NOT NULL,

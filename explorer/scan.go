@@ -184,10 +184,10 @@ func (e *Explorer) scanHosts() {
 	defer locator.Close()
 
 	for !e.isClosed() {
-		lastScanCutoff := time.Now().Add(-e.scanCfg.MaxLastScan)
-		lastAnnouncementCutoff := time.Now().Add(-e.scanCfg.MinLastAnnouncement)
+		now := types.CurrentTimestamp()
+		lastAnnouncementCutoff := now.Add(-e.scanCfg.MinLastAnnouncement)
 
-		batch, err := e.s.HostsForScanning(lastScanCutoff, lastAnnouncementCutoff, scanBatchSize)
+		batch, err := e.s.HostsForScanning(now, lastAnnouncementCutoff, scanBatchSize)
 		if err != nil {
 			e.log.Info("failed to get hosts for scanning:", zap.Error(err))
 			return
