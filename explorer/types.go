@@ -93,6 +93,10 @@ const (
 	SearchTypeSiafundElement SearchType = "siafundElement"
 	// SearchTypeContract means we found a contract with the given ID.
 	SearchTypeContract SearchType = "contract"
+	// SearchTypeV2Contract means we found a V2 contract with the given ID.
+	SearchTypeV2Contract SearchType = "v2contract"
+	// SearchTypeHost means we found a host with the given pubkey.
+	SearchTypeHost SearchType = "host"
 )
 
 // A ResolutionType represents the type of a v2 file contract resolution.

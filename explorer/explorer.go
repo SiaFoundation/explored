@@ -445,5 +445,19 @@ func (e *Explorer) Search(id types.Hash256) (SearchType, error) {
 		return SearchTypeContract, nil
 	}
 
+	v2Contracts, err := e.V2Contracts([]types.FileContractID{types.FileContractID(id)})
+	if err != nil {
+		return SearchTypeInvalid, err
+	} else if len(v2Contracts) > 0 {
+		return SearchTypeV2Contract, nil
+	}
+
+	hosts, err := e.Hosts([]types.PublicKey{types.PublicKey(id)})
+	if err != nil {
+		return SearchTypeInvalid, err
+	} else if len(hosts) > 0 {
+		return SearchTypeHost, nil
+	}
+
 	return SearchTypeInvalid, errors.New("no such element")
 }
