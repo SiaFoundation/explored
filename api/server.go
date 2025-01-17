@@ -721,7 +721,7 @@ func (s *server) hostsHandler(jc jape.Context) {
 }
 
 func (s *server) searchIDHandler(jc jape.Context) {
-	const maxLen = len(types.Hash256{})
+	const idLen = len(types.Hash256{})
 
 	// get everything after separator if there is one
 	split := strings.Split(jc.PathParam("id"), ":")
@@ -729,9 +729,12 @@ func (s *server) searchIDHandler(jc jape.Context) {
 	if err != nil {
 		jc.Error(errors.New("failed to decode hex"), http.StatusBadRequest)
 		return
+	} else if len(id) < idLen {
+		jc.Error(fmt.Errorf("expected length %d, got %d", idLen, len(id)), http.StatusBadRequest)
+		return
 	}
 
-	trunc := id[:maxLen]
+	trunc := id[:idLen]
 	result, err := s.e.Search(types.Hash256(trunc))
 	if err == explorer.ErrNoSearchResults {
 		jc.Error(ErrNoSearchResults, http.StatusNotFound)
