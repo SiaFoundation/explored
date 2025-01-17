@@ -47,7 +47,7 @@ var cfg = config.Config{
 		Threads:             10,
 		Timeout:             30 * time.Second,
 		MaxLastScan:         3 * time.Hour,
-		MinLastAnnouncement: 90 * 24 * time.Hour,
+		MinLastAnnouncement: 365 * 24 * time.Hour,
 	},
 	Consensus: config.Consensus{
 		Network: "mainnet",
