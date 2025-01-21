@@ -34,6 +34,12 @@ type (
 		BatchSize int `yaml:"batchSize,omitempty"`
 	}
 
+	// ExchangeRates contains the configuration for the exchange rate clients.
+	ExchangeRates struct {
+		// refresh exchange rates this often
+		Refresh time.Duration
+	}
+
 	// LogFile configures the file output of the logger.
 	LogFile struct {
 		Enabled bool   `yaml:"enabled,omitempty"`
@@ -63,11 +69,12 @@ type (
 		Directory     string `yaml:"directory,omitempty"`
 		AutoOpenWebUI bool   `yaml:"autoOpenWebUI,omitempty"`
 
-		HTTP      HTTP      `yaml:"http,omitempty"`
-		Consensus Consensus `yaml:"consensus,omitempty"`
-		Syncer    Syncer    `yaml:"syncer,omitempty"`
-		Scanner   Scanner   `yaml:"scanner,omitempty"`
-		Log       Log       `yaml:"log,omitempty"`
-		Index     Index     `yaml:"index,omitempty"`
+		HTTP          HTTP          `yaml:"http,omitempty"`
+		Consensus     Consensus     `yaml:"consensus,omitempty"`
+		Syncer        Syncer        `yaml:"syncer,omitempty"`
+		Scanner       Scanner       `yaml:"scanner,omitempty"`
+		ExchangeRates ExchangeRates `yaml:"exchangeRates,omitempty"`
+		Log           Log           `yaml:"log,omitempty"`
+		Index         Index         `yaml:"index,omitempty"`
 	}
 )
