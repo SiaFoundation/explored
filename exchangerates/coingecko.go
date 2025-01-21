@@ -91,8 +91,8 @@ type coinGecko struct {
 	err   error
 }
 
-// NewCoinGecko creates an ExchangeRateSource with user-specified mappings
-func NewCoinGecko(apiKey string, pairMap map[string]string, token string, refresh time.Duration) ExchangeRateSource {
+// NewCoinGecko creates an Source with user-specified mappings
+func NewCoinGecko(apiKey string, pairMap map[string]string, token string, refresh time.Duration) Source {
 	return &coinGecko{
 		token:   token,
 		pairMap: pairMap,
@@ -102,7 +102,7 @@ func NewCoinGecko(apiKey string, pairMap map[string]string, token string, refres
 	}
 }
 
-// Start implements ExchangeRateSource.
+// Start implements Source.
 func (c *coinGecko) Start(ctx context.Context) {
 	ticker := time.NewTicker(c.refresh)
 	defer ticker.Stop()
@@ -131,7 +131,7 @@ func (c *coinGecko) Start(ctx context.Context) {
 	}
 }
 
-// Last implements ExchangeRateSource.
+// Last implements Source.
 func (c *coinGecko) Last(currency string) (float64, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

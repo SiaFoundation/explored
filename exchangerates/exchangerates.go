@@ -26,20 +26,20 @@ const (
 	CurrencyETH = "ETH"
 )
 
-// An ExchangeRateSource returns the price of 1 unit of an asset in USD.
-type ExchangeRateSource interface {
+// An Source returns the price of 1 unit of an asset in USD.
+type Source interface {
 	Last(currency string) (float64, error)
 	Start(ctx context.Context)
 }
 
 type averager struct {
 	ignoreOnError bool
-	sources       []ExchangeRateSource
+	sources       []Source
 }
 
 // NewAverager returns an exchange rate source that averages multiple exchange
 // rates.
-func NewAverager(ignoreOnError bool, sources ...ExchangeRateSource) (ExchangeRateSource, error) {
+func NewAverager(ignoreOnError bool, sources ...Source) (Source, error) {
 	if len(sources) == 0 {
 		return nil, errors.New("no sources provided")
 	}
@@ -49,14 +49,14 @@ func NewAverager(ignoreOnError bool, sources ...ExchangeRateSource) (ExchangeRat
 	}, nil
 }
 
-// Start implements ExchangeRateSource.
+// Start implements Source.
 func (a *averager) Start(ctx context.Context) {
 	for i := range a.sources {
 		go a.sources[i].Start(ctx)
 	}
 }
 
-// Last implements ExchangeRateSource.
+// Last implements Source.
 func (a *averager) Last(currency string) (float64, error) {
 	sum, count := 0.0, 0.0
 	for i := range a.sources {

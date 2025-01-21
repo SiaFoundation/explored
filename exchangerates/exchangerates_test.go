@@ -66,7 +66,7 @@ func TestAverager(t *testing.T) {
 	tests := []struct {
 		name          string
 		ignoreOnError bool
-		sources       []ExchangeRateSource
+		sources       []Source
 		expectedPrice float64
 		expectError   bool
 		errorMessage  string
@@ -81,28 +81,28 @@ func TestAverager(t *testing.T) {
 		{
 			name:          "All sources fail",
 			ignoreOnError: true,
-			sources:       []ExchangeRateSource{errorSource, errorSource, errorSource},
+			sources:       []Source{errorSource, errorSource, errorSource},
 			expectError:   true,
 			errorMessage:  "Should have gotten error for averager with no working sources",
 		},
 		{
 			name:          "Valid sources without errors",
 			ignoreOnError: false,
-			sources:       []ExchangeRateSource{s1, s2, s3},
+			sources:       []Source{s1, s2, s3},
 			expectedPrice: (p1 + p2 + p3) / 3,
 			expectError:   false,
 		},
 		{
 			name:          "One error source without ignoreOnError",
 			ignoreOnError: false,
-			sources:       []ExchangeRateSource{s1, s2, s3, errorSource},
+			sources:       []Source{s1, s2, s3, errorSource},
 			expectError:   true,
 			errorMessage:  "Should have gotten error for averager with error source and ignoreOnError disabled",
 		},
 		{
 			name:          "One error source with ignoreOnError",
 			ignoreOnError: true,
-			sources:       []ExchangeRateSource{s1, s2, s3, errorSource},
+			sources:       []Source{s1, s2, s3, errorSource},
 			expectedPrice: (p1 + p2 + p3) / 3,
 			expectError:   false,
 		},

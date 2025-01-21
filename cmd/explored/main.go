@@ -266,7 +266,7 @@ func runRootCmd(ctx context.Context, log *zap.Logger) error {
 	defer timeoutCancel()
 	defer e.Shutdown(timeoutCtx)
 
-	var sources []exchangerates.ExchangeRateSource
+	var sources []exchangerates.Source
 	sources = append(sources, exchangerates.NewKraken(map[string]string{
 		exchangerates.CurrencyUSD: exchangerates.KrakenPairSiacoinUSD,
 		exchangerates.CurrencyEUR: exchangerates.KrakenPairSiacoinEUR,

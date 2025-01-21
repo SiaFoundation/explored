@@ -79,8 +79,8 @@ type kraken struct {
 	err   error
 }
 
-// NewKraken returns an ExchangeRateSource that gets data from Kraken.
-func NewKraken(pairMap map[string]string, refresh time.Duration) ExchangeRateSource {
+// NewKraken returns an Source that gets data from Kraken.
+func NewKraken(pairMap map[string]string, refresh time.Duration) Source {
 	return &kraken{
 		pairMap: pairMap,
 		refresh: refresh,
@@ -89,7 +89,7 @@ func NewKraken(pairMap map[string]string, refresh time.Duration) ExchangeRateSou
 	}
 }
 
-// Start implements ExchangeRateSource.
+// Start implements Source.
 func (k *kraken) Start(ctx context.Context) {
 	ticker := time.NewTicker(k.refresh)
 	defer ticker.Stop()
@@ -118,7 +118,7 @@ func (k *kraken) Start(ctx context.Context) {
 	}
 }
 
-// Last implements ExchangeRateSource.
+// Last implements Source.
 func (k *kraken) Last(currency string) (float64, error) {
 	k.mu.Lock()
 	defer k.mu.Unlock()

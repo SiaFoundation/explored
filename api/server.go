@@ -118,7 +118,7 @@ type server struct {
 	cm ChainManager
 	e  Explorer
 	s  Syncer
-	ex exchangerates.ExchangeRateSource
+	ex exchangerates.Source
 
 	startTime time.Time
 }
@@ -760,7 +760,7 @@ func (s *server) exchangeRateHandler(jc jape.Context) {
 }
 
 // NewServer returns an HTTP handler that serves the explored API.
-func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.ExchangeRateSource) http.Handler {
+func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.Source) http.Handler {
 	srv := server{
 		cm:        cm,
 		e:         e,
