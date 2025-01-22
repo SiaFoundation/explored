@@ -24,6 +24,7 @@ import (
 	"go.sia.tech/explored/api"
 	"go.sia.tech/explored/build"
 	"go.sia.tech/explored/config"
+	"go.sia.tech/explored/exchangerates"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/syncerutil"
 	"go.sia.tech/explored/persist/sqlite"
@@ -48,6 +49,9 @@ var cfg = config.Config{
 		Timeout:             30 * time.Second,
 		MaxLastScan:         3 * time.Hour,
 		MinLastAnnouncement: 365 * 24 * time.Hour,
+	},
+	ExchangeRates: config.ExchangeRates{
+		Refresh: 3 * time.Second,
 	},
 	Consensus: config.Consensus{
 		Network: "mainnet",
@@ -262,7 +266,33 @@ func runRootCmd(ctx context.Context, log *zap.Logger) error {
 	defer timeoutCancel()
 	defer e.Shutdown(timeoutCtx)
 
-	api := api.NewServer(e, cm, s)
+	var sources []exchangerates.Source
+	sources = append(sources, exchangerates.NewKraken(map[string]string{
+		exchangerates.CurrencyUSD: exchangerates.KrakenPairSiacoinUSD,
+		exchangerates.CurrencyEUR: exchangerates.KrakenPairSiacoinEUR,
+		exchangerates.CurrencyBTC: exchangerates.KrakenPairSiacoinBTC,
+	}, cfg.ExchangeRates.Refresh))
+	if apiKey := os.Getenv("COINGECKO_API_KEY"); apiKey != "" {
+		sources = append(sources, exchangerates.NewCoinGecko(apiKey, map[string]string{
+			exchangerates.CurrencyUSD: exchangerates.CoinGeckoCurrencyUSD,
+			exchangerates.CurrencyEUR: exchangerates.CoinGeckoCurrencyEUR,
+			exchangerates.CurrencyCAD: exchangerates.CoinGeckoCurrencyCAD,
+			exchangerates.CurrencyAUD: exchangerates.CoinGeckoCurrencyAUD,
+			exchangerates.CurrencyGBP: exchangerates.CoinGeckoCurrencyGBP,
+			exchangerates.CurrencyJPY: exchangerates.CoinGeckoCurrencyJPY,
+			exchangerates.CurrencyCNY: exchangerates.CoinGeckoCurrencyCNY,
+			exchangerates.CurrencyETH: exchangerates.CoinGeckoCurrencyETH,
+			exchangerates.CurrencyBTC: exchangerates.CoinGeckoCurrencyBTC,
+		}, exchangerates.CoinGeckoTokenSiacoin, cfg.ExchangeRates.Refresh))
+	}
+
+	ex, err := exchangerates.NewAverager(true, sources...)
+	if err != nil {
+		return fmt.Errorf("failed to create exchange rate source: %w", err)
+	}
+	go ex.Start(ctx)
+
+	api := api.NewServer(e, cm, s, ex)
 	server := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasPrefix(r.URL.Path, "/api") {
