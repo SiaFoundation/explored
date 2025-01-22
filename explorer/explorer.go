@@ -2,7 +2,6 @@ package explorer
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"math"
@@ -75,6 +74,7 @@ type Store interface {
 	V2ContractRevisions(id types.FileContractID) (result []V2FileContract, err error)
 	SiacoinElements(ids []types.SiacoinOutputID) (result []SiacoinOutput, err error)
 	SiafundElements(ids []types.SiafundOutputID) (result []SiafundOutput, err error)
+	Search(id types.Hash256) (SearchType, error)
 
 	QueryHosts(params HostQuery, sortBy HostSortColumn, dir HostSortDir, offset, limit uint64) ([]Host, error)
 	HostsForScanning(maxLastScan, minLastAnnouncement time.Time, limit uint64) ([]Host, error)
@@ -404,64 +404,8 @@ func (e *Explorer) QueryHosts(params HostQuery, sortBy HostSortColumn, dir HostS
 	return e.s.QueryHosts(params, sortBy, dir, offset, limit)
 }
 
-// Search returns the element type (address, block, transaction, contract ID)
-// for a given ID.
+// Search returns the type of an element (siacoin element, siafund element,
+// contract, v2 contract, transaction, v2 transaction, block, or host).
 func (e *Explorer) Search(id types.Hash256) (SearchType, error) {
-	events, err := e.AddressEvents(types.Address(id), 0, 1)
-	if err != nil {
-		return SearchTypeInvalid, err
-	} else if len(events) > 0 {
-		return SearchTypeAddress, nil
-	}
-
-	_, err = e.Block(types.BlockID(id))
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return SearchTypeInvalid, err
-	} else if err == nil {
-		return SearchTypeBlock, nil
-	}
-
-	txns, err := e.Transactions([]types.TransactionID{types.TransactionID(id)})
-	if err != nil {
-		return SearchTypeInvalid, err
-	} else if len(txns) > 0 {
-		return SearchTypeTransaction, nil
-	}
-
-	scos, err := e.SiacoinElements([]types.SiacoinOutputID{types.SiacoinOutputID(id)})
-	if err != nil {
-		return SearchTypeInvalid, err
-	} else if len(scos) > 0 {
-		return SearchTypeSiacoinElement, nil
-	}
-
-	sfos, err := e.SiafundElements([]types.SiafundOutputID{types.SiafundOutputID(id)})
-	if err != nil {
-		return SearchTypeInvalid, err
-	} else if len(sfos) > 0 {
-		return SearchTypeSiafundElement, nil
-	}
-
-	contracts, err := e.Contracts([]types.FileContractID{types.FileContractID(id)})
-	if err != nil {
-		return SearchTypeInvalid, err
-	} else if len(contracts) > 0 {
-		return SearchTypeContract, nil
-	}
-
-	v2Contracts, err := e.V2Contracts([]types.FileContractID{types.FileContractID(id)})
-	if err != nil {
-		return SearchTypeInvalid, err
-	} else if len(v2Contracts) > 0 {
-		return SearchTypeV2Contract, nil
-	}
-
-	hosts, err := e.Hosts([]types.PublicKey{types.PublicKey(id)})
-	if err != nil {
-		return SearchTypeInvalid, err
-	} else if len(hosts) > 0 {
-		return SearchTypeHost, nil
-	}
-
-	return SearchTypeInvalid, ErrNoSearchResults
+	return e.s.Search(id)
 }
