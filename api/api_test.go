@@ -508,25 +508,47 @@ func TestAPI(t *testing.T) {
 			testutil.CheckFC(t, true, false, false, revFC, resp[0])
 		}},
 		{"Search siacoin", func(t *testing.T) {
-			resp, err := client.Search(types.Hash256(txn1.SiacoinOutputID(0)))
+			resp, err := client.Search(txn1.SiacoinOutputID(0).String())
 			if err != nil {
 				t.Fatal(err)
 			}
 			testutil.Equal(t, "search type", explorer.SearchTypeSiacoinElement, resp)
 		}},
 		{"Search siafund", func(t *testing.T) {
-			resp, err := client.Search(types.Hash256(txn2.SiafundOutputID(1)))
+			resp, err := client.Search(txn2.SiafundOutputID(1).String())
 			if err != nil {
 				t.Fatal(err)
 			}
 			testutil.Equal(t, "search type", explorer.SearchTypeSiafundElement, resp)
 		}},
 		{"Search contract", func(t *testing.T) {
-			resp, err := client.Search(types.Hash256(txn1.FileContractID(0)))
+			resp, err := client.Search(txn1.FileContractID(0).String())
 			if err != nil {
 				t.Fatal(err)
 			}
 			testutil.Equal(t, "search type", explorer.SearchTypeContract, resp)
+		}},
+		{"Search contract prefixed", func(t *testing.T) {
+			resp, err := client.Search("fcid:" + txn1.FileContractID(0).String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			testutil.Equal(t, "search type", explorer.SearchTypeContract, resp)
+		}},
+		{"Search invalid", func(t *testing.T) {
+			if _, err := client.Search(":"); err == nil {
+				t.Fatal("unparsable search should have failed")
+			}
+			if _, err := client.Search("nbcbsfdhjf"); err == nil {
+				t.Fatal("non hex search should have failed")
+			}
+		}},
+		{"Search host", func(t *testing.T) {
+			resp, err := client.Search(pk1.PublicKey().String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			testutil.Equal(t, "search type", explorer.SearchTypeHost, resp)
 		}},
 		{"Exchange rate", func(t *testing.T) {
 			resp, err := client.ExchangeRate("USD")

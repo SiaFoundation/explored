@@ -87,12 +87,20 @@ const (
 	SearchTypeBlock SearchType = "block"
 	// SearchTypeTransaction means we found a transaction with the given ID.
 	SearchTypeTransaction SearchType = "transaction"
-	// SearchTypeSiacoinElement means we found a contract with the given ID.
+	// SearchTypeV2Transaction means we found a v2 transaction with the given ID.
+	SearchTypeV2Transaction SearchType = "v2Transaction"
+	// SearchTypeSiacoinElement means we found a siacoin element with the given
+	// ID.
 	SearchTypeSiacoinElement SearchType = "siacoinElement"
-	// SearchTypeSiafundElement means we found a contract with the given ID.
+	// SearchTypeSiafundElement means we found a siafund element with the given
+	// ID.
 	SearchTypeSiafundElement SearchType = "siafundElement"
 	// SearchTypeContract means we found a contract with the given ID.
 	SearchTypeContract SearchType = "contract"
+	// SearchTypeV2Contract means we found a V2 contract with the given ID.
+	SearchTypeV2Contract SearchType = "v2contract"
+	// SearchTypeHost means we found a host with the given pubkey.
+	SearchTypeHost SearchType = "host"
 )
 
 // A ResolutionType represents the type of a v2 file contract resolution.
