@@ -87,9 +87,11 @@ const (
 	SearchTypeBlock SearchType = "block"
 	// SearchTypeTransaction means we found a transaction with the given ID.
 	SearchTypeTransaction SearchType = "transaction"
-	// SearchTypeSiacoinElement means we found a contract with the given ID.
+	// SearchTypeSiacoinElement means we found a siacoin element with the given
+	// ID.
 	SearchTypeSiacoinElement SearchType = "siacoinElement"
-	// SearchTypeSiafundElement means we found a contract with the given ID.
+	// SearchTypeSiafundElement means we found a siafund element with the given
+	// ID.
 	SearchTypeSiafundElement SearchType = "siafundElement"
 	// SearchTypeContract means we found a contract with the given ID.
 	SearchTypeContract SearchType = "contract"
