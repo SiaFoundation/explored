@@ -74,7 +74,7 @@ type Store interface {
 	V2ContractRevisions(id types.FileContractID) (result []V2FileContract, err error)
 	SiacoinElements(ids []types.SiacoinOutputID) (result []SiacoinOutput, err error)
 	SiafundElements(ids []types.SiafundOutputID) (result []SiafundOutput, err error)
-	Search(id types.Hash256) (SearchType, error)
+	Search(id string) (SearchType, error)
 
 	QueryHosts(params HostQuery, sortBy HostSortColumn, dir HostSortDir, offset, limit uint64) ([]Host, error)
 	HostsForScanning(maxLastScan, minLastAnnouncement time.Time, limit uint64) ([]Host, error)
@@ -406,6 +406,6 @@ func (e *Explorer) QueryHosts(params HostQuery, sortBy HostSortColumn, dir HostS
 
 // Search returns the type of an element (siacoin element, siafund element,
 // contract, v2 contract, transaction, v2 transaction, block, or host).
-func (e *Explorer) Search(id types.Hash256) (SearchType, error) {
+func (e *Explorer) Search(id string) (SearchType, error) {
 	return e.s.Search(id)
 }

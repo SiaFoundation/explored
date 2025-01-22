@@ -274,8 +274,8 @@ func (c *Client) HostMetrics() (resp explorer.HostMetrics, err error) {
 }
 
 // Search returns what type of object an ID is.
-func (c *Client) Search(id types.Hash256) (resp explorer.SearchType, err error) {
-	err = c.c.GET(fmt.Sprintf("/search/%s", id.String()), &resp)
+func (c *Client) Search(id string) (resp explorer.SearchType, err error) {
+	err = c.c.GET(fmt.Sprintf("/search/%s", id), &resp)
 	return
 }
 
