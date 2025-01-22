@@ -729,6 +729,9 @@ func (s *server) searchIDHandler(jc jape.Context) {
 	if errors.Is(err, explorer.ErrNoSearchResults) {
 		jc.Error(ErrNoSearchResults, http.StatusNotFound)
 		return
+	} else if errors.Is(err, explorer.ErrSearchParse) {
+		jc.Error(err, http.StatusBadRequest)
+		return
 	} else if jc.Check("failed to search ID", err) != nil {
 		return
 	}

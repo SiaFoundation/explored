@@ -3,6 +3,7 @@ package sqlite
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"strings"
 
 	"go.sia.tech/core/types"
@@ -20,15 +21,17 @@ func (s *Store) Search(input string) (explorer.SearchType, error) {
 		if err != nil {
 			return nil, err
 		}
-		if len(decoded) != len(types.Hash256{}) {
+
+		const idLen = len(types.Hash256{})
+		if len(decoded) < len(types.Hash256{}) {
 			return nil, errors.New("should have hex encoded 32 byte input")
 		}
-		return decoded, nil
+		return decoded[:idLen], nil
 	}
 
 	id, err := decodeHex(input)
 	if err != nil {
-		return explorer.SearchTypeInvalid, err
+		return explorer.SearchTypeInvalid, fmt.Errorf("%w: %w", explorer.ErrSearchParse, err)
 	}
 
 	var result explorer.SearchType

@@ -24,6 +24,10 @@ var (
 	// the specified contract ID.
 	ErrContractNotFound = errors.New("contract not found")
 
+	// ErrSearchParse is returned when Search is unable to parse the specified
+	// ID.
+	ErrSearchParse = errors.New("error parsing ID")
+
 	// ErrNoSearchResults is returned when Search is unable to find anything
 	// with the specified ID.
 	ErrNoSearchResults = errors.New("no search results")
