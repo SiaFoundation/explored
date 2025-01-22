@@ -1,6 +1,8 @@
 package sqlite
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 
 	"go.sia.tech/core/types"
@@ -41,10 +43,11 @@ WHERE rev.contract_id = ?
 
 		for _, id := range ids {
 			fc, err := scanV2FileContract(stmt.QueryRow(encode(id)))
-			if err != nil {
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				return fmt.Errorf("failed to scan file contract: %w", err)
+			} else if err == nil {
+				result = append(result, fc)
 			}
-			result = append(result, fc)
 		}
 
 		return nil

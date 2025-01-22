@@ -644,8 +644,11 @@ func TestV2FileContractRevert(t *testing.T) {
 	}
 
 	{
-		_, err := db.V2Contracts([]types.FileContractID{txn1.V2FileContractID(txn1.ID(), 0)})
-		if err == nil {
+		fcs, err := db.V2Contracts([]types.FileContractID{txn1.V2FileContractID(txn1.ID(), 0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(fcs) > 0 {
 			t.Fatal("contract should not exist")
 		}
 	}

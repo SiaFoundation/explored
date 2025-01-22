@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -72,7 +71,7 @@ type (
 		V2Contracts(ids []types.FileContractID) (result []explorer.V2FileContract, err error)
 		V2ContractsKey(key types.PublicKey) (result []explorer.V2FileContract, err error)
 		V2ContractRevisions(id types.FileContractID) (result []explorer.V2FileContract, err error)
-		Search(id types.Hash256) (explorer.SearchType, error)
+		Search(id string) (explorer.SearchType, error)
 
 		Hosts(pks []types.PublicKey) ([]explorer.Host, error)
 		QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortColumn, dir explorer.HostSortDir, offset, limit uint64) ([]explorer.Host, error)
@@ -721,21 +720,19 @@ func (s *server) hostsHandler(jc jape.Context) {
 }
 
 func (s *server) searchIDHandler(jc jape.Context) {
-	const maxLen = len(types.Hash256{})
-
-	// get everything after separator if there is one
-	split := strings.Split(jc.PathParam("id"), ":")
-	id, err := hex.DecodeString(split[len(split)-1])
-	if jc.Check("failed to decode hex", err) != nil {
+	var id string
+	if jc.DecodeParam("id", &id) != nil {
 		return
 	}
 
-	trunc := id[:maxLen]
-	result, err := s.e.Search(types.Hash256(trunc))
-	if jc.Check("failed to search ID", err) != nil {
-		return
-	} else if result == explorer.SearchTypeInvalid {
+	result, err := s.e.Search(id)
+	if errors.Is(err, explorer.ErrNoSearchResults) {
 		jc.Error(ErrNoSearchResults, http.StatusNotFound)
+		return
+	} else if errors.Is(err, explorer.ErrSearchParse) {
+		jc.Error(err, http.StatusBadRequest)
+		return
+	} else if jc.Check("failed to search ID", err) != nil {
 		return
 	}
 	jc.Encode(result)
