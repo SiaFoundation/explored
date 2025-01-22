@@ -187,7 +187,7 @@ func (e *Explorer) scanHosts() {
 		now := types.CurrentTimestamp()
 		lastAnnouncementCutoff := now.Add(-e.scanCfg.MinLastAnnouncement)
 
-		batch, err := e.s.HostsForScanning(now, lastAnnouncementCutoff, scanBatchSize)
+		batch, err := e.s.HostsForScanning(lastAnnouncementCutoff, scanBatchSize)
 		if err != nil {
 			e.log.Info("failed to get hosts for scanning:", zap.Error(err))
 			return

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
 )
@@ -14,9 +15,9 @@ import (
 // time to avoid wasting resources.
 // Note that only the PublicKey, V2, NetAddress, and V2NetAddresses fields are
 // populated.
-func (s *Store) HostsForScanning(now, minLastAnnouncement time.Time, limit uint64) (result []explorer.Host, err error) {
+func (s *Store) HostsForScanning(minLastAnnouncement time.Time, limit uint64) (result []explorer.Host, err error) {
 	err = s.transaction(func(tx *txn) error {
-		rows, err := tx.Query(`SELECT public_key, v2, net_address FROM host_info WHERE next_scan <= ? AND last_announcement >= ? ORDER BY next_scan ASC LIMIT ?`, encode(now), encode(minLastAnnouncement), limit)
+		rows, err := tx.Query(`SELECT public_key, v2, net_address FROM host_info WHERE next_scan <= ? AND last_announcement >= ? ORDER BY next_scan ASC LIMIT ?`, encode(types.CurrentTimestamp()), encode(minLastAnnouncement), limit)
 		if err != nil {
 			return err
 		}

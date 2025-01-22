@@ -73,7 +73,7 @@ type Store interface {
 	SiafundElements(ids []types.SiafundOutputID) (result []SiafundOutput, err error)
 
 	QueryHosts(params HostQuery, sortBy HostSortColumn, dir HostSortDir, offset, limit uint64) ([]Host, error)
-	HostsForScanning(now, minLastAnnouncement time.Time, limit uint64) ([]Host, error)
+	HostsForScanning(minLastAnnouncement time.Time, limit uint64) ([]Host, error)
 }
 
 // Explorer implements a Sia explorer.
