@@ -736,7 +736,7 @@ func (s *server) searchIDHandler(jc jape.Context) {
 
 	trunc := id[:idLen]
 	result, err := s.e.Search(types.Hash256(trunc))
-	if err == explorer.ErrNoSearchResults {
+	if errors.Is(err, explorer.ErrNoSearchResults) {
 		jc.Error(ErrNoSearchResults, http.StatusNotFound)
 		return
 	} else if jc.Check("failed to search ID", err) != nil {
