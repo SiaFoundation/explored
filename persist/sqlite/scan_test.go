@@ -220,10 +220,10 @@ func TestScan(t *testing.T) {
 	}
 
 	{
-		lastScanCutoff := time.Now().Add(-cfg.MaxLastScan)
-		lastAnnouncementCutoff := time.Now().Add(-cfg.MinLastAnnouncement)
+		now := types.CurrentTimestamp()
+		lastAnnouncementCutoff := now.Add(-cfg.MinLastAnnouncement)
 
-		dbHosts, err := db.HostsForScanning(lastScanCutoff, lastAnnouncementCutoff, 100)
+		dbHosts, err := db.HostsForScanning(lastAnnouncementCutoff, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -308,7 +308,7 @@ func TestScan(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	time.Sleep(cfg.Timeout)
+	time.Sleep(2 * cfg.Timeout)
 
 	{
 		dbHosts, err := e.Hosts([]types.PublicKey{pubkey3, pubkey2, pubkey1})
@@ -343,13 +343,13 @@ func TestScan(t *testing.T) {
 	}
 
 	{
-		lastScanCutoff := time.Now().Add(-cfg.MaxLastScan)
-		lastAnnouncementCutoff := time.Now().Add(-cfg.MinLastAnnouncement)
+		now := types.CurrentTimestamp()
+		lastAnnouncementCutoff := now.Add(-cfg.MinLastAnnouncement)
 
-		hosts, err := db.HostsForScanning(lastScanCutoff, lastAnnouncementCutoff, 100)
+		dbHosts, err := db.HostsForScanning(lastAnnouncementCutoff, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Equal(t, "len(hostsForScanning)", 0, len(hosts))
+		testutil.Equal(t, "len(hostsForScanning)", 0, len(dbHosts))
 	}
 }

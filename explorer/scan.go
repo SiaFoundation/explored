@@ -3,6 +3,7 @@ package explorer
 import (
 	"context"
 	"fmt"
+	"math"
 	"net"
 	"time"
 
@@ -51,7 +52,7 @@ func (e *Explorer) waitForSync() error {
 	return nil
 }
 
-func (e *Explorer) scanV1Host(locator geoip.Locator, host Host) (HostScan, error) {
+func (e *Explorer) scanV1Host(locator geoip.Locator, host UnscannedHost) (HostScan, error) {
 	ctx, cancel := context.WithTimeout(e.ctx, e.scanCfg.Timeout)
 	defer cancel()
 
@@ -112,7 +113,7 @@ func (e *Explorer) scanV1Host(locator geoip.Locator, host Host) (HostScan, error
 	}, nil
 }
 
-func (e *Explorer) scanV2Host(locator geoip.Locator, host Host) (HostScan, error) {
+func (e *Explorer) scanV2Host(locator geoip.Locator, host UnscannedHost) (HostScan, error) {
 	ctx, cancel := context.WithTimeout(e.ctx, e.scanCfg.Timeout)
 	defer cancel()
 
@@ -184,10 +185,10 @@ func (e *Explorer) scanHosts() {
 	defer locator.Close()
 
 	for !e.isClosed() {
-		lastScanCutoff := time.Now().Add(-e.scanCfg.MaxLastScan)
-		lastAnnouncementCutoff := time.Now().Add(-e.scanCfg.MinLastAnnouncement)
+		now := types.CurrentTimestamp()
+		lastAnnouncementCutoff := now.Add(-e.scanCfg.MinLastAnnouncement)
 
-		batch, err := e.s.HostsForScanning(lastScanCutoff, lastAnnouncementCutoff, scanBatchSize)
+		batch, err := e.s.HostsForScanning(lastAnnouncementCutoff, scanBatchSize)
 		if err != nil {
 			e.log.Info("failed to get hosts for scanning:", zap.Error(err))
 			return
@@ -204,23 +205,27 @@ func (e *Explorer) scanHosts() {
 		results := make([]HostScan, len(batch))
 		for i, host := range batch {
 			e.wg.Add(1)
-			go func(i int, host Host) {
+			go func(i int, host UnscannedHost) {
 				defer e.wg.Done()
 
 				var err error
-				if len(host.V2NetAddresses) > 0 {
+				if host.IsV2() {
 					results[i], err = e.scanV2Host(locator, host)
 				} else {
 					results[i], err = e.scanV1Host(locator, host)
 				}
+				now := types.CurrentTimestamp()
 				if err != nil {
 					e.log.Debug("host scan failed", zap.Stringer("pk", host.PublicKey), zap.Error(err))
 					results[i] = HostScan{
 						PublicKey: host.PublicKey,
 						Success:   false,
-						Timestamp: types.CurrentTimestamp(),
+						Timestamp: now,
+						NextScan:  now.Add(e.scanCfg.MaxLastScan * time.Duration(math.Pow(2, float64(host.FailedInteractionsStreak)+1))),
 					}
 					return
+				} else {
+					results[i].NextScan = now.Add(e.scanCfg.MaxLastScan)
 				}
 			}(i, host)
 		}

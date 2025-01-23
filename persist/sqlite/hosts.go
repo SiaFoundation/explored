@@ -5,16 +5,19 @@ import (
 	"strings"
 	"time"
 
+	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
 )
 
-// HostsForScanning returns hosts ordered by the transaction they were created in.
-// Note that only the PublicKey, V2, NetAddress, and V2NetAddresses fields are
-// populated.
-func (s *Store) HostsForScanning(maxLastScan, minLastAnnouncement time.Time, limit uint64) (result []explorer.Host, err error) {
+// HostsForScanning returns hosts ordered by their time to next scan.  Hosts
+// which are repeatedly offline will face an exponentially growing next scan
+// time to avoid wasting resources.
+// Note that only the PublicKey, V2, NetAddress, V2NetAddresses,
+// FailedInteractionsStreak fields are populated.
+func (s *Store) HostsForScanning(minLastAnnouncement time.Time, limit uint64) (result []explorer.UnscannedHost, err error) {
 	err = s.transaction(func(tx *txn) error {
-		rows, err := tx.Query(`SELECT public_key, v2, net_address FROM host_info WHERE last_scan <= ? AND last_announcement >= ? ORDER BY last_scan ASC LIMIT ?`, encode(maxLastScan), encode(minLastAnnouncement), limit)
+		rows, err := tx.Query(`SELECT public_key, v2, net_address, failed_interactions_streak FROM host_info WHERE next_scan <= ? AND last_announcement >= ? ORDER BY next_scan ASC LIMIT ?`, encode(types.CurrentTimestamp()), encode(minLastAnnouncement), limit)
 		if err != nil {
 			return err
 		}
@@ -27,8 +30,8 @@ func (s *Store) HostsForScanning(maxLastScan, minLastAnnouncement time.Time, lim
 		defer v2AddrStmt.Close()
 
 		for rows.Next() {
-			var host explorer.Host
-			if err := rows.Scan(decode(&host.PublicKey), &host.V2, &host.NetAddress); err != nil {
+			var host explorer.UnscannedHost
+			if err := rows.Scan(decode(&host.PublicKey), &host.V2, &host.NetAddress, &host.FailedInteractionsStreak); err != nil {
 				return err
 			}
 

@@ -480,10 +480,13 @@ CREATE TABLE host_info (
     known_since INTEGER NOT NULL,
     last_scan INTEGER NOT NULL,
     last_scan_successful INTEGER NOT NULL,
+    next_scan INTEGER NOT NULL,
     last_announcement INTEGER NOT NULL,
     total_scans INTEGER NOT NULL,
     successful_interactions INTEGER NOT NULL,
     failed_interactions INTEGER NOT NULL,
+	-- number of failed interactions since the last successful interaction
+    failed_interactions_streak INTEGER NOT NULL,
     -- settings
     settings_accepting_contracts INTEGER NOT NULL,
     settings_max_download_batch_size BLOB NOT NULL,
