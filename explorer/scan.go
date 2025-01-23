@@ -3,6 +3,7 @@ package explorer
 import (
 	"context"
 	"fmt"
+	"math"
 	"net"
 	"time"
 
@@ -213,20 +214,24 @@ func (e *Explorer) scanHosts() {
 				} else {
 					results[i], err = e.scanV1Host(locator, host)
 				}
+				now := types.CurrentTimestamp()
 				if err != nil {
 					e.log.Debug("host scan failed", zap.Stringer("pk", host.PublicKey), zap.Error(err))
 					results[i] = HostScan{
 						PublicKey: host.PublicKey,
 						Success:   false,
-						Timestamp: types.CurrentTimestamp(),
+						Timestamp: now,
+						NextScan:  now.Add(e.scanCfg.MaxLastScan * time.Duration(math.Pow(2, float64(host.FailedInteractionsStreak)+1))),
 					}
 					return
+				} else {
+					results[i].NextScan = now.Add(e.scanCfg.MaxLastScan)
 				}
 			}(i, host)
 		}
 		e.wg.Wait()
 
-		if err := e.s.AddHostScans(e.scanCfg.MaxLastScan, results); err != nil {
+		if err := e.s.AddHostScans(results); err != nil {
 			e.log.Info("failed to add host scans to DB:", zap.Error(err))
 			return
 		}

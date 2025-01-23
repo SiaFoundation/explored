@@ -1714,7 +1714,7 @@ func TestHostAnnouncement(t *testing.T) {
 	}
 
 	{
-		if err := db.AddHostScans(time.Hour, []explorer.HostScan{scan1}); err != nil {
+		if err := db.AddHostScans([]explorer.HostScan{scan1}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -1733,7 +1733,7 @@ func TestHostAnnouncement(t *testing.T) {
 	}
 
 	{
-		if err := db.AddHostScans(time.Hour, []explorer.HostScan{scan2}); err != nil {
+		if err := db.AddHostScans([]explorer.HostScan{scan2}); err != nil {
 			t.Fatal(err)
 		}
 

@@ -330,6 +330,7 @@ type HostScan struct {
 	CountryCode string          `json:"countryCode"`
 	Success     bool            `json:"success"`
 	Timestamp   time.Time       `json:"timestamp"`
+	NextScan    time.Time       `json:"nextScan"`
 
 	Settings   rhpv2.HostSettings   `json:"settings"`
 	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
@@ -346,13 +347,14 @@ type Host struct {
 
 	CountryCode string `json:"countryCode"`
 
-	KnownSince             time.Time `json:"knownSince"`
-	LastScan               time.Time `json:"lastScan"`
-	LastScanSuccessful     bool      `json:"lastScanSuccessful"`
-	LastAnnouncement       time.Time `json:"lastAnnouncement"`
-	TotalScans             uint64    `json:"totalScans"`
-	SuccessfulInteractions uint64    `json:"successfulInteractions"`
-	FailedInteractions     uint64    `json:"failedInteractions"`
+	KnownSince               time.Time `json:"knownSince"`
+	LastScan                 time.Time `json:"lastScan"`
+	LastScanSuccessful       bool      `json:"lastScanSuccessful"`
+	LastAnnouncement         time.Time `json:"lastAnnouncement"`
+	TotalScans               uint64    `json:"totalScans"`
+	SuccessfulInteractions   uint64    `json:"successfulInteractions"`
+	FailedInteractions       uint64    `json:"failedInteractions"`
+	FailedInteractionsStreak uint64    `json:"failedInteractionsStreak"`
 
 	Settings   rhpv2.HostSettings   `json:"settings"`
 	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
