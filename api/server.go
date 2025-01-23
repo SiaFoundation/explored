@@ -740,7 +740,7 @@ func (s *server) searchIDHandler(jc jape.Context) {
 
 func (s *server) exchangeRateHandler(jc jape.Context) {
 	var currency string
-	if jc.DecodeForm("currency", &currency) != nil {
+	if jc.DecodeParam("currency", &currency) != nil {
 		return
 	}
 	if currency == "" {
@@ -824,6 +824,6 @@ func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.Source) h
 
 		"GET    /search/:id": srv.searchIDHandler,
 
-		"GET    /exchangerate": srv.exchangeRateHandler,
+		"GET    /exchange-rate/siacoin/:currency": srv.exchangeRateHandler,
 	})
 }
