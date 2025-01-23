@@ -52,7 +52,7 @@ func (e *Explorer) waitForSync() error {
 	return nil
 }
 
-func (e *Explorer) scanV1Host(locator geoip.Locator, host Host) (HostScan, error) {
+func (e *Explorer) scanV1Host(locator geoip.Locator, host UnscannedHost) (HostScan, error) {
 	ctx, cancel := context.WithTimeout(e.ctx, e.scanCfg.Timeout)
 	defer cancel()
 
@@ -113,7 +113,7 @@ func (e *Explorer) scanV1Host(locator geoip.Locator, host Host) (HostScan, error
 	}, nil
 }
 
-func (e *Explorer) scanV2Host(locator geoip.Locator, host Host) (HostScan, error) {
+func (e *Explorer) scanV2Host(locator geoip.Locator, host UnscannedHost) (HostScan, error) {
 	ctx, cancel := context.WithTimeout(e.ctx, e.scanCfg.Timeout)
 	defer cancel()
 
@@ -205,11 +205,11 @@ func (e *Explorer) scanHosts() {
 		results := make([]HostScan, len(batch))
 		for i, host := range batch {
 			e.wg.Add(1)
-			go func(i int, host Host) {
+			go func(i int, host UnscannedHost) {
 				defer e.wg.Done()
 
 				var err error
-				if len(host.V2NetAddresses) > 0 {
+				if host.IsV2() {
 					results[i], err = e.scanV2Host(locator, host)
 				} else {
 					results[i], err = e.scanV1Host(locator, host)

@@ -81,7 +81,7 @@ type Store interface {
 	Search(id string) (SearchType, error)
 
 	QueryHosts(params HostQuery, sortBy HostSortColumn, dir HostSortDir, offset, limit uint64) ([]Host, error)
-	HostsForScanning(minLastAnnouncement time.Time, limit uint64) ([]Host, error)
+	HostsForScanning(minLastAnnouncement time.Time, limit uint64) ([]UnscannedHost, error)
 }
 
 // Explorer implements a Sia explorer.

@@ -338,34 +338,19 @@ type HostScan struct {
 	RHPV4Settings rhpv4.HostSettings `json:"rhpV4Settings"`
 }
 
-// Host represents a host and the information gathered from scanning it.
-type Host struct {
-	PublicKey      types.PublicKey    `json:"publicKey"`
-	V2             bool               `json:"v2"`
-	NetAddress     string             `json:"netAddress"`
-	V2NetAddresses []chain.NetAddress `json:"v2NetAddresses,omitempty"`
-
-	CountryCode string `json:"countryCode"`
-
-	KnownSince               time.Time `json:"knownSince"`
-	LastScan                 time.Time `json:"lastScan"`
-	LastScanSuccessful       bool      `json:"lastScanSuccessful"`
-	LastAnnouncement         time.Time `json:"lastAnnouncement"`
-	TotalScans               uint64    `json:"totalScans"`
-	SuccessfulInteractions   uint64    `json:"successfulInteractions"`
-	FailedInteractions       uint64    `json:"failedInteractions"`
-	FailedInteractionsStreak uint64    `json:"failedInteractionsStreak"`
-
-	Settings   rhpv2.HostSettings   `json:"settings"`
-	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
-
-	RHPV4Settings rhpv4.HostSettings `json:"rhpV4Settings"`
+// UnscannedHost represents the metadata needed to scan a host.
+type UnscannedHost struct {
+	PublicKey                types.PublicKey    `json:"publicKey"`
+	V2                       bool               `json:"v2"`
+	NetAddress               string             `json:"netAddress"`
+	V2NetAddresses           []chain.NetAddress `json:"v2NetAddresses,omitempty"`
+	FailedInteractionsStreak uint64             `json:"failedInteractionsStreak"`
 }
 
 // V2SiamuxAddr returns the `Address` of the first TCP siamux `NetAddress` it
 // finds in the host's list of net addresses.  The protocol for this address is
 // ProtocolTCPSiaMux.
-func (h Host) V2SiamuxAddr() (string, bool) {
+func (h UnscannedHost) V2SiamuxAddr() (string, bool) {
 	for _, netAddr := range h.V2NetAddresses {
 		if netAddr.Protocol == crhpv4.ProtocolTCPSiaMux {
 			return netAddr.Address, true
@@ -375,8 +360,31 @@ func (h Host) V2SiamuxAddr() (string, bool) {
 }
 
 // IsV2 returns whether a host supports V2 or not.
-func (h Host) IsV2() bool {
+func (h UnscannedHost) IsV2() bool {
 	return len(h.V2NetAddresses) > 0
+}
+
+// Host represents a host and the information gathered from scanning it.
+type Host struct {
+	PublicKey      types.PublicKey    `json:"publicKey"`
+	V2             bool               `json:"v2"`
+	NetAddress     string             `json:"netAddress"`
+	V2NetAddresses []chain.NetAddress `json:"v2NetAddresses,omitempty"`
+
+	CountryCode string `json:"countryCode"`
+
+	KnownSince             time.Time `json:"knownSince"`
+	LastScan               time.Time `json:"lastScan"`
+	LastScanSuccessful     bool      `json:"lastScanSuccessful"`
+	LastAnnouncement       time.Time `json:"lastAnnouncement"`
+	TotalScans             uint64    `json:"totalScans"`
+	SuccessfulInteractions uint64    `json:"successfulInteractions"`
+	FailedInteractions     uint64    `json:"failedInteractions"`
+
+	Settings   rhpv2.HostSettings   `json:"settings"`
+	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
+
+	RHPV4Settings rhpv4.HostSettings `json:"rhpV4Settings"`
 }
 
 // HostMetrics represents averages of scanned information from hosts.
