@@ -36,16 +36,29 @@ const (
 	CoinGeckoCurrencyETH = "eth"
 )
 
+const (
+	demoBaseURL = "https://api.coingecko.com"
+	proBaseURL  = "https://pro-api.coingecko.com"
+)
+
 type coinGeckoAPI struct {
+	pro    bool
 	apiKey string
 	client http.Client
 }
 
-func newCoinGeckoAPI(apiKey string) *coinGeckoAPI {
-	return &coinGeckoAPI{apiKey: apiKey}
+func newCoinGeckoAPI(pro bool, apiKey string) *coinGeckoAPI {
+	return &coinGeckoAPI{pro: pro, apiKey: apiKey}
 }
 
 type coinGeckoPriceResponse map[string]map[string]float64
+
+func (c *coinGeckoAPI) baseURL() string {
+	if c.pro {
+		return proBaseURL
+	}
+	return demoBaseURL
+}
 
 // See https://docs.coingecko.com/reference/simple-price
 func (c *coinGeckoAPI) tickers(ctx context.Context, currencies []string, token string) (map[string]float64, error) {
@@ -53,13 +66,17 @@ func (c *coinGeckoAPI) tickers(ctx context.Context, currencies []string, token s
 	token = strings.ToLower(token)
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf(
-		"https://api.coingecko.com/api/v3/simple/price?vs_currencies=%s&ids=%s",
-		vsCurrencies, token), nil)
+		"%s/api/v3/simple/price?vs_currencies=%s&ids=%s",
+		c.baseURL(), vsCurrencies, token), nil)
 	if err != nil {
 		return nil, err
 	}
 	request.Header.Set("accept", "application/json")
-	request.Header.Set("x-cg-demo-api-key", c.apiKey)
+	if c.pro {
+		request.Header.Set("x-cg-pro-api-key", c.apiKey)
+	} else {
+		request.Header.Set("x-cg-demo-api-key", c.apiKey)
+	}
 
 	response, err := c.client.Do(request)
 	if err != nil {
@@ -92,12 +109,12 @@ type coinGecko struct {
 }
 
 // NewCoinGecko creates an Source with user-specified mappings
-func NewCoinGecko(apiKey string, pairMap map[string]string, token string, refresh time.Duration) Source {
+func NewCoinGecko(pro bool, apiKey string, pairMap map[string]string, token string, refresh time.Duration) Source {
 	return &coinGecko{
 		token:   token,
 		pairMap: pairMap,
 		refresh: refresh,
-		client:  newCoinGeckoAPI(apiKey),
+		client:  newCoinGeckoAPI(pro, apiKey),
 		rates:   make(map[string]float64),
 	}
 }
