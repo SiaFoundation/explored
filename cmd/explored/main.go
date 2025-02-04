@@ -272,8 +272,13 @@ func runRootCmd(ctx context.Context, log *zap.Logger) error {
 		exchangerates.CurrencyEUR: exchangerates.KrakenPairSiacoinEUR,
 		exchangerates.CurrencyBTC: exchangerates.KrakenPairSiacoinBTC,
 	}, cfg.ExchangeRates.Refresh))
-	if apiKey := os.Getenv("COINGECKO_API_KEY"); apiKey != "" {
-		sources = append(sources, exchangerates.NewCoinGecko(apiKey, map[string]string{
+
+	coinGeckoPro, coinGeckoAPIKey := false, os.Getenv("COINGECKO_DEMO_API_KEY")
+	if coinGeckoAPIKey == "" {
+		coinGeckoPro, coinGeckoAPIKey = true, os.Getenv("COINGECKO_PRO_API_KEY")
+	}
+	if coinGeckoAPIKey != "" {
+		sources = append(sources, exchangerates.NewCoinGecko(coinGeckoPro, coinGeckoAPIKey, map[string]string{
 			exchangerates.CurrencyUSD: exchangerates.CoinGeckoCurrencyUSD,
 			exchangerates.CurrencyEUR: exchangerates.CoinGeckoCurrencyEUR,
 			exchangerates.CurrencyCAD: exchangerates.CoinGeckoCurrencyCAD,
