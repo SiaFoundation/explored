@@ -507,16 +507,16 @@ func (h *HostSortColumn) UnmarshalText(data []byte) error {
 
 // HostQuery defines the filter and sort parameters for querying hosts.
 type HostQuery struct {
-	V2                   *bool
-	PublicKeys           []types.PublicKey
-	MinUptime            float64
-	MinDuration          uint64
-	MaxStoragePrice      types.Currency
-	MaxContractPrice     types.Currency
-	MaxUploadPrice       types.Currency
-	MaxDownloadPrice     types.Currency
-	MaxBaseRPCPrice      types.Currency
-	MaxSectorAccessPrice types.Currency
-	AcceptContracts      *bool
-	Online               *bool
+	V2                   *bool             `json:"v2"`
+	PublicKeys           []types.PublicKey `json:"publicKeys"`
+	MinUptime            float64           `json:"minUptime"`
+	MinDuration          uint64            `json:"minDuration"`
+	MaxStoragePrice      types.Currency    `json:"maxStoragePrice"`
+	MaxContractPrice     types.Currency    `json:"maxContractPrice"`
+	MaxUploadPrice       types.Currency    `json:"maxUploadPrice"`
+	MaxDownloadPrice     types.Currency    `json:"maxDownloadPrice"`
+	MaxBaseRPCPrice      types.Currency    `json:"maxBaseRPCPrice"`
+	MaxSectorAccessPrice types.Currency    `json:"maxSectorAccessPrice"`
+	AcceptContracts      *bool             `json:"acceptContracts"`
+	Online               *bool             `json:"online"`
 }
