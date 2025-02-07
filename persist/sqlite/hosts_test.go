@@ -423,8 +423,11 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v1 min duration 1000",
 			query: explorer.HostQuery{
-				V2:          &falseBool,
-				MinDuration: 1000,
+				V2: &falseBool,
+				MinDuration: func() *uint64 {
+					x := uint64(1000)
+					return &x
+				}(),
 			},
 			sortBy: explorer.HostSortAcceptingContracts,
 			dir:    explorer.HostSortDesc,
@@ -433,8 +436,11 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v1 min duration 5000",
 			query: explorer.HostQuery{
-				V2:          &falseBool,
-				MinDuration: 5000,
+				V2: &falseBool,
+				MinDuration: func() *uint64 {
+					x := uint64(5000)
+					return &x
+				}(),
 			},
 			sortBy: explorer.HostSortAcceptingContracts,
 			dir:    explorer.HostSortDesc,
@@ -443,8 +449,11 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v2 min duration 1000",
 			query: explorer.HostQuery{
-				V2:          &trueBool,
-				MinDuration: 1000,
+				V2: &trueBool,
+				MinDuration: func() *uint64 {
+					x := uint64(1000)
+					return &x
+				}(),
 			},
 			sortBy: explorer.HostSortAcceptingContracts,
 			dir:    explorer.HostSortDesc,
@@ -453,8 +462,11 @@ func TestQueryHosts(t *testing.T) {
 		{
 			name: "v2 min duration 5000",
 			query: explorer.HostQuery{
-				V2:          &trueBool,
-				MinDuration: 5000,
+				V2: &trueBool,
+				MinDuration: func() *uint64 {
+					x := uint64(5000)
+					return &x
+				}(),
 			},
 			sortBy: explorer.HostSortAcceptingContracts,
 			dir:    explorer.HostSortDesc,
