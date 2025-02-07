@@ -509,14 +509,14 @@ func (h *HostSortColumn) UnmarshalText(data []byte) error {
 type HostQuery struct {
 	V2                   *bool             `json:"v2"`
 	PublicKeys           []types.PublicKey `json:"publicKeys"`
-	MinUptime            float64           `json:"minUptime"`
-	MinDuration          uint64            `json:"minDuration"`
-	MaxStoragePrice      types.Currency    `json:"maxStoragePrice"`
-	MaxContractPrice     types.Currency    `json:"maxContractPrice"`
-	MaxUploadPrice       types.Currency    `json:"maxUploadPrice"`
-	MaxDownloadPrice     types.Currency    `json:"maxDownloadPrice"`
-	MaxBaseRPCPrice      types.Currency    `json:"maxBaseRPCPrice"`
-	MaxSectorAccessPrice types.Currency    `json:"maxSectorAccessPrice"`
+	MinUptime            *float64          `json:"minUptime"`
+	MinDuration          *uint64           `json:"minDuration"`
+	MaxStoragePrice      *types.Currency   `json:"maxStoragePrice"`
+	MaxContractPrice     *types.Currency   `json:"maxContractPrice"`
+	MaxUploadPrice       *types.Currency   `json:"maxUploadPrice"`
+	MaxDownloadPrice     *types.Currency   `json:"maxDownloadPrice"`
+	MaxBaseRPCPrice      *types.Currency   `json:"maxBaseRPCPrice"`
+	MaxSectorAccessPrice *types.Currency   `json:"maxSectorAccessPrice"`
 	AcceptContracts      *bool             `json:"acceptContracts"`
 	Online               *bool             `json:"online"`
 }
