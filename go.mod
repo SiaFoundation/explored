@@ -8,7 +8,7 @@ require (
 	github.com/google/go-cmp v0.6.0
 	github.com/ip2location/ip2location-go v8.3.0+incompatible
 	github.com/mattn/go-sqlite3 v1.14.24
-	go.sia.tech/core v0.10.0
+	go.sia.tech/core v0.10.1
 	go.sia.tech/coreutils v0.11.0
 	go.sia.tech/jape v0.12.1
 	go.uber.org/zap v1.27.0
@@ -29,12 +29,12 @@ require (
 	go.sia.tech/mux v1.3.0 // indirect
 	go.uber.org/mock v0.5.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.32.0 // indirect
+	golang.org/x/crypto v0.33.0 // indirect
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect
 	golang.org/x/mod v0.18.0 // indirect
 	golang.org/x/net v0.34.0 // indirect
-	golang.org/x/sync v0.10.0 // indirect
-	golang.org/x/sys v0.29.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/sync v0.11.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 	golang.org/x/tools v0.22.0 // indirect
 )
