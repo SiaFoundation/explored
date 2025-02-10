@@ -256,7 +256,7 @@ func runRootCmd(ctx context.Context, log *zap.Logger) error {
 	}
 	s := syncer.New(syncerListener, cm, ps, header, syncer.WithLogger(log.Named("syncer")), syncer.WithMaxInboundPeers(256))
 	defer s.Close()
-	go s.Run(ctx)
+	go s.Run()
 
 	e, err := explorer.NewExplorer(cm, store, cfg.Index.BatchSize, cfg.Scanner, log.Named("explorer"))
 	if err != nil {

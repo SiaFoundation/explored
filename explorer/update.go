@@ -103,13 +103,14 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 	// add new siacoin elements to the store
 	var newSiacoinElements, spentSiacoinElements []SiacoinOutput
 	var ephemeralSiacoinElements []SiacoinOutput
-	cau.ForEachSiacoinElement(func(se types.SiacoinElement, created, spent bool) {
+	for _, diff := range cau.SiacoinElementDiffs() {
+		created, spent, se := diff.Created, diff.Spent, diff.SiacoinElement
 		if created && spent {
 			ephemeralSiacoinElements = append(ephemeralSiacoinElements, SiacoinOutput{
 				SiacoinElement: se,
 				Source:         sources[se.ID],
 			})
-			return
+			continue
 		}
 
 		if spent {
@@ -123,14 +124,15 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 				Source:         sources[se.ID],
 			})
 		}
-	})
+	}
 
 	var newSiafundElements, spentSiafundElements []types.SiafundElement
 	var ephemeralSiafundElements []types.SiafundElement
-	cau.ForEachSiafundElement(func(se types.SiafundElement, created, spent bool) {
+	for _, diff := range cau.SiafundElementDiffs() {
+		created, spent, se := diff.Created, diff.Spent, diff.SiafundElement
 		if created && spent {
 			ephemeralSiafundElements = append(ephemeralSiafundElements, se)
-			return
+			continue
 		}
 
 		if spent {
@@ -138,17 +140,25 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 		} else {
 			newSiafundElements = append(newSiafundElements, se)
 		}
-	})
+	}
 
 	fceMap := make(map[types.FileContractID]FileContractUpdate)
-	cau.ForEachFileContractElement(func(fce types.FileContractElement, created bool, rev *types.FileContractElement, resolved, valid bool) {
-		fceMap[fce.ID] = FileContractUpdate{
-			FileContractElement: fce,
-			Revision:            rev,
-			Resolved:            resolved,
-			Valid:               valid,
+	for _, diff := range cau.FileContractElementDiffs() {
+		var rev *types.FileContractElement
+		if diff.Revision != nil {
+			rev = &types.FileContractElement{
+				ID:           diff.FileContractElement.ID,
+				StateElement: diff.FileContractElement.StateElement,
+				FileContract: *diff.Revision,
+			}
 		}
-	})
+		fceMap[diff.FileContractElement.ID] = FileContractUpdate{
+			FileContractElement: diff.FileContractElement,
+			Revision:            rev,
+			Resolved:            diff.Resolved,
+			Valid:               diff.Valid,
+		}
+	}
 	for _, txn := range cau.Block.Transactions {
 		txnID := txn.ID()
 		for i := range txn.FileContracts {
@@ -173,13 +183,21 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 	}
 
 	v2FceMap := make(map[types.FileContractID]V2FileContractUpdate)
-	cau.ForEachV2FileContractElement(func(fce types.V2FileContractElement, created bool, rev *types.V2FileContractElement, res types.V2FileContractResolutionType) {
-		v2FceMap[types.FileContractID(fce.ID)] = V2FileContractUpdate{
-			FileContractElement: fce,
-			Revision:            rev,
-			Resolution:          res,
+	for _, diff := range cau.V2FileContractElementDiffs() {
+		var rev *types.V2FileContractElement
+		if diff.Revision != nil {
+			rev = &types.V2FileContractElement{
+				ID:             diff.V2FileContractElement.ID,
+				StateElement:   diff.V2FileContractElement.StateElement,
+				V2FileContract: *diff.Revision,
+			}
 		}
-	})
+		v2FceMap[types.FileContractID(diff.V2FileContractElement.ID)] = V2FileContractUpdate{
+			FileContractElement: diff.V2FileContractElement,
+			Revision:            rev,
+			Resolution:          diff.Resolution,
+		}
+	}
 	for _, txn := range cau.Block.V2Transactions() {
 		txnID := txn.ID()
 		for i := range txn.FileContracts {
@@ -290,12 +308,13 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 	// add new siacoin elements to the store
 	var newSiacoinElements, spentSiacoinElements []SiacoinOutput
 	var ephemeralSiacoinElements []SiacoinOutput
-	cru.ForEachSiacoinElement(func(se types.SiacoinElement, created, spent bool) {
+	for _, diff := range cru.SiacoinElementDiffs() {
+		created, spent, se := diff.Created, diff.Spent, diff.SiacoinElement
 		if created && spent {
 			ephemeralSiacoinElements = append(ephemeralSiacoinElements, SiacoinOutput{
 				SiacoinElement: se,
 			})
-			return
+			continue
 		}
 
 		if spent {
@@ -307,14 +326,15 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 				SiacoinElement: se,
 			})
 		}
-	})
+	}
 
 	var newSiafundElements, spentSiafundElements []types.SiafundElement
 	var ephemeralSiafundElements []types.SiafundElement
-	cru.ForEachSiafundElement(func(se types.SiafundElement, created, spent bool) {
+	for _, diff := range cru.SiafundElementDiffs() {
+		created, spent, se := diff.Created, diff.Spent, diff.SiafundElement
 		if created && spent {
 			ephemeralSiafundElements = append(ephemeralSiafundElements, se)
-			return
+			continue
 		}
 
 		if spent {
@@ -322,17 +342,25 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 		} else {
 			spentSiafundElements = append(spentSiafundElements, se)
 		}
-	})
+	}
 
 	fceMap := make(map[types.FileContractID]FileContractUpdate)
-	cru.ForEachFileContractElement(func(fce types.FileContractElement, created bool, rev *types.FileContractElement, resolved, valid bool) {
-		fceMap[fce.ID] = FileContractUpdate{
-			FileContractElement: fce,
-			Revision:            rev,
-			Resolved:            resolved,
-			Valid:               valid,
+	for _, diff := range cru.FileContractElementDiffs() {
+		var rev *types.FileContractElement
+		if diff.Revision != nil {
+			rev = &types.FileContractElement{
+				ID:           diff.FileContractElement.ID,
+				StateElement: diff.FileContractElement.StateElement,
+				FileContract: *diff.Revision,
+			}
 		}
-	})
+		fceMap[diff.FileContractElement.ID] = FileContractUpdate{
+			FileContractElement: diff.FileContractElement,
+			Revision:            rev,
+			Resolved:            diff.Resolved,
+			Valid:               diff.Valid,
+		}
+	}
 	for _, txn := range cru.Block.Transactions {
 		txnID := txn.ID()
 		for i := range txn.FileContracts {
@@ -357,13 +385,21 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 	}
 
 	v2FceMap := make(map[types.FileContractID]V2FileContractUpdate)
-	cru.ForEachV2FileContractElement(func(fce types.V2FileContractElement, created bool, rev *types.V2FileContractElement, res types.V2FileContractResolutionType) {
-		v2FceMap[types.FileContractID(fce.ID)] = V2FileContractUpdate{
-			FileContractElement: fce,
-			Revision:            rev,
-			Resolution:          res,
+	for _, diff := range cru.V2FileContractElementDiffs() {
+		var rev *types.V2FileContractElement
+		if diff.Revision != nil {
+			rev = &types.V2FileContractElement{
+				ID:             diff.V2FileContractElement.ID,
+				StateElement:   diff.V2FileContractElement.StateElement,
+				V2FileContract: *diff.Revision,
+			}
 		}
-	})
+		v2FceMap[types.FileContractID(diff.V2FileContractElement.ID)] = V2FileContractUpdate{
+			FileContractElement: diff.V2FileContractElement,
+			Revision:            rev,
+			Resolution:          diff.Resolution,
+		}
+	}
 	for _, txn := range cru.Block.V2Transactions() {
 		txnID := txn.ID()
 		for i := range txn.FileContracts {

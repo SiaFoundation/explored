@@ -46,7 +46,7 @@ func startTestNode(tb testing.TB, n *consensus.Network, genesis types.Block) (*c
 		UniqueID:   gateway.GenerateUniqueID(),
 		NetAddress: "localhost:1234",
 	})
-	go s.Run(context.Background())
+	go s.Run()
 	tb.Cleanup(func() { s.Close() })
 
 	ws := ctestutil.NewEphemeralWalletStore()
