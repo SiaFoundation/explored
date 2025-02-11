@@ -145,12 +145,8 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 	fceMap := make(map[types.FileContractID]FileContractUpdate)
 	for _, diff := range cau.FileContractElementDiffs() {
 		var rev *types.FileContractElement
-		if diff.Revision != nil {
-			rev = &types.FileContractElement{
-				ID:           diff.FileContractElement.ID,
-				StateElement: diff.FileContractElement.StateElement,
-				FileContract: *diff.Revision,
-			}
+		if revision, ok := diff.RevisionElement(); ok {
+			rev = &revision
 		}
 		fceMap[diff.FileContractElement.ID] = FileContractUpdate{
 			FileContractElement: diff.FileContractElement,
@@ -185,12 +181,8 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 	v2FceMap := make(map[types.FileContractID]V2FileContractUpdate)
 	for _, diff := range cau.V2FileContractElementDiffs() {
 		var rev *types.V2FileContractElement
-		if diff.Revision != nil {
-			rev = &types.V2FileContractElement{
-				ID:             diff.V2FileContractElement.ID,
-				StateElement:   diff.V2FileContractElement.StateElement,
-				V2FileContract: *diff.Revision,
-			}
+		if revision, ok := diff.V2RevisionElement(); ok {
+			rev = &revision
 		}
 		v2FceMap[types.FileContractID(diff.V2FileContractElement.ID)] = V2FileContractUpdate{
 			FileContractElement: diff.V2FileContractElement,
@@ -347,12 +339,8 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 	fceMap := make(map[types.FileContractID]FileContractUpdate)
 	for _, diff := range cru.FileContractElementDiffs() {
 		var rev *types.FileContractElement
-		if diff.Revision != nil {
-			rev = &types.FileContractElement{
-				ID:           diff.FileContractElement.ID,
-				StateElement: diff.FileContractElement.StateElement,
-				FileContract: *diff.Revision,
-			}
+		if revision, ok := diff.RevisionElement(); ok {
+			rev = &revision
 		}
 		fceMap[diff.FileContractElement.ID] = FileContractUpdate{
 			FileContractElement: diff.FileContractElement,
@@ -387,12 +375,8 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 	v2FceMap := make(map[types.FileContractID]V2FileContractUpdate)
 	for _, diff := range cru.V2FileContractElementDiffs() {
 		var rev *types.V2FileContractElement
-		if diff.Revision != nil {
-			rev = &types.V2FileContractElement{
-				ID:             diff.V2FileContractElement.ID,
-				StateElement:   diff.V2FileContractElement.StateElement,
-				V2FileContract: *diff.Revision,
-			}
+		if revision, ok := diff.V2RevisionElement(); ok {
+			rev = &revision
 		}
 		v2FceMap[types.FileContractID(diff.V2FileContractElement.ID)] = V2FileContractUpdate{
 			FileContractElement: diff.V2FileContractElement,
