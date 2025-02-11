@@ -85,37 +85,37 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 	}
 
 	const uptimeValue = `(successful_interactions * 1.0 / MAX(1, total_scans))`
-	if params.MinUptime > 0 {
+	if params.MinUptime != nil {
 		filters = append(filters, uptimeValue+" >= ?")
-		args = append(args, params.MinUptime/100.0)
+		args = append(args, *params.MinUptime/100.0)
 	}
-	if params.MinDuration > 0 {
+	if params.MinDuration != nil {
 		filters = append(filters, "CASE WHEN v2=1 THEN rhp4_settings_max_contract_duration >= ? ELSE settings_max_duration >= ? END")
-		args = append(args, encode(params.MinDuration), encode(params.MinDuration))
+		args = append(args, encode(*params.MinDuration), encode(*params.MinDuration))
 	}
-	if !params.MaxStoragePrice.IsZero() {
+	if params.MaxStoragePrice != nil {
 		filters = append(filters, "CASE WHEN v2=1 THEN rhp4_prices_storage_price <= ? ELSE settings_storage_price <= ? END")
-		args = append(args, encode(params.MaxStoragePrice), encode(params.MaxStoragePrice))
+		args = append(args, encode(*params.MaxStoragePrice), encode(*params.MaxStoragePrice))
 	}
-	if !params.MaxContractPrice.IsZero() {
+	if params.MaxContractPrice != nil {
 		filters = append(filters, "CASE WHEN v2=1 THEN rhp4_prices_contract_price <= ? ELSE settings_contract_price <= ? END")
-		args = append(args, encode(params.MaxContractPrice), encode(params.MaxContractPrice))
+		args = append(args, encode(*params.MaxContractPrice), encode(*params.MaxContractPrice))
 	}
-	if !params.MaxUploadPrice.IsZero() {
+	if params.MaxUploadPrice != nil {
 		filters = append(filters, "CASE WHEN v2=1 THEN rhp4_prices_ingress_price <= ? ELSE settings_upload_bandwidth_price <= ? END")
-		args = append(args, encode(params.MaxUploadPrice), encode(params.MaxUploadPrice))
+		args = append(args, encode(*params.MaxUploadPrice), encode(*params.MaxUploadPrice))
 	}
-	if !params.MaxDownloadPrice.IsZero() {
+	if params.MaxDownloadPrice != nil {
 		filters = append(filters, "CASE WHEN v2=1 THEN rhp4_prices_egress_price <= ? ELSE settings_download_bandwidth_price <= ? END")
-		args = append(args, encode(params.MaxDownloadPrice), encode(params.MaxDownloadPrice))
+		args = append(args, encode(*params.MaxDownloadPrice), encode(*params.MaxDownloadPrice))
 	}
-	if !params.MaxBaseRPCPrice.IsZero() {
+	if params.MaxBaseRPCPrice != nil {
 		filters = append(filters, "settings_base_rpc_price <= ?")
-		args = append(args, encode(params.MaxBaseRPCPrice))
+		args = append(args, encode(*params.MaxBaseRPCPrice))
 	}
-	if !params.MaxSectorAccessPrice.IsZero() {
+	if params.MaxSectorAccessPrice != nil {
 		filters = append(filters, "settings_sector_access_price <= ?")
-		args = append(args, encode(params.MaxSectorAccessPrice))
+		args = append(args, encode(*params.MaxSectorAccessPrice))
 	}
 	if params.AcceptContracts != nil {
 		v := 0

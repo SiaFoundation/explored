@@ -135,6 +135,9 @@ func TestQueryHosts(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	uint64Ptr := func(x uint64) *uint64 {
+		return &x
+	}
 	trueBool, falseBool := true, false
 	tests := []struct {
 		name   string
@@ -424,7 +427,7 @@ func TestQueryHosts(t *testing.T) {
 			name: "v1 min duration 1000",
 			query: explorer.HostQuery{
 				V2:          &falseBool,
-				MinDuration: 1000,
+				MinDuration: uint64Ptr(1000),
 			},
 			sortBy: explorer.HostSortAcceptingContracts,
 			dir:    explorer.HostSortDesc,
@@ -434,7 +437,7 @@ func TestQueryHosts(t *testing.T) {
 			name: "v1 min duration 5000",
 			query: explorer.HostQuery{
 				V2:          &falseBool,
-				MinDuration: 5000,
+				MinDuration: uint64Ptr(5000),
 			},
 			sortBy: explorer.HostSortAcceptingContracts,
 			dir:    explorer.HostSortDesc,
@@ -444,7 +447,7 @@ func TestQueryHosts(t *testing.T) {
 			name: "v2 min duration 1000",
 			query: explorer.HostQuery{
 				V2:          &trueBool,
-				MinDuration: 1000,
+				MinDuration: uint64Ptr(1000),
 			},
 			sortBy: explorer.HostSortAcceptingContracts,
 			dir:    explorer.HostSortDesc,
@@ -454,7 +457,7 @@ func TestQueryHosts(t *testing.T) {
 			name: "v2 min duration 5000",
 			query: explorer.HostQuery{
 				V2:          &trueBool,
-				MinDuration: 5000,
+				MinDuration: uint64Ptr(5000),
 			},
 			sortBy: explorer.HostSortAcceptingContracts,
 			dir:    explorer.HostSortDesc,
