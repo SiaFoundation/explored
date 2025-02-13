@@ -27,7 +27,7 @@ SELECT
 		ELSE last_chain_index.height - b.height
 	END AS confirmations,
 	ev.event_type
-FROM events ev INDEXED BY events_maturity_height_id_idx -- force the index to prevent temp-btree sorts
+FROM events ev
 INNER JOIN event_addresses ea ON (ev.id = ea.event_id)
 INNER JOIN address_balance sa ON (ea.address_id = sa.id)
 INNER JOIN blocks b ON (ev.block_id = b.id)
