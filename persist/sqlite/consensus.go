@@ -636,7 +636,7 @@ func addEvents(tx *txn, bid types.BlockID, scDBIds map[types.SiacoinOutputID]int
 	}
 	defer addrStmt.Close()
 
-	relevantAddrStmt, err := tx.Prepare(`INSERT INTO event_addresses (event_id, address_id) VALUES ($1, $2) ON CONFLICT (event_id, address_id) DO NOTHING`)
+	relevantAddrStmt, err := tx.Prepare(`INSERT INTO event_addresses (event_id, address_id, event_maturity_height) VALUES ($1, $2, $3) ON CONFLICT (event_id, address_id) DO NOTHING`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare relevant address statement: %w", err)
 	}
@@ -693,7 +693,7 @@ func addEvents(tx *txn, bid types.BlockID, scDBIds map[types.SiacoinOutputID]int
 				return fmt.Errorf("failed to get address: %w", err)
 			}
 
-			_, err = relevantAddrStmt.Exec(eventID, addressID)
+			_, err = relevantAddrStmt.Exec(eventID, addressID, event.MaturityHeight)
 			if err != nil {
 				return fmt.Errorf("failed to add relevant address: %w", err)
 			}

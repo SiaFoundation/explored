@@ -35,8 +35,6 @@ SELECT
 	END AS confirmations,
 	ev.event_type
 FROM events ev
-INNER JOIN event_addresses ea ON (ev.id = ea.event_id)
-INNER JOIN address_balance sa ON (ea.address_id = sa.id)
 INNER JOIN blocks b ON (ev.block_id = b.id)
 CROSS JOIN last_chain_index
 WHERE ev.event_id = $1`
