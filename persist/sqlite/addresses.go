@@ -2,20 +2,45 @@ package sqlite
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"go.sia.tech/core/types"
 	"go.sia.tech/explored/explorer"
 )
 
-// AddressEvents returns the events of a single address.
-func (s *Store) AddressEvents(address types.Address, offset, limit uint64) (events []explorer.Event, err error) {
-	err = s.transaction(func(tx *txn) error {
-		const query = `
-WITH last_chain_index (height) AS (
-    SELECT MAX(height) FROM blocks
-)
-SELECT
+func getAddressEvents(tx *txn, address types.Address, offset, limit uint64) (eventIDs []int64, err error) {
+	const query = `SELECT DISTINCT ea.event_id
+FROM event_addresses ea
+INNER JOIN address_balance sa ON ea.address_id = sa.id
+WHERE sa.address = $1
+ORDER BY ea.event_maturity_height DESC, ea.event_id DESC
+LIMIT $2 OFFSET $3;`
+
+	rows, err := tx.Query(query, encode(address), limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		eventIDs = append(eventIDs, id)
+	}
+	return eventIDs, rows.Err()
+}
+
+func getEventsByID(tx *txn, eventIDs []int64) (events []explorer.Event, err error) {
+	var scanHeight uint64
+	err = tx.QueryRow(`SELECT COALESCE(MAX(height), 0) FROM blocks`).Scan(&scanHeight)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get last indexed height: %w", err)
+	}
+
+	stmt, err := tx.Prepare(`SELECT
 	ev.id,
 	ev.event_id,
 	ev.maturity_height,
@@ -23,34 +48,48 @@ SELECT
 	b.height,
 	b.id,
 	CASE
-		WHEN last_chain_index.height < b.height THEN 0
-		ELSE last_chain_index.height - b.height
+		WHEN $1 < b.height THEN 0
+		ELSE $1 - b.height
 	END AS confirmations,
 	ev.event_type
-FROM events ev INDEXED BY events_maturity_height_id_idx -- force the index to prevent temp-btree sorts
-INNER JOIN event_addresses ea ON (ev.id = ea.event_id)
-INNER JOIN address_balance sa ON (ea.address_id = sa.id)
+FROM events ev
 INNER JOIN blocks b ON (ev.block_id = b.id)
-CROSS JOIN last_chain_index
-WHERE sa.address = $1
-ORDER BY ev.maturity_height DESC, ev.id DESC
-LIMIT $2 OFFSET $3`
+WHERE ev.id=$2`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
 
-		rows, err := tx.Query(query, encode(address), limit, offset)
+	events = make([]explorer.Event, 0, len(eventIDs))
+	for i, id := range eventIDs {
+		event, _, err := scanEvent(tx, stmt.QueryRow(scanHeight, id))
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		} else if err != nil {
+			return nil, fmt.Errorf("failed to query event %d: %w", i, err)
+		}
+		events = append(events, event)
+	}
+	return
+}
+
+// AddressEvents returns the events of a single address.
+func (s *Store) AddressEvents(address types.Address, offset, limit uint64) (events []explorer.Event, err error) {
+	err = s.transaction(func(tx *txn) error {
+		dbIDs, err := getAddressEvents(tx, address, offset, limit)
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
 
-		for rows.Next() {
-			event, _, err := scanEvent(tx, rows)
-			if err != nil {
-				return fmt.Errorf("failed to scan event: %w", err)
-			}
-			event.Relevant = []types.Address{address}
-			events = append(events, event)
+		events, err = getEventsByID(tx, dbIDs)
+		if err != nil {
+			return fmt.Errorf("failed to get events by ID: %w", err)
 		}
-		return rows.Err()
+
+		for i := range events {
+			events[i].Relevant = []types.Address{address}
+		}
+		return nil
 	})
 	return
 }
