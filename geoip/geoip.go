@@ -17,8 +17,8 @@ var maxMindCityDB []byte
 type Location struct {
 	CountryCode string `json:"countryCode"`
 
-	Longitude float64 `json:"longitude"`
 	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
 }
 
 // A Locator maps IP addresses to their location.
