@@ -13,6 +13,7 @@ import (
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
+	"go.sia.tech/explored/geoip"
 	"go.uber.org/zap/zaptest"
 )
 
@@ -35,10 +36,14 @@ func TestQueryHosts(t *testing.T) {
 	tm := time.Now()
 	hosts := []explorer.Host{
 		{
-			PublicKey:              pk1,
-			V2:                     false,
-			NetAddress:             "host1.com:9982",
-			CountryCode:            "US",
+			PublicKey:  pk1,
+			V2:         false,
+			NetAddress: "host1.com:9982",
+			Location: geoip.Location{
+				CountryCode: "US",
+				Latitude:    0.01,
+				Longitude:   -0.02,
+			},
 			KnownSince:             tm.Add(-4 * time.Hour),
 			LastScan:               tm,
 			LastScanSuccessful:     true,
@@ -58,10 +63,14 @@ func TestQueryHosts(t *testing.T) {
 			},
 		},
 		{
-			PublicKey:              pk2,
-			V2:                     false,
-			NetAddress:             "host2.com:9982",
-			CountryCode:            "US",
+			PublicKey:  pk2,
+			V2:         false,
+			NetAddress: "host2.com:9982",
+			Location: geoip.Location{
+				CountryCode: "US",
+				Latitude:    0.01,
+				Longitude:   -0.02,
+			},
 			KnownSince:             tm.Add(-3 * time.Hour),
 			LastScan:               tm,
 			LastScanSuccessful:     true,
@@ -81,10 +90,14 @@ func TestQueryHosts(t *testing.T) {
 			},
 		},
 		{
-			PublicKey:              pk3,
-			V2:                     true,
-			V2NetAddresses:         []chain.NetAddress{{Protocol: crhpv4.ProtocolTCPSiaMux, Address: "host3.com:9982"}},
-			CountryCode:            "DE",
+			PublicKey:      pk3,
+			V2:             true,
+			V2NetAddresses: []chain.NetAddress{{Protocol: crhpv4.ProtocolTCPSiaMux, Address: "host3.com:9982"}},
+			Location: geoip.Location{
+				CountryCode: "DE",
+				Latitude:    0.05,
+				Longitude:   -0.10,
+			},
 			KnownSince:             tm.Add(-2 * time.Hour),
 			LastScan:               tm,
 			LastScanSuccessful:     false,
@@ -104,10 +117,14 @@ func TestQueryHosts(t *testing.T) {
 			},
 		},
 		{
-			PublicKey:              pk4,
-			V2:                     true,
-			V2NetAddresses:         []chain.NetAddress{{Protocol: crhpv4.ProtocolTCPSiaMux, Address: "host4.com:9982"}},
-			CountryCode:            "DE",
+			PublicKey:      pk4,
+			V2:             true,
+			V2NetAddresses: []chain.NetAddress{{Protocol: crhpv4.ProtocolTCPSiaMux, Address: "host4.com:9982"}},
+			Location: geoip.Location{
+				CountryCode: "DE",
+				Latitude:    0.05,
+				Longitude:   -0.10,
+			},
 			KnownSince:             tm.Add(-1 * time.Hour),
 			LastScan:               tm,
 			LastScanSuccessful:     false,

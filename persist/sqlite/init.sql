@@ -478,6 +478,8 @@ CREATE TABLE host_info (
     v2 INTEGER NOT NULL,
     net_address TEXT NOT NULL,
     country_code TEXT NOT NULL,
+    latitude REAL NOT NULL,
+    longitude REAL NOT NULL,
     known_since INTEGER NOT NULL,
     last_scan INTEGER NOT NULL,
     last_scan_successful INTEGER NOT NULL,

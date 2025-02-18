@@ -269,7 +269,7 @@ func TestScan(t *testing.T) {
 		testutil.Equal(t, "host2.KnownSince", b2.Timestamp, host1.KnownSince)
 		testutil.Equal(t, "host1.LastAnnouncement", b2.Timestamp, host1.LastAnnouncement)
 		if !host1.RHPV4Settings.AcceptingContracts {
-			log.Fatal("AcceptingContracts = false on host that's supposed to be active")
+			t.Fatal("AcceptingContracts = false on host that's supposed to be active")
 		}
 
 		host2 := dbHosts[1]
@@ -285,7 +285,10 @@ func TestScan(t *testing.T) {
 		host3 := dbHosts[2]
 		testutil.Equal(t, "host3.NetAddress", "sia1.euregiohosting.nl:9982", host3.NetAddress)
 		testutil.Equal(t, "host3.PublicKey", pubkey1, host3.PublicKey)
-		testutil.Equal(t, "host3.CountryCode", "NL", host3.CountryCode)
+		testutil.Equal(t, "host3.Location.CountryCode", "NL", host3.Location.CountryCode)
+		if host3.Location.Latitude == 0 || host3.Location.Longitude == 0 {
+			t.Fatalf("Unset latitude/longitude: %v", host3.Location)
+		}
 		testutil.Equal(t, "host3.TotalScans", 1, host3.TotalScans)
 		testutil.Equal(t, "host3.SuccessfulInteractions", 1, host3.SuccessfulInteractions)
 		testutil.Equal(t, "host3.FailedInteractions", 0, host3.FailedInteractions)
@@ -293,7 +296,7 @@ func TestScan(t *testing.T) {
 		testutil.Equal(t, "host3.KnownSince", b1.Timestamp, host2.KnownSince)
 		testutil.Equal(t, "host3.LastAnnouncement", b1.Timestamp, host3.LastAnnouncement)
 		if host3.Settings.SectorSize <= 0 {
-			log.Fatal("SectorSize = 0 on host that's supposed to be active")
+			t.Fatal("SectorSize = 0 on host that's supposed to be active")
 		}
 	}
 
@@ -326,7 +329,7 @@ func TestScan(t *testing.T) {
 		testutil.Equal(t, "host1.LastAnnouncement", b4.Timestamp, host1.LastAnnouncement)
 		// settings should not be overwritten if there was not a successful scan
 		if !host1.RHPV4Settings.AcceptingContracts {
-			log.Fatal("AcceptingContracts = false on host that's supposed to be active")
+			t.Fatal("AcceptingContracts = false on host that's supposed to be active")
 		}
 
 		host2 := dbHosts[1]
@@ -338,7 +341,7 @@ func TestScan(t *testing.T) {
 		testutil.Equal(t, "host3.LastAnnouncement", b3.Timestamp, host3.LastAnnouncement)
 		// settings should not be overwritten if there was not a successful scan
 		if host3.Settings.SectorSize <= 0 {
-			log.Fatal("SectorSize = 0 on host that's supposed to be active")
+			t.Fatal("SectorSize = 0 on host that's supposed to be active")
 		}
 	}
 

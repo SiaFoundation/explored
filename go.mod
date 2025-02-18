@@ -6,8 +6,8 @@ toolchain go1.23.2
 
 require (
 	github.com/google/go-cmp v0.6.0
-	github.com/ip2location/ip2location-go v8.3.0+incompatible
 	github.com/mattn/go-sqlite3 v1.14.24
+	github.com/oschwald/geoip2-golang v1.11.0
 	go.sia.tech/core v0.10.2-0.20250211180922-261f960c1315
 	go.sia.tech/coreutils v0.11.1
 	go.sia.tech/jape v0.12.1
@@ -22,6 +22,7 @@ require (
 	github.com/google/pprof v0.0.0-20230821062121-407c9e7a662f // indirect
 	github.com/julienschmidt/httprouter v1.3.0 // indirect
 	github.com/onsi/ginkgo/v2 v2.12.0 // indirect
+	github.com/oschwald/maxminddb-golang v1.13.0 // indirect
 	github.com/quic-go/qpack v0.5.1 // indirect
 	github.com/quic-go/quic-go v0.49.0 // indirect
 	github.com/quic-go/webtransport-go v0.8.1-0.20241018022711-4ac2c9250e66 // indirect

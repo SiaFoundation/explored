@@ -4,4 +4,4 @@
 
 ## Required Disclosure
 
-`explored` uses the IP2Location LITE database for <a href="https://lite.ip2location.com">IP geolocation</a>.
+This product includes GeoLite2 data created by MaxMind, available at https://www.maxmind.com.  It is provided under a [Creative Commons Corporation Attribution-ShareAlike 4.0 International License](https://www.maxmind.com/en/geolite2/eula).

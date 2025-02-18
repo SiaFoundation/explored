@@ -13,6 +13,7 @@ import (
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	crhpv4 "go.sia.tech/coreutils/rhp/v4"
+	"go.sia.tech/explored/geoip"
 )
 
 // A Source represents where a siacoin output came from.
@@ -326,11 +327,11 @@ type Metrics struct {
 
 // HostScan represents the results of a host scan.
 type HostScan struct {
-	PublicKey   types.PublicKey `json:"publicKey"`
-	CountryCode string          `json:"countryCode"`
-	Success     bool            `json:"success"`
-	Timestamp   time.Time       `json:"timestamp"`
-	NextScan    time.Time       `json:"nextScan"`
+	PublicKey types.PublicKey `json:"publicKey"`
+	Location  geoip.Location  `json:"location"`
+	Success   bool            `json:"success"`
+	Timestamp time.Time       `json:"timestamp"`
+	NextScan  time.Time       `json:"nextScan"`
 
 	Settings   rhpv2.HostSettings   `json:"settings"`
 	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
@@ -371,7 +372,7 @@ type Host struct {
 	NetAddress     string             `json:"netAddress"`
 	V2NetAddresses []chain.NetAddress `json:"v2NetAddresses,omitempty"`
 
-	CountryCode string `json:"countryCode"`
+	Location geoip.Location `json:"location"`
 
 	KnownSince             time.Time `json:"knownSince"`
 	LastScan               time.Time `json:"lastScan"`
