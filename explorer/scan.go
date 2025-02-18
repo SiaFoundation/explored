@@ -10,7 +10,7 @@ import (
 	crhpv2 "go.sia.tech/core/rhp/v2"
 	"go.sia.tech/core/types"
 	crhpv4 "go.sia.tech/coreutils/rhp/v4"
-	"go.sia.tech/explored/internal/geoip"
+	"go.sia.tech/explored/geoip"
 	rhpv2 "go.sia.tech/explored/internal/rhp/v2"
 	rhpv3 "go.sia.tech/explored/internal/rhp/v3"
 	"go.uber.org/zap"
@@ -85,10 +85,9 @@ func (e *Explorer) scanV1Host(locator geoip.Locator, host UnscannedHost) (HostSc
 		return HostScan{}, fmt.Errorf("scanHost: failed to resolve host address: %w", err)
 	}
 
-	countryCode, err := locator.CountryCode(resolved)
+	location, err := locator.Locate(resolved)
 	if err != nil {
 		e.log.Debug("Failed to resolve IP geolocation, not setting country code", zap.String("addr", host.NetAddress))
-		countryCode = ""
 	}
 
 	v3Addr := net.JoinHostPort(hostIP, settings.SiaMuxPort)
@@ -103,10 +102,10 @@ func (e *Explorer) scanV1Host(locator geoip.Locator, host UnscannedHost) (HostSc
 	}
 
 	return HostScan{
-		PublicKey:   host.PublicKey,
-		CountryCode: countryCode,
-		Success:     true,
-		Timestamp:   types.CurrentTimestamp(),
+		PublicKey: host.PublicKey,
+		Location:  location,
+		Success:   true,
+		Timestamp: types.CurrentTimestamp(),
 
 		Settings:   settings,
 		PriceTable: table,
@@ -143,17 +142,16 @@ func (e *Explorer) scanV2Host(locator geoip.Locator, host UnscannedHost) (HostSc
 		return HostScan{}, fmt.Errorf("scanHost: failed to resolve host address: %w", err)
 	}
 
-	countryCode, err := locator.CountryCode(resolved)
+	location, err := locator.Locate(resolved)
 	if err != nil {
 		e.log.Debug("Failed to resolve IP geolocation, not setting country code", zap.String("addr", host.NetAddress))
-		countryCode = ""
 	}
 
 	return HostScan{
-		PublicKey:   host.PublicKey,
-		CountryCode: countryCode,
-		Success:     true,
-		Timestamp:   types.CurrentTimestamp(),
+		PublicKey: host.PublicKey,
+		Location:  location,
+		Success:   true,
+		Timestamp: types.CurrentTimestamp(),
 
 		RHPV4Settings: settings,
 	}, nil
@@ -177,7 +175,7 @@ func (e *Explorer) scanHosts() {
 	}
 	e.log.Info("Syncing complete, will begin scanning hosts")
 
-	locator, err := geoip.NewIP2LocationLocator("")
+	locator, err := geoip.NewMaxMindLocator("")
 	if err != nil {
 		e.log.Info("failed to create geoip database:", zap.Error(err))
 		return
