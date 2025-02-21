@@ -88,29 +88,37 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 		ev.Data = explorer.EventV2Transaction(txns[0])
 	case wallet.EventTypeV1ContractResolution:
 		var resolution explorer.EventV1ContractResolution
+		var spentIndex types.ChainIndex
 		fce, sce := &resolution.Parent, &resolution.SiacoinElement
-		err := tx.QueryRow(`SELECT sce.output_id, sce.leaf_index, sce.maturity_height, sce.address, sce.value, fce.contract_id, fce.filesize, fce.file_merkle_root, fce.window_start, fce.window_end, fce.payout, fce.unlock_hash, fce.revision_number, ev.missed
+		err := tx.QueryRow(`SELECT sce.output_id, sce.leaf_index, sce.source, sce.spent_index, sce.maturity_height, sce.address, sce.value, fce.contract_id, fce.filesize, fce.file_merkle_root, fce.window_start, fce.window_end, fce.payout, fce.unlock_hash, fce.revision_number, ev.missed
 			FROM v1_contract_resolution_events ev
 			JOIN siacoin_elements sce ON ev.output_id = sce.id
 			JOIN file_contract_elements fce ON ev.parent_id = fce.id
-			WHERE ev.event_id = ?`, eventID).Scan(decode(&sce.ID), decode(&sce.StateElement.LeafIndex), decode(&sce.MaturityHeight), decode(&sce.SiacoinOutput.Address), decode(&sce.SiacoinOutput.Value), decode(&fce.ID), decode(&fce.Filesize), decode(&fce.FileMerkleRoot), decode(&fce.WindowStart), decode(&fce.WindowEnd), decode(&fce.Payout), decode(&fce.UnlockHash), decode(&fce.RevisionNumber), &resolution.Missed)
+			WHERE ev.event_id = ?`, eventID).Scan(decode(&sce.ID), decode(&sce.StateElement.LeafIndex), &sce.Source, decodeNull(&spentIndex), &sce.MaturityHeight, decode(&sce.SiacoinOutput.Address), decode(&sce.SiacoinOutput.Value), decode(&fce.ID), decode(&fce.Filesize), decode(&fce.FileMerkleRoot), decode(&fce.WindowStart), decode(&fce.WindowEnd), decode(&fce.Payout), decode(&fce.UnlockHash), decode(&fce.RevisionNumber), &resolution.Missed)
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v1 resolution event: %w", err)
+		}
+		if spentIndex != (types.ChainIndex{}) {
+			sce.SpentIndex = &spentIndex
 		}
 		ev.Data = resolution
 	case wallet.EventTypeV2ContractResolution:
 		var resolution explorer.EventV2ContractResolution
 		var parentContractID types.FileContractID
 		var resolutionTransactionID types.TransactionID
+		var spentIndex types.ChainIndex
 		sce := &resolution.SiacoinElement
-		err := tx.QueryRow(`SELECT sce.output_id, sce.leaf_index, sce.maturity_height, sce.address, sce.value, rev.contract_id, rev.resolution_transaction_id, ev.missed
+		err := tx.QueryRow(`SELECT sce.output_id, sce.leaf_index, sce.source, sce.spent_index, sce.maturity_height, sce.address, sce.value, rev.contract_id, rev.resolution_transaction_id, ev.missed
 			FROM v2_contract_resolution_events ev
 			JOIN siacoin_elements sce ON ev.output_id = sce.id
 			JOIN v2_file_contract_elements fce ON ev.parent_id = fce.id
  			JOIN v2_last_contract_revision rev ON fce.contract_id = rev.contract_id
-			WHERE ev.event_id = ?`, eventID).Scan(decode(&sce.ID), decode(&sce.StateElement.LeafIndex), decode(&sce.MaturityHeight), decode(&sce.SiacoinOutput.Address), decode(&sce.SiacoinOutput.Value), decode(&parentContractID), decode(&resolutionTransactionID), &resolution.Missed)
+			WHERE ev.event_id = ?`, eventID).Scan(decode(&sce.ID), decode(&sce.StateElement.LeafIndex), &sce.Source, decodeNull(&spentIndex), &sce.MaturityHeight, decode(&sce.SiacoinOutput.Address), decode(&sce.SiacoinOutput.Value), decode(&parentContractID), decode(&resolutionTransactionID), &resolution.Missed)
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v2 resolution event: %w", err)
+		}
+		if spentIndex != (types.ChainIndex{}) {
+			sce.SpentIndex = &spentIndex
 		}
 
 		resolutionTxns, err := getV2Transactions(tx, []types.TransactionID{resolutionTransactionID})
@@ -136,11 +144,10 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 		ev.Data = resolution
 	case wallet.EventTypeSiafundClaim, wallet.EventTypeMinerPayout, wallet.EventTypeFoundationSubsidy:
 		var payout explorer.EventPayout
-		sce := &payout.SiacoinElement
-		err := tx.QueryRow(`SELECT sce.output_id, sce.leaf_index, sce.maturity_height, sce.address, sce.value
+		payout.SiacoinElement, err = scanSiacoinOutput(tx.QueryRow(`SELECT sce.output_id, sce.leaf_index, sce.source, sce.spent_index, sce.maturity_height, sce.address, sce.value
 			FROM payout_events ev
 			JOIN siacoin_elements sce ON ev.output_id = sce.id
-			WHERE ev.event_id = ?`, eventID).Scan(decode(&sce.ID), decode(&sce.StateElement.LeafIndex), decode(&sce.MaturityHeight), decode(&sce.SiacoinOutput.Address), decode(&sce.SiacoinOutput.Value))
+			WHERE ev.event_id = ?`, eventID))
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve payout event: %w", err)
 		}

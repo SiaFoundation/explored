@@ -88,14 +88,38 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 		for i := range txn.SiacoinOutputs {
 			sources[txn.SiacoinOutputID(i)] = SourceTransaction
 		}
+	}
 
-		for i := range txn.FileContracts {
-			fcid := txn.FileContractID(i)
-			for j := range txn.FileContracts[i].ValidProofOutputs {
-				sources[fcid.ValidOutputID(j)] = SourceValidProofOutput
+	for _, diff := range cau.FileContractElementDiffs() {
+		if diff.Resolved {
+			fcID := diff.FileContractElement.ID
+			if diff.Valid {
+				for i := range diff.FileContractElement.FileContract.ValidProofOutputs {
+					sources[fcID.ValidOutputID(i)] = SourceValidProofOutput
+				}
+			} else {
+				for i := range diff.FileContractElement.FileContract.MissedProofOutputs {
+					sources[fcID.MissedOutputID(i)] = SourceMissedProofOutput
+				}
 			}
-			for j := range txn.FileContracts[i].MissedProofOutputs {
-				sources[fcid.MissedOutputID(j)] = SourceMissedProofOutput
+		}
+	}
+
+	for _, diff := range cau.V2FileContractElementDiffs() {
+		if diff.Resolution != nil {
+			fcID := diff.V2FileContractElement.ID
+			switch r := diff.Resolution.(type) {
+			case *types.V2FileContractRenewal:
+				sources[fcID.V2RenterOutputID()] = SourceValidProofOutput
+				sources[fcID.V2HostOutputID()] = SourceValidProofOutput
+			case *types.V2StorageProof:
+				sources[fcID.V2RenterOutputID()] = SourceValidProofOutput
+				sources[fcID.V2HostOutputID()] = SourceValidProofOutput
+			case *types.V2FileContractExpiration:
+				sources[fcID.V2RenterOutputID()] = SourceMissedProofOutput
+				sources[fcID.V2HostOutputID()] = SourceMissedProofOutput
+			default:
+				panic(fmt.Sprintf("unhandled resolution type %T", r))
 			}
 		}
 	}
@@ -155,6 +179,7 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 			Valid:               diff.Valid,
 		}
 	}
+
 	for _, txn := range cau.Block.Transactions {
 		txnID := txn.ID()
 		for i := range txn.FileContracts {
