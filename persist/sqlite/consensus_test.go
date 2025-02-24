@@ -187,6 +187,18 @@ func TestBalance(t *testing.T) {
 	testutil.Equal(t, "value", expectedPayout, utxos[0].SiacoinOutput.Value)
 	testutil.Equal(t, "source", explorer.SourceMinerPayout, utxos[0].Source)
 
+	{
+		events, err := db.AddressEvents(addr1, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "events", 1, len(events))
+
+		ev0 := events[0].Data.(explorer.EventPayout)
+		testutil.Equal(t, "event 0 output ID", cm.Tip().ID.MinerOutputID(0), ev0.SiacoinElement.ID)
+		testutil.Equal(t, "event 0 output source", explorer.SourceMinerPayout, ev0.SiacoinElement.Source)
+	}
+
 	// Mine until the payout matures
 	for i := cm.Tip().Height; i < maturityHeight; i++ {
 		testutil.CheckBalance(t, db, addr1, types.ZeroCurrency, expectedPayout, 0)
@@ -692,6 +704,7 @@ func TestFileContract(t *testing.T) {
 		ev0 := events[0].Data.(explorer.EventV1ContractResolution)
 		testutil.Equal(t, "event 0 parent ID", fcID, ev0.Parent.ID)
 		testutil.Equal(t, "event 0 output ID", fcID.MissedOutputID(0), ev0.SiacoinElement.ID)
+		testutil.Equal(t, "event 0 output source", explorer.SourceMissedProofOutput, ev0.SiacoinElement.Source)
 		testutil.Equal(t, "event 0 missed", true, ev0.Missed)
 
 		ev1 := events[1].Data.(explorer.EventV1Transaction)

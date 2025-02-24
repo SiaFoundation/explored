@@ -1191,6 +1191,7 @@ func TestV2FileContractResolution(t *testing.T) {
 		ev0 := events[0].Data.(explorer.EventV2ContractResolution)
 		testutil.Equal(t, "event 0 parent ID", v2FC3ID, ev0.Resolution.Parent.ID)
 		testutil.Equal(t, "event 0 output ID", v2FC3ID.V2RenterOutputID(), ev0.SiacoinElement.ID)
+		testutil.Equal(t, "event 0 output source", explorer.SourceMissedProofOutput, ev0.SiacoinElement.Source)
 		testutil.Equal(t, "event 0 missed", true, ev0.Missed)
 		{
 			dbTxns, err := db.V2Transactions([]types.TransactionID{txn4.ID()})
@@ -1203,6 +1204,7 @@ func TestV2FileContractResolution(t *testing.T) {
 		ev1 := events[1].Data.(explorer.EventV2ContractResolution)
 		testutil.Equal(t, "event 1 parent ID", v2FC2ID, ev1.Resolution.Parent.ID)
 		testutil.Equal(t, "event 1 output ID", v2FC2ID.V2RenterOutputID(), ev1.SiacoinElement.ID)
+		testutil.Equal(t, "event 1 output source", explorer.SourceValidProofOutput, ev1.SiacoinElement.Source)
 		testutil.Equal(t, "event 1 missed", false, ev1.Missed)
 		{
 			dbTxns, err := db.V2Transactions([]types.TransactionID{txn3.ID()})
@@ -1215,6 +1217,7 @@ func TestV2FileContractResolution(t *testing.T) {
 		ev2 := events[2].Data.(explorer.EventV2ContractResolution)
 		testutil.Equal(t, "event 2 parent ID", v2FC1ID, ev2.Resolution.Parent.ID)
 		testutil.Equal(t, "event 2 output ID", v2FC1ID.V2RenterOutputID(), ev2.SiacoinElement.ID)
+		testutil.Equal(t, "event 2 output source", explorer.SourceValidProofOutput, ev2.SiacoinElement.Source)
 		testutil.Equal(t, "event 2 missed", false, ev2.Missed)
 		{
 			dbTxns, err := db.V2Transactions([]types.TransactionID{txn2.ID()})
