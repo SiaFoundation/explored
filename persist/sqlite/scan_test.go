@@ -15,6 +15,7 @@ import (
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	crhpv4 "go.sia.tech/coreutils/rhp/v4"
+	"go.sia.tech/coreutils/rhp/v4/siamux"
 	"go.sia.tech/coreutils/syncer"
 	ctestutil "go.sia.tech/coreutils/testutil"
 	"go.sia.tech/coreutils/wallet"
@@ -90,7 +91,7 @@ func testRenterHostPair(tb testing.TB, hostKey types.PrivateKey, cm crhpv4.Chain
 	rs := crhpv4.NewServer(hostKey, cm, s, c, w, sr, ss, crhpv4.WithPriceTableValidity(2*time.Minute))
 	hostAddr := ctestutil.ServeSiaMux(tb, rs, log.Named("siamux"))
 
-	transport, err := crhpv4.DialSiaMux(context.Background(), hostAddr, hostKey.PublicKey())
+	transport, err := siamux.Dial(context.Background(), hostAddr, hostKey.PublicKey())
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -194,7 +195,7 @@ func TestScan(t *testing.T) {
 	}
 
 	ha3 := chain.V2HostAnnouncement{{
-		Protocol: crhpv4.ProtocolTCPSiaMux,
+		Protocol: siamux.Protocol,
 		Address:  v4Addr,
 	}}
 	txn2 := types.V2Transaction{

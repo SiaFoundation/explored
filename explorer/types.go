@@ -12,7 +12,7 @@ import (
 	rhpv4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
-	crhpv4 "go.sia.tech/coreutils/rhp/v4"
+	"go.sia.tech/coreutils/rhp/v4/siamux"
 	"go.sia.tech/explored/geoip"
 )
 
@@ -353,7 +353,7 @@ type UnscannedHost struct {
 // ProtocolTCPSiaMux.
 func (h UnscannedHost) V2SiamuxAddr() (string, bool) {
 	for _, netAddr := range h.V2NetAddresses {
-		if netAddr.Protocol == crhpv4.ProtocolTCPSiaMux {
+		if netAddr.Protocol == siamux.Protocol {
 			return netAddr.Address, true
 		}
 	}

@@ -10,6 +10,7 @@ import (
 	crhpv2 "go.sia.tech/core/rhp/v2"
 	"go.sia.tech/core/types"
 	crhpv4 "go.sia.tech/coreutils/rhp/v4"
+	"go.sia.tech/coreutils/rhp/v4/siamux"
 	"go.sia.tech/explored/geoip"
 	rhpv2 "go.sia.tech/explored/internal/rhp/v2"
 	rhpv3 "go.sia.tech/explored/internal/rhp/v3"
@@ -121,7 +122,7 @@ func (e *Explorer) scanV2Host(locator geoip.Locator, host UnscannedHost) (HostSc
 		return HostScan{}, fmt.Errorf("host has no v2 siamux address")
 	}
 
-	transport, err := crhpv4.DialSiaMux(ctx, addr, host.PublicKey)
+	transport, err := siamux.Dial(ctx, addr, host.PublicKey)
 	if err != nil {
 		return HostScan{}, fmt.Errorf("failed to dial host: %w", err)
 	}
