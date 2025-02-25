@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	crhpv4 "go.sia.tech/coreutils/rhp/v4"
+	"go.sia.tech/coreutils/rhp/v4/siamux"
 
 	rhpv2 "go.sia.tech/core/rhp/v2"
 	rhpv4 "go.sia.tech/core/rhp/v4"
@@ -92,7 +92,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			PublicKey:      pk3,
 			V2:             true,
-			V2NetAddresses: []chain.NetAddress{{Protocol: crhpv4.ProtocolTCPSiaMux, Address: "host3.com:9982"}},
+			V2NetAddresses: []chain.NetAddress{{Protocol: siamux.Protocol, Address: "host3.com:9982"}},
 			Location: geoip.Location{
 				CountryCode: "DE",
 				Latitude:    0.05,
@@ -119,7 +119,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			PublicKey:      pk4,
 			V2:             true,
-			V2NetAddresses: []chain.NetAddress{{Protocol: crhpv4.ProtocolTCPSiaMux, Address: "host4.com:9982"}},
+			V2NetAddresses: []chain.NetAddress{{Protocol: siamux.Protocol, Address: "host4.com:9982"}},
 			Location: geoip.Location{
 				CountryCode: "DE",
 				Latitude:    0.05,
