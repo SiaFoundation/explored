@@ -57,7 +57,6 @@ func (s *Store) HostMetrics() (result explorer.HostMetrics, err error) {
 		defer rows.Close()
 
 		var count uint64
-
 		var settingsMaxDownloadBatchSize, settingsMaxDuration, settingsMaxReviseBatchSize, settingsRemainingStorage, settingsSectorSize, settingsTotalStorage, settingsWindowSize, settingsRevisionNumber, priceTableHostBlockHeight, priceTableMaxDuration, priceTableWindowSize, priceTableRegistryEntriesLeft, priceTableRegistryEntriesTotal, settingsEphemeralAccountExpiry, priceTableValidity []uint64
 		var settingsCollateral, settingsMaxCollateral, settingsBaseRPCPrice, settingsContractPrice, settingsDownloadBandwidthPrice, settingsSectorAccessPrice, settingsStoragePrice, settingsUploadBandwidthPrice, settingsMaxEphemeralAccountBalance, priceTableUpdatePriceTableCost, priceTableAccountBalanceCost, priceTableFundAccountCost, priceTableLatestRevisionCost, priceTableSubscriptionMemoryCost, priceTableSubscriptionNotificationCost, priceTableInitBaseCost, priceTableMemoryTimeCost, priceTableDownloadBandwidthCost, priceTableUploadBandwidthCost, priceTableDropSectorsBaseCost, priceTableDropSectorsUnitCost, priceTableHasSectorBaseCost, priceTableReadBaseCost, priceTableReadLengthCost, priceTableRenewContractCost, priceTableRevisionBaseCost, priceTableSwapSectorBaseCost, priceTableWriteBaseCost, priceTableWriteLengthCost, priceTableWriteStoreCost, priceTableTxnFeeMinRecommended, priceTableTxnFeeMaxRecommended, priceTableContractPrice, priceTableCollateralCost, priceTableMaxCollateral []types.Currency
 		for rows.Next() {
@@ -91,37 +90,40 @@ func (s *Store) HostMetrics() (result explorer.HostMetrics, err error) {
 			priceTableValidity = append(priceTableValidity, uint64(host.PriceTable.Validity))
 			priceTableHostBlockHeight = append(priceTableHostBlockHeight, host.PriceTable.HostBlockHeight)
 			priceTableUpdatePriceTableCost = append(priceTableUpdatePriceTableCost, host.PriceTable.UpdatePriceTableCost)
-			priceTableAccountBalanceCost = append(priceTableAccountBalanceCost, result.PriceTable.AccountBalanceCost)
-			priceTableFundAccountCost = append(priceTableFundAccountCost, result.PriceTable.FundAccountCost)
-			priceTableLatestRevisionCost = append(priceTableLatestRevisionCost, result.PriceTable.LatestRevisionCost)
-			priceTableSubscriptionMemoryCost = append(priceTableSubscriptionMemoryCost, result.PriceTable.SubscriptionMemoryCost)
-			priceTableSubscriptionNotificationCost = append(priceTableSubscriptionNotificationCost, result.PriceTable.SubscriptionNotificationCost)
-			priceTableInitBaseCost = append(priceTableInitBaseCost, result.PriceTable.InitBaseCost)
-			priceTableMemoryTimeCost = append(priceTableMemoryTimeCost, result.PriceTable.MemoryTimeCost)
-			priceTableDownloadBandwidthCost = append(priceTableDownloadBandwidthCost, result.PriceTable.DownloadBandwidthCost)
-			priceTableUploadBandwidthCost = append(priceTableUploadBandwidthCost, result.PriceTable.UploadBandwidthCost)
-			priceTableDropSectorsBaseCost = append(priceTableDropSectorsBaseCost, result.PriceTable.DropSectorsBaseCost)
-			priceTableDropSectorsUnitCost = append(priceTableDropSectorsUnitCost, result.PriceTable.DropSectorsUnitCost)
-			priceTableHasSectorBaseCost = append(priceTableHasSectorBaseCost, result.PriceTable.HasSectorBaseCost)
-			priceTableReadBaseCost = append(priceTableReadBaseCost, result.PriceTable.ReadBaseCost)
-			priceTableReadLengthCost = append(priceTableReadLengthCost, result.PriceTable.ReadLengthCost)
-			priceTableRenewContractCost = append(priceTableRenewContractCost, result.PriceTable.RenewContractCost)
-			priceTableRevisionBaseCost = append(priceTableRevisionBaseCost, result.PriceTable.RevisionBaseCost)
-			priceTableSwapSectorBaseCost = append(priceTableSwapSectorBaseCost, result.PriceTable.SwapSectorBaseCost)
-			priceTableWriteBaseCost = append(priceTableWriteBaseCost, result.PriceTable.WriteBaseCost)
-			priceTableWriteLengthCost = append(priceTableWriteLengthCost, result.PriceTable.WriteLengthCost)
-			priceTableWriteStoreCost = append(priceTableWriteStoreCost, result.PriceTable.WriteStoreCost)
-			priceTableTxnFeeMinRecommended = append(priceTableTxnFeeMinRecommended, result.PriceTable.TxnFeeMinRecommended)
-			priceTableTxnFeeMaxRecommended = append(priceTableTxnFeeMaxRecommended, result.PriceTable.TxnFeeMaxRecommended)
-			priceTableContractPrice = append(priceTableContractPrice, result.PriceTable.ContractPrice)
-			priceTableCollateralCost = append(priceTableCollateralCost, result.PriceTable.CollateralCost)
-			priceTableMaxCollateral = append(priceTableMaxCollateral, result.PriceTable.MaxCollateral)
+			priceTableAccountBalanceCost = append(priceTableAccountBalanceCost, host.PriceTable.AccountBalanceCost)
+			priceTableFundAccountCost = append(priceTableFundAccountCost, host.PriceTable.FundAccountCost)
+			priceTableLatestRevisionCost = append(priceTableLatestRevisionCost, host.PriceTable.LatestRevisionCost)
+			priceTableSubscriptionMemoryCost = append(priceTableSubscriptionMemoryCost, host.PriceTable.SubscriptionMemoryCost)
+			priceTableSubscriptionNotificationCost = append(priceTableSubscriptionNotificationCost, host.PriceTable.SubscriptionNotificationCost)
+			priceTableInitBaseCost = append(priceTableInitBaseCost, host.PriceTable.InitBaseCost)
+			priceTableMemoryTimeCost = append(priceTableMemoryTimeCost, host.PriceTable.MemoryTimeCost)
+			priceTableDownloadBandwidthCost = append(priceTableDownloadBandwidthCost, host.PriceTable.DownloadBandwidthCost)
+			priceTableUploadBandwidthCost = append(priceTableUploadBandwidthCost, host.PriceTable.UploadBandwidthCost)
+			priceTableDropSectorsBaseCost = append(priceTableDropSectorsBaseCost, host.PriceTable.DropSectorsBaseCost)
+			priceTableDropSectorsUnitCost = append(priceTableDropSectorsUnitCost, host.PriceTable.DropSectorsUnitCost)
+			priceTableHasSectorBaseCost = append(priceTableHasSectorBaseCost, host.PriceTable.HasSectorBaseCost)
+			priceTableReadBaseCost = append(priceTableReadBaseCost, host.PriceTable.ReadBaseCost)
+			priceTableReadLengthCost = append(priceTableReadLengthCost, host.PriceTable.ReadLengthCost)
+			priceTableRenewContractCost = append(priceTableRenewContractCost, host.PriceTable.RenewContractCost)
+			priceTableRevisionBaseCost = append(priceTableRevisionBaseCost, host.PriceTable.RevisionBaseCost)
+			priceTableSwapSectorBaseCost = append(priceTableSwapSectorBaseCost, host.PriceTable.SwapSectorBaseCost)
+			priceTableWriteBaseCost = append(priceTableWriteBaseCost, host.PriceTable.WriteBaseCost)
+			priceTableWriteLengthCost = append(priceTableWriteLengthCost, host.PriceTable.WriteLengthCost)
+			priceTableWriteStoreCost = append(priceTableWriteStoreCost, host.PriceTable.WriteStoreCost)
+			priceTableTxnFeeMinRecommended = append(priceTableTxnFeeMinRecommended, host.PriceTable.TxnFeeMinRecommended)
+			priceTableTxnFeeMaxRecommended = append(priceTableTxnFeeMaxRecommended, host.PriceTable.TxnFeeMaxRecommended)
+			priceTableContractPrice = append(priceTableContractPrice, host.PriceTable.ContractPrice)
+			priceTableCollateralCost = append(priceTableCollateralCost, host.PriceTable.CollateralCost)
+			priceTableMaxCollateral = append(priceTableMaxCollateral, host.PriceTable.MaxCollateral)
 			priceTableMaxDuration = append(priceTableMaxDuration, host.PriceTable.MaxDuration)
 			priceTableWindowSize = append(priceTableWindowSize, host.PriceTable.WindowSize)
 			priceTableRegistryEntriesLeft = append(priceTableRegistryEntriesLeft, host.PriceTable.RegistryEntriesLeft)
 			priceTableRegistryEntriesTotal = append(priceTableRegistryEntriesTotal, host.PriceTable.RegistryEntriesTotal)
 
 			count++
+		}
+		if err := rows.Err(); err != nil {
+			return err
 		}
 
 		if count > 0 {
