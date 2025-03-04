@@ -378,6 +378,7 @@ type Host struct {
 	LastScan               time.Time `json:"lastScan"`
 	LastScanSuccessful     bool      `json:"lastScanSuccessful"`
 	LastAnnouncement       time.Time `json:"lastAnnouncement"`
+	NextScan               time.Time `json:"nextScan"`
 	TotalScans             uint64    `json:"totalScans"`
 	SuccessfulInteractions uint64    `json:"successfulInteractions"`
 	FailedInteractions     uint64    `json:"failedInteractions"`
