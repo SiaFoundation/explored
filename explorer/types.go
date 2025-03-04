@@ -399,8 +399,9 @@ type HostMetrics struct {
 	// equal to TotalStorage - RemainingStorage)
 	RemainingStorage uint64 `json:"remainingStorage"`
 
-	Settings   rhpv2.HostSettings   `json:"settings"`
-	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
+	Settings      rhpv2.HostSettings   `json:"settings"`
+	PriceTable    rhpv3.HostPriceTable `json:"priceTable"`
+	RHPV4Settings rhpv4.HostSettings   `json:"hostSettings"`
 }
 
 // HostSortDir represents the sorting direction for host filtering.
