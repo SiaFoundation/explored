@@ -8,8 +8,8 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/oschwald/geoip2-golang v1.11.0
-	go.sia.tech/core v0.10.3-0.20250225045648-07b92f8cf455
-	go.sia.tech/coreutils v0.11.2-0.20250225051012-d01f7fa285c7
+	go.sia.tech/core v0.10.3
+	go.sia.tech/coreutils v0.12.0
 	go.sia.tech/jape v0.12.1
 	go.uber.org/zap v1.27.0
 	gopkg.in/yaml.v3 v3.0.1
