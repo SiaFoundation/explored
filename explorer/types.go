@@ -336,7 +336,7 @@ type HostScan struct {
 	Settings   rhpv2.HostSettings   `json:"settings"`
 	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
 
-	RHPV4Settings rhpv4.HostSettings `json:"rhpV4Settings"`
+	V2Settings rhpv4.HostSettings `json:"v2Settings"`
 }
 
 // UnscannedHost represents the metadata needed to scan a host.
@@ -386,7 +386,7 @@ type Host struct {
 	Settings   rhpv2.HostSettings   `json:"settings"`
 	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
 
-	RHPV4Settings rhpv4.HostSettings `json:"rhpV4Settings"`
+	V2Settings rhpv4.HostSettings `json:"v2Settings"`
 }
 
 // HostMetrics represents averages of scanned information from hosts.
@@ -399,9 +399,9 @@ type HostMetrics struct {
 	// equal to TotalStorage - RemainingStorage)
 	RemainingStorage uint64 `json:"remainingStorage"`
 
-	Settings      rhpv2.HostSettings   `json:"settings"`
-	PriceTable    rhpv3.HostPriceTable `json:"priceTable"`
-	RHPV4Settings rhpv4.HostSettings   `json:"hostSettings"`
+	Settings   rhpv2.HostSettings   `json:"settings"`
+	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
+	V2Settings rhpv4.HostSettings   `json:"hostSettings"`
 }
 
 // HostSortDir represents the sorting direction for host filtering.

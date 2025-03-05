@@ -154,7 +154,7 @@ func (e *Explorer) scanV2Host(locator geoip.Locator, host UnscannedHost) (HostSc
 		Success:   true,
 		Timestamp: types.CurrentTimestamp(),
 
-		RHPV4Settings: settings,
+		V2Settings: settings,
 	}, nil
 }
 

@@ -551,25 +551,25 @@ CREATE TABLE host_info (
     price_table_registry_entries_left BLOB NOT NULL,
     price_table_registry_entries_total BLOB NOT NULL,
     -- rhp4 settings
-    rhp4_settings_protocol_version BLOB NOT NULL,
-    rhp4_settings_release TEXT NOT NULL,
-    rhp4_settings_wallet_address BLOB NOT NULL,
-    rhp4_settings_accepting_contracts INTEGER NOT NULL,
-    rhp4_settings_max_collateral BLOB NOT NULL,
-    rhp4_settings_max_contract_duration BLOB NOT NULL,
-    rhp4_settings_remaining_storage BLOB NOT NULL,
-    rhp4_settings_total_storage BLOB NOT NULL,
-    rhp4_settings_used_storage BLOB NOT NULL, -- needed so we can sort by this because there's no clean way of subtracting binary encoded uint64s (total and remaining storage) in sqlite
+    v2_settings_protocol_version BLOB NOT NULL,
+    v2_settings_release TEXT NOT NULL,
+    v2_settings_wallet_address BLOB NOT NULL,
+    v2_settings_accepting_contracts INTEGER NOT NULL,
+    v2_settings_max_collateral BLOB NOT NULL,
+    v2_settings_max_contract_duration BLOB NOT NULL,
+    v2_settings_remaining_storage BLOB NOT NULL,
+    v2_settings_total_storage BLOB NOT NULL,
+    v2_settings_used_storage BLOB NOT NULL, -- needed so we can sort by this because there's no clean way of subtracting binary encoded uint64s (total and remaining storage) in sqlite
     -- rhp4 prices
-    rhp4_prices_contract_price BLOB NOT NULL,
-    rhp4_prices_collateral_price BLOB NOT NULL,
-    rhp4_prices_storage_price BLOB NOT NULL,
-    rhp4_prices_ingress_price BLOB NOT NULL,
-    rhp4_prices_egress_price BLOB NOT NULL,
-    rhp4_prices_free_sector_price BLOB NOT NULL,
-    rhp4_prices_tip_height BLOB NOT NULL,
-    rhp4_prices_valid_until BLOB NOT NULL,
-    rhp4_prices_signature BLOB NOT NULL
+    v2_prices_contract_price BLOB NOT NULL,
+    v2_prices_collateral_price BLOB NOT NULL,
+    v2_prices_storage_price BLOB NOT NULL,
+    v2_prices_ingress_price BLOB NOT NULL,
+    v2_prices_egress_price BLOB NOT NULL,
+    v2_prices_free_sector_price BLOB NOT NULL,
+    v2_prices_tip_height BLOB NOT NULL,
+    v2_prices_valid_until BLOB NOT NULL,
+    v2_prices_signature BLOB NOT NULL
 );
 
 CREATE TABLE host_info_v2_netaddresses(

@@ -103,7 +103,7 @@ func TestQueryHosts(t *testing.T) {
 			LastScanSuccessful:     false,
 			SuccessfulInteractions: 95,
 			TotalScans:             100,
-			RHPV4Settings: rhpv4.HostSettings{
+			V2Settings: rhpv4.HostSettings{
 				AcceptingContracts:  true,
 				MaxContractDuration: 1000,
 				TotalStorage:        2000,
@@ -130,7 +130,7 @@ func TestQueryHosts(t *testing.T) {
 			LastScanSuccessful:     false,
 			SuccessfulInteractions: 75,
 			TotalScans:             100,
-			RHPV4Settings: rhpv4.HostSettings{
+			V2Settings: rhpv4.HostSettings{
 				AcceptingContracts:  false,
 				MaxContractDuration: 10000,
 				TotalStorage:        1000,
@@ -520,32 +520,32 @@ func verifyCurrencySort(t *testing.T, hosts []explorer.Host, sortBy explorer.Hos
 		switch sortBy {
 		case explorer.HostSortStoragePrice:
 			if hosts[i].V2 {
-				prev = hosts[i-1].RHPV4Settings.Prices.StoragePrice
-				curr = hosts[i].RHPV4Settings.Prices.StoragePrice
+				prev = hosts[i-1].V2Settings.Prices.StoragePrice
+				curr = hosts[i].V2Settings.Prices.StoragePrice
 			} else {
 				prev = hosts[i-1].Settings.StoragePrice
 				curr = hosts[i].Settings.StoragePrice
 			}
 		case explorer.HostSortContractPrice:
 			if hosts[i].V2 {
-				prev = hosts[i-1].RHPV4Settings.Prices.ContractPrice
-				curr = hosts[i].RHPV4Settings.Prices.ContractPrice
+				prev = hosts[i-1].V2Settings.Prices.ContractPrice
+				curr = hosts[i].V2Settings.Prices.ContractPrice
 			} else {
 				prev = hosts[i-1].Settings.ContractPrice
 				curr = hosts[i].Settings.ContractPrice
 			}
 		case explorer.HostSortDownloadPrice:
 			if hosts[i].V2 {
-				prev = hosts[i-1].RHPV4Settings.Prices.EgressPrice
-				curr = hosts[i].RHPV4Settings.Prices.EgressPrice
+				prev = hosts[i-1].V2Settings.Prices.EgressPrice
+				curr = hosts[i].V2Settings.Prices.EgressPrice
 			} else {
 				prev = hosts[i-1].Settings.DownloadBandwidthPrice
 				curr = hosts[i].Settings.DownloadBandwidthPrice
 			}
 		case explorer.HostSortUploadPrice:
 			if hosts[i].V2 {
-				prev = hosts[i-1].RHPV4Settings.Prices.IngressPrice
-				curr = hosts[i].RHPV4Settings.Prices.IngressPrice
+				prev = hosts[i-1].V2Settings.Prices.IngressPrice
+				curr = hosts[i].V2Settings.Prices.IngressPrice
 			} else {
 				prev = hosts[i-1].Settings.UploadBandwidthPrice
 				curr = hosts[i].Settings.UploadBandwidthPrice
