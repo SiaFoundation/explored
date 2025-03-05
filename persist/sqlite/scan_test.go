@@ -11,6 +11,7 @@ import (
 
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/gateway"
+	proto3 "go.sia.tech/core/rhp/v3"
 	proto4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
@@ -347,6 +348,20 @@ func TestScan(t *testing.T) {
 		if host3.Settings.SectorSize <= 0 {
 			t.Fatal("SectorSize = 0 on host that's supposed to be active")
 		}
+
+		// we only have one v1 host and one v2 host, so the median will just be
+		// whatever the values for that host are
+		metrics, err := e.HostMetrics()
+		if err != nil {
+			t.Fatal(err)
+		}
+		// zero out fields we can't take median of
+		host1.V2Settings.ProtocolVersion, host1.V2Settings.AcceptingContracts, host1.V2Settings.Release, host1.V2Settings.WalletAddress, host1.V2Settings.Prices.Signature = [3]uint8{}, false, "", types.VoidAddress, types.Signature{}
+		host3.Settings.AcceptingContracts, host3.Settings.NetAddress, host3.Settings.Address, host3.Settings.Version, host3.Settings.Release, host3.Settings.SiaMuxPort, host3.PriceTable.UID = false, "", types.VoidAddress, "", "", "", proto3.SettingsID{}
+
+		testutil.Equal(t, "metrics.V2Settings", host1.V2Settings, metrics.V2Settings)
+		testutil.Equal(t, "metrics.Settings", host3.Settings, metrics.Settings)
+		testutil.Equal(t, "metrics.PriceTable", host3.PriceTable, metrics.PriceTable)
 	}
 
 	{

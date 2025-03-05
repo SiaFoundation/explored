@@ -160,7 +160,7 @@ func (s *Store) HostMetrics() (result explorer.HostMetrics, err error) {
 			result.Settings.SectorAccessPrice = medianCurrency(settingsSectorAccessPrice)
 			result.Settings.StoragePrice = medianCurrency(settingsStoragePrice)
 			result.Settings.UploadBandwidthPrice = medianCurrency(settingsUploadBandwidthPrice)
-			result.Settings.EphemeralAccountExpiry /= time.Duration(medianUint64(settingsEphemeralAccountExpiry))
+			result.Settings.EphemeralAccountExpiry = time.Duration(medianUint64(settingsEphemeralAccountExpiry))
 			result.Settings.MaxEphemeralAccountBalance = medianCurrency(settingsMaxEphemeralAccountBalance)
 			result.Settings.RevisionNumber = medianUint64(settingsRevisionNumber)
 
