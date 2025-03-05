@@ -90,23 +90,23 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 		args = append(args, *params.MinUptime/100.0)
 	}
 	if params.MinDuration != nil {
-		filters = append(filters, "CASE WHEN v2=1 THEN rhp4_settings_max_contract_duration >= ? ELSE settings_max_duration >= ? END")
+		filters = append(filters, "CASE WHEN v2=1 THEN v2_settings_max_contract_duration >= ? ELSE settings_max_duration >= ? END")
 		args = append(args, encode(*params.MinDuration), encode(*params.MinDuration))
 	}
 	if params.MaxStoragePrice != nil {
-		filters = append(filters, "CASE WHEN v2=1 THEN rhp4_prices_storage_price <= ? ELSE settings_storage_price <= ? END")
+		filters = append(filters, "CASE WHEN v2=1 THEN v2_prices_storage_price <= ? ELSE settings_storage_price <= ? END")
 		args = append(args, encode(*params.MaxStoragePrice), encode(*params.MaxStoragePrice))
 	}
 	if params.MaxContractPrice != nil {
-		filters = append(filters, "CASE WHEN v2=1 THEN rhp4_prices_contract_price <= ? ELSE settings_contract_price <= ? END")
+		filters = append(filters, "CASE WHEN v2=1 THEN v2_prices_contract_price <= ? ELSE settings_contract_price <= ? END")
 		args = append(args, encode(*params.MaxContractPrice), encode(*params.MaxContractPrice))
 	}
 	if params.MaxUploadPrice != nil {
-		filters = append(filters, "CASE WHEN v2=1 THEN rhp4_prices_ingress_price <= ? ELSE settings_upload_bandwidth_price <= ? END")
+		filters = append(filters, "CASE WHEN v2=1 THEN v2_prices_ingress_price <= ? ELSE settings_upload_bandwidth_price <= ? END")
 		args = append(args, encode(*params.MaxUploadPrice), encode(*params.MaxUploadPrice))
 	}
 	if params.MaxDownloadPrice != nil {
-		filters = append(filters, "CASE WHEN v2=1 THEN rhp4_prices_egress_price <= ? ELSE settings_download_bandwidth_price <= ? END")
+		filters = append(filters, "CASE WHEN v2=1 THEN v2_prices_egress_price <= ? ELSE settings_download_bandwidth_price <= ? END")
 		args = append(args, encode(*params.MaxDownloadPrice), encode(*params.MaxDownloadPrice))
 	}
 	if params.MaxBaseRPCPrice != nil {
@@ -122,7 +122,7 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 		if *params.AcceptContracts {
 			v = 1
 		}
-		filters = append(filters, fmt.Sprintf("CASE WHEN v2=1 THEN rhp4_settings_accepting_contracts = %d ELSE settings_accepting_contracts = %d END", v, v))
+		filters = append(filters, fmt.Sprintf("CASE WHEN v2=1 THEN v2_settings_accepting_contracts = %d ELSE settings_accepting_contracts = %d END", v, v))
 	}
 	if params.Online != nil {
 		v := 0
@@ -144,19 +144,19 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 	case explorer.HostSortUptime:
 		sortColumn = uptimeValue
 	case explorer.HostSortAcceptingContracts:
-		sortColumn = "CASE WHEN v2=1 THEN rhp4_settings_accepting_contracts ELSE settings_accepting_contracts END"
+		sortColumn = "CASE WHEN v2=1 THEN v2_settings_accepting_contracts ELSE settings_accepting_contracts END"
 	case explorer.HostSortStoragePrice:
-		sortColumn = "CASE WHEN v2=1 THEN rhp4_prices_storage_price ELSE settings_storage_price END"
+		sortColumn = "CASE WHEN v2=1 THEN v2_prices_storage_price ELSE settings_storage_price END"
 	case explorer.HostSortContractPrice:
-		sortColumn = "CASE WHEN v2=1 THEN rhp4_prices_contract_price ELSE settings_contract_price END"
+		sortColumn = "CASE WHEN v2=1 THEN v2_prices_contract_price ELSE settings_contract_price END"
 	case explorer.HostSortDownloadPrice:
-		sortColumn = "CASE WHEN v2=1 THEN rhp4_prices_egress_price ELSE settings_download_bandwidth_price END"
+		sortColumn = "CASE WHEN v2=1 THEN v2_prices_egress_price ELSE settings_download_bandwidth_price END"
 	case explorer.HostSortUploadPrice:
-		sortColumn = "CASE WHEN v2=1 THEN rhp4_prices_ingress_price ELSE settings_upload_bandwidth_price END"
+		sortColumn = "CASE WHEN v2=1 THEN v2_prices_ingress_price ELSE settings_upload_bandwidth_price END"
 	case explorer.HostSortUsedStorage:
-		sortColumn = "CASE WHEN v2=1 THEN rhp4_settings_used_storage ELSE settings_used_storage END"
+		sortColumn = "CASE WHEN v2=1 THEN v2_settings_used_storage ELSE settings_used_storage END"
 	case explorer.HostSortTotalStorage:
-		sortColumn = "CASE WHEN v2=1 THEN rhp4_settings_total_storage ELSE settings_total_storage END"
+		sortColumn = "CASE WHEN v2=1 THEN v2_settings_total_storage ELSE settings_total_storage END"
 	default:
 		return nil, fmt.Errorf("invalid sort column: %s", sortBy)
 	}
@@ -196,7 +196,7 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 				if err := rows.Scan(decode(&host.PublicKey), &host.V2, &host.NetAddress, &host.Location.CountryCode, &host.Location.Latitude, &host.Location.Longitude, decode(&host.KnownSince), decode(&host.LastScan), &host.LastScanSuccessful, decode(&host.LastAnnouncement), decode(&host.NextScan), &host.TotalScans, &host.SuccessfulInteractions, &host.FailedInteractions, &s.AcceptingContracts, decode(&s.MaxDownloadBatchSize), decode(&s.MaxDuration), decode(&s.MaxReviseBatchSize), &s.NetAddress, decode(&s.RemainingStorage), decode(&s.SectorSize), decode(&s.TotalStorage), decode(&s.Address), decode(&s.WindowSize), decode(&s.Collateral), decode(&s.MaxCollateral), decode(&s.BaseRPCPrice), decode(&s.ContractPrice), decode(&s.DownloadBandwidthPrice), decode(&s.SectorAccessPrice), decode(&s.StoragePrice), decode(&s.UploadBandwidthPrice), &s.EphemeralAccountExpiry, decode(&s.MaxEphemeralAccountBalance), decode(&s.RevisionNumber), &s.Version, &s.Release, &s.SiaMuxPort, decode(&p.UID), &p.Validity, decode(&p.HostBlockHeight), decode(&p.UpdatePriceTableCost), decode(&p.AccountBalanceCost), decode(&p.FundAccountCost), decode(&p.LatestRevisionCost), decode(&p.SubscriptionMemoryCost), decode(&p.SubscriptionNotificationCost), decode(&p.InitBaseCost), decode(&p.MemoryTimeCost), decode(&p.DownloadBandwidthCost), decode(&p.UploadBandwidthCost), decode(&p.DropSectorsBaseCost), decode(&p.DropSectorsUnitCost), decode(&p.HasSectorBaseCost), decode(&p.ReadBaseCost), decode(&p.ReadLengthCost), decode(&p.RenewContractCost), decode(&p.RevisionBaseCost), decode(&p.SwapSectorBaseCost), decode(&p.WriteBaseCost), decode(&p.WriteLengthCost), decode(&p.WriteStoreCost), decode(&p.TxnFeeMinRecommended), decode(&p.TxnFeeMaxRecommended), decode(&p.ContractPrice), decode(&p.CollateralCost), decode(&p.MaxCollateral), decode(&p.MaxDuration), decode(&p.WindowSize), decode(&p.RegistryEntriesLeft), decode(&p.RegistryEntriesTotal), &protocolVersion, &sV4.Release, decode(&sV4.WalletAddress), &sV4.AcceptingContracts, decode(&sV4.MaxCollateral), decode(&sV4.MaxContractDuration), decode(&sV4.RemainingStorage), decode(&sV4.TotalStorage), decode(&pV4.ContractPrice), decode(&pV4.Collateral), decode(&pV4.StoragePrice), decode(&pV4.IngressPrice), decode(&pV4.EgressPrice), decode(&pV4.FreeSectorPrice), decode(&pV4.TipHeight), decode(&pV4.ValidUntil), decode(&pV4.Signature)); err != nil {
 					return err
 				}
-				sV4.ProtocolVersion = [3]uint8(protocolVersion)
+				sV2.ProtocolVersion = [3]uint8(protocolVersion)
 
 				if host.V2 {
 					v2AddrRows, err := v2AddrStmt.Query(encode(host.PublicKey))

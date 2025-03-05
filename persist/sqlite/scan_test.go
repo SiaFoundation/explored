@@ -332,7 +332,7 @@ func TestScan(t *testing.T) {
 		testutil.Equal(t, "host1.KnownSince", b2.Timestamp, host1.KnownSince)
 		testutil.Equal(t, "host1.LastAnnouncement", b4.Timestamp, host1.LastAnnouncement)
 		// settings should not be overwritten if there was not a successful scan
-		if !host1.RHPV4Settings.AcceptingContracts {
+		if !host1.V2Settings.AcceptingContracts {
 			t.Fatal("AcceptingContracts = false on host that's supposed to be active")
 		}
 
