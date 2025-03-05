@@ -269,6 +269,7 @@ func TestScan(t *testing.T) {
 		testutil.Equal(t, "host1.LastScanSuccessful", true, host1.LastScanSuccessful)
 		testutil.Equal(t, "host2.KnownSince", b2.Timestamp, host1.KnownSince)
 		testutil.Equal(t, "host1.LastAnnouncement", b2.Timestamp, host1.LastAnnouncement)
+		testutil.Equal(t, "host1.NextScan", host1.LastScan.Add(cfg.MaxLastScan), host1.NextScan)
 		if !host1.RHPV4Settings.AcceptingContracts {
 			t.Fatal("AcceptingContracts = false on host that's supposed to be active")
 		}
@@ -282,6 +283,7 @@ func TestScan(t *testing.T) {
 		testutil.Equal(t, "host2.LastScanSuccessful", false, host2.LastScanSuccessful)
 		testutil.Equal(t, "host2.KnownSince", b1.Timestamp, host2.KnownSince)
 		testutil.Equal(t, "host2.LastAnnouncement", b1.Timestamp, host2.LastAnnouncement)
+		testutil.Equal(t, "host2.NextScan", host2.LastScan.Add(2*cfg.MaxLastScan), host2.NextScan)
 
 		host3 := dbHosts[2]
 		testutil.Equal(t, "host3.NetAddress", "sia1.euregiohosting.nl:9982", host3.NetAddress)
@@ -296,6 +298,7 @@ func TestScan(t *testing.T) {
 		testutil.Equal(t, "host3.LastScanSuccessful", true, host3.LastScanSuccessful)
 		testutil.Equal(t, "host3.KnownSince", b1.Timestamp, host2.KnownSince)
 		testutil.Equal(t, "host3.LastAnnouncement", b1.Timestamp, host3.LastAnnouncement)
+		testutil.Equal(t, "host3.NextScan", host3.LastScan.Add(cfg.MaxLastScan), host3.NextScan)
 		if host3.Settings.SectorSize <= 0 {
 			t.Fatal("SectorSize = 0 on host that's supposed to be active")
 		}
