@@ -47,7 +47,7 @@ var cfg = config.Config{
 	Scanner: config.Scanner{
 		Threads:             10,
 		Timeout:             30 * time.Second,
-		MaxLastScan:         3 * time.Hour,
+		MaxLastScan:         1 * time.Hour,
 		MinLastAnnouncement: 365 * 24 * time.Hour,
 	},
 	ExchangeRates: config.ExchangeRates{
