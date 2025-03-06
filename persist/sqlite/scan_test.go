@@ -271,7 +271,7 @@ func TestScan(t *testing.T) {
 		testutil.Equal(t, "host2.KnownSince", b2.Timestamp, host1.KnownSince)
 		testutil.Equal(t, "host1.LastAnnouncement", b2.Timestamp, host1.LastAnnouncement)
 		testutil.Equal(t, "host1.NextScan", host1.LastScan.Add(cfg.MaxLastScan), host1.NextScan)
-		if !host1.RHPV4Settings.AcceptingContracts {
+		if !host1.V2Settings.AcceptingContracts {
 			t.Fatal("AcceptingContracts = false on host that's supposed to be active")
 		}
 
