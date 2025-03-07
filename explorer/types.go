@@ -512,6 +512,7 @@ func (h *HostSortColumn) UnmarshalText(data []byte) error {
 type HostQuery struct {
 	V2                   *bool             `json:"v2,omitempty"`
 	PublicKeys           []types.PublicKey `json:"publicKeys,omitempty"`
+	NetAddresses         []string          `json:"netAddresses,omitempty"`
 	MinUptime            *float64          `json:"minUptime,omitempty"`
 	MinDuration          *uint64           `json:"minDuration,omitempty"`
 	MaxStoragePrice      *types.Currency   `json:"maxStoragePrice,omitempty"`

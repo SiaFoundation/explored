@@ -65,115 +65,152 @@ func (s *Store) HostsForScanning(minLastAnnouncement time.Time, limit uint64) (r
 // QueryHosts returns the hosts matching the query parameters in the order
 // specified by dir.
 func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortColumn, dir explorer.HostSortDir, offset, limit uint64) (result []explorer.Host, err error) {
-	var args []any
-	var filters []string
+	err = st.transaction(func(tx *txn) error {
+		var args []any
+		var filters []string
 
-	if params.V2 != nil {
-		if *params.V2 {
-			filters = append(filters, `v2 = 1`)
-		} else {
-			filters = append(filters, `v2 = 0`)
+		if params.V2 != nil {
+			if *params.V2 {
+				filters = append(filters, `v2 = 1`)
+			} else {
+				filters = append(filters, `v2 = 0`)
+			}
 		}
-	}
 
-	if len(params.PublicKeys) > 0 {
-		filter := "public_key IN (" + queryPlaceHolders(len(params.PublicKeys)) + ")"
-		for _, pk := range params.PublicKeys {
-			args = append(args, encode(pk))
+		if len(params.PublicKeys) > 0 {
+			filter := `public_key IN (` + queryPlaceHolders(len(params.PublicKeys)) + `)`
+			for _, pk := range params.PublicKeys {
+				args = append(args, encode(pk))
+			}
+			filters = append(filters, filter)
 		}
-		filters = append(filters, filter)
-	}
 
-	const uptimeValue = `(successful_interactions * 1.0 / MAX(1, total_scans))`
-	if params.MinUptime != nil {
-		filters = append(filters, uptimeValue+" >= ?")
-		args = append(args, *params.MinUptime/100.0)
-	}
-	if params.MinDuration != nil {
-		filters = append(filters, "CASE WHEN v2=1 THEN v2_settings_max_contract_duration >= ? ELSE settings_max_duration >= ? END")
-		args = append(args, encode(*params.MinDuration), encode(*params.MinDuration))
-	}
-	if params.MaxStoragePrice != nil {
-		filters = append(filters, "CASE WHEN v2=1 THEN v2_prices_storage_price <= ? ELSE settings_storage_price <= ? END")
-		args = append(args, encode(*params.MaxStoragePrice), encode(*params.MaxStoragePrice))
-	}
-	if params.MaxContractPrice != nil {
-		filters = append(filters, "CASE WHEN v2=1 THEN v2_prices_contract_price <= ? ELSE settings_contract_price <= ? END")
-		args = append(args, encode(*params.MaxContractPrice), encode(*params.MaxContractPrice))
-	}
-	if params.MaxUploadPrice != nil {
-		filters = append(filters, "CASE WHEN v2=1 THEN v2_prices_ingress_price <= ? ELSE settings_upload_bandwidth_price <= ? END")
-		args = append(args, encode(*params.MaxUploadPrice), encode(*params.MaxUploadPrice))
-	}
-	if params.MaxDownloadPrice != nil {
-		filters = append(filters, "CASE WHEN v2=1 THEN v2_prices_egress_price <= ? ELSE settings_download_bandwidth_price <= ? END")
-		args = append(args, encode(*params.MaxDownloadPrice), encode(*params.MaxDownloadPrice))
-	}
-	if params.MaxBaseRPCPrice != nil {
-		filters = append(filters, "settings_base_rpc_price <= ?")
-		args = append(args, encode(*params.MaxBaseRPCPrice))
-	}
-	if params.MaxSectorAccessPrice != nil {
-		filters = append(filters, "settings_sector_access_price <= ?")
-		args = append(args, encode(*params.MaxSectorAccessPrice))
-	}
-	if params.AcceptContracts != nil {
-		v := 0
-		if *params.AcceptContracts {
-			v = 1
+		if len(params.NetAddresses) > 0 {
+			var addrFilters []string
+			if params.V2 == nil || !*params.V2 {
+				for _, netAddress := range params.NetAddresses {
+					args = append(args, any(netAddress))
+				}
+				addrFilters = append(addrFilters, `net_address IN (`+queryPlaceHolders(len(params.NetAddresses))+`)`)
+			}
+			if params.V2 == nil || *params.V2 {
+				netAddresses := make([]any, 0, len(params.NetAddresses))
+				for _, netAddress := range params.NetAddresses {
+					netAddresses = append(netAddresses, any(netAddress))
+				}
+				rows, err := tx.Query(`SELECT public_key FROM host_info_v2_netaddresses WHERE address IN (`+queryPlaceHolders(len(params.NetAddresses))+`)`, netAddresses...)
+				if err != nil {
+					return fmt.Errorf("failed to get query public keys for given net addresses: %w", err)
+				}
+				defer rows.Close()
+
+				var pks []any
+				for rows.Next() {
+					var pk types.PublicKey
+					if err := rows.Scan(decode(&pk)); err != nil {
+						return fmt.Errorf("failed to scan public key: %w", err)
+					}
+					pks = append(pks, encode(pk))
+				}
+				if err := rows.Err(); err != nil {
+					return fmt.Errorf("error retrieving public keys for given net addresses: %w", err)
+				}
+
+				args = append(args, pks...)
+				addrFilters = append(addrFilters, `public_key IN (`+queryPlaceHolders(len(pks))+`)`)
+			}
+			filters = append(filters, `(`+strings.Join(addrFilters, ` OR `)+`)`)
 		}
-		filters = append(filters, fmt.Sprintf("CASE WHEN v2=1 THEN v2_settings_accepting_contracts = %d ELSE settings_accepting_contracts = %d END", v, v))
-	}
-	if params.Online != nil {
-		v := 0
-		if *params.Online {
-			v = 1
+
+		const uptimeValue = `(successful_interactions * 1.0 / MAX(1, total_scans))`
+		if params.MinUptime != nil {
+			filters = append(filters, uptimeValue+` >= ?`)
+			args = append(args, *params.MinUptime/100.0)
 		}
-		filters = append(filters, fmt.Sprintf("last_scan_successful = %d", v))
-	}
-	args = append(args, limit, offset)
+		if params.MinDuration != nil {
+			filters = append(filters, `CASE WHEN v2=1 THEN v2_settings_max_contract_duration >= ? ELSE settings_max_duration >= ? END`)
+			args = append(args, encode(*params.MinDuration), encode(*params.MinDuration))
+		}
+		if params.MaxStoragePrice != nil {
+			filters = append(filters, `CASE WHEN v2=1 THEN v2_prices_storage_price <= ? ELSE settings_storage_price <= ? END`)
+			args = append(args, encode(*params.MaxStoragePrice), encode(*params.MaxStoragePrice))
+		}
+		if params.MaxContractPrice != nil {
+			filters = append(filters, `CASE WHEN v2=1 THEN v2_prices_contract_price <= ? ELSE settings_contract_price <= ? END`)
+			args = append(args, encode(*params.MaxContractPrice), encode(*params.MaxContractPrice))
+		}
+		if params.MaxUploadPrice != nil {
+			filters = append(filters, `CASE WHEN v2=1 THEN v2_prices_ingress_price <= ? ELSE settings_upload_bandwidth_price <= ? END`)
+			args = append(args, encode(*params.MaxUploadPrice), encode(*params.MaxUploadPrice))
+		}
+		if params.MaxDownloadPrice != nil {
+			filters = append(filters, `CASE WHEN v2=1 THEN v2_prices_egress_price <= ? ELSE settings_download_bandwidth_price <= ? END`)
+			args = append(args, encode(*params.MaxDownloadPrice), encode(*params.MaxDownloadPrice))
+		}
+		if params.MaxBaseRPCPrice != nil {
+			filters = append(filters, `settings_base_rpc_price <= ?`)
+			args = append(args, encode(*params.MaxBaseRPCPrice))
+		}
+		if params.MaxSectorAccessPrice != nil {
+			filters = append(filters, `settings_sector_access_price <= ?`)
+			args = append(args, encode(*params.MaxSectorAccessPrice))
+		}
+		if params.AcceptContracts != nil {
+			v := 0
+			if *params.AcceptContracts {
+				v = 1
+			}
+			filters = append(filters, fmt.Sprintf(`CASE WHEN v2=1 THEN v2_settings_accepting_contracts = %d ELSE settings_accepting_contracts = %d END`, v, v))
+		}
+		if params.Online != nil {
+			v := 0
+			if *params.Online {
+				v = 1
+			}
+			filters = append(filters, fmt.Sprintf(`last_scan_successful = %d`, v))
+		}
+		args = append(args, limit, offset)
 
-	var sortColumn string
-	switch sortBy {
-	case explorer.HostSortDateCreated:
-		sortColumn = "known_since"
-	case explorer.HostSortNetAddress:
-		sortColumn = "net_address"
-	case explorer.HostSortPublicKey:
-		sortColumn = "public_key"
-	case explorer.HostSortUptime:
-		sortColumn = uptimeValue
-	case explorer.HostSortAcceptingContracts:
-		sortColumn = "CASE WHEN v2=1 THEN v2_settings_accepting_contracts ELSE settings_accepting_contracts END"
-	case explorer.HostSortStoragePrice:
-		sortColumn = "CASE WHEN v2=1 THEN v2_prices_storage_price ELSE settings_storage_price END"
-	case explorer.HostSortContractPrice:
-		sortColumn = "CASE WHEN v2=1 THEN v2_prices_contract_price ELSE settings_contract_price END"
-	case explorer.HostSortDownloadPrice:
-		sortColumn = "CASE WHEN v2=1 THEN v2_prices_egress_price ELSE settings_download_bandwidth_price END"
-	case explorer.HostSortUploadPrice:
-		sortColumn = "CASE WHEN v2=1 THEN v2_prices_ingress_price ELSE settings_upload_bandwidth_price END"
-	case explorer.HostSortUsedStorage:
-		sortColumn = "CASE WHEN v2=1 THEN v2_settings_used_storage ELSE settings_used_storage END"
-	case explorer.HostSortTotalStorage:
-		sortColumn = "CASE WHEN v2=1 THEN v2_settings_total_storage ELSE settings_total_storage END"
-	default:
-		return nil, fmt.Errorf("invalid sort column: %s", sortBy)
-	}
+		var sortColumn string
+		switch sortBy {
+		case explorer.HostSortDateCreated:
+			sortColumn = `known_since`
+		case explorer.HostSortNetAddress:
+			sortColumn = `net_address`
+		case explorer.HostSortPublicKey:
+			sortColumn = `public_key`
+		case explorer.HostSortUptime:
+			sortColumn = uptimeValue
+		case explorer.HostSortAcceptingContracts:
+			sortColumn = `CASE WHEN v2=1 THEN v2_settings_accepting_contracts ELSE settings_accepting_contracts END`
+		case explorer.HostSortStoragePrice:
+			sortColumn = `CASE WHEN v2=1 THEN v2_prices_storage_price ELSE settings_storage_price END`
+		case explorer.HostSortContractPrice:
+			sortColumn = `CASE WHEN v2=1 THEN v2_prices_contract_price ELSE settings_contract_price END`
+		case explorer.HostSortDownloadPrice:
+			sortColumn = `CASE WHEN v2=1 THEN v2_prices_egress_price ELSE settings_download_bandwidth_price END`
+		case explorer.HostSortUploadPrice:
+			sortColumn = `CASE WHEN v2=1 THEN v2_prices_ingress_price ELSE settings_upload_bandwidth_price END`
+		case explorer.HostSortUsedStorage:
+			sortColumn = `CASE WHEN v2=1 THEN v2_settings_used_storage ELSE settings_used_storage END`
+		case explorer.HostSortTotalStorage:
+			sortColumn = `CASE WHEN v2=1 THEN v2_settings_total_storage ELSE settings_total_storage END`
+		default:
+			return fmt.Errorf("%w: %s", explorer.ErrNoSortColumn, sortBy)
+		}
 
-	whereClause := ""
-	if len(filters) > 0 {
-		whereClause = "WHERE " + strings.Join(filters, " AND ")
-	}
-	query := fmt.Sprintf(`
+		var whereClause string
+		if len(filters) > 0 {
+			whereClause = "WHERE " + strings.Join(filters, " AND ")
+		}
+		query := fmt.Sprintf(`
         SELECT public_key,v2,net_address,country_code,latitude,longitude,known_since,last_scan,last_scan_successful,last_announcement,next_scan,total_scans,successful_interactions,failed_interactions,settings_accepting_contracts,settings_max_download_batch_size,settings_max_duration,settings_max_revise_batch_size,settings_net_address,settings_remaining_storage,settings_sector_size,settings_total_storage,settings_address,settings_window_size,settings_collateral,settings_max_collateral,settings_base_rpc_price,settings_contract_price,settings_download_bandwidth_price,settings_sector_access_price,settings_storage_price,settings_upload_bandwidth_price,settings_ephemeral_account_expiry,settings_max_ephemeral_account_balance,settings_revision_number,settings_version,settings_release,settings_sia_mux_port,price_table_uid,price_table_validity,price_table_host_block_height,price_table_update_price_table_cost,price_table_account_balance_cost,price_table_fund_account_cost,price_table_latest_revision_cost,price_table_subscription_memory_cost,price_table_subscription_notification_cost,price_table_init_base_cost,price_table_memory_time_cost,price_table_download_bandwidth_cost,price_table_upload_bandwidth_cost,price_table_drop_sectors_base_cost,price_table_drop_sectors_unit_cost,price_table_has_sector_base_cost,price_table_read_base_cost,price_table_read_length_cost,price_table_renew_contract_cost,price_table_revision_base_cost,price_table_swap_sector_base_cost,price_table_write_base_cost,price_table_write_length_cost,price_table_write_store_cost,price_table_txn_fee_min_recommended,price_table_txn_fee_max_recommended,price_table_contract_price,price_table_collateral_cost,price_table_max_collateral,price_table_max_duration,price_table_window_size,price_table_registry_entries_left,price_table_registry_entries_total,v2_settings_protocol_version,v2_settings_release,v2_settings_wallet_address,v2_settings_accepting_contracts,v2_settings_max_collateral,v2_settings_max_contract_duration,v2_settings_remaining_storage,v2_settings_total_storage,v2_prices_contract_price,v2_prices_collateral_price,v2_prices_storage_price,v2_prices_ingress_price,v2_prices_egress_price,v2_prices_free_sector_price,v2_prices_tip_height,v2_prices_valid_until,v2_prices_signature FROM host_info
         %s
         ORDER BY (%s) %s
         LIMIT ? OFFSET ?`,
-		whereClause, sortColumn, dir,
-	)
+			whereClause, sortColumn, dir,
+		)
 
-	err = st.transaction(func(tx *txn) error {
 		v2AddrStmt, err := tx.Prepare(`SELECT protocol,address FROM host_info_v2_netaddresses WHERE public_key = ? ORDER BY netaddress_order`)
 		if err != nil {
 			return err
@@ -219,7 +256,7 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 				return err
 			}
 		}
-		return nil
+		return rows.Err()
 	})
 	return
 }

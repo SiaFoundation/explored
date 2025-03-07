@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"context"
+	"math"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -106,6 +107,7 @@ func newServer(t *testing.T, cm *chain.Manager, e *explorer.Explorer, listenAddr
 }
 
 func TestAPI(t *testing.T) {
+	const netAddr1 = "127.0.0.1:1234"
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
 
@@ -178,7 +180,7 @@ func TestAPI(t *testing.T) {
 			},
 		},
 		ArbitraryData: [][]byte{
-			testutil.CreateAnnouncement(pk1, "127.0.0.1:1234"),
+			testutil.CreateAnnouncement(pk1, netAddr1),
 		},
 	}
 	testutil.SignTransaction(cm.TipState(), pk1, &txn2)
@@ -559,6 +561,31 @@ func TestAPI(t *testing.T) {
 				t.Fatal("exchange rate should be positive")
 			}
 			t.Logf("Exchange rate: %f", resp)
+		}},
+		{"Search host by pubkey", func(t *testing.T) {
+			pubkey := pk1.PublicKey()
+			host, err := client.Host(pubkey)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			testutil.Equal(t, "pubkey", pubkey, host.PublicKey)
+			testutil.Equal(t, "net address", netAddr1, host.NetAddress)
+		}},
+		{"Search host by net address", func(t *testing.T) {
+			pubkey := pk1.PublicKey()
+			hosts, err := client.HostsList(explorer.HostQuery{
+				NetAddresses: []string{netAddr1},
+			}, explorer.HostSortPublicKey, explorer.HostSortAsc, 0, math.MaxInt64)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			testutil.Equal(t, "len(hosts)", 1, len(hosts))
+
+			host := hosts[0]
+			testutil.Equal(t, "pubkey", pubkey, host.PublicKey)
+			testutil.Equal(t, "net address", netAddr1, host.NetAddress)
 		}},
 	}
 

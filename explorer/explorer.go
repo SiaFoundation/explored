@@ -31,6 +31,10 @@ var (
 	// ErrNoSearchResults is returned when Search is unable to find anything
 	// with the specified ID.
 	ErrNoSearchResults = errors.New("no search results")
+
+	// ErrNoSortColumn is returned when a host query requests that we sort by a
+	// column that does not exist.
+	ErrNoSortColumn = errors.New("no such sort column")
 )
 
 // A ChainManager manages the consensus state
