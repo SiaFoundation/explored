@@ -571,6 +571,7 @@ CREATE TABLE host_info (
     v2_prices_valid_until BLOB NOT NULL,
     v2_prices_signature BLOB NOT NULL
 );
+CREATE INDEX host_info_net_address ON host_info(net_address);
 
 CREATE TABLE host_info_v2_netaddresses(
     public_key BLOB REFERENCES host_info(public_key) ON DELETE CASCADE NOT NULL,
@@ -582,6 +583,7 @@ CREATE TABLE host_info_v2_netaddresses(
 );
 
 CREATE INDEX host_info_v2_netaddresses_public_key ON host_info_v2_netaddresses(public_key);
+CREATE INDEX host_info_v2_netaddresses_address ON host_info_v2_netaddresses(address);
 
 -- initialize the global settings table
 INSERT INTO global_settings (id, db_version) VALUES (0, 0); -- should not be changed
