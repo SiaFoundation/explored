@@ -713,7 +713,10 @@ func (s *server) hostsHandler(jc jape.Context) {
 	}
 
 	hosts, err := s.e.QueryHosts(params, sortBy, dir, offset, limit)
-	if jc.Check("failed to query hosts", err) != nil {
+	if errors.Is(err, explorer.ErrNoSortColumn) {
+		jc.Error(err, http.StatusBadRequest)
+		return
+	} else if jc.Check("failed to query hosts", err) != nil {
 		return
 	}
 	jc.Encode(hosts)
