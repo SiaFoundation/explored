@@ -66,7 +66,9 @@ func (s *Store) HostMetrics() (result explorer.HostMetrics, err error) {
 			}
 
 			result.TotalStorage += host.Settings.TotalStorage
+			result.TotalStorage += host.V2Settings.TotalStorage
 			result.RemainingStorage += host.Settings.RemainingStorage
+			result.RemainingStorage += host.V2Settings.RemainingStorage
 
 			if !host.V2 {
 				settingsMaxDownloadBatchSize = append(settingsMaxDownloadBatchSize, host.Settings.MaxDownloadBatchSize)
