@@ -25,8 +25,14 @@ func TestQueryHosts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	defer db.Close()
+
+	const (
+		netAddr1 = "host1.com:9982"
+		netAddr2 = "host2.com:9982"
+		netAddr3 = "host3.com:9982"
+		netAddr4 = "host4.com:9982"
+	)
 
 	pk1 := types.GeneratePrivateKey().PublicKey()
 	pk2 := types.GeneratePrivateKey().PublicKey()
@@ -38,7 +44,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			PublicKey:  pk1,
 			V2:         false,
-			NetAddress: "host1.com:9982",
+			NetAddress: netAddr1,
 			Location: geoip.Location{
 				CountryCode: "US",
 				Latitude:    0.01,
@@ -65,7 +71,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			PublicKey:  pk2,
 			V2:         false,
-			NetAddress: "host2.com:9982",
+			NetAddress: netAddr2,
 			Location: geoip.Location{
 				CountryCode: "US",
 				Latitude:    0.01,
@@ -92,7 +98,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			PublicKey:      pk3,
 			V2:             true,
-			V2NetAddresses: []chain.NetAddress{{Protocol: siamux.Protocol, Address: "host3.com:9982"}},
+			V2NetAddresses: []chain.NetAddress{{Protocol: siamux.Protocol, Address: netAddr3}},
 			Location: geoip.Location{
 				CountryCode: "DE",
 				Latitude:    0.05,
@@ -119,7 +125,7 @@ func TestQueryHosts(t *testing.T) {
 		{
 			PublicKey:      pk4,
 			V2:             true,
-			V2NetAddresses: []chain.NetAddress{{Protocol: siamux.Protocol, Address: "host4.com:9982"}},
+			V2NetAddresses: []chain.NetAddress{{Protocol: siamux.Protocol, Address: netAddr4}},
 			Location: geoip.Location{
 				CountryCode: "DE",
 				Latitude:    0.05,
@@ -479,6 +485,65 @@ func TestQueryHosts(t *testing.T) {
 			sortBy: explorer.HostSortAcceptingContracts,
 			dir:    explorer.HostSortDesc,
 			want:   []types.PublicKey{pk4},
+		},
+
+		{
+			name: "net address 1 2 3 4",
+			query: explorer.HostQuery{
+				NetAddresses: []string{netAddr1, netAddr2, netAddr3, netAddr4},
+			},
+			sortBy: explorer.HostSortDateCreated,
+			dir:    explorer.HostSortAsc,
+			want:   []types.PublicKey{pk1, pk2, pk3, pk4},
+		},
+		{
+			name: "net address 1 2 3",
+			query: explorer.HostQuery{
+				NetAddresses: []string{netAddr1, netAddr2, netAddr3},
+			},
+			sortBy: explorer.HostSortDateCreated,
+			dir:    explorer.HostSortAsc,
+			want:   []types.PublicKey{pk1, pk2, pk3},
+		},
+		{
+			name: "net address pubkey 1 2 3",
+			query: explorer.HostQuery{
+				PublicKeys:   []types.PublicKey{pk1, pk2, pk3},
+				NetAddresses: []string{netAddr1, netAddr3},
+			},
+			sortBy: explorer.HostSortDateCreated,
+			dir:    explorer.HostSortAsc,
+			want:   []types.PublicKey{pk1, pk3},
+		},
+		{
+			name: "net address v2 1 2 3 4",
+			query: explorer.HostQuery{
+				V2:           &trueBool,
+				NetAddresses: []string{netAddr1, netAddr2, netAddr3, netAddr4},
+			},
+			sortBy: explorer.HostSortDateCreated,
+			dir:    explorer.HostSortAsc,
+			want:   []types.PublicKey{pk3, pk4},
+		},
+		{
+			name: "net address v2 3",
+			query: explorer.HostQuery{
+				V2:           &trueBool,
+				NetAddresses: []string{netAddr3},
+			},
+			sortBy: explorer.HostSortDateCreated,
+			dir:    explorer.HostSortAsc,
+			want:   []types.PublicKey{pk3},
+		},
+		{
+			name: "net address v1 1",
+			query: explorer.HostQuery{
+				V2:           &falseBool,
+				NetAddresses: []string{netAddr1},
+			},
+			sortBy: explorer.HostSortDateCreated,
+			dir:    explorer.HostSortAsc,
+			want:   []types.PublicKey{pk1},
 		},
 	}
 
