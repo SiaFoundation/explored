@@ -401,7 +401,7 @@ type HostMetrics struct {
 
 	Settings   rhpv2.HostSettings   `json:"settings"`
 	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
-	V2Settings rhpv4.HostSettings   `json:"hostSettings"`
+	V2Settings rhpv4.HostSettings   `json:"v2Settings"`
 }
 
 // HostSortDir represents the sorting direction for host filtering.
