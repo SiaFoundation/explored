@@ -54,51 +54,29 @@ func (e *Explorer) waitForSync() error {
 	return nil
 }
 
-func rhpv2Settings(ctx context.Context, publicKey types.PublicKey, netAddress string) (settings crhpv2.HostSettings, err error) {
+func rhpv2Settings(ctx context.Context, publicKey types.PublicKey, netAddress string) (crhpv2.HostSettings, error) {
 	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", netAddress)
 	if err != nil {
-		return crhpv2.HostSettings{}, fmt.Errorf("scanV1Host: failed to connect to host: %w", err)
+		return crhpv2.HostSettings{}, fmt.Errorf("failed to connect to host: %w", err)
 	}
 	defer conn.Close()
 
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
-		select {
-		case <-ctx.Done():
-			_ = conn.Close()
-		case <-done:
-		}
-	}()
 	// default timeout if context doesn't have one
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	if dl, ok := ctx.Deadline(); ok && !dl.IsZero() {
 		deadline = dl
 	}
-
 	if err := conn.SetDeadline(deadline); err != nil {
 		return crhpv2.HostSettings{}, fmt.Errorf("failed to set deadline: %w", err)
 	}
+
 	t, err := crhpv2.NewRenterTransport(conn, publicKey)
 	if err != nil {
 		return crhpv2.HostSettings{}, fmt.Errorf("failed to establish rhpv2 transport: %w", err)
 	}
 	defer t.Close()
-	if err := conn.SetDeadline(time.Time{}); err != nil {
-		return crhpv2.HostSettings{}, fmt.Errorf("failed to clear deadline: %w", err)
-	}
 
-	settings, err = rhpv2.RPCSettings(ctx, t)
-	if err != nil {
-		return crhpv2.HostSettings{}, fmt.Errorf("failed to retrieve rhpv2 settings: %w", err)
-	}
-
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("panic (withTransportV2): %v", r)
-		}
-	}()
-	return
+	return rhpv2.RPCSettings(ctx, t)
 }
 
 func rhpv3PriceTable(ctx context.Context, publicKey types.PublicKey, netAddress string) (priceTable crhpv3.HostPriceTable, err error) {
@@ -108,9 +86,18 @@ func rhpv3PriceTable(ctx context.Context, publicKey types.PublicKey, netAddress 
 	}
 	defer conn.Close()
 
+	// default timeout if context doesn't have one
+	deadline := time.Now().Add(30 * time.Second)
+	if dl, ok := ctx.Deadline(); ok && !dl.IsZero() {
+		deadline = dl
+	}
+	if err := conn.SetDeadline(deadline); err != nil {
+		return crhpv3.HostPriceTable{}, fmt.Errorf("failed to set deadline: %w", err)
+	}
+
 	v3Session, err := rhpv3.NewSession(ctx, conn, publicKey, nil, nil)
 	if err != nil {
-		return crhpv3.HostPriceTable{}, fmt.Errorf("failed to establish v3 transport: %w", err)
+		return crhpv3.HostPriceTable{}, fmt.Errorf("failed to establish rhpv3 transport: %w", err)
 	}
 	defer v3Session.Close()
 
@@ -118,7 +105,6 @@ func rhpv3PriceTable(ctx context.Context, publicKey types.PublicKey, netAddress 
 	if err != nil {
 		return crhpv3.HostPriceTable{}, fmt.Errorf("failed to scan price table: %w", err)
 	}
-
 	return table, nil
 }
 
