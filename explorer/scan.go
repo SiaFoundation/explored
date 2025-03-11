@@ -76,7 +76,11 @@ func rhpv2Settings(ctx context.Context, publicKey types.PublicKey, netAddress st
 	}
 	defer t.Close()
 
-	return rhpv2.RPCSettings(ctx, t)
+	settings, err := rhpv2.RPCSettings(ctx, t)
+	if err != nil {
+		return crhpv2.HostSettings{}, fmt.Errorf("failed to call settings RPC: %w", err)
+	}
+	return settings, nil
 }
 
 func rhpv3PriceTable(ctx context.Context, publicKey types.PublicKey, netAddress string) (priceTable crhpv3.HostPriceTable, err error) {
