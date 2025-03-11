@@ -10,6 +10,7 @@ import (
 	"math"
 	"math/bits"
 	"net"
+	"time"
 
 	"go.sia.tech/core/consensus"
 	rhp2 "go.sia.tech/core/rhp/v2"
@@ -799,15 +800,31 @@ func AccountPayment(account rhp3.Account, privateKey types.PrivateKey) PaymentMe
 }
 
 // NewSession creates a new session with a host
-func NewSession(ctx context.Context, hostKey types.PublicKey, hostAddr string, cm ChainManager, w Wallet) (*Session, error) {
-	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", hostAddr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to dial host: %w", err)
+func NewSession(ctx context.Context, conn net.Conn, hostKey types.PublicKey, cm ChainManager, w Wallet) (*Session, error) {
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = conn.Close()
+		case <-done:
+		}
+	}()
+	// default timeout if context doesn't have one
+	deadline := time.Now().Add(10 * time.Second)
+	if dl, ok := ctx.Deadline(); ok && !dl.IsZero() {
+		deadline = dl
+	}
+
+	if err := conn.SetDeadline(deadline); err != nil {
+		return nil, fmt.Errorf("failed to set deadline: %w", err)
 	}
 	t, err := rhp3.NewRenterTransport(conn, hostKey)
 	if err != nil {
-		conn.Close()
 		return nil, fmt.Errorf("failed to create transport: %w", err)
+	}
+	if err := conn.SetDeadline(time.Time{}); err != nil {
+		return nil, fmt.Errorf("failed to clear deadline: %w", err)
 	}
 
 	return &Session{
