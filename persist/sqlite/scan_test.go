@@ -359,6 +359,9 @@ func TestScan(t *testing.T) {
 		host1.V2Settings.ProtocolVersion, host1.V2Settings.AcceptingContracts, host1.V2Settings.Release, host1.V2Settings.WalletAddress, host1.V2Settings.Prices.Signature = [3]uint8{}, false, "", types.VoidAddress, types.Signature{}
 		host3.Settings.AcceptingContracts, host3.Settings.NetAddress, host3.Settings.Address, host3.Settings.Version, host3.Settings.Release, host3.Settings.SiaMuxPort, host3.PriceTable.UID = false, "", types.VoidAddress, "", "", "", proto3.SettingsID{}
 
+		testutil.Equal(t, "metrics.TotalStorage", proto4.SectorSize*host1.V2Settings.TotalStorage+host3.Settings.TotalStorage, metrics.TotalStorage)
+		testutil.Equal(t, "metrics.RemainingStorage", proto4.SectorSize*host1.V2Settings.RemainingStorage+host3.Settings.RemainingStorage, metrics.RemainingStorage)
+
 		testutil.Equal(t, "metrics.V2Settings", host1.V2Settings, metrics.V2Settings)
 		testutil.Equal(t, "metrics.Settings", host3.Settings, metrics.Settings)
 		testutil.Equal(t, "metrics.PriceTable", host3.PriceTable, metrics.PriceTable)
