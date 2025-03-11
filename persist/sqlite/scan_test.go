@@ -129,8 +129,8 @@ func TestScan(t *testing.T) {
 		WalletAddress:       w.Address(),
 		MaxCollateral:       types.Siacoins(10000),
 		MaxContractDuration: 1000,
-		RemainingStorage:    100 * proto4.SectorSize,
-		TotalStorage:        100 * proto4.SectorSize,
+		RemainingStorage:    100,
+		TotalStorage:        100,
 		Prices: proto4.HostPrices{
 			ContractPrice: types.Siacoins(uint32(frand.Uint64n(10000))),
 			StoragePrice:  types.Siacoins(uint32(frand.Uint64n(10000))),

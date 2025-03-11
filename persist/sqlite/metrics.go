@@ -5,6 +5,8 @@ import (
 	"slices"
 	"time"
 
+	proto4 "go.sia.tech/core/rhp/v4"
+
 	"go.sia.tech/core/types"
 	"go.sia.tech/explored/explorer"
 )
@@ -66,9 +68,9 @@ func (s *Store) HostMetrics() (result explorer.HostMetrics, err error) {
 			}
 
 			result.TotalStorage += host.Settings.TotalStorage
-			result.TotalStorage += host.V2Settings.TotalStorage
+			result.TotalStorage += proto4.SectorSize * host.V2Settings.TotalStorage
 			result.RemainingStorage += host.Settings.RemainingStorage
-			result.RemainingStorage += host.V2Settings.RemainingStorage
+			result.RemainingStorage += proto4.SectorSize * host.V2Settings.RemainingStorage
 
 			if !host.V2 {
 				settingsMaxDownloadBatchSize = append(settingsMaxDownloadBatchSize, host.Settings.MaxDownloadBatchSize)
