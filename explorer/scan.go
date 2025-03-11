@@ -54,18 +54,12 @@ func (e *Explorer) waitForSync() error {
 	return nil
 }
 
-func rhpv2Settings(ctx context.Context, publicKey types.PublicKey, netAddress string) (crhpv2.HostSettings, error) {
+func rhpv2Settings(ctx context.Context, deadline time.Time, publicKey types.PublicKey, netAddress string) (crhpv2.HostSettings, error) {
 	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", netAddress)
 	if err != nil {
 		return crhpv2.HostSettings{}, fmt.Errorf("failed to connect to host: %w", err)
 	}
 	defer conn.Close()
-
-	// default timeout if context doesn't have one
-	deadline := time.Now().Add(30 * time.Second)
-	if dl, ok := ctx.Deadline(); ok && !dl.IsZero() {
-		deadline = dl
-	}
 	if err := conn.SetDeadline(deadline); err != nil {
 		return crhpv2.HostSettings{}, fmt.Errorf("failed to set deadline: %w", err)
 	}
@@ -83,18 +77,12 @@ func rhpv2Settings(ctx context.Context, publicKey types.PublicKey, netAddress st
 	return settings, nil
 }
 
-func rhpv3PriceTable(ctx context.Context, publicKey types.PublicKey, netAddress string) (priceTable crhpv3.HostPriceTable, err error) {
+func rhpv3PriceTable(ctx context.Context, deadline time.Time, publicKey types.PublicKey, netAddress string) (priceTable crhpv3.HostPriceTable, err error) {
 	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", netAddress)
 	if err != nil {
 		return crhpv3.HostPriceTable{}, fmt.Errorf("failed to connect to siamux port: %w", err)
 	}
 	defer conn.Close()
-
-	// default timeout if context doesn't have one
-	deadline := time.Now().Add(30 * time.Second)
-	if dl, ok := ctx.Deadline(); ok && !dl.IsZero() {
-		deadline = dl
-	}
 	if err := conn.SetDeadline(deadline); err != nil {
 		return crhpv3.HostPriceTable{}, fmt.Errorf("failed to set deadline: %w", err)
 	}
@@ -116,7 +104,13 @@ func (e *Explorer) scanV1Host(locator geoip.Locator, host UnscannedHost) (HostSc
 	ctx, cancel := context.WithTimeout(e.ctx, e.scanCfg.Timeout)
 	defer cancel()
 
-	settings, err := rhpv2Settings(ctx, host.PublicKey, host.NetAddress)
+	// default timeout if context doesn't have one
+	deadline := time.Now().Add(e.scanCfg.Timeout)
+	if dl, ok := ctx.Deadline(); ok && !dl.IsZero() {
+		deadline = dl
+	}
+
+	settings, err := rhpv2Settings(ctx, deadline, host.PublicKey, host.NetAddress)
 	if err != nil {
 		return HostScan{}, fmt.Errorf("scanV1Host: failed to get host settings: %w", err)
 	}
@@ -126,7 +120,7 @@ func (e *Explorer) scanV1Host(locator geoip.Locator, host UnscannedHost) (HostSc
 		return HostScan{}, fmt.Errorf("scanV1Host: failed to parse net address: %w", err)
 	}
 
-	table, err := rhpv3PriceTable(ctx, host.PublicKey, net.JoinHostPort(hostIP, settings.SiaMuxPort))
+	table, err := rhpv3PriceTable(ctx, deadline, host.PublicKey, net.JoinHostPort(hostIP, settings.SiaMuxPort))
 	if err != nil {
 		return HostScan{}, fmt.Errorf("scanV1Host: failed to get price table: %w", err)
 	}
