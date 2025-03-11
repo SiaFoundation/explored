@@ -46,7 +46,7 @@ var cfg = config.Config{
 	},
 	Scanner: config.Scanner{
 		Threads:             10,
-		Timeout:             30 * time.Second,
+		Timeout:             1 * time.Minute,
 		MaxLastScan:         1 * time.Hour,
 		MinLastAnnouncement: 365 * 24 * time.Hour,
 	},
