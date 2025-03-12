@@ -8,6 +8,7 @@ import (
 	"time"
 
 	crhpv2 "go.sia.tech/core/rhp/v2"
+	crhpv3 "go.sia.tech/core/rhp/v3"
 	"go.sia.tech/core/types"
 	crhpv4 "go.sia.tech/coreutils/rhp/v4"
 	"go.sia.tech/coreutils/rhp/v4/siamux"
@@ -53,53 +54,91 @@ func (e *Explorer) waitForSync() error {
 	return nil
 }
 
+func rhpv2Settings(ctx context.Context, publicKey types.PublicKey, netAddress string) (crhpv2.HostSettings, error) {
+	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", netAddress)
+	if err != nil {
+		return crhpv2.HostSettings{}, fmt.Errorf("failed to connect to host: %w", err)
+	}
+	defer conn.Close()
+
+	// default timeout if context doesn't have one
+	deadline := time.Now().Add(30 * time.Second)
+	if dl, ok := ctx.Deadline(); ok && !dl.IsZero() {
+		deadline = dl
+	}
+	if err := conn.SetDeadline(deadline); err != nil {
+		return crhpv2.HostSettings{}, fmt.Errorf("failed to set deadline: %w", err)
+	}
+
+	t, err := crhpv2.NewRenterTransport(conn, publicKey)
+	if err != nil {
+		return crhpv2.HostSettings{}, fmt.Errorf("failed to establish rhpv2 transport: %w", err)
+	}
+	defer t.Close()
+
+	settings, err := rhpv2.RPCSettings(ctx, t)
+	if err != nil {
+		return crhpv2.HostSettings{}, fmt.Errorf("failed to call settings RPC: %w", err)
+	}
+	return settings, nil
+}
+
+func rhpv3PriceTable(ctx context.Context, publicKey types.PublicKey, netAddress string) (priceTable crhpv3.HostPriceTable, err error) {
+	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", netAddress)
+	if err != nil {
+		return crhpv3.HostPriceTable{}, fmt.Errorf("failed to connect to siamux port: %w", err)
+	}
+	defer conn.Close()
+
+	// default timeout if context doesn't have one
+	deadline := time.Now().Add(30 * time.Second)
+	if dl, ok := ctx.Deadline(); ok && !dl.IsZero() {
+		deadline = dl
+	}
+	if err := conn.SetDeadline(deadline); err != nil {
+		return crhpv3.HostPriceTable{}, fmt.Errorf("failed to set deadline: %w", err)
+	}
+
+	v3Session, err := rhpv3.NewSession(ctx, conn, publicKey, nil, nil)
+	if err != nil {
+		return crhpv3.HostPriceTable{}, fmt.Errorf("failed to establish rhpv3 transport: %w", err)
+	}
+	defer v3Session.Close()
+
+	table, err := v3Session.ScanPriceTable()
+	if err != nil {
+		return crhpv3.HostPriceTable{}, fmt.Errorf("failed to scan price table: %w", err)
+	}
+	return table, nil
+}
+
 func (e *Explorer) scanV1Host(locator geoip.Locator, host UnscannedHost) (HostScan, error) {
 	ctx, cancel := context.WithTimeout(e.ctx, e.scanCfg.Timeout)
 	defer cancel()
 
-	dialer := (&net.Dialer{})
-
-	conn, err := dialer.DialContext(ctx, "tcp", host.NetAddress)
+	settings, err := rhpv2Settings(ctx, host.PublicKey, host.NetAddress)
 	if err != nil {
-		return HostScan{}, fmt.Errorf("scanHost: failed to connect to host: %w", err)
-	}
-	defer conn.Close()
-
-	transport, err := crhpv2.NewRenterTransport(conn, host.PublicKey)
-	if err != nil {
-		return HostScan{}, fmt.Errorf("scanHost: failed to establish v2 transport: %w", err)
-	}
-	defer transport.Close()
-
-	settings, err := rhpv2.RPCSettings(ctx, transport)
-	if err != nil {
-		return HostScan{}, fmt.Errorf("scanHost: failed to get host settings: %w", err)
+		return HostScan{}, fmt.Errorf("scanV1Host: failed to get host settings: %w", err)
 	}
 
 	hostIP, _, err := net.SplitHostPort(settings.NetAddress)
 	if err != nil {
-		return HostScan{}, fmt.Errorf("scanHost: failed to parse net address: %w", err)
+		return HostScan{}, fmt.Errorf("scanV1Host: failed to parse net address: %w", err)
+	}
+
+	table, err := rhpv3PriceTable(ctx, host.PublicKey, net.JoinHostPort(hostIP, settings.SiaMuxPort))
+	if err != nil {
+		return HostScan{}, fmt.Errorf("scanV1Host: failed to get price table: %w", err)
 	}
 
 	resolved, err := net.ResolveIPAddr("ip", hostIP)
 	if err != nil {
-		return HostScan{}, fmt.Errorf("scanHost: failed to resolve host address: %w", err)
+		return HostScan{}, fmt.Errorf("scanV1Host: failed to resolve host address: %w", err)
 	}
 
 	location, err := locator.Locate(resolved)
 	if err != nil {
 		e.log.Debug("Failed to resolve IP geolocation, not setting country code", zap.String("addr", host.NetAddress))
-	}
-
-	v3Addr := net.JoinHostPort(hostIP, settings.SiaMuxPort)
-	v3Session, err := rhpv3.NewSession(ctx, host.PublicKey, v3Addr, e.cm, nil)
-	if err != nil {
-		return HostScan{}, fmt.Errorf("scanHost: failed to establish v3 transport: %w", err)
-	}
-
-	table, err := v3Session.ScanPriceTable()
-	if err != nil {
-		return HostScan{}, fmt.Errorf("scanHost: failed to scan price table: %w", err)
 	}
 
 	return HostScan{
