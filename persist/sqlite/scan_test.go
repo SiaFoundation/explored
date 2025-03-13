@@ -2,15 +2,16 @@ package sqlite_test
 
 import (
 	"context"
-	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"net"
 	"path/filepath"
-	"sort"
 	"testing"
 	"time"
 
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/gateway"
+	proto2 "go.sia.tech/core/rhp/v2"
 	proto3 "go.sia.tech/core/rhp/v3"
 	proto4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
@@ -88,7 +89,7 @@ func startTestNode(tb testing.TB, n *consensus.Network, genesis types.Block) (*c
 	return cm, s, w
 }
 
-func testRenterHostPair(tb testing.TB, hostKey types.PrivateKey, cm crhpv4.ChainManager, s crhpv4.Syncer, w crhpv4.Wallet, c crhpv4.Contractor, sr crhpv4.Settings, ss crhpv4.Sectors, log *zap.Logger) (string, crhpv4.TransportClient) {
+func testV2Host(tb testing.TB, hostKey types.PrivateKey, cm crhpv4.ChainManager, s crhpv4.Syncer, w crhpv4.Wallet, c crhpv4.Contractor, sr crhpv4.Settings, ss crhpv4.Sectors, log *zap.Logger) (string, crhpv4.TransportClient) {
 	rs := crhpv4.NewServer(hostKey, cm, s, c, w, sr, ss, crhpv4.WithPriceTableValidity(2*time.Minute))
 	hostAddr := ctestutil.ServeSiaMux(tb, rs, log.Named("siamux"))
 
@@ -101,9 +102,118 @@ func testRenterHostPair(tb testing.TB, hostKey types.PrivateKey, cm crhpv4.Chain
 	return hostAddr, transport
 }
 
+func testV1Host(tb testing.TB, hostKey types.PrivateKey, hostSettings *proto2.HostSettings, priceTable *proto3.HostPriceTable) (string, string) {
+	rhp2Listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		tb.Fatal(err)
+	}
+	rhp3Listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		tb.Fatal(err)
+	}
+
+	hostSettings.NetAddress = rhp2Listener.Addr().String()
+	_, hostSettings.SiaMuxPort, err = net.SplitHostPort(rhp3Listener.Addr().String())
+	if err != nil {
+		tb.Fatal(err)
+	}
+
+	tb.Cleanup(func() {
+		rhp2Listener.Close()
+		rhp3Listener.Close()
+	})
+
+	go func() {
+		for {
+			func() {
+				conn, err := rhp2Listener.Accept()
+				if errors.Is(err, net.ErrClosed) {
+					return
+				} else if err != nil {
+					tb.Fatal(err)
+				}
+				defer conn.Close()
+				conn.SetDeadline(time.Now().Add(10 * time.Second))
+
+				transport, err := proto2.NewHostTransport(conn, hostKey)
+				if err != nil {
+					tb.Fatal(err)
+				}
+				defer transport.Close()
+
+				id, err := transport.ReadID()
+				if err != nil {
+					tb.Fatal(err)
+				} else if id != proto2.RPCSettingsID {
+					tb.Fatal("received non settings RPC")
+				}
+
+				encoded, err := json.Marshal(hostSettings)
+				if err != nil {
+					tb.Fatal(err)
+				}
+				if err := transport.WriteResponse(&proto2.RPCSettingsResponse{
+					Settings: encoded,
+				}); err != nil {
+					tb.Fatal(err)
+				}
+			}()
+		}
+	}()
+
+	go func() {
+		for {
+			func() {
+				conn, err := rhp3Listener.Accept()
+				if errors.Is(err, net.ErrClosed) {
+					return
+				} else if err != nil {
+					tb.Fatal(err)
+				}
+				defer conn.Close()
+				conn.SetDeadline(time.Now().Add(10 * time.Second))
+
+				transport, err := proto3.NewHostTransport(conn, hostKey)
+				if err != nil {
+					tb.Fatal(err)
+				}
+				defer transport.Close()
+
+				stream, err := transport.AcceptStream()
+				if err != nil {
+					tb.Fatal(err)
+				}
+				defer stream.Close()
+
+				id, err := stream.ReadID()
+				if err != nil {
+					tb.Fatal(err)
+				} else if id != proto3.RPCUpdatePriceTableID {
+					tb.Fatal("received non price table RPC")
+				}
+
+				encoded, err := json.Marshal(priceTable)
+				if err != nil {
+					tb.Fatal(err)
+				}
+				if err := stream.WriteResponse(&proto3.RPCUpdatePriceTableResponse{
+					PriceTableJSON: encoded,
+				}); err != nil {
+					tb.Fatal(err)
+				}
+			}()
+		}
+	}()
+
+	return rhp2Listener.Addr().String(), rhp3Listener.Addr().String()
+}
+
 func TestScan(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
+	}
+	randSC := func() types.Currency {
+		return types.Siacoins(uint32(frand.Uint64n(10000)))
 	}
 
 	log := zaptest.NewLogger(t)
@@ -121,40 +231,91 @@ func TestScan(t *testing.T) {
 
 	cm, s, w := startTestNode(t, network, genesisBlock)
 
-	sr := ctestutil.NewEphemeralSettingsReporter()
-	sr.Update(proto4.HostSettings{
-		ProtocolVersion:     [3]uint8{1, 2, 3},
+	settings := proto2.HostSettings{
+		AcceptingContracts:   true,
+		MaxDownloadBatchSize: 10,
+		MaxDuration:          20,
+		MaxReviseBatchSize:   30,
+		RemainingStorage:     50,
+		SectorSize:           60,
+		TotalStorage:         70,
+
+		Collateral:             randSC(),
+		MaxCollateral:          randSC(),
+		BaseRPCPrice:           randSC(),
+		ContractPrice:          randSC(),
+		DownloadBandwidthPrice: randSC(),
+		SectorAccessPrice:      randSC(),
+		StoragePrice:           randSC(),
+		UploadBandwidthPrice:   randSC(),
+
+		EphemeralAccountExpiry: time.Duration(80),
+		RevisionNumber:         90,
+		Version:                "version",
+		Release:                "release",
+	}
+	table := proto3.HostPriceTable{
+		Validity:        time.Duration(100),
+		HostBlockHeight: cm.Tip().Height,
+
+		UpdatePriceTableCost:         randSC(),
+		AccountBalanceCost:           randSC(),
+		FundAccountCost:              randSC(),
+		LatestRevisionCost:           randSC(),
+		SubscriptionMemoryCost:       randSC(),
+		SubscriptionNotificationCost: randSC(),
+		InitBaseCost:                 randSC(),
+		MemoryTimeCost:               randSC(),
+		DownloadBandwidthCost:        randSC(),
+		UploadBandwidthCost:          randSC(),
+		DropSectorsBaseCost:          randSC(),
+		DropSectorsUnitCost:          randSC(),
+		HasSectorBaseCost:            randSC(),
+		ReadBaseCost:                 randSC(),
+		ReadLengthCost:               randSC(),
+		RenewContractCost:            randSC(),
+		RevisionBaseCost:             randSC(),
+		SwapSectorBaseCost:           randSC(),
+		WriteBaseCost:                randSC(),
+		WriteLengthCost:              randSC(),
+		WriteStoreCost:               randSC(),
+		TxnFeeMinRecommended:         randSC(),
+		TxnFeeMaxRecommended:         randSC(),
+		ContractPrice:                randSC(),
+		CollateralCost:               randSC(),
+		MaxCollateral:                randSC(),
+
+		MaxDuration:          20,
+		WindowSize:           30,
+		RegistryEntriesLeft:  40,
+		RegistryEntriesTotal: 50,
+	}
+
+	v2Settings := proto4.HostSettings{
+		ProtocolVersion:     [3]uint8{4, 0, 0},
 		Release:             "test",
 		AcceptingContracts:  true,
 		WalletAddress:       w.Address(),
-		MaxCollateral:       types.Siacoins(10000),
+		MaxCollateral:       randSC(),
 		MaxContractDuration: 1000,
 		RemainingStorage:    100,
 		TotalStorage:        100,
 		Prices: proto4.HostPrices{
-			ContractPrice: types.Siacoins(uint32(frand.Uint64n(10000))),
-			StoragePrice:  types.Siacoins(uint32(frand.Uint64n(10000))),
-			IngressPrice:  types.Siacoins(uint32(frand.Uint64n(10000))),
-			EgressPrice:   types.Siacoins(uint32(frand.Uint64n(10000))),
-			Collateral:    types.Siacoins(uint32(frand.Uint64n(10000))),
+			ContractPrice: randSC(),
+			StoragePrice:  randSC(),
+			IngressPrice:  randSC(),
+			EgressPrice:   randSC(),
+			Collateral:    randSC(),
 		},
-	})
+	}
+
+	sr := ctestutil.NewEphemeralSettingsReporter()
+	sr.Update(v2Settings)
 	ss := ctestutil.NewEphemeralSectorStore()
 	c := ctestutil.NewEphemeralContractor(cm)
 
-	// We do not have the private key to this host, so we copy their
-	// announcement data because we cannot sign an announcement as
-	// them.
-	var pubkey1 types.PublicKey
-	// pubkey of sia1.euregiohosting.nl:9982
-	if err := pubkey1.UnmarshalText([]byte(`ed25519:e89e13affe9d2ab4dc6f1e157376c60cdcadddf061ea78a52db68b63e6070ee4`)); err != nil {
-		t.Fatal(err)
-	}
-	// announcement copied from block 426479
-	announcement, err := base64.StdEncoding.DecodeString("SG9zdEFubm91bmNlbWVudBsAAAAAAAAAc2lhMS5ldXJlZ2lvaG9zdGluZy5ubDo5OTgyZWQyNTUxOQAAAAAAAAAAACAAAAAAAAAA6J4Tr/6dKrTcbx4Vc3bGDNyt3fBh6nilLbaLY+YHDuRQ49Qr0uy4nZJq3XVW/8kCsqnJFyQT4Zj/CcvC5fG5orVLwnVp2xYdn0nNvBdPNV9LzHborsYz4pep1ywwn40C")
-	if err != nil {
-		t.Fatal(err)
-	}
+	pk1 := types.GeneratePrivateKey()
+	pubkey1 := pk1.PublicKey()
 
 	pk2 := types.GeneratePrivateKey()
 	pubkey2 := pk2.PublicKey()
@@ -162,7 +323,8 @@ func TestScan(t *testing.T) {
 	pk3 := types.GeneratePrivateKey()
 	pubkey3 := pk3.PublicKey()
 
-	v4Addr, _ := testRenterHostPair(t, pk3, cm, s, w, c, sr, ss, zap.NewNop())
+	rhp2Address, _ := testV1Host(t, pk1, &settings, &table)
+	v4Addr, _ := testV2Host(t, pk3, cm, s, w, c, sr, ss, zap.NewNop())
 
 	cfg := config.Scanner{
 		Threads:             10,
@@ -179,13 +341,17 @@ func TestScan(t *testing.T) {
 	defer timeoutCancel()
 	defer e.Shutdown(timeoutCtx)
 
+	ha1 := chain.HostAnnouncement{
+		PublicKey:  pubkey1,
+		NetAddress: rhp2Address,
+	}
 	ha2 := chain.HostAnnouncement{
 		PublicKey:  pubkey2,
-		NetAddress: "example.com:9982",
+		NetAddress: "127.0.0.1:9999",
 	}
 	txn1 := types.Transaction{
 		ArbitraryData: [][]byte{
-			announcement,
+			ha1.ToArbitraryData(pk1),
 			ha2.ToArbitraryData(pk2),
 		},
 	}
@@ -221,6 +387,81 @@ func TestScan(t *testing.T) {
 		}
 	}
 
+	time.Sleep(1 * cfg.Timeout)
+
+	{
+		tests := []struct {
+			name   string
+			pubkey types.PublicKey
+			checks func(explorer.Host)
+		}{
+			{
+				name:   "online v2 host",
+				pubkey: pubkey3,
+				checks: func(host explorer.Host) {
+					testutil.Equal(t, "host.V2NetAddresses", ha3, host.V2NetAddresses)
+					testutil.Equal(t, "host.PublicKey", pubkey3, host.PublicKey)
+					testutil.Equal(t, "host.TotalScans", 1, host.TotalScans)
+					testutil.Equal(t, "host.SuccessfulInteractions", 1, host.SuccessfulInteractions)
+					testutil.Equal(t, "host.FailedInteractions", 0, host.FailedInteractions)
+					testutil.Equal(t, "host.LastScanSuccessful", true, host.LastScanSuccessful)
+					testutil.Equal(t, "host2.KnownSince", b2.Timestamp, host.KnownSince)
+					testutil.Equal(t, "host.LastAnnouncement", b2.Timestamp, host.LastAnnouncement)
+					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.MaxLastScan), host.NextScan)
+
+					host.V2Settings.Prices.ValidUntil, host.V2Settings.Prices.TipHeight, host.V2Settings.Prices.Signature = time.Time{}, 0, types.Signature{}
+					testutil.Equal(t, "host.V2Settings", v2Settings, host.V2Settings)
+				},
+			},
+			{
+				name:   "offline v1 host",
+				pubkey: pubkey2,
+				checks: func(host explorer.Host) {
+					testutil.Equal(t, "host.NetAddress", ha2.NetAddress, host.NetAddress)
+					testutil.Equal(t, "host.PublicKey", ha2.PublicKey, host.PublicKey)
+					testutil.Equal(t, "host.TotalScans", 1, host.TotalScans)
+					testutil.Equal(t, "host.SuccessfulInteractions", 0, host.SuccessfulInteractions)
+					testutil.Equal(t, "host.FailedInteractions", 1, host.FailedInteractions)
+					testutil.Equal(t, "host.LastScanSuccessful", false, host.LastScanSuccessful)
+					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
+					testutil.Equal(t, "host.LastAnnouncement", b1.Timestamp, host.LastAnnouncement)
+					testutil.Equal(t, "host.NextScan", host.LastScan.Add(2*cfg.MaxLastScan), host.NextScan)
+				},
+			},
+			{
+				name:   "online v1 host",
+				pubkey: pubkey1,
+				checks: func(host explorer.Host) {
+					testutil.Equal(t, "host.NetAddress", ha1.NetAddress, host.NetAddress)
+					testutil.Equal(t, "host.PublicKey", pubkey1, host.PublicKey)
+					testutil.Equal(t, "host.TotalScans", 1, host.TotalScans)
+					testutil.Equal(t, "host.SuccessfulInteractions", 1, host.SuccessfulInteractions)
+					testutil.Equal(t, "host.FailedInteractions", 0, host.FailedInteractions)
+					testutil.Equal(t, "host.LastScanSuccessful", true, host.LastScanSuccessful)
+					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
+					testutil.Equal(t, "host.LastAnnouncement", b1.Timestamp, host.LastAnnouncement)
+					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.MaxLastScan), host.NextScan)
+
+					testutil.Equal(t, "host.Settings", settings, host.Settings)
+					testutil.Equal(t, "host.PriceTable", table, host.PriceTable)
+				},
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				hosts, err := e.Hosts([]types.PublicKey{tt.pubkey})
+				if err != nil {
+					t.Fatal(err)
+				} else if len(hosts) != 1 {
+					t.Fatalf("can't find host %s (%v) in DB", tt.name, tt.pubkey)
+				}
+
+				tt.checks(hosts[0])
+			})
+		}
+	}
+
 	{
 		now := types.CurrentTimestamp()
 		lastAnnouncementCutoff := now.Add(-cfg.MinLastAnnouncement)
@@ -229,80 +470,7 @@ func TestScan(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Equal(t, "len(hostsForScanning)", 3, len(dbHosts))
-
-		sort.Slice(dbHosts, func(i, j int) bool {
-			return dbHosts[i].NetAddress < dbHosts[j].NetAddress
-		})
-
-		host1 := dbHosts[0]
-		testutil.Equal(t, "host1.V2NetAddresses", ha3, host1.V2NetAddresses)
-		testutil.Equal(t, "host1.PublicKey", pubkey3, host1.PublicKey)
-
-		host2 := dbHosts[1]
-		testutil.Equal(t, "host2.NetAddress", ha2.NetAddress, host2.NetAddress)
-		testutil.Equal(t, "host2.PublicKey", ha2.PublicKey, host2.PublicKey)
-
-		host3 := dbHosts[2]
-		testutil.Equal(t, "host3.NetAddress", "sia1.euregiohosting.nl:9982", host3.NetAddress)
-		testutil.Equal(t, "host3.PublicKey", pubkey1, host3.PublicKey)
-	}
-
-	time.Sleep(4 * cfg.Timeout)
-
-	{
-		dbHosts, err := e.Hosts([]types.PublicKey{pubkey3, pubkey2, pubkey1})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "len(dbHosts)", 3, len(dbHosts))
-
-		sort.Slice(dbHosts, func(i, j int) bool {
-			return dbHosts[i].NetAddress < dbHosts[j].NetAddress
-		})
-
-		host1 := dbHosts[0]
-		testutil.Equal(t, "host1.V2NetAddresses", ha3, host1.V2NetAddresses)
-		testutil.Equal(t, "host1.PublicKey", pubkey3, host1.PublicKey)
-		testutil.Equal(t, "host1.TotalScans", 1, host1.TotalScans)
-		testutil.Equal(t, "host1.SuccessfulInteractions", 1, host1.SuccessfulInteractions)
-		testutil.Equal(t, "host1.FailedInteractions", 0, host1.FailedInteractions)
-		testutil.Equal(t, "host1.LastScanSuccessful", true, host1.LastScanSuccessful)
-		testutil.Equal(t, "host2.KnownSince", b2.Timestamp, host1.KnownSince)
-		testutil.Equal(t, "host1.LastAnnouncement", b2.Timestamp, host1.LastAnnouncement)
-		testutil.Equal(t, "host1.NextScan", host1.LastScan.Add(cfg.MaxLastScan), host1.NextScan)
-		if !host1.V2Settings.AcceptingContracts {
-			t.Fatal("AcceptingContracts = false on host that's supposed to be active")
-		}
-
-		host2 := dbHosts[1]
-		testutil.Equal(t, "host2.NetAddress", ha2.NetAddress, host2.NetAddress)
-		testutil.Equal(t, "host2.PublicKey", ha2.PublicKey, host2.PublicKey)
-		testutil.Equal(t, "host2.TotalScans", 1, host2.TotalScans)
-		testutil.Equal(t, "host2.SuccessfulInteractions", 0, host2.SuccessfulInteractions)
-		testutil.Equal(t, "host2.FailedInteractions", 1, host2.FailedInteractions)
-		testutil.Equal(t, "host2.LastScanSuccessful", false, host2.LastScanSuccessful)
-		testutil.Equal(t, "host2.KnownSince", b1.Timestamp, host2.KnownSince)
-		testutil.Equal(t, "host2.LastAnnouncement", b1.Timestamp, host2.LastAnnouncement)
-		testutil.Equal(t, "host2.NextScan", host2.LastScan.Add(2*cfg.MaxLastScan), host2.NextScan)
-
-		host3 := dbHosts[2]
-		testutil.Equal(t, "host3.NetAddress", "sia1.euregiohosting.nl:9982", host3.NetAddress)
-		testutil.Equal(t, "host3.PublicKey", pubkey1, host3.PublicKey)
-		testutil.Equal(t, "host3.Location.CountryCode", "NL", host3.Location.CountryCode)
-		if host3.Location.Latitude == 0 || host3.Location.Longitude == 0 {
-			t.Fatalf("Unset latitude/longitude: %v", host3.Location)
-		}
-		testutil.Equal(t, "host3.TotalScans", 1, host3.TotalScans)
-		testutil.Equal(t, "host3.SuccessfulInteractions", 1, host3.SuccessfulInteractions)
-		testutil.Equal(t, "host3.FailedInteractions", 0, host3.FailedInteractions)
-		testutil.Equal(t, "host3.LastScanSuccessful", true, host3.LastScanSuccessful)
-		testutil.Equal(t, "host3.KnownSince", b1.Timestamp, host2.KnownSince)
-		testutil.Equal(t, "host3.LastAnnouncement", b1.Timestamp, host3.LastAnnouncement)
-		testutil.Equal(t, "host3.NextScan", host3.LastScan.Add(cfg.MaxLastScan), host3.NextScan)
-		if host3.Settings.SectorSize <= 0 {
-			t.Fatal("SectorSize = 0 on host that's supposed to be active")
-		}
+		testutil.Equal(t, "len(hostsForScanning)", 0, len(dbHosts))
 	}
 
 	// add v1 host announcements again
@@ -316,37 +484,71 @@ func TestScan(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	time.Sleep(2 * cfg.Timeout)
+	time.Sleep(1 * cfg.Timeout)
 
 	{
-		dbHosts, err := e.Hosts([]types.PublicKey{pubkey3, pubkey2, pubkey1})
+		tests := []struct {
+			name   string
+			pubkey types.PublicKey
+			checks func(explorer.Host)
+		}{
+			{
+				name:   "online v2 host",
+				pubkey: pubkey3,
+				checks: func(host explorer.Host) {
+					testutil.Equal(t, "host.KnownSince", b2.Timestamp, host.KnownSince)
+					testutil.Equal(t, "host.LastAnnouncement", b4.Timestamp, host.LastAnnouncement)
+
+					// settings should not be overwritten if another successful scan has not occured yet
+					host.V2Settings.Prices.ValidUntil, host.V2Settings.Prices.TipHeight, host.V2Settings.Prices.Signature = time.Time{}, 0, types.Signature{}
+					testutil.Equal(t, "host.V2Settings", v2Settings, host.V2Settings)
+				},
+			},
+			{
+				name:   "offline v1 host",
+				pubkey: pubkey2,
+				checks: func(host explorer.Host) {
+					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
+					testutil.Equal(t, "host.LastAnnouncement", b3.Timestamp, host.LastAnnouncement)
+				},
+			},
+			{
+				name:   "online v1 host",
+				pubkey: pubkey1,
+				checks: func(host explorer.Host) {
+					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
+					testutil.Equal(t, "host.LastAnnouncement", b3.Timestamp, host.LastAnnouncement)
+
+					// settings should not be overwritten if another successful scan has not occured yet
+					testutil.Equal(t, "host.Settings", settings, host.Settings)
+					testutil.Equal(t, "host.PriceTable", table, host.PriceTable)
+				},
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				hosts, err := e.Hosts([]types.PublicKey{tt.pubkey})
+				if err != nil {
+					t.Fatal(err)
+				} else if len(hosts) != 1 {
+					t.Fatalf("can't find host %s (%v) in DB", tt.name, tt.pubkey)
+				}
+
+				tt.checks(hosts[0])
+			})
+		}
+	}
+
+	{
+		hosts, err := e.Hosts([]types.PublicKey{pubkey1, pubkey3})
 		if err != nil {
 			t.Fatal(err)
 		}
-		testutil.Equal(t, "len(dbHosts)", 3, len(dbHosts))
+		testutil.Equal(t, "len(hosts)", 2, len(hosts))
 
-		sort.Slice(dbHosts, func(i, j int) bool {
-			return dbHosts[i].NetAddress < dbHosts[j].NetAddress
-		})
-
-		host1 := dbHosts[0]
-		testutil.Equal(t, "host1.KnownSince", b2.Timestamp, host1.KnownSince)
-		testutil.Equal(t, "host1.LastAnnouncement", b4.Timestamp, host1.LastAnnouncement)
-		// settings should not be overwritten if there was not a successful scan
-		if !host1.V2Settings.AcceptingContracts {
-			t.Fatal("AcceptingContracts = false on host that's supposed to be active")
-		}
-
-		host2 := dbHosts[1]
-		testutil.Equal(t, "host2.KnownSince", b1.Timestamp, host2.KnownSince)
-		testutil.Equal(t, "host2.LastAnnouncement", b3.Timestamp, host2.LastAnnouncement)
-
-		host3 := dbHosts[2]
-		testutil.Equal(t, "host3.KnownSince", b1.Timestamp, host3.KnownSince)
-		testutil.Equal(t, "host3.LastAnnouncement", b3.Timestamp, host3.LastAnnouncement)
-		// settings should not be overwritten if there was not a successful scan
-		if host3.Settings.SectorSize <= 0 {
-			t.Fatal("SectorSize = 0 on host that's supposed to be active")
+		v1Host, v2Host := hosts[0], hosts[1]
+		if v1Host.V2 {
+			v1Host, v2Host = v2Host, v1Host
 		}
 
 		// we only have one v1 host and one v2 host, so the median will just be
@@ -355,26 +557,15 @@ func TestScan(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		// zero out fields we can't take median of
-		host1.V2Settings.ProtocolVersion, host1.V2Settings.AcceptingContracts, host1.V2Settings.Release, host1.V2Settings.WalletAddress, host1.V2Settings.Prices.Signature = [3]uint8{}, false, "", types.VoidAddress, types.Signature{}
-		host3.Settings.AcceptingContracts, host3.Settings.NetAddress, host3.Settings.Address, host3.Settings.Version, host3.Settings.Release, host3.Settings.SiaMuxPort, host3.PriceTable.UID = false, "", types.VoidAddress, "", "", "", proto3.SettingsID{}
+		v2Host.V2Settings.ProtocolVersion, v2Host.V2Settings.AcceptingContracts, v2Host.V2Settings.Release, v2Host.V2Settings.WalletAddress, v2Host.V2Settings.Prices.Signature = [3]uint8{}, false, "", types.VoidAddress, types.Signature{}
+		v1Host.Settings.AcceptingContracts, v1Host.Settings.NetAddress, v1Host.Settings.Address, v1Host.Settings.Version, v1Host.Settings.Release, v1Host.Settings.SiaMuxPort, v1Host.PriceTable.UID = false, "", types.VoidAddress, "", "", "", proto3.SettingsID{}
 
-		testutil.Equal(t, "metrics.TotalStorage", proto4.SectorSize*host1.V2Settings.TotalStorage+host3.Settings.TotalStorage, metrics.TotalStorage)
-		testutil.Equal(t, "metrics.RemainingStorage", proto4.SectorSize*host1.V2Settings.RemainingStorage+host3.Settings.RemainingStorage, metrics.RemainingStorage)
-
-		testutil.Equal(t, "metrics.V2Settings", host1.V2Settings, metrics.V2Settings)
-		testutil.Equal(t, "metrics.Settings", host3.Settings, metrics.Settings)
-		testutil.Equal(t, "metrics.PriceTable", host3.PriceTable, metrics.PriceTable)
-	}
-
-	{
-		now := types.CurrentTimestamp()
-		lastAnnouncementCutoff := now.Add(-cfg.MinLastAnnouncement)
-
-		dbHosts, err := db.HostsForScanning(lastAnnouncementCutoff, 100)
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "len(hostsForScanning)", 0, len(dbHosts))
+		testutil.Equal(t, "metrics.TotalStorage", proto4.SectorSize*v2Host.V2Settings.TotalStorage+v1Host.Settings.TotalStorage, metrics.TotalStorage)
+		testutil.Equal(t, "metrics.RemainingStorage", proto4.SectorSize*v2Host.V2Settings.RemainingStorage+v1Host.Settings.RemainingStorage, metrics.RemainingStorage)
+		testutil.Equal(t, "metrics.V2Settings", v2Host.V2Settings, metrics.V2Settings)
+		testutil.Equal(t, "metrics.Settings", v1Host.Settings, metrics.Settings)
+		testutil.Equal(t, "metrics.PriceTable", v1Host.PriceTable, metrics.PriceTable)
 	}
 }
