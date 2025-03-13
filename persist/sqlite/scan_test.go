@@ -102,7 +102,7 @@ func testV2Host(tb testing.TB, hostKey types.PrivateKey, cm crhpv4.ChainManager,
 	return hostAddr, transport
 }
 
-func testV1Host(tb testing.TB, hostKey types.PrivateKey, hostSettings *proto2.HostSettings, priceTable *proto3.HostPriceTable) (string, string) {
+func testV1Host(tb testing.TB, hostKey types.PrivateKey, hostSettings *proto2.HostSettings, priceTable *proto3.HostPriceTable) (rhp2Addr string, rhp3Addr string) {
 	rhp2Listener, err := net.Listen("tcp", ":0")
 	if err != nil {
 		tb.Fatal(err)
@@ -111,6 +111,7 @@ func testV1Host(tb testing.TB, hostKey types.PrivateKey, hostSettings *proto2.Ho
 	if err != nil {
 		tb.Fatal(err)
 	}
+	rhp2Addr, rhp3Addr = rhp2Listener.Addr().String(), rhp3Listener.Addr().String()
 
 	hostSettings.NetAddress = rhp2Listener.Addr().String()
 	_, hostSettings.SiaMuxPort, err = net.SplitHostPort(rhp3Listener.Addr().String())
@@ -204,8 +205,6 @@ func testV1Host(tb testing.TB, hostKey types.PrivateKey, hostSettings *proto2.Ho
 			}()
 		}
 	}()
-
-	return rhp2Listener.Addr().String(), rhp3Listener.Addr().String()
 }
 
 func TestScan(t *testing.T) {
@@ -323,7 +322,7 @@ func TestScan(t *testing.T) {
 	pk3 := types.GeneratePrivateKey()
 	pubkey3 := pk3.PublicKey()
 
-	rhp2Address, _ := testV1Host(t, pk1, &settings, &table)
+	rhp2Addr, _ := testV1Host(t, pk1, &settings, &table)
 	v4Addr, _ := testV2Host(t, pk3, cm, s, w, c, sr, ss, zap.NewNop())
 
 	cfg := config.Scanner{
@@ -343,7 +342,7 @@ func TestScan(t *testing.T) {
 
 	ha1 := chain.HostAnnouncement{
 		PublicKey:  pubkey1,
-		NetAddress: rhp2Address,
+		NetAddress: rhp2Addr,
 	}
 	ha2 := chain.HostAnnouncement{
 		PublicKey:  pubkey2,
@@ -499,7 +498,7 @@ func TestScan(t *testing.T) {
 					testutil.Equal(t, "host.KnownSince", b2.Timestamp, host.KnownSince)
 					testutil.Equal(t, "host.LastAnnouncement", b4.Timestamp, host.LastAnnouncement)
 
-					// settings should not be overwritten if another successful scan has not occured yet
+					// settings should not be overwritten if another successful scan has not occurred yet
 					host.V2Settings.Prices.ValidUntil, host.V2Settings.Prices.TipHeight, host.V2Settings.Prices.Signature = time.Time{}, 0, types.Signature{}
 					testutil.Equal(t, "host.V2Settings", v2Settings, host.V2Settings)
 				},
@@ -519,7 +518,7 @@ func TestScan(t *testing.T) {
 					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
 					testutil.Equal(t, "host.LastAnnouncement", b3.Timestamp, host.LastAnnouncement)
 
-					// settings should not be overwritten if another successful scan has not occured yet
+					// settings should not be overwritten if another successful scan has not occurred yet
 					testutil.Equal(t, "host.Settings", settings, host.Settings)
 					testutil.Equal(t, "host.PriceTable", table, host.PriceTable)
 				},
