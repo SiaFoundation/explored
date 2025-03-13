@@ -205,6 +205,8 @@ func testV1Host(tb testing.TB, hostKey types.PrivateKey, hostSettings *proto2.Ho
 			}()
 		}
 	}()
+
+	return
 }
 
 func TestScan(t *testing.T) {
