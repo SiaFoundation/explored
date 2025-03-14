@@ -3,7 +3,6 @@ package sqlite
 import (
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"strings"
 
 	"go.sia.tech/core/types"
@@ -28,35 +27,42 @@ func (s *Store) Search(input string) (explorer.SearchType, error) {
 		}
 		return decoded[:idLen], nil
 	}
-
-	id, err := decodeHex(input)
-	if err != nil {
-		return explorer.SearchTypeInvalid, fmt.Errorf("%w: %w", explorer.ErrSearchParse, err)
-	}
+	id, _ := decodeHex(input)
 
 	var result explorer.SearchType
-	err = s.transaction(func(tx *txn) error {
+	err := s.transaction(func(tx *txn) error {
 		var exists bool
 		queries := []struct {
+			str   bool
 			query string
 			typ   explorer.SearchType
 		}{
-			{`SELECT EXISTS(SELECT 1 FROM address_balance WHERE address=?)`, explorer.SearchTypeAddress},
-			{`SELECT EXISTS(SELECT 1 FROM blocks WHERE id=?)`, explorer.SearchTypeBlock},
-			{`SELECT EXISTS(SELECT 1 FROM transactions WHERE transaction_id=?)`, explorer.SearchTypeTransaction},
-			{`SELECT EXISTS(SELECT 1 FROM v2_transactions WHERE transaction_id=?)`, explorer.SearchTypeV2Transaction},
-			{`SELECT EXISTS(SELECT 1 FROM siacoin_elements WHERE output_id=?)`, explorer.SearchTypeSiacoinElement},
-			{`SELECT EXISTS(SELECT 1 FROM siafund_elements WHERE output_id=?)`, explorer.SearchTypeSiafundElement},
-			{`SELECT EXISTS(SELECT 1 FROM last_contract_revision WHERE contract_id=?)`, explorer.SearchTypeContract},
-			{`SELECT EXISTS(SELECT 1 FROM v2_last_contract_revision WHERE contract_id=?)`, explorer.SearchTypeV2Contract},
-			{`SELECT EXISTS(SELECT 1 FROM host_info WHERE public_key=?)`, explorer.SearchTypeHost},
+			{false, `SELECT EXISTS(SELECT 1 FROM address_balance WHERE address=?)`, explorer.SearchTypeAddress},
+			{false, `SELECT EXISTS(SELECT 1 FROM blocks WHERE id=?)`, explorer.SearchTypeBlock},
+			{false, `SELECT EXISTS(SELECT 1 FROM transactions WHERE transaction_id=?)`, explorer.SearchTypeTransaction},
+			{false, `SELECT EXISTS(SELECT 1 FROM v2_transactions WHERE transaction_id=?)`, explorer.SearchTypeV2Transaction},
+			{false, `SELECT EXISTS(SELECT 1 FROM siacoin_elements WHERE output_id=?)`, explorer.SearchTypeSiacoinElement},
+			{false, `SELECT EXISTS(SELECT 1 FROM siafund_elements WHERE output_id=?)`, explorer.SearchTypeSiafundElement},
+			{false, `SELECT EXISTS(SELECT 1 FROM last_contract_revision WHERE contract_id=?)`, explorer.SearchTypeContract},
+			{false, `SELECT EXISTS(SELECT 1 FROM v2_last_contract_revision WHERE contract_id=?)`, explorer.SearchTypeV2Contract},
+			{false, `SELECT EXISTS(SELECT 1 FROM host_info WHERE public_key=?)`, explorer.SearchTypeHost},
+			{true, `SELECT EXISTS(SELECT 1 FROM host_info WHERE net_address=?)`, explorer.SearchTypeHost},
+			{true, `SELECT EXISTS(SELECT 1 FROM host_info_v2_netaddresses WHERE address=?)`, explorer.SearchTypeHost},
 		}
 
 		for _, q := range queries {
-			err := tx.QueryRow(q.query, id).Scan(&exists)
-			if err != nil {
-				return err
+			if q.str {
+				err := tx.QueryRow(q.query, input).Scan(&exists)
+				if err != nil {
+					return err
+				}
+			} else if !q.str && id != nil {
+				err := tx.QueryRow(q.query, id).Scan(&exists)
+				if err != nil {
+					return err
+				}
 			}
+
 			if exists {
 				result = q.typ
 				return nil

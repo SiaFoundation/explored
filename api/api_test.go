@@ -545,8 +545,15 @@ func TestAPI(t *testing.T) {
 				t.Fatal("non hex search should have failed")
 			}
 		}},
-		{"Search host", func(t *testing.T) {
+		{"Search using host pubkey", func(t *testing.T) {
 			resp, err := client.Search(pk1.PublicKey().String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			testutil.Equal(t, "search type", explorer.SearchTypeHost, resp)
+		}},
+		{"Search using host net address", func(t *testing.T) {
+			resp, err := client.Search(netAddr1)
 			if err != nil {
 				t.Fatal(err)
 			}
