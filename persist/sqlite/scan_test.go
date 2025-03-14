@@ -214,7 +214,7 @@ func TestScan(t *testing.T) {
 		t.Skip()
 	}
 	randSC := func() types.Currency {
-		return types.Siacoins(uint32(frand.Uint64n(10000)))
+		return types.NewCurrency64(frand.Uint64n(10000))
 	}
 
 	log := zaptest.NewLogger(t)
@@ -324,6 +324,9 @@ func TestScan(t *testing.T) {
 	pk3 := types.GeneratePrivateKey()
 	pubkey3 := pk3.PublicKey()
 
+	pk4 := types.GeneratePrivateKey()
+	pubkey4 := pk4.PublicKey()
+
 	rhp2Addr, _ := testV1Host(t, pk1, &settings, &table)
 	v4Addr, _ := testV2Host(t, pk3, cm, s, w, c, sr, ss, zap.NewNop())
 
@@ -367,11 +370,24 @@ func TestScan(t *testing.T) {
 		Address:  v4Addr,
 	}}
 	txn2 := types.V2Transaction{
-		Attestations: []types.Attestation{ha3.ToAttestation(cm.TipState(), pk3)},
+		Attestations: []types.Attestation{
+			ha3.ToAttestation(cm.TipState(), pk3),
+		},
 	}
 	testutil.SignV2Transaction(cm.TipState(), pk3, &txn2)
 
-	b2 := testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn2}, types.VoidAddress)
+	ha4 := chain.V2HostAnnouncement{{
+		Protocol: siamux.Protocol,
+		Address:  "127.0.0.1:9999",
+	}}
+	txn3 := types.V2Transaction{
+		Attestations: []types.Attestation{
+			ha4.ToAttestation(cm.TipState(), pk4),
+		},
+	}
+	testutil.SignV2Transaction(cm.TipState(), pk4, &txn3)
+
+	b2 := testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn2, txn3}, types.VoidAddress)
 	if err := cm.AddBlocks([]types.Block{b2}); err != nil {
 		t.Fatal(err)
 	}
@@ -388,7 +404,7 @@ func TestScan(t *testing.T) {
 		}
 	}
 
-	time.Sleep(1 * cfg.Timeout)
+	time.Sleep(cfg.Timeout)
 
 	{
 		tests := []struct {
@@ -396,6 +412,21 @@ func TestScan(t *testing.T) {
 			pubkey types.PublicKey
 			checks func(explorer.Host)
 		}{
+			{
+				name:   "offline v2 host",
+				pubkey: pubkey4,
+				checks: func(host explorer.Host) {
+					testutil.Equal(t, "host.V2NetAddresses", ha4, host.V2NetAddresses)
+					testutil.Equal(t, "host.PublicKey", pubkey4, host.PublicKey)
+					testutil.Equal(t, "host.TotalScans", 1, host.TotalScans)
+					testutil.Equal(t, "host.SuccessfulInteractions", 0, host.SuccessfulInteractions)
+					testutil.Equal(t, "host.FailedInteractions", 1, host.FailedInteractions)
+					testutil.Equal(t, "host.LastScanSuccessful", false, host.LastScanSuccessful)
+					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
+					testutil.Equal(t, "host.LastAnnouncement", b1.Timestamp, host.LastAnnouncement)
+					testutil.Equal(t, "host.NextScan", host.LastScan.Add(2*cfg.MaxLastScan), host.NextScan)
+				},
+			},
 			{
 				name:   "online v2 host",
 				pubkey: pubkey3,
@@ -480,12 +511,12 @@ func TestScan(t *testing.T) {
 		t.Fatal(err)
 	}
 	// add v2 host announcements again
-	b4 := testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn2}, types.VoidAddress)
+	b4 := testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn2, txn3}, types.VoidAddress)
 	if err := cm.AddBlocks([]types.Block{b4}); err != nil {
 		t.Fatal(err)
 	}
 
-	time.Sleep(1 * cfg.Timeout)
+	time.Sleep(cfg.Timeout)
 
 	{
 		tests := []struct {
@@ -493,6 +524,14 @@ func TestScan(t *testing.T) {
 			pubkey types.PublicKey
 			checks func(explorer.Host)
 		}{
+			{
+				name:   "offline v2 host",
+				pubkey: pubkey4,
+				checks: func(host explorer.Host) {
+					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
+					testutil.Equal(t, "host.LastAnnouncement", b3.Timestamp, host.LastAnnouncement)
+				},
+			},
 			{
 				name:   "online v2 host",
 				pubkey: pubkey3,
