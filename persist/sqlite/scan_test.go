@@ -332,7 +332,7 @@ func TestScan(t *testing.T) {
 
 	cfg := config.Scanner{
 		Threads:             10,
-		Timeout:             30 * time.Second,
+		Timeout:             10 * time.Second,
 		MaxLastScan:         3 * time.Hour,
 		MinLastAnnouncement: 90 * 24 * time.Hour,
 	}
@@ -437,7 +437,7 @@ func TestScan(t *testing.T) {
 					testutil.Equal(t, "host.SuccessfulInteractions", 1, host.SuccessfulInteractions)
 					testutil.Equal(t, "host.FailedInteractions", 0, host.FailedInteractions)
 					testutil.Equal(t, "host.LastScanSuccessful", true, host.LastScanSuccessful)
-					testutil.Equal(t, "host2.KnownSince", b2.Timestamp, host.KnownSince)
+					testutil.Equal(t, "host.KnownSince", b2.Timestamp, host.KnownSince)
 					testutil.Equal(t, "host.LastAnnouncement", b2.Timestamp, host.LastAnnouncement)
 					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.MaxLastScan), host.NextScan)
 
@@ -515,9 +515,10 @@ func TestScan(t *testing.T) {
 	if err := cm.AddBlocks([]types.Block{b4}); err != nil {
 		t.Fatal(err)
 	}
+	// This will trigger a rescan because a host announcement sets the next_scan time for
+	// that host to the timestamp of the block containing the announcement.
 
 	time.Sleep(cfg.Timeout)
-
 	{
 		tests := []struct {
 			name   string
@@ -528,18 +529,31 @@ func TestScan(t *testing.T) {
 				name:   "offline v2 host",
 				pubkey: pubkey4,
 				checks: func(host explorer.Host) {
+					testutil.Equal(t, "host.V2NetAddresses", ha4, host.V2NetAddresses)
+					testutil.Equal(t, "host.PublicKey", pubkey4, host.PublicKey)
+					testutil.Equal(t, "host.TotalScans", 2, host.TotalScans)
+					testutil.Equal(t, "host.SuccessfulInteractions", 0, host.SuccessfulInteractions)
+					testutil.Equal(t, "host.FailedInteractions", 2, host.FailedInteractions)
+					testutil.Equal(t, "host.LastScanSuccessful", false, host.LastScanSuccessful)
 					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
 					testutil.Equal(t, "host.LastAnnouncement", b3.Timestamp, host.LastAnnouncement)
+					testutil.Equal(t, "host.NextScan", host.LastScan.Add(2*2*cfg.MaxLastScan), host.NextScan)
 				},
 			},
 			{
 				name:   "online v2 host",
 				pubkey: pubkey3,
 				checks: func(host explorer.Host) {
+					testutil.Equal(t, "host.V2NetAddresses", ha3, host.V2NetAddresses)
+					testutil.Equal(t, "host.PublicKey", pubkey3, host.PublicKey)
+					testutil.Equal(t, "host.TotalScans", 2, host.TotalScans)
+					testutil.Equal(t, "host.SuccessfulInteractions", 2, host.SuccessfulInteractions)
+					testutil.Equal(t, "host.FailedInteractions", 0, host.FailedInteractions)
+					testutil.Equal(t, "host.LastScanSuccessful", true, host.LastScanSuccessful)
 					testutil.Equal(t, "host.KnownSince", b2.Timestamp, host.KnownSince)
 					testutil.Equal(t, "host.LastAnnouncement", b4.Timestamp, host.LastAnnouncement)
+					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.MaxLastScan), host.NextScan)
 
-					// settings should not be overwritten if another successful scan has not occurred yet
 					host.V2Settings.Prices.ValidUntil, host.V2Settings.Prices.TipHeight, host.V2Settings.Prices.Signature = time.Time{}, 0, types.Signature{}
 					testutil.Equal(t, "host.V2Settings", v2Settings, host.V2Settings)
 				},
@@ -548,18 +562,31 @@ func TestScan(t *testing.T) {
 				name:   "offline v1 host",
 				pubkey: pubkey2,
 				checks: func(host explorer.Host) {
+					testutil.Equal(t, "host.NetAddress", ha2.NetAddress, host.NetAddress)
+					testutil.Equal(t, "host.PublicKey", ha2.PublicKey, host.PublicKey)
+					testutil.Equal(t, "host.TotalScans", 2, host.TotalScans)
+					testutil.Equal(t, "host.SuccessfulInteractions", 0, host.SuccessfulInteractions)
+					testutil.Equal(t, "host.FailedInteractions", 2, host.FailedInteractions)
+					testutil.Equal(t, "host.LastScanSuccessful", false, host.LastScanSuccessful)
 					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
 					testutil.Equal(t, "host.LastAnnouncement", b3.Timestamp, host.LastAnnouncement)
+					testutil.Equal(t, "host.NextScan", host.LastScan.Add(2*2*cfg.MaxLastScan), host.NextScan)
 				},
 			},
 			{
 				name:   "online v1 host",
 				pubkey: pubkey1,
 				checks: func(host explorer.Host) {
+					testutil.Equal(t, "host.NetAddress", ha1.NetAddress, host.NetAddress)
+					testutil.Equal(t, "host.PublicKey", pubkey1, host.PublicKey)
+					testutil.Equal(t, "host.TotalScans", 2, host.TotalScans)
+					testutil.Equal(t, "host.SuccessfulInteractions", 2, host.SuccessfulInteractions)
+					testutil.Equal(t, "host.FailedInteractions", 0, host.FailedInteractions)
+					testutil.Equal(t, "host.LastScanSuccessful", true, host.LastScanSuccessful)
 					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
 					testutil.Equal(t, "host.LastAnnouncement", b3.Timestamp, host.LastAnnouncement)
+					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.MaxLastScan), host.NextScan)
 
-					// settings should not be overwritten if another successful scan has not occurred yet
 					testutil.Equal(t, "host.Settings", settings, host.Settings)
 					testutil.Equal(t, "host.PriceTable", table, host.PriceTable)
 				},

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"testing"
 	"time"
 
 	crhpv2 "go.sia.tech/core/rhp/v2"
@@ -222,6 +223,10 @@ func (e *Explorer) scanHosts() {
 	}
 	defer locator.Close()
 
+	tryAgainInterval := 15 * time.Second
+	if testing.Testing() {
+		tryAgainInterval = 100 * time.Millisecond
+	}
 	for !e.isClosed() {
 		now := types.CurrentTimestamp()
 		lastAnnouncementCutoff := now.Add(-e.scanCfg.MinLastAnnouncement)
@@ -235,7 +240,7 @@ func (e *Explorer) scanHosts() {
 			case <-e.ctx.Done():
 				e.log.Info("shutdown:", zap.Error(e.ctx.Err()))
 				return
-			case <-time.After(15 * time.Second):
+			case <-time.After(tryAgainInterval):
 				continue // check again
 			}
 		}
