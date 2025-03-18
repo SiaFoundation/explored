@@ -255,6 +255,12 @@ func (c *Client) Host(key types.PublicKey) (resp explorer.Host, err error) {
 	return
 }
 
+// TriggerHostScan triggers a manual host scan.
+func (c *Client) TriggerHostScan(key types.PublicKey) (err error) {
+	err = c.c.POST(fmt.Sprintf("/pubkey/%s/host/scan", key), nil, nil)
+	return
+}
+
 // BlockMetrics returns the most recent metrics about the Sia blockchain.
 func (c *Client) BlockMetrics() (resp explorer.Metrics, err error) {
 	err = c.c.GET("/metrics/block", &resp)

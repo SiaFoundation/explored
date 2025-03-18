@@ -421,7 +421,7 @@ func (e *Explorer) QueryHosts(params HostQuery, sortBy HostSortColumn, dir HostS
 	return e.s.QueryHosts(params, sortBy, dir, offset, limit)
 }
 
-// TriggerHostScan triggers a manual blocking host scan.
+// TriggerHostScan triggers a manual host scan.
 func (e *Explorer) TriggerHostScan(pk types.PublicKey) error {
 	hosts, err := e.Hosts([]types.PublicKey{pk})
 	if err != nil {
