@@ -18,6 +18,7 @@ type (
 
 	// Scanner contains the configuration for the host scanner.
 	Scanner struct {
+		EnableManualScan    bool          `yaml:"enableManualScan,omitempty"`
 		Threads             int           `yaml:"threads,omitempty"`
 		Timeout             time.Duration `yaml:"timeout,omitempty"`
 		MaxLastScan         time.Duration `yaml:"maxLastScan,omitempty"`
