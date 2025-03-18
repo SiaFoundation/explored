@@ -12,6 +12,7 @@ import (
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/config"
+	"go.sia.tech/explored/geoip"
 	"go.uber.org/zap"
 )
 
@@ -94,6 +95,7 @@ type Explorer struct {
 	cm ChainManager
 
 	scanCfg config.Scanner
+	locator geoip.Locator
 
 	log *zap.Logger
 
@@ -136,6 +138,13 @@ func NewExplorer(cm ChainManager, store Store, indexCfg config.Index, scanCfg co
 		log:       log,
 	}
 
+	locator, err := geoip.NewMaxMindLocator("")
+	if err != nil {
+		e.log.Info("failed to create geoip database:", zap.Error(err))
+		return nil, err
+	}
+	e.locator = locator
+
 	tip, err := e.s.Tip()
 	if errors.Is(err, ErrNoTip) {
 		tip = types.ChainIndex{}
@@ -160,7 +169,6 @@ func NewExplorer(cm ChainManager, store Store, indexCfg config.Index, scanCfg co
 			}
 		}
 	}()
-
 	go e.scanHosts()
 
 	e.unsubscribe = e.cm.OnReorg(func(index types.ChainIndex) {
@@ -175,6 +183,7 @@ func NewExplorer(cm ChainManager, store Store, indexCfg config.Index, scanCfg co
 // Shutdown tries to close the scanning goroutines in the explorer.
 func (e *Explorer) Shutdown(ctx context.Context) error {
 	e.ctxCancel()
+	e.locator.Close()
 
 	done := make(chan struct{})
 	go func() {
@@ -410,6 +419,51 @@ func (e *Explorer) Hosts(pks []types.PublicKey) ([]Host, error) {
 // specified by dir.
 func (e *Explorer) QueryHosts(params HostQuery, sortBy HostSortColumn, dir HostSortDir, offset, limit uint64) ([]Host, error) {
 	return e.s.QueryHosts(params, sortBy, dir, offset, limit)
+}
+
+// TriggerHostScan triggers a manual blocking host scan.
+func (e *Explorer) TriggerHostScan(pk types.PublicKey) error {
+	hosts, err := e.Hosts([]types.PublicKey{pk})
+	if err != nil {
+		return fmt.Errorf("failed to retrieve host: %w", err)
+	} else if len(hosts) == 0 {
+		return fmt.Errorf("could not find host with that pubkey")
+	}
+	host := hosts[0]
+	unscannedHost := UnscannedHost{
+		PublicKey:                host.PublicKey,
+		V2:                       host.V2,
+		NetAddress:               host.NetAddress,
+		V2NetAddresses:           host.V2NetAddresses,
+		FailedInteractionsStreak: host.FailedInteractionsStreak,
+	}
+
+	var scan HostScan
+	if host.V2 {
+		scan, err = e.scanV2Host(unscannedHost)
+	} else {
+		scan, err = e.scanV1Host(unscannedHost)
+	}
+
+	now := types.CurrentTimestamp()
+	if err != nil {
+		e.log.Debug("manual host scan failed", zap.Stringer("pk", host.PublicKey), zap.Error(err))
+		scan = HostScan{
+			PublicKey: host.PublicKey,
+			Success:   false,
+			Timestamp: now,
+			NextScan:  now.Add(e.scanCfg.MaxLastScan * time.Duration(math.Pow(2, float64(host.FailedInteractionsStreak)+1))),
+		}
+	} else {
+		e.log.Debug("manual host scan succeeded", zap.Stringer("pk", host.PublicKey), zap.Error(err))
+		scan.NextScan = now.Add(e.scanCfg.MaxLastScan)
+	}
+
+	if err := e.s.AddHostScans([]HostScan{scan}); err != nil {
+		return fmt.Errorf("failed to add host scans to DB: %w", err)
+	}
+
+	return nil
 }
 
 // Search returns the type of an element (siacoin element, siafund element,

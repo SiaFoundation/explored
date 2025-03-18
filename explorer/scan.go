@@ -12,7 +12,6 @@ import (
 	"go.sia.tech/core/types"
 	crhpv4 "go.sia.tech/coreutils/rhp/v4"
 	"go.sia.tech/coreutils/rhp/v4/siamux"
-	"go.sia.tech/explored/geoip"
 	rhpv2 "go.sia.tech/explored/internal/rhp/v2"
 	rhpv3 "go.sia.tech/explored/internal/rhp/v3"
 	"go.uber.org/zap"
@@ -132,7 +131,7 @@ func (e *Explorer) scanV1Host(locator geoip.Locator, host UnscannedHost) (HostSc
 		return HostScan{}, fmt.Errorf("scanV1Host: failed to resolve host address: %w", err)
 	}
 
-	location, err := locator.Locate(resolved)
+	location, err := e.locator.Locate(resolved)
 	if err != nil {
 		e.log.Debug("Failed to resolve IP geolocation, not setting country code", zap.String("addr", host.NetAddress))
 	}
@@ -178,7 +177,7 @@ func (e *Explorer) scanV2Host(locator geoip.Locator, host UnscannedHost) (HostSc
 		return HostScan{}, fmt.Errorf("scanHost: failed to resolve host address: %w", err)
 	}
 
-	location, err := locator.Locate(resolved)
+	location, err := e.locator.Locate(resolved)
 	if err != nil {
 		e.log.Debug("Failed to resolve IP geolocation, not setting country code", zap.String("addr", host.NetAddress))
 	}
@@ -211,13 +210,6 @@ func (e *Explorer) scanHosts() {
 	}
 	e.log.Info("Syncing complete, will begin scanning hosts")
 
-	locator, err := geoip.NewMaxMindLocator("")
-	if err != nil {
-		e.log.Info("failed to create geoip database:", zap.Error(err))
-		return
-	}
-	defer locator.Close()
-
 	for !e.isClosed() {
 		now := types.CurrentTimestamp()
 		lastAnnouncementCutoff := now.Add(-e.scanCfg.MinLastAnnouncement)
@@ -245,9 +237,9 @@ func (e *Explorer) scanHosts() {
 
 				var err error
 				if host.IsV2() {
-					results[i], err = e.scanV2Host(locator, host)
+					results[i], err = e.scanV2Host(host)
 				} else {
-					results[i], err = e.scanV1Host(locator, host)
+					results[i], err = e.scanV1Host(host)
 				}
 				now := types.CurrentTimestamp()
 				if err != nil {

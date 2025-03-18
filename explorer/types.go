@@ -374,14 +374,15 @@ type Host struct {
 
 	Location geoip.Location `json:"location"`
 
-	KnownSince             time.Time `json:"knownSince"`
-	LastScan               time.Time `json:"lastScan"`
-	LastScanSuccessful     bool      `json:"lastScanSuccessful"`
-	LastAnnouncement       time.Time `json:"lastAnnouncement"`
-	NextScan               time.Time `json:"nextScan"`
-	TotalScans             uint64    `json:"totalScans"`
-	SuccessfulInteractions uint64    `json:"successfulInteractions"`
-	FailedInteractions     uint64    `json:"failedInteractions"`
+	KnownSince               time.Time `json:"knownSince"`
+	LastScan                 time.Time `json:"lastScan"`
+	LastScanSuccessful       bool      `json:"lastScanSuccessful"`
+	LastAnnouncement         time.Time `json:"lastAnnouncement"`
+	NextScan                 time.Time `json:"nextScan"`
+	TotalScans               uint64    `json:"totalScans"`
+	SuccessfulInteractions   uint64    `json:"successfulInteractions"`
+	FailedInteractions       uint64    `json:"failedInteractions"`
+	FailedInteractionsStreak uint64    `json:"failedInteractionsStreak"`
 
 	Settings   rhpv2.HostSettings   `json:"settings"`
 	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
