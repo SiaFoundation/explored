@@ -73,6 +73,7 @@ type (
 		V2ContractRevisions(id types.FileContractID) (result []explorer.V2FileContract, err error)
 		Search(id string) (explorer.SearchType, error)
 
+		TriggerHostScan(pk types.PublicKey) error
 		Hosts(pks []types.PublicKey) ([]explorer.Host, error)
 		QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortColumn, dir explorer.HostSortDir, offset, limit uint64) ([]explorer.Host, error)
 	}
@@ -694,6 +695,17 @@ func (s *server) pubkeyHostHandler(jc jape.Context) {
 	jc.Encode(hosts[0])
 }
 
+func (s *server) pubkeyHostScanHandler(jc jape.Context) {
+	var key types.PublicKey
+	if jc.DecodeParam("key", &key) != nil {
+		return
+	}
+
+	if jc.Check("failed to scan host", s.e.TriggerHostScan(key)) != nil {
+		return
+	}
+}
+
 func (s *server) hostsHandler(jc jape.Context) {
 	var params explorer.HostQuery
 	if jc.Decode(&params) != nil {
@@ -821,6 +833,7 @@ func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.Source) h
 
 		"GET    /pubkey/:key/contracts": srv.pubkeyContractsHandler,
 		"GET    /pubkey/:key/host":      srv.pubkeyHostHandler,
+		"POST   /pubkey/:key/host/scan": srv.pubkeyHostScanHandler,
 
 		"GET    /metrics/block":     srv.blocksMetricsHandler,
 		"GET    /metrics/block/:id": srv.blocksMetricsIDHandler,
