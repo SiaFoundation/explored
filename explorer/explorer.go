@@ -476,6 +476,8 @@ func (e *Explorer) Search(id string) (SearchType, error) {
 	return e.s.Search(id)
 }
 
+// ManualScanEnabled returns whether this explored instance allows users to
+// manually trigger scans.
 func (e *Explorer) ManualScanEnabled() bool {
 	return e.scanCfg.EnableManualScan
 }
