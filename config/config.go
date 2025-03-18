@@ -18,9 +18,24 @@ type (
 
 	// Scanner contains the configuration for the host scanner.
 	Scanner struct {
-		Threads             int           `yaml:"threads,omitempty"`
-		Timeout             time.Duration `yaml:"timeout,omitempty"`
-		MaxLastScan         time.Duration `yaml:"maxLastScan,omitempty"`
+		// BatchSize represents the maximum number of hosts we will
+		// simultaneously scan.
+		BatchSize uint64 `yaml:"batchSize,omitempty"`
+		// Timeout represents the maximum amount of time we will spend scanning
+		// a single host.
+		Timeout time.Duration `yaml:"timeout,omitempty"`
+		// CheckAgainDelay represents the amount of time we will wait before
+		// calling HostsForScanning again if the previous call returned zero
+		// hosts to scan.
+		CheckAgainDelay time.Duration `yaml:"checkAgainDelay,omitempty"`
+		// MaxLastScan represents how frequently hosts will be scanned.  If a
+		// scan is successful, the hosts next scan time will be set to
+		// the current time plus MaxLastScan.  If it fails, the next scan time
+		// is set to the current time plus MaxLastScan * pow(2, # of
+		// consecutive failed scans).
+		MaxLastScan time.Duration `yaml:"maxLastScan,omitempty"`
+		// MinLastAnnouncement represents how far back we will search for
+		// announcements to find hosts to scan.
 		MinLastAnnouncement time.Duration `yaml:"minLastAnnouncement,omitempty"`
 	}
 

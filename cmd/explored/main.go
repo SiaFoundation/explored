@@ -45,8 +45,9 @@ var cfg = config.Config{
 		EnableUPNP: false,
 	},
 	Scanner: config.Scanner{
-		Threads:             10,
+		BatchSize:           100,
 		Timeout:             1 * time.Minute,
+		CheckAgainDelay:     15 * time.Second,
 		MaxLastScan:         1 * time.Hour,
 		MinLastAnnouncement: 365 * 24 * time.Hour,
 	},

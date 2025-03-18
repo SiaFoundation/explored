@@ -331,8 +331,9 @@ func TestScan(t *testing.T) {
 	v4Addr, _ := testV2Host(t, pk3, cm, s, w, c, sr, ss, zap.NewNop())
 
 	cfg := config.Scanner{
-		Threads:             10,
+		BatchSize:           100,
 		Timeout:             10 * time.Second,
+		CheckAgainDelay:     100 * time.Millisecond,
 		MaxLastScan:         3 * time.Hour,
 		MinLastAnnouncement: 90 * 24 * time.Hour,
 	}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"net"
-	"testing"
 	"time"
 
 	crhpv2 "go.sia.tech/core/rhp/v2"
@@ -17,10 +16,6 @@ import (
 	rhpv2 "go.sia.tech/explored/internal/rhp/v2"
 	rhpv3 "go.sia.tech/explored/internal/rhp/v3"
 	"go.uber.org/zap"
-)
-
-const (
-	scanBatchSize = 100
 )
 
 func isSynced(b Block) bool {
@@ -223,15 +218,11 @@ func (e *Explorer) scanHosts() {
 	}
 	defer locator.Close()
 
-	tryAgainInterval := 15 * time.Second
-	if testing.Testing() {
-		tryAgainInterval = 100 * time.Millisecond
-	}
 	for !e.isClosed() {
 		now := types.CurrentTimestamp()
 		lastAnnouncementCutoff := now.Add(-e.scanCfg.MinLastAnnouncement)
 
-		batch, err := e.s.HostsForScanning(lastAnnouncementCutoff, scanBatchSize)
+		batch, err := e.s.HostsForScanning(lastAnnouncementCutoff, e.scanCfg.BatchSize)
 		if err != nil {
 			e.log.Info("failed to get hosts for scanning:", zap.Error(err))
 			return
@@ -240,7 +231,8 @@ func (e *Explorer) scanHosts() {
 			case <-e.ctx.Done():
 				e.log.Info("shutdown:", zap.Error(e.ctx.Err()))
 				return
-			case <-time.After(tryAgainInterval):
+			// wait until we call HostsForScanning again
+			case <-time.After(e.scanCfg.CheckAgainDelay):
 				continue // check again
 			}
 		}
