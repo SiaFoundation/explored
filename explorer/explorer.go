@@ -475,3 +475,7 @@ func (e *Explorer) TriggerHostScan(pk types.PublicKey) error {
 func (e *Explorer) Search(id string) (SearchType, error) {
 	return e.s.Search(id)
 }
+
+func (e *Explorer) ManualScanEnabled() bool {
+	return e.scanCfg.EnableManualScan
+}
