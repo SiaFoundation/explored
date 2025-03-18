@@ -431,11 +431,10 @@ func (e *Explorer) TriggerHostScan(pk types.PublicKey) error {
 	}
 	host := hosts[0]
 	unscannedHost := UnscannedHost{
-		PublicKey:                host.PublicKey,
-		V2:                       host.V2,
-		NetAddress:               host.NetAddress,
-		V2NetAddresses:           host.V2NetAddresses,
-		FailedInteractionsStreak: host.FailedInteractionsStreak,
+		PublicKey:      host.PublicKey,
+		V2:             host.V2,
+		NetAddress:     host.NetAddress,
+		V2NetAddresses: host.V2NetAddresses,
 	}
 
 	var scan HostScan
@@ -452,17 +451,18 @@ func (e *Explorer) TriggerHostScan(pk types.PublicKey) error {
 			PublicKey: host.PublicKey,
 			Success:   false,
 			Timestamp: now,
-			NextScan:  now.Add(e.scanCfg.MaxLastScan * time.Duration(math.Pow(2, float64(host.FailedInteractionsStreak)+1))),
 		}
 	} else {
 		e.log.Debug("manual host scan succeeded", zap.Stringer("pk", host.PublicKey), zap.Error(err))
-		scan.NextScan = now.Add(e.scanCfg.MaxLastScan)
 	}
+	// We don't apply the exponential delay penalty to manually scanned hosts.
+	// Given that this would mostly be used by someone setting up or
+	// configuring their host, it seems wrong to use it here.
+	scan.NextScan = now.Add(e.scanCfg.MaxLastScan)
 
 	if err := e.s.AddHostScans([]HostScan{scan}); err != nil {
 		return fmt.Errorf("failed to add host scans to DB: %w", err)
 	}
-
 	return nil
 }
 
