@@ -73,6 +73,7 @@ type (
 		V2ContractRevisions(id types.FileContractID) (result []explorer.V2FileContract, err error)
 		Search(id string) (explorer.SearchType, error)
 
+		ManualScanEnabled() bool
 		TriggerHostScan(pk types.PublicKey) error
 		Hosts(pks []types.PublicKey) ([]explorer.Host, error)
 		QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortColumn, dir explorer.HostSortDir, offset, limit uint64) ([]explorer.Host, error)
@@ -693,6 +694,11 @@ func (s *server) pubkeyHostHandler(jc jape.Context) {
 }
 
 func (s *server) pubkeyHostScanHandler(jc jape.Context) {
+	if !s.e.ManualScanEnabled() {
+		jc.Error(errors.New("manual scanning not enabled on this instance"), http.StatusForbidden)
+		return
+	}
+
 	var key types.PublicKey
 	if jc.DecodeParam("key", &key) != nil {
 		return
