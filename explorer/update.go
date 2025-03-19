@@ -90,6 +90,13 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 		}
 	}
 
+	for _, txn := range cau.Block.V2Transactions() {
+		txnID := txn.ID()
+		for i := range txn.SiacoinOutputs {
+			sources[txn.SiacoinOutputID(txnID, i)] = SourceTransaction
+		}
+	}
+
 	for _, diff := range cau.FileContractElementDiffs() {
 		if diff.Resolved {
 			fcID := diff.FileContractElement.ID

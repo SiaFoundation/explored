@@ -159,6 +159,7 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 
 		Equal(t, "address", expected.Address, got.Address)
 		Equal(t, "value", expected.Value, got.Value)
+		Equal(t, "source", explorer.SourceTransaction, gotTxn.SiacoinOutputs[i].Source)
 	}
 
 	Equal(t, "siafund inputs", len(expectTxn.SiafundInputs), len(gotTxn.SiafundInputs))
