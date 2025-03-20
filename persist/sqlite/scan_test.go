@@ -331,14 +331,14 @@ func TestScan(t *testing.T) {
 	v4Addr, _ := testV2Host(t, pk3, cm, s, w, c, sr, ss, zap.NewNop())
 
 	cfg := config.Scanner{
-		BatchSize:           100,
-		Timeout:             10 * time.Second,
-		CheckAgainDelay:     100 * time.Millisecond,
-		MaxLastScan:         3 * time.Hour,
+		NumThreads:          100,
+		ScanTimeout:         10 * time.Second,
+		ScanFrequency:       100 * time.Millisecond,
+		ScanInterval:        3 * time.Hour,
 		MinLastAnnouncement: 90 * 24 * time.Hour,
 	}
 
-	e, err := explorer.NewExplorer(cm, db, 1000, cfg, log)
+	e, err := explorer.NewExplorer(cm, db, config.Index{BatchSize: 1000}, cfg, log)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -405,7 +405,7 @@ func TestScan(t *testing.T) {
 		}
 	}
 
-	time.Sleep(cfg.Timeout)
+	time.Sleep(cfg.ScanTimeout)
 
 	{
 		tests := []struct {
@@ -425,7 +425,7 @@ func TestScan(t *testing.T) {
 					testutil.Equal(t, "host.LastScanSuccessful", false, host.LastScanSuccessful)
 					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
 					testutil.Equal(t, "host.LastAnnouncement", b1.Timestamp, host.LastAnnouncement)
-					testutil.Equal(t, "host.NextScan", host.LastScan.Add(2*cfg.MaxLastScan), host.NextScan)
+					testutil.Equal(t, "host.NextScan", host.LastScan.Add(2*cfg.ScanInterval), host.NextScan)
 				},
 			},
 			{
@@ -440,7 +440,7 @@ func TestScan(t *testing.T) {
 					testutil.Equal(t, "host.LastScanSuccessful", true, host.LastScanSuccessful)
 					testutil.Equal(t, "host.KnownSince", b2.Timestamp, host.KnownSince)
 					testutil.Equal(t, "host.LastAnnouncement", b2.Timestamp, host.LastAnnouncement)
-					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.MaxLastScan), host.NextScan)
+					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.ScanInterval), host.NextScan)
 
 					host.V2Settings.Prices.ValidUntil, host.V2Settings.Prices.TipHeight, host.V2Settings.Prices.Signature = time.Time{}, 0, types.Signature{}
 					testutil.Equal(t, "host.V2Settings", v2Settings, host.V2Settings)
@@ -458,7 +458,7 @@ func TestScan(t *testing.T) {
 					testutil.Equal(t, "host.LastScanSuccessful", false, host.LastScanSuccessful)
 					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
 					testutil.Equal(t, "host.LastAnnouncement", b1.Timestamp, host.LastAnnouncement)
-					testutil.Equal(t, "host.NextScan", host.LastScan.Add(2*cfg.MaxLastScan), host.NextScan)
+					testutil.Equal(t, "host.NextScan", host.LastScan.Add(2*cfg.ScanInterval), host.NextScan)
 				},
 			},
 			{
@@ -473,7 +473,7 @@ func TestScan(t *testing.T) {
 					testutil.Equal(t, "host.LastScanSuccessful", true, host.LastScanSuccessful)
 					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
 					testutil.Equal(t, "host.LastAnnouncement", b1.Timestamp, host.LastAnnouncement)
-					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.MaxLastScan), host.NextScan)
+					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.ScanInterval), host.NextScan)
 
 					testutil.Equal(t, "host.Settings", settings, host.Settings)
 					testutil.Equal(t, "host.PriceTable", table, host.PriceTable)
@@ -519,7 +519,7 @@ func TestScan(t *testing.T) {
 	// This will trigger a rescan because a host announcement sets the next_scan time for
 	// that host to the timestamp of the block containing the announcement.
 
-	time.Sleep(cfg.Timeout)
+	time.Sleep(cfg.ScanTimeout)
 	{
 		tests := []struct {
 			name   string
@@ -538,7 +538,7 @@ func TestScan(t *testing.T) {
 					testutil.Equal(t, "host.LastScanSuccessful", false, host.LastScanSuccessful)
 					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
 					testutil.Equal(t, "host.LastAnnouncement", b3.Timestamp, host.LastAnnouncement)
-					testutil.Equal(t, "host.NextScan", host.LastScan.Add(2*2*cfg.MaxLastScan), host.NextScan)
+					testutil.Equal(t, "host.NextScan", host.LastScan.Add(2*2*cfg.ScanInterval), host.NextScan)
 				},
 			},
 			{
@@ -553,7 +553,7 @@ func TestScan(t *testing.T) {
 					testutil.Equal(t, "host.LastScanSuccessful", true, host.LastScanSuccessful)
 					testutil.Equal(t, "host.KnownSince", b2.Timestamp, host.KnownSince)
 					testutil.Equal(t, "host.LastAnnouncement", b4.Timestamp, host.LastAnnouncement)
-					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.MaxLastScan), host.NextScan)
+					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.ScanInterval), host.NextScan)
 
 					host.V2Settings.Prices.ValidUntil, host.V2Settings.Prices.TipHeight, host.V2Settings.Prices.Signature = time.Time{}, 0, types.Signature{}
 					testutil.Equal(t, "host.V2Settings", v2Settings, host.V2Settings)
@@ -571,7 +571,7 @@ func TestScan(t *testing.T) {
 					testutil.Equal(t, "host.LastScanSuccessful", false, host.LastScanSuccessful)
 					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
 					testutil.Equal(t, "host.LastAnnouncement", b3.Timestamp, host.LastAnnouncement)
-					testutil.Equal(t, "host.NextScan", host.LastScan.Add(2*2*cfg.MaxLastScan), host.NextScan)
+					testutil.Equal(t, "host.NextScan", host.LastScan.Add(2*2*cfg.ScanInterval), host.NextScan)
 				},
 			},
 			{
@@ -586,7 +586,7 @@ func TestScan(t *testing.T) {
 					testutil.Equal(t, "host.LastScanSuccessful", true, host.LastScanSuccessful)
 					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
 					testutil.Equal(t, "host.LastAnnouncement", b3.Timestamp, host.LastAnnouncement)
-					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.MaxLastScan), host.NextScan)
+					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.ScanInterval), host.NextScan)
 
 					testutil.Equal(t, "host.Settings", settings, host.Settings)
 					testutil.Equal(t, "host.PriceTable", table, host.PriceTable)

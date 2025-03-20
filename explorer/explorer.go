@@ -125,7 +125,7 @@ func (e *Explorer) syncStore(index types.ChainIndex, batchSize int) error {
 }
 
 // NewExplorer returns a Sia explorer.
-func NewExplorer(cm ChainManager, store Store, batchSize int, scanCfg config.Scanner, log *zap.Logger) (*Explorer, error) {
+func NewExplorer(cm ChainManager, store Store, indexCfg config.Index, scanCfg config.Scanner, log *zap.Logger) (*Explorer, error) {
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	e := &Explorer{
 		s:         store,
@@ -142,7 +142,7 @@ func NewExplorer(cm ChainManager, store Store, batchSize int, scanCfg config.Sca
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to get tip: %w", err)
 	}
-	if err := e.syncStore(tip, batchSize); err != nil {
+	if err := e.syncStore(tip, indexCfg.BatchSize); err != nil {
 		return nil, fmt.Errorf("failed to subscribe to chain manager: %w", err)
 	}
 
@@ -155,7 +155,7 @@ func NewExplorer(cm ChainManager, store Store, batchSize int, scanCfg config.Sca
 			} else if err != nil {
 				e.log.Error("failed to get tip", zap.Error(err))
 			}
-			if err := e.syncStore(lastTip, batchSize); err != nil {
+			if err := e.syncStore(lastTip, indexCfg.BatchSize); err != nil {
 				e.log.Panic("failed to sync store", zap.Error(err))
 			}
 		}

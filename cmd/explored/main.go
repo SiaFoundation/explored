@@ -45,10 +45,10 @@ var cfg = config.Config{
 		EnableUPNP: false,
 	},
 	Scanner: config.Scanner{
-		BatchSize:           100,
-		Timeout:             1 * time.Minute,
-		CheckAgainDelay:     15 * time.Second,
-		MaxLastScan:         1 * time.Hour,
+		NumThreads:          100,
+		ScanTimeout:         1 * time.Minute,
+		ScanFrequency:       15 * time.Second,
+		ScanInterval:        1 * time.Hour,
 		MinLastAnnouncement: 365 * 24 * time.Hour,
 	},
 	ExchangeRates: config.ExchangeRates{
@@ -259,7 +259,7 @@ func runRootCmd(ctx context.Context, log *zap.Logger) error {
 	defer s.Close()
 	go s.Run()
 
-	e, err := explorer.NewExplorer(cm, store, cfg.Index.BatchSize, cfg.Scanner, log.Named("explorer"))
+	e, err := explorer.NewExplorer(cm, store, cfg.Index, cfg.Scanner, log.Named("explorer"))
 	if err != nil {
 		return fmt.Errorf("failed to create explorer: %w", err)
 	}
