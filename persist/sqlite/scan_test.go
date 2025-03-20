@@ -405,7 +405,7 @@ func TestScan(t *testing.T) {
 		}
 	}
 
-	time.Sleep(cfg.ScanTimeout)
+	time.Sleep(3 * time.Second)
 
 	{
 		tests := []struct {
@@ -519,7 +519,7 @@ func TestScan(t *testing.T) {
 	// This will trigger a rescan because a host announcement sets the next_scan time for
 	// that host to the timestamp of the block containing the announcement.
 
-	time.Sleep(cfg.ScanTimeout)
+	time.Sleep(3 * time.Second)
 	{
 		tests := []struct {
 			name   string
