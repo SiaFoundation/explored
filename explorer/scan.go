@@ -229,7 +229,7 @@ func (e *Explorer) scanHosts() {
 		} else if len(batch) == 0 {
 			select {
 			case <-e.ctx.Done():
-				e.log.Info("shutdown:", zap.Error(e.ctx.Err()))
+				e.log.Debug("shutdown:", zap.Error(e.ctx.Err()))
 				return
 			// wait until we call HostsForScanning again
 			case <-time.After(e.scanCfg.ScanFrequency):
