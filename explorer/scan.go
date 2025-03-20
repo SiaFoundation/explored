@@ -23,7 +23,7 @@ func isSynced(b Block) bool {
 }
 
 func (e *Explorer) waitForSync() error {
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	for {
