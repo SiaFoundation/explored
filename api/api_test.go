@@ -48,11 +48,13 @@ func newExplorer(t *testing.T, network *consensus.Network, genesisBlock types.Bl
 
 	cm := chain.NewManager(store, genesisState)
 
-	e, err := explorer.NewExplorer(cm, db, 1000, config.Scanner{
-		BatchSize:           100,
-		Timeout:             30 * time.Second,
-		CheckAgainDelay:     100 * time.Millisecond,
-		MaxLastScan:         3 * time.Hour,
+	e, err := explorer.NewExplorer(cm, db, config.Index{
+		BatchSize: 1000,
+	}, config.Scanner{
+		NumThreads:          100,
+		ScanTimeout:         30 * time.Second,
+		ScanFrequency:       100 * time.Millisecond,
+		ScanInterval:        3 * time.Hour,
 		MinLastAnnouncement: 90 * 24 * time.Hour,
 	}, log)
 	if err != nil {
