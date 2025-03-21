@@ -5,6 +5,8 @@ import (
 	"slices"
 	"time"
 
+	proto4 "go.sia.tech/core/rhp/v4"
+
 	"go.sia.tech/core/types"
 	"go.sia.tech/explored/explorer"
 )
@@ -65,10 +67,27 @@ func (s *Store) HostMetrics() (result explorer.HostMetrics, err error) {
 				return fmt.Errorf("failed to scan host: %w", err)
 			}
 
-			result.TotalStorage += host.Settings.TotalStorage
-			result.RemainingStorage += host.Settings.RemainingStorage
+			if host.V2 {
+				result.TotalStorage += proto4.SectorSize * host.V2Settings.TotalStorage
+				result.RemainingStorage += proto4.SectorSize * host.V2Settings.RemainingStorage
 
-			if !host.V2 {
+				v2MaxCollateral = append(v2MaxCollateral, host.V2Settings.MaxCollateral)
+				v2MaxContractDuration = append(v2MaxContractDuration, host.V2Settings.MaxContractDuration)
+				v2RemainingStorage = append(v2RemainingStorage, host.V2Settings.RemainingStorage)
+				v2TotalStorage = append(v2TotalStorage, host.V2Settings.TotalStorage)
+
+				v2PricesContractPrice = append(v2PricesContractPrice, host.V2Settings.Prices.ContractPrice)
+				v2PricesCollateral = append(v2PricesCollateral, host.V2Settings.Prices.Collateral)
+				v2PricesStoragePrice = append(v2PricesStoragePrice, host.V2Settings.Prices.StoragePrice)
+				v2PricesIngressPrice = append(v2PricesIngressPrice, host.V2Settings.Prices.IngressPrice)
+				v2PricesEgressPrice = append(v2PricesEgressPrice, host.V2Settings.Prices.EgressPrice)
+				v2PricesFreeSectorPrice = append(v2PricesFreeSectorPrice, host.V2Settings.Prices.FreeSectorPrice)
+				v2PricesTipHeight = append(v2PricesTipHeight, host.V2Settings.Prices.TipHeight)
+				v2PricesValidUntil = append(v2PricesValidUntil, uint64(host.V2Settings.Prices.ValidUntil.Unix()))
+			} else {
+				result.TotalStorage += host.Settings.TotalStorage
+				result.RemainingStorage += host.Settings.RemainingStorage
+
 				settingsMaxDownloadBatchSize = append(settingsMaxDownloadBatchSize, host.Settings.MaxDownloadBatchSize)
 				settingsMaxDuration = append(settingsMaxDuration, host.Settings.MaxDuration)
 				settingsMaxReviseBatchSize = append(settingsMaxReviseBatchSize, host.Settings.MaxReviseBatchSize)
@@ -120,20 +139,6 @@ func (s *Store) HostMetrics() (result explorer.HostMetrics, err error) {
 				priceTableWindowSize = append(priceTableWindowSize, host.PriceTable.WindowSize)
 				priceTableRegistryEntriesLeft = append(priceTableRegistryEntriesLeft, host.PriceTable.RegistryEntriesLeft)
 				priceTableRegistryEntriesTotal = append(priceTableRegistryEntriesTotal, host.PriceTable.RegistryEntriesTotal)
-			} else {
-				v2MaxCollateral = append(v2MaxCollateral, host.V2Settings.MaxCollateral)
-				v2MaxContractDuration = append(v2MaxContractDuration, host.V2Settings.MaxContractDuration)
-				v2RemainingStorage = append(v2RemainingStorage, host.V2Settings.RemainingStorage)
-				v2TotalStorage = append(v2TotalStorage, host.V2Settings.TotalStorage)
-
-				v2PricesContractPrice = append(v2PricesContractPrice, host.V2Settings.Prices.ContractPrice)
-				v2PricesCollateral = append(v2PricesCollateral, host.V2Settings.Prices.Collateral)
-				v2PricesStoragePrice = append(v2PricesStoragePrice, host.V2Settings.Prices.StoragePrice)
-				v2PricesIngressPrice = append(v2PricesIngressPrice, host.V2Settings.Prices.IngressPrice)
-				v2PricesEgressPrice = append(v2PricesEgressPrice, host.V2Settings.Prices.EgressPrice)
-				v2PricesFreeSectorPrice = append(v2PricesFreeSectorPrice, host.V2Settings.Prices.FreeSectorPrice)
-				v2PricesTipHeight = append(v2PricesTipHeight, host.V2Settings.Prices.TipHeight)
-				v2PricesValidUntil = append(v2PricesValidUntil, uint64(host.V2Settings.Prices.ValidUntil.Unix()))
 			}
 
 			count++

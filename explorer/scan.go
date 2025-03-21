@@ -18,10 +18,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	scanBatchSize = 100
-)
-
 func isSynced(b Block) bool {
 	return time.Since(b.Timestamp) <= 3*time.Hour
 }
@@ -226,7 +222,7 @@ func (e *Explorer) scanHosts() {
 		now := types.CurrentTimestamp()
 		lastAnnouncementCutoff := now.Add(-e.scanCfg.MinLastAnnouncement)
 
-		batch, err := e.s.HostsForScanning(lastAnnouncementCutoff, scanBatchSize)
+		batch, err := e.s.HostsForScanning(lastAnnouncementCutoff, e.scanCfg.BatchSize)
 		if err != nil {
 			e.log.Info("failed to get hosts for scanning:", zap.Error(err))
 			return
@@ -235,7 +231,8 @@ func (e *Explorer) scanHosts() {
 			case <-e.ctx.Done():
 				e.log.Info("shutdown:", zap.Error(e.ctx.Err()))
 				return
-			case <-time.After(15 * time.Second):
+			// wait until we call HostsForScanning again
+			case <-time.After(e.scanCfg.CheckAgainDelay):
 				continue // check again
 			}
 		}
