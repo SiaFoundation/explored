@@ -23,7 +23,7 @@ func isSynced(b Block) bool {
 }
 
 func (e *Explorer) waitForSync() error {
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -109,7 +109,7 @@ func rhpv3PriceTable(ctx context.Context, publicKey types.PublicKey, netAddress 
 }
 
 func (e *Explorer) scanV1Host(locator geoip.Locator, host UnscannedHost) (HostScan, error) {
-	ctx, cancel := context.WithTimeout(e.ctx, e.scanCfg.Timeout)
+	ctx, cancel := context.WithTimeout(e.ctx, e.scanCfg.ScanTimeout)
 	defer cancel()
 
 	settings, err := rhpv2Settings(ctx, host.PublicKey, host.NetAddress)
@@ -149,7 +149,7 @@ func (e *Explorer) scanV1Host(locator geoip.Locator, host UnscannedHost) (HostSc
 }
 
 func (e *Explorer) scanV2Host(locator geoip.Locator, host UnscannedHost) (HostScan, error) {
-	ctx, cancel := context.WithTimeout(e.ctx, e.scanCfg.Timeout)
+	ctx, cancel := context.WithTimeout(e.ctx, e.scanCfg.ScanTimeout)
 	defer cancel()
 
 	addr, ok := host.V2SiamuxAddr()
@@ -222,17 +222,17 @@ func (e *Explorer) scanHosts() {
 		now := types.CurrentTimestamp()
 		lastAnnouncementCutoff := now.Add(-e.scanCfg.MinLastAnnouncement)
 
-		batch, err := e.s.HostsForScanning(lastAnnouncementCutoff, e.scanCfg.BatchSize)
+		batch, err := e.s.HostsForScanning(lastAnnouncementCutoff, e.scanCfg.NumThreads)
 		if err != nil {
 			e.log.Info("failed to get hosts for scanning:", zap.Error(err))
 			return
 		} else if len(batch) == 0 {
 			select {
 			case <-e.ctx.Done():
-				e.log.Info("shutdown:", zap.Error(e.ctx.Err()))
+				e.log.Debug("shutdown:", zap.Error(e.ctx.Err()))
 				return
 			// wait until we call HostsForScanning again
-			case <-time.After(e.scanCfg.CheckAgainDelay):
+			case <-time.After(e.scanCfg.ScanFrequency):
 				continue // check again
 			}
 		}
@@ -256,11 +256,11 @@ func (e *Explorer) scanHosts() {
 						PublicKey: host.PublicKey,
 						Success:   false,
 						Timestamp: now,
-						NextScan:  now.Add(e.scanCfg.MaxLastScan * time.Duration(math.Pow(2, float64(host.FailedInteractionsStreak)+1))),
+						NextScan:  now.Add(e.scanCfg.ScanInterval * time.Duration(math.Pow(2, float64(host.FailedInteractionsStreak)+1))),
 					}
 					return
 				} else {
-					results[i].NextScan = now.Add(e.scanCfg.MaxLastScan)
+					results[i].NextScan = now.Add(e.scanCfg.ScanInterval)
 				}
 			}(i, host)
 		}
