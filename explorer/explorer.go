@@ -451,6 +451,7 @@ func (e *Explorer) TriggerHostScan(pk types.PublicKey) error {
 			PublicKey: host.PublicKey,
 			Success:   false,
 			Timestamp: now,
+			Error:     err,
 		}
 	} else {
 		e.log.Debug("manual host scan succeeded", zap.Stringer("pk", host.PublicKey), zap.Error(err))

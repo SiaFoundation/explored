@@ -483,6 +483,7 @@ CREATE TABLE host_info (
     known_since INTEGER NOT NULL,
     last_scan INTEGER NOT NULL,
     last_scan_successful INTEGER NOT NULL,
+    last_scan_error TEXT NOT NULL,
     next_scan INTEGER NOT NULL,
     last_announcement INTEGER NOT NULL,
     total_scans INTEGER NOT NULL,
