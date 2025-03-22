@@ -247,6 +247,7 @@ func (e *Explorer) scanHosts() {
 					results[i] = HostScan{
 						PublicKey: host.PublicKey,
 						Success:   false,
+						Error:     err,
 						Timestamp: now,
 						NextScan:  now.Add(e.scanCfg.ScanInterval * time.Duration(math.Pow(2, float64(host.FailedInteractionsStreak)+1))),
 					}

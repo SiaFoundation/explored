@@ -389,6 +389,7 @@ type HostScan struct {
 	PublicKey types.PublicKey `json:"publicKey"`
 	Location  geoip.Location  `json:"location"`
 	Success   bool            `json:"success"`
+	Error     error           `json:"error"`
 	Timestamp time.Time       `json:"timestamp"`
 	NextScan  time.Time       `json:"nextScan"`
 
@@ -436,6 +437,7 @@ type Host struct {
 	KnownSince             time.Time `json:"knownSince"`
 	LastScan               time.Time `json:"lastScan"`
 	LastScanSuccessful     bool      `json:"lastScanSuccessful"`
+	LastScanError          string    `json:"lastScanError"`
 	LastAnnouncement       time.Time `json:"lastAnnouncement"`
 	NextScan               time.Time `json:"nextScan"`
 	TotalScans             uint64    `json:"totalScans"`
