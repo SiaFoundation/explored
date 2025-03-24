@@ -12,6 +12,7 @@ import (
 	"go.sia.tech/core/types"
 	crhpv4 "go.sia.tech/coreutils/rhp/v4"
 	"go.sia.tech/coreutils/rhp/v4/siamux"
+	"go.sia.tech/explored/geoip"
 	rhpv2 "go.sia.tech/explored/internal/rhp/v2"
 	rhpv3 "go.sia.tech/explored/internal/rhp/v3"
 	"go.uber.org/zap"
