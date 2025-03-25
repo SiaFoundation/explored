@@ -25,10 +25,9 @@ import (
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/testutil"
 	"go.sia.tech/explored/persist/sqlite"
-	"lukechampine.com/frand"
-
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
+	"lukechampine.com/frand"
 )
 
 func startTestNode(tb testing.TB, n *consensus.Network, genesis types.Block) (*chain.Manager, *syncer.Syncer, *wallet.SingleAddressWallet) {
@@ -291,7 +290,6 @@ func TestScan(t *testing.T) {
 		RegistryEntriesLeft:  40,
 		RegistryEntriesTotal: 50,
 	}
-
 	v2Settings := proto4.HostSettings{
 		ProtocolVersion:     [3]uint8{4, 0, 0},
 		Release:             "test",
@@ -315,20 +313,15 @@ func TestScan(t *testing.T) {
 	ss := ctestutil.NewEphemeralSectorStore()
 	c := ctestutil.NewEphemeralContractor(cm)
 
-	pk1 := types.GeneratePrivateKey()
-	pubkey1 := pk1.PublicKey()
+	var pks [4]types.PrivateKey
+	var pubkeys [4]types.PublicKey
+	for i := range pks {
+		pks[i] = types.GeneratePrivateKey()
+		pubkeys[i] = pks[i].PublicKey()
+	}
 
-	pk2 := types.GeneratePrivateKey()
-	pubkey2 := pk2.PublicKey()
-
-	pk3 := types.GeneratePrivateKey()
-	pubkey3 := pk3.PublicKey()
-
-	pk4 := types.GeneratePrivateKey()
-	pubkey4 := pk4.PublicKey()
-
-	rhp2Addr, _ := testV1Host(t, pk1, &settings, &table)
-	v4Addr, _ := testV2Host(t, pk3, cm, s, w, c, sr, ss, zap.NewNop())
+	rhp2Addr, _ := testV1Host(t, pks[0], &settings, &table)
+	v4Addr, _ := testV2Host(t, pks[2], cm, s, w, c, sr, ss, zap.NewNop())
 
 	cfg := config.Scanner{
 		NumThreads:          100,
@@ -346,18 +339,12 @@ func TestScan(t *testing.T) {
 	defer timeoutCancel()
 	defer e.Shutdown(timeoutCtx)
 
-	ha1 := chain.HostAnnouncement{
-		PublicKey:  pubkey1,
-		NetAddress: rhp2Addr,
-	}
-	ha2 := chain.HostAnnouncement{
-		PublicKey:  pubkey2,
-		NetAddress: "127.0.0.1:9999",
-	}
+	ha1 := chain.HostAnnouncement{PublicKey: pubkeys[0], NetAddress: rhp2Addr}
+	ha2 := chain.HostAnnouncement{PublicKey: pubkeys[1], NetAddress: "127.0.0.1:9999"}
 	txn1 := types.Transaction{
 		ArbitraryData: [][]byte{
-			ha1.ToArbitraryData(pk1),
-			ha2.ToArbitraryData(pk2),
+			ha1.ToArbitraryData(pks[0]),
+			ha2.ToArbitraryData(pks[1]),
 		},
 	}
 
@@ -366,121 +353,60 @@ func TestScan(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ha3 := chain.V2HostAnnouncement{{
-		Protocol: siamux.Protocol,
-		Address:  v4Addr,
-	}}
+	ha3 := chain.V2HostAnnouncement{{Protocol: siamux.Protocol, Address: v4Addr}}
 	txn2 := types.V2Transaction{
 		Attestations: []types.Attestation{
-			ha3.ToAttestation(cm.TipState(), pk3),
+			ha3.ToAttestation(cm.TipState(), pks[2]),
 		},
 	}
-	testutil.SignV2Transaction(cm.TipState(), pk3, &txn2)
+	testutil.SignV2Transaction(cm.TipState(), pks[2], &txn2)
 
-	ha4 := chain.V2HostAnnouncement{{
-		Protocol: siamux.Protocol,
-		Address:  "127.0.0.1:9999",
-	}}
+	ha4 := chain.V2HostAnnouncement{{Protocol: siamux.Protocol, Address: "127.0.0.1:9999"}}
 	txn3 := types.V2Transaction{
 		Attestations: []types.Attestation{
-			ha4.ToAttestation(cm.TipState(), pk4),
+			ha4.ToAttestation(cm.TipState(), pks[3]),
 		},
 	}
-	testutil.SignV2Transaction(cm.TipState(), pk4, &txn3)
+	testutil.SignV2Transaction(cm.TipState(), pks[3], &txn3)
 
 	b2 := testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn2, txn3}, types.VoidAddress)
 	if err := cm.AddBlocks([]types.Block{b2}); err != nil {
 		t.Fatal(err)
 	}
 
-	for {
-		tip, err := e.Tip()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if tip != cm.Tip() {
-			time.Sleep(time.Second)
-		} else {
-			break
+	waitForTip := func() {
+		for {
+			tip, err := e.Tip()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tip != cm.Tip() {
+				time.Sleep(time.Second)
+			} else {
+				break
+			}
 		}
 	}
-
+	waitForTip()
 	time.Sleep(2 * cfg.ScanTimeout)
 
-	{
-		tests := []struct {
-			name   string
-			pubkey types.PublicKey
-			checks func(explorer.Host)
-		}{
-			{
-				name:   "offline v2 host",
-				pubkey: pubkey4,
-				checks: func(host explorer.Host) {
-					testutil.Equal(t, "host.V2NetAddresses", ha4, host.V2NetAddresses)
-					testutil.Equal(t, "host.PublicKey", pubkey4, host.PublicKey)
-					testutil.Equal(t, "host.TotalScans", 1, host.TotalScans)
-					testutil.Equal(t, "host.SuccessfulInteractions", 0, host.SuccessfulInteractions)
-					testutil.Equal(t, "host.FailedInteractions", 1, host.FailedInteractions)
-					testutil.Equal(t, "host.LastScanSuccessful", false, host.LastScanSuccessful)
-					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
-					testutil.Equal(t, "host.LastAnnouncement", b1.Timestamp, host.LastAnnouncement)
-					testutil.Equal(t, "host.NextScan", host.LastScan.Add(2*cfg.ScanInterval), host.NextScan)
-				},
-			},
-			{
-				name:   "online v2 host",
-				pubkey: pubkey3,
-				checks: func(host explorer.Host) {
-					testutil.Equal(t, "host.V2NetAddresses", ha3, host.V2NetAddresses)
-					testutil.Equal(t, "host.PublicKey", pubkey3, host.PublicKey)
-					testutil.Equal(t, "host.TotalScans", 1, host.TotalScans)
-					testutil.Equal(t, "host.SuccessfulInteractions", 1, host.SuccessfulInteractions)
-					testutil.Equal(t, "host.FailedInteractions", 0, host.FailedInteractions)
-					testutil.Equal(t, "host.LastScanSuccessful", true, host.LastScanSuccessful)
-					testutil.Equal(t, "host.KnownSince", b2.Timestamp, host.KnownSince)
-					testutil.Equal(t, "host.LastAnnouncement", b2.Timestamp, host.LastAnnouncement)
-					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.ScanInterval), host.NextScan)
+	type hostTest struct {
+		name               string
+		pubkey             types.PublicKey
+		totalScans         uint64
+		lastScanSuccessful bool
+		knownSince         time.Time
+		lastAnnounce       time.Time
+		nextScanFactor     int
 
-					host.V2Settings.Prices.ValidUntil, host.V2Settings.Prices.TipHeight, host.V2Settings.Prices.Signature = time.Time{}, 0, types.Signature{}
-					testutil.Equal(t, "host.V2Settings", v2Settings, host.V2Settings)
-				},
-			},
-			{
-				name:   "offline v1 host",
-				pubkey: pubkey2,
-				checks: func(host explorer.Host) {
-					testutil.Equal(t, "host.NetAddress", ha2.NetAddress, host.NetAddress)
-					testutil.Equal(t, "host.PublicKey", ha2.PublicKey, host.PublicKey)
-					testutil.Equal(t, "host.TotalScans", 1, host.TotalScans)
-					testutil.Equal(t, "host.SuccessfulInteractions", 0, host.SuccessfulInteractions)
-					testutil.Equal(t, "host.FailedInteractions", 1, host.FailedInteractions)
-					testutil.Equal(t, "host.LastScanSuccessful", false, host.LastScanSuccessful)
-					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
-					testutil.Equal(t, "host.LastAnnouncement", b1.Timestamp, host.LastAnnouncement)
-					testutil.Equal(t, "host.NextScan", host.LastScan.Add(2*cfg.ScanInterval), host.NextScan)
-				},
-			},
-			{
-				name:   "online v1 host",
-				pubkey: pubkey1,
-				checks: func(host explorer.Host) {
-					testutil.Equal(t, "host.NetAddress", ha1.NetAddress, host.NetAddress)
-					testutil.Equal(t, "host.PublicKey", pubkey1, host.PublicKey)
-					testutil.Equal(t, "host.TotalScans", 1, host.TotalScans)
-					testutil.Equal(t, "host.SuccessfulInteractions", 1, host.SuccessfulInteractions)
-					testutil.Equal(t, "host.FailedInteractions", 0, host.FailedInteractions)
-					testutil.Equal(t, "host.LastScanSuccessful", true, host.LastScanSuccessful)
-					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
-					testutil.Equal(t, "host.LastAnnouncement", b1.Timestamp, host.LastAnnouncement)
-					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.ScanInterval), host.NextScan)
+		expectedV2NetAddresses []chain.NetAddress
+		expectedNetAddress     *string
+		expectedV2Settings     *proto4.HostSettings
+		expectedSettings       *proto2.HostSettings
+		expectedPriceTable     *proto3.HostPriceTable
+	}
 
-					testutil.Equal(t, "host.Settings", settings, host.Settings)
-					testutil.Equal(t, "host.PriceTable", table, host.PriceTable)
-				},
-			},
-		}
-
+	runTests := func(tests []hostTest) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				hosts, err := e.Hosts([]types.PublicKey{tt.pubkey})
@@ -490,125 +416,153 @@ func TestScan(t *testing.T) {
 					t.Fatalf("can't find host %s (%v) in DB", tt.name, tt.pubkey)
 				}
 
-				tt.checks(hosts[0])
+				h := hosts[0]
+				testutil.Equal(t, "PublicKey", tt.pubkey, h.PublicKey)
+				testutil.Equal(t, "TotalScans", tt.totalScans, h.TotalScans)
+				if tt.lastScanSuccessful {
+					testutil.Equal(t, "SuccessfulInteractions", tt.totalScans, h.SuccessfulInteractions)
+					testutil.Equal(t, "FailedInteractions", 0, h.FailedInteractions)
+				} else {
+					testutil.Equal(t, "FailedInteractions", tt.totalScans, h.FailedInteractions)
+					testutil.Equal(t, "SuccessfulInteractions", 0, h.SuccessfulInteractions)
+				}
+				testutil.Equal(t, "LastScanSuccessful", tt.lastScanSuccessful, h.LastScanSuccessful)
+				testutil.Equal(t, "KnownSince", tt.knownSince, h.KnownSince)
+				testutil.Equal(t, "LastAnnouncement", tt.lastAnnounce, h.LastAnnouncement)
+				testutil.Equal(t, "NextScan", h.LastScan.Add(time.Duration(tt.nextScanFactor)*cfg.ScanInterval), h.NextScan)
+
+				if tt.expectedV2NetAddresses != nil {
+					testutil.Equal(t, "V2NetAddresses", tt.expectedV2NetAddresses, h.V2NetAddresses)
+				}
+				if tt.expectedNetAddress != nil {
+					testutil.Equal(t, "NetAddress", *tt.expectedNetAddress, h.NetAddress)
+				}
+				if tt.expectedV2Settings != nil {
+					h.V2Settings.Prices.ValidUntil = time.Time{}
+					h.V2Settings.Prices.TipHeight = 0
+					h.V2Settings.Prices.Signature = types.Signature{}
+					testutil.Equal(t, "V2Settings", *tt.expectedV2Settings, h.V2Settings)
+				}
+				if tt.expectedSettings != nil {
+					testutil.Equal(t, "Settings", *tt.expectedSettings, h.Settings)
+				}
+				if tt.expectedPriceTable != nil {
+					testutil.Equal(t, "PriceTable", *tt.expectedPriceTable, h.PriceTable)
+				}
 			})
 		}
 	}
 
-	{
-		now := types.CurrentTimestamp()
-		lastAnnouncementCutoff := now.Add(-cfg.MinLastAnnouncement)
-
-		dbHosts, err := db.HostsForScanning(lastAnnouncementCutoff, 100)
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "len(hostsForScanning)", 0, len(dbHosts))
-	}
-
-	// add v1 host announcements again
+	runTests([]hostTest{
+		{
+			name:                   "offline v2 host",
+			pubkey:                 pubkeys[3],
+			totalScans:             1,
+			lastScanSuccessful:     false,
+			knownSince:             b1.Timestamp,
+			lastAnnounce:           b1.Timestamp,
+			nextScanFactor:         2,
+			expectedV2NetAddresses: ha4,
+		},
+		{
+			name:                   "online v2 host",
+			pubkey:                 pubkeys[2],
+			totalScans:             1,
+			lastScanSuccessful:     true,
+			knownSince:             b2.Timestamp,
+			lastAnnounce:           b2.Timestamp,
+			nextScanFactor:         1,
+			expectedV2NetAddresses: ha3,
+			expectedV2Settings:     &v2Settings,
+		},
+		{
+			name:               "offline v1 host",
+			pubkey:             pubkeys[1],
+			totalScans:         1,
+			lastScanSuccessful: false,
+			knownSince:         b1.Timestamp,
+			lastAnnounce:       b1.Timestamp,
+			nextScanFactor:     2,
+			expectedNetAddress: &ha2.NetAddress,
+		},
+		{
+			name:               "online v1 host",
+			pubkey:             pubkeys[0],
+			totalScans:         1,
+			lastScanSuccessful: true,
+			knownSince:         b1.Timestamp,
+			lastAnnounce:       b1.Timestamp,
+			nextScanFactor:     1,
+			expectedNetAddress: &ha1.NetAddress,
+			expectedSettings:   &settings,
+			expectedPriceTable: &table,
+		},
+	})
+	// Test host scanning after reannouncement
 	b3 := testutil.MineBlock(cm.TipState(), []types.Transaction{txn1}, types.VoidAddress)
-	if err := cm.AddBlocks([]types.Block{b3}); err != nil {
-		t.Fatal(err)
-	}
-	// add v2 host announcements again
+	cm.AddBlocks([]types.Block{b3})
 	b4 := testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn2, txn3}, types.VoidAddress)
-	if err := cm.AddBlocks([]types.Block{b4}); err != nil {
+	cm.AddBlocks([]types.Block{b4})
+
+	waitForTip()
+	time.Sleep(2 * cfg.ScanTimeout)
+
+	runTests([]hostTest{
+		{
+			name:                   "offline v2 host",
+			pubkey:                 pubkeys[3],
+			totalScans:             2,
+			lastScanSuccessful:     false,
+			knownSince:             b1.Timestamp,
+			lastAnnounce:           b4.Timestamp,
+			nextScanFactor:         4,
+			expectedV2NetAddresses: ha4,
+		},
+		{
+			name:                   "online v2 host",
+			pubkey:                 pubkeys[2],
+			totalScans:             2,
+			lastScanSuccessful:     true,
+			knownSince:             b2.Timestamp,
+			lastAnnounce:           b4.Timestamp,
+			nextScanFactor:         1,
+			expectedV2NetAddresses: ha3,
+			expectedV2Settings:     &v2Settings,
+		},
+		{
+			name:               "offline v1 host",
+			pubkey:             pubkeys[1],
+			totalScans:         2,
+			lastScanSuccessful: false,
+			knownSince:         b1.Timestamp,
+			lastAnnounce:       b3.Timestamp,
+			nextScanFactor:     4,
+			expectedNetAddress: &ha2.NetAddress,
+		},
+		{
+			name:               "online v1 host",
+			pubkey:             pubkeys[0],
+			totalScans:         2,
+			lastScanSuccessful: true,
+			knownSince:         b1.Timestamp,
+			lastAnnounce:       b3.Timestamp,
+			nextScanFactor:     1,
+			expectedNetAddress: &ha1.NetAddress,
+			expectedSettings:   &settings,
+			expectedPriceTable: &table,
+		},
+	})
+
+	// Check that we have no more hosts to scan
+	now := types.CurrentTimestamp()
+	dbHosts, err := db.HostsForScanning(now.Add(-cfg.MinLastAnnouncement), 100)
+	if err != nil {
 		t.Fatal(err)
 	}
-	// This will trigger a rescan because a host announcement sets the next_scan time for
-	// that host to the timestamp of the block containing the announcement.
-
-	time.Sleep(2 * cfg.ScanTimeout)
-	{
-		tests := []struct {
-			name   string
-			pubkey types.PublicKey
-			checks func(explorer.Host)
-		}{
-			{
-				name:   "offline v2 host",
-				pubkey: pubkey4,
-				checks: func(host explorer.Host) {
-					testutil.Equal(t, "host.V2NetAddresses", ha4, host.V2NetAddresses)
-					testutil.Equal(t, "host.PublicKey", pubkey4, host.PublicKey)
-					testutil.Equal(t, "host.TotalScans", 2, host.TotalScans)
-					testutil.Equal(t, "host.SuccessfulInteractions", 0, host.SuccessfulInteractions)
-					testutil.Equal(t, "host.FailedInteractions", 2, host.FailedInteractions)
-					testutil.Equal(t, "host.LastScanSuccessful", false, host.LastScanSuccessful)
-					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
-					testutil.Equal(t, "host.LastAnnouncement", b3.Timestamp, host.LastAnnouncement)
-					testutil.Equal(t, "host.NextScan", host.LastScan.Add(2*2*cfg.ScanInterval), host.NextScan)
-				},
-			},
-			{
-				name:   "online v2 host",
-				pubkey: pubkey3,
-				checks: func(host explorer.Host) {
-					testutil.Equal(t, "host.V2NetAddresses", ha3, host.V2NetAddresses)
-					testutil.Equal(t, "host.PublicKey", pubkey3, host.PublicKey)
-					testutil.Equal(t, "host.TotalScans", 2, host.TotalScans)
-					testutil.Equal(t, "host.SuccessfulInteractions", 2, host.SuccessfulInteractions)
-					testutil.Equal(t, "host.FailedInteractions", 0, host.FailedInteractions)
-					testutil.Equal(t, "host.LastScanSuccessful", true, host.LastScanSuccessful)
-					testutil.Equal(t, "host.KnownSince", b2.Timestamp, host.KnownSince)
-					testutil.Equal(t, "host.LastAnnouncement", b4.Timestamp, host.LastAnnouncement)
-					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.ScanInterval), host.NextScan)
-
-					host.V2Settings.Prices.ValidUntil, host.V2Settings.Prices.TipHeight, host.V2Settings.Prices.Signature = time.Time{}, 0, types.Signature{}
-					testutil.Equal(t, "host.V2Settings", v2Settings, host.V2Settings)
-				},
-			},
-			{
-				name:   "offline v1 host",
-				pubkey: pubkey2,
-				checks: func(host explorer.Host) {
-					testutil.Equal(t, "host.NetAddress", ha2.NetAddress, host.NetAddress)
-					testutil.Equal(t, "host.PublicKey", ha2.PublicKey, host.PublicKey)
-					testutil.Equal(t, "host.TotalScans", 2, host.TotalScans)
-					testutil.Equal(t, "host.SuccessfulInteractions", 0, host.SuccessfulInteractions)
-					testutil.Equal(t, "host.FailedInteractions", 2, host.FailedInteractions)
-					testutil.Equal(t, "host.LastScanSuccessful", false, host.LastScanSuccessful)
-					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
-					testutil.Equal(t, "host.LastAnnouncement", b3.Timestamp, host.LastAnnouncement)
-					testutil.Equal(t, "host.NextScan", host.LastScan.Add(2*2*cfg.ScanInterval), host.NextScan)
-				},
-			},
-			{
-				name:   "online v1 host",
-				pubkey: pubkey1,
-				checks: func(host explorer.Host) {
-					testutil.Equal(t, "host.NetAddress", ha1.NetAddress, host.NetAddress)
-					testutil.Equal(t, "host.PublicKey", pubkey1, host.PublicKey)
-					testutil.Equal(t, "host.TotalScans", 2, host.TotalScans)
-					testutil.Equal(t, "host.SuccessfulInteractions", 2, host.SuccessfulInteractions)
-					testutil.Equal(t, "host.FailedInteractions", 0, host.FailedInteractions)
-					testutil.Equal(t, "host.LastScanSuccessful", true, host.LastScanSuccessful)
-					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
-					testutil.Equal(t, "host.LastAnnouncement", b3.Timestamp, host.LastAnnouncement)
-					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.ScanInterval), host.NextScan)
-
-					testutil.Equal(t, "host.Settings", settings, host.Settings)
-					testutil.Equal(t, "host.PriceTable", table, host.PriceTable)
-				},
-			},
-		}
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				hosts, err := e.Hosts([]types.PublicKey{tt.pubkey})
-				if err != nil {
-					t.Fatal(err)
-				} else if len(hosts) != 1 {
-					t.Fatalf("can't find host %s (%v) in DB", tt.name, tt.pubkey)
-				}
-
-				tt.checks(hosts[0])
-			})
-		}
-	}
+	testutil.Equal(t, "hostsForScanning", 0, len(dbHosts))
 
 	{
-		hosts, err := e.Hosts([]types.PublicKey{pubkey1, pubkey3})
+		hosts, err := e.Hosts([]types.PublicKey{pubkeys[0], pubkeys[2]})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -637,98 +591,56 @@ func TestScan(t *testing.T) {
 		testutil.Equal(t, "metrics.PriceTable", v1Host.PriceTable, metrics.PriceTable)
 	}
 
-	for _, pk := range []types.PublicKey{pubkey1, pubkey2, pubkey3, pubkey4} {
+	// Manually scan all the hosts
+	for _, pk := range pubkeys {
 		if err := e.TriggerHostScan(pk); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	{
-		tests := []struct {
-			name   string
-			pubkey types.PublicKey
-			checks func(explorer.Host)
-		}{
-			{
-				name:   "offline v2 host",
-				pubkey: pubkey4,
-				checks: func(host explorer.Host) {
-					testutil.Equal(t, "host.V2NetAddresses", ha4, host.V2NetAddresses)
-					testutil.Equal(t, "host.PublicKey", pubkey4, host.PublicKey)
-					testutil.Equal(t, "host.TotalScans", 3, host.TotalScans)
-					testutil.Equal(t, "host.SuccessfulInteractions", 0, host.SuccessfulInteractions)
-					testutil.Equal(t, "host.FailedInteractions", 3, host.FailedInteractions)
-					testutil.Equal(t, "host.LastScanSuccessful", false, host.LastScanSuccessful)
-					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
-					testutil.Equal(t, "host.LastAnnouncement", b3.Timestamp, host.LastAnnouncement)
-					// no exponential backoff for manual scans
-					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.ScanInterval), host.NextScan)
-				},
-			},
-			{
-				name:   "online v2 host",
-				pubkey: pubkey3,
-				checks: func(host explorer.Host) {
-					testutil.Equal(t, "host.V2NetAddresses", ha3, host.V2NetAddresses)
-					testutil.Equal(t, "host.PublicKey", pubkey3, host.PublicKey)
-					testutil.Equal(t, "host.TotalScans", 3, host.TotalScans)
-					testutil.Equal(t, "host.SuccessfulInteractions", 3, host.SuccessfulInteractions)
-					testutil.Equal(t, "host.FailedInteractions", 0, host.FailedInteractions)
-					testutil.Equal(t, "host.LastScanSuccessful", true, host.LastScanSuccessful)
-					testutil.Equal(t, "host.KnownSince", b2.Timestamp, host.KnownSince)
-					testutil.Equal(t, "host.LastAnnouncement", b4.Timestamp, host.LastAnnouncement)
-					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.ScanInterval), host.NextScan)
-
-					host.V2Settings.Prices.ValidUntil, host.V2Settings.Prices.TipHeight, host.V2Settings.Prices.Signature = time.Time{}, 0, types.Signature{}
-					testutil.Equal(t, "host.V2Settings", v2Settings, host.V2Settings)
-				},
-			},
-			{
-				name:   "offline v1 host",
-				pubkey: pubkey2,
-				checks: func(host explorer.Host) {
-					testutil.Equal(t, "host.NetAddress", ha2.NetAddress, host.NetAddress)
-					testutil.Equal(t, "host.PublicKey", ha2.PublicKey, host.PublicKey)
-					testutil.Equal(t, "host.TotalScans", 3, host.TotalScans)
-					testutil.Equal(t, "host.SuccessfulInteractions", 0, host.SuccessfulInteractions)
-					testutil.Equal(t, "host.FailedInteractions", 3, host.FailedInteractions)
-					testutil.Equal(t, "host.LastScanSuccessful", false, host.LastScanSuccessful)
-					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
-					testutil.Equal(t, "host.LastAnnouncement", b3.Timestamp, host.LastAnnouncement)
-					// no exponential backoff for manual scans
-					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.ScanInterval), host.NextScan)
-				},
-			},
-			{
-				name:   "online v1 host",
-				pubkey: pubkey1,
-				checks: func(host explorer.Host) {
-					testutil.Equal(t, "host.NetAddress", ha1.NetAddress, host.NetAddress)
-					testutil.Equal(t, "host.PublicKey", pubkey1, host.PublicKey)
-					testutil.Equal(t, "host.TotalScans", 3, host.TotalScans)
-					testutil.Equal(t, "host.SuccessfulInteractions", 3, host.SuccessfulInteractions)
-					testutil.Equal(t, "host.FailedInteractions", 0, host.FailedInteractions)
-					testutil.Equal(t, "host.LastScanSuccessful", true, host.LastScanSuccessful)
-					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
-					testutil.Equal(t, "host.LastAnnouncement", b3.Timestamp, host.LastAnnouncement)
-					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.ScanInterval), host.NextScan)
-
-					testutil.Equal(t, "host.Settings", settings, host.Settings)
-					testutil.Equal(t, "host.PriceTable", table, host.PriceTable)
-				},
-			},
-		}
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				hosts, err := e.Hosts([]types.PublicKey{tt.pubkey})
-				if err != nil {
-					t.Fatal(err)
-				} else if len(hosts) != 1 {
-					t.Fatalf("can't find host %s (%v) in DB", tt.name, tt.pubkey)
-				}
-
-				tt.checks(hosts[0])
-			})
-		}
-	}
+	runTests([]hostTest{
+		{
+			name:                   "offline v2 host",
+			pubkey:                 pubkeys[3],
+			totalScans:             3,
+			lastScanSuccessful:     false,
+			knownSince:             b1.Timestamp,
+			lastAnnounce:           b4.Timestamp,
+			nextScanFactor:         1,
+			expectedV2NetAddresses: ha4,
+		},
+		{
+			name:                   "online v2 host",
+			pubkey:                 pubkeys[2],
+			totalScans:             3,
+			lastScanSuccessful:     true,
+			knownSince:             b2.Timestamp,
+			lastAnnounce:           b4.Timestamp,
+			nextScanFactor:         1,
+			expectedV2NetAddresses: ha3,
+			expectedV2Settings:     &v2Settings,
+		},
+		{
+			name:               "offline v1 host",
+			pubkey:             pubkeys[1],
+			totalScans:         3,
+			lastScanSuccessful: false,
+			knownSince:         b1.Timestamp,
+			lastAnnounce:       b3.Timestamp,
+			nextScanFactor:     1,
+			expectedNetAddress: &ha2.NetAddress,
+		},
+		{
+			name:               "online v1 host",
+			pubkey:             pubkeys[0],
+			totalScans:         3,
+			lastScanSuccessful: true,
+			knownSince:         b1.Timestamp,
+			lastAnnounce:       b3.Timestamp,
+			nextScanFactor:     1,
+			expectedNetAddress: &ha1.NetAddress,
+			expectedSettings:   &settings,
+			expectedPriceTable: &table,
+		},
+	})
 }
