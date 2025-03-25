@@ -12,7 +12,6 @@ import (
 	"go.sia.tech/core/types"
 	crhpv4 "go.sia.tech/coreutils/rhp/v4"
 	"go.sia.tech/coreutils/rhp/v4/siamux"
-	"go.sia.tech/explored/geoip"
 	rhpv2 "go.sia.tech/explored/internal/rhp/v2"
 	rhpv3 "go.sia.tech/explored/internal/rhp/v3"
 	"go.uber.org/zap"
@@ -108,7 +107,7 @@ func rhpv3PriceTable(ctx context.Context, publicKey types.PublicKey, netAddress 
 	return table, nil
 }
 
-func (e *Explorer) scanV1Host(locator geoip.Locator, host UnscannedHost) (HostScan, error) {
+func (e *Explorer) scanV1Host(host UnscannedHost) (HostScan, error) {
 	ctx, cancel := context.WithTimeout(e.ctx, e.scanCfg.ScanTimeout)
 	defer cancel()
 
@@ -148,7 +147,7 @@ func (e *Explorer) scanV1Host(locator geoip.Locator, host UnscannedHost) (HostSc
 	}, nil
 }
 
-func (e *Explorer) scanV2Host(locator geoip.Locator, host UnscannedHost) (HostScan, error) {
+func (e *Explorer) scanV2Host(host UnscannedHost) (HostScan, error) {
 	ctx, cancel := context.WithTimeout(e.ctx, e.scanCfg.ScanTimeout)
 	defer cancel()
 
