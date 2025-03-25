@@ -425,6 +425,9 @@ func TestScan(t *testing.T) {
 				} else {
 					testutil.Equal(t, "FailedInteractions", tt.totalScans, h.FailedInteractions)
 					testutil.Equal(t, "SuccessfulInteractions", 0, h.SuccessfulInteractions)
+					if h.LastScanError == "" {
+						t.Fatal("empty last scan error when last scan was unsuccessful")
+					}
 				}
 				testutil.Equal(t, "LastScanSuccessful", tt.lastScanSuccessful, h.LastScanSuccessful)
 				testutil.Equal(t, "KnownSince", tt.knownSince, h.KnownSince)
