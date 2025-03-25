@@ -61,7 +61,7 @@ var cfg = config.Config{
 		BatchSize: 1000,
 	},
 	Log: config.Log{
-		Level: "info",
+		Level: "debug",
 		StdOut: config.StdOut{
 			Enabled:    true,
 			Format:     "human",
