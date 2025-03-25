@@ -73,7 +73,6 @@ type (
 		V2ContractRevisions(id types.FileContractID) (result []explorer.V2FileContract, err error)
 		Search(id string) (explorer.SearchType, error)
 
-		ManualScanEnabled() bool
 		TriggerHostScan(pk types.PublicKey) error
 		Hosts(pks []types.PublicKey) ([]explorer.Host, error)
 		QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortColumn, dir explorer.HostSortDir, offset, limit uint64) ([]explorer.Host, error)
@@ -697,11 +696,6 @@ func (s *server) pubkeyHostHandler(jc jape.Context) {
 }
 
 func (s *server) pubkeyHostScanHandler(jc jape.Context) {
-	if !s.e.ManualScanEnabled() {
-		jc.Error(errors.New("manual scanning not enabled on this instance"), http.StatusForbidden)
-		return
-	}
-
 	var key types.PublicKey
 	if jc.DecodeParam("key", &key) != nil {
 		return
@@ -781,7 +775,7 @@ func (s *server) exchangeRateHandler(jc jape.Context) {
 }
 
 // NewServer returns an HTTP handler that serves the explored API.
-func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.Source) http.Handler {
+func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.Source, manualScanPassword string) http.Handler {
 	srv := server{
 		cm:        cm,
 		e:         e,
@@ -839,7 +833,7 @@ func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.Source) h
 
 		"GET    /pubkey/:key/contracts": srv.pubkeyContractsHandler,
 		"GET    /pubkey/:key/host":      srv.pubkeyHostHandler,
-		"POST   /pubkey/:key/host/scan": srv.pubkeyHostScanHandler,
+		"POST   /pubkey/:key/host/scan": jape.Adapt(jape.BasicAuth(manualScanPassword))(srv.pubkeyHostScanHandler),
 
 		"GET    /metrics/block":     srv.blocksMetricsHandler,
 		"GET    /metrics/block/:id": srv.blocksMetricsIDHandler,
