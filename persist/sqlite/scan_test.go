@@ -636,4 +636,99 @@ func TestScan(t *testing.T) {
 		testutil.Equal(t, "metrics.Settings", v1Host.Settings, metrics.Settings)
 		testutil.Equal(t, "metrics.PriceTable", v1Host.PriceTable, metrics.PriceTable)
 	}
+
+	for _, pk := range []types.PublicKey{pubkey1, pubkey2, pubkey3, pubkey4} {
+		if err := e.TriggerHostScan(pk); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	{
+		tests := []struct {
+			name   string
+			pubkey types.PublicKey
+			checks func(explorer.Host)
+		}{
+			{
+				name:   "offline v2 host",
+				pubkey: pubkey4,
+				checks: func(host explorer.Host) {
+					testutil.Equal(t, "host.V2NetAddresses", ha4, host.V2NetAddresses)
+					testutil.Equal(t, "host.PublicKey", pubkey4, host.PublicKey)
+					testutil.Equal(t, "host.TotalScans", 3, host.TotalScans)
+					testutil.Equal(t, "host.SuccessfulInteractions", 0, host.SuccessfulInteractions)
+					testutil.Equal(t, "host.FailedInteractions", 3, host.FailedInteractions)
+					testutil.Equal(t, "host.LastScanSuccessful", false, host.LastScanSuccessful)
+					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
+					testutil.Equal(t, "host.LastAnnouncement", b3.Timestamp, host.LastAnnouncement)
+					// no exponential backoff for manual scans
+					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.ScanInterval), host.NextScan)
+				},
+			},
+			{
+				name:   "online v2 host",
+				pubkey: pubkey3,
+				checks: func(host explorer.Host) {
+					testutil.Equal(t, "host.V2NetAddresses", ha3, host.V2NetAddresses)
+					testutil.Equal(t, "host.PublicKey", pubkey3, host.PublicKey)
+					testutil.Equal(t, "host.TotalScans", 3, host.TotalScans)
+					testutil.Equal(t, "host.SuccessfulInteractions", 3, host.SuccessfulInteractions)
+					testutil.Equal(t, "host.FailedInteractions", 0, host.FailedInteractions)
+					testutil.Equal(t, "host.LastScanSuccessful", true, host.LastScanSuccessful)
+					testutil.Equal(t, "host.KnownSince", b2.Timestamp, host.KnownSince)
+					testutil.Equal(t, "host.LastAnnouncement", b4.Timestamp, host.LastAnnouncement)
+					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.ScanInterval), host.NextScan)
+
+					host.V2Settings.Prices.ValidUntil, host.V2Settings.Prices.TipHeight, host.V2Settings.Prices.Signature = time.Time{}, 0, types.Signature{}
+					testutil.Equal(t, "host.V2Settings", v2Settings, host.V2Settings)
+				},
+			},
+			{
+				name:   "offline v1 host",
+				pubkey: pubkey2,
+				checks: func(host explorer.Host) {
+					testutil.Equal(t, "host.NetAddress", ha2.NetAddress, host.NetAddress)
+					testutil.Equal(t, "host.PublicKey", ha2.PublicKey, host.PublicKey)
+					testutil.Equal(t, "host.TotalScans", 3, host.TotalScans)
+					testutil.Equal(t, "host.SuccessfulInteractions", 0, host.SuccessfulInteractions)
+					testutil.Equal(t, "host.FailedInteractions", 3, host.FailedInteractions)
+					testutil.Equal(t, "host.LastScanSuccessful", false, host.LastScanSuccessful)
+					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
+					testutil.Equal(t, "host.LastAnnouncement", b3.Timestamp, host.LastAnnouncement)
+					// no exponential backoff for manual scans
+					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.ScanInterval), host.NextScan)
+				},
+			},
+			{
+				name:   "online v1 host",
+				pubkey: pubkey1,
+				checks: func(host explorer.Host) {
+					testutil.Equal(t, "host.NetAddress", ha1.NetAddress, host.NetAddress)
+					testutil.Equal(t, "host.PublicKey", pubkey1, host.PublicKey)
+					testutil.Equal(t, "host.TotalScans", 3, host.TotalScans)
+					testutil.Equal(t, "host.SuccessfulInteractions", 3, host.SuccessfulInteractions)
+					testutil.Equal(t, "host.FailedInteractions", 0, host.FailedInteractions)
+					testutil.Equal(t, "host.LastScanSuccessful", true, host.LastScanSuccessful)
+					testutil.Equal(t, "host.KnownSince", b1.Timestamp, host.KnownSince)
+					testutil.Equal(t, "host.LastAnnouncement", b3.Timestamp, host.LastAnnouncement)
+					testutil.Equal(t, "host.NextScan", host.LastScan.Add(cfg.ScanInterval), host.NextScan)
+
+					testutil.Equal(t, "host.Settings", settings, host.Settings)
+					testutil.Equal(t, "host.PriceTable", table, host.PriceTable)
+				},
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				hosts, err := e.Hosts([]types.PublicKey{tt.pubkey})
+				if err != nil {
+					t.Fatal(err)
+				} else if len(hosts) != 1 {
+					t.Fatalf("can't find host %s (%v) in DB", tt.name, tt.pubkey)
+				}
+
+				tt.checks(hosts[0])
+			})
+		}
+	}
 }

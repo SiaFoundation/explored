@@ -79,7 +79,7 @@ func newServer(t *testing.T, cm *chain.Manager, e *explorer.Explorer, listenAddr
 		exchangerates.CurrencyUSD: exchangerates.KrakenPairSiacoinUSD}, time.Second)
 	go ex.Start(ctx)
 
-	api := api.NewServer(e, cm, &syncer.Syncer{}, ex)
+	api := api.NewServer(e, cm, &syncer.Syncer{}, ex, "")
 	server := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasPrefix(r.URL.Path, "/api") {

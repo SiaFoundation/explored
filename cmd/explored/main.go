@@ -298,7 +298,8 @@ func runRootCmd(ctx context.Context, log *zap.Logger) error {
 	}
 	go ex.Start(ctx)
 
-	api := api.NewServer(e, cm, s, ex)
+	manualScanPassword := os.Getenv("MANUAL_SCAN_PASSWORD")
+	api := api.NewServer(e, cm, s, ex, manualScanPassword)
 	server := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasPrefix(r.URL.Path, "/api") {
