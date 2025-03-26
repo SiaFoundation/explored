@@ -38,6 +38,7 @@ var cfg = config.Config{
 	Directory: ".",
 	HTTP: config.HTTP{
 		Address: ":9980",
+		Password; os.Getenv("EXPLORED_API_PASSWORD"),
 	},
 	Syncer: config.Syncer{
 		Address:    ":9981",
@@ -298,8 +299,7 @@ func runRootCmd(ctx context.Context, log *zap.Logger) error {
 	}
 	go ex.Start(ctx)
 
-	apiPassword := os.Getenv("EXPLORED_API_PASSWORD")
-	api := api.NewServer(e, cm, s, ex, apiPassword)
+	api := api.NewServer(e, cm, s, ex, &cfg.HTTP.Password)
 	server := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasPrefix(r.URL.Path, "/api") {
