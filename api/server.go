@@ -115,10 +115,11 @@ var (
 )
 
 type server struct {
-	cm ChainManager
-	e  Explorer
-	s  Syncer
-	ex exchangerates.Source
+	cm                 ChainManager
+	e                  Explorer
+	s                  Syncer
+	ex                 exchangerates.Source
+	manualScanPassword string
 
 	startTime time.Time
 }
@@ -693,6 +694,14 @@ func (s *server) pubkeyHostHandler(jc jape.Context) {
 }
 
 func (s *server) pubkeyHostScanHandler(jc jape.Context) {
+	// We could use jape.BasicAuth when defining the route in the map, but it
+	// makes the jape linter think that the route is undefined, so we have some
+	// auth code here.
+	if _, p, ok := jc.Request.BasicAuth(); !ok || s.manualScanPassword == "" || p != s.manualScanPassword {
+		jc.Error(errors.New("auth needed for manual scan"), http.StatusUnauthorized)
+		return
+	}
+
 	var key types.PublicKey
 	if jc.DecodeParam("key", &key) != nil {
 		return
@@ -774,12 +783,14 @@ func (s *server) exchangeRateHandler(jc jape.Context) {
 // NewServer returns an HTTP handler that serves the explored API.
 func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.Source, manualScanPassword string) http.Handler {
 	srv := server{
-		cm:        cm,
-		e:         e,
-		s:         s,
-		ex:        ex,
-		startTime: time.Now().UTC(),
+		cm:                 cm,
+		e:                  e,
+		s:                  s,
+		ex:                 ex,
+		manualScanPassword: manualScanPassword,
+		startTime:          time.Now().UTC(),
 	}
+
 	return jape.Mux(map[string]jape.Handler{
 		"GET    /state":                  srv.stateHandler,
 		"GET    /syncer/peers":           srv.syncerPeersHandler,
@@ -830,7 +841,7 @@ func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.Source, m
 
 		"GET    /pubkey/:key/contracts": srv.pubkeyContractsHandler,
 		"GET    /pubkey/:key/host":      srv.pubkeyHostHandler,
-		"POST   /pubkey/:key/host/scan": jape.Adapt(jape.BasicAuth(manualScanPassword))(srv.pubkeyHostScanHandler),
+		"POST   /pubkey/:key/host/scan": srv.pubkeyHostScanHandler,
 
 		"GET    /metrics/block":     srv.blocksMetricsHandler,
 		"GET    /metrics/block/:id": srv.blocksMetricsIDHandler,
