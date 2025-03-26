@@ -466,6 +466,8 @@ CREATE TABLE v2_last_contract_revision (
     confirmation_block_id BLOB NOT NULL REFERENCES blocks(id) ON DELETE CASCADE,
     confirmation_transaction_id BLOB NOT NULL REFERENCES v2_transactions(transaction_id),
 
+    -- V2FileContractRenewal = 0, V2StorageProof = 1, V2FileContractExpiration = 2
+    resolution_type INTEGER,
     resolution_height BLOB,
     resolution_block_id BLOB,
     resolution_transaction_id BLOB REFERENCES v2_transactions(transaction_id),
