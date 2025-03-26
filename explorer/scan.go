@@ -201,7 +201,7 @@ func (e *Explorer) isClosed() bool {
 	}
 }
 
-func (e *Explorer) scanHosts() {
+func (e *Explorer) scanLoop() {
 	e.log.Info("Waiting for syncing to complete before scanning hosts")
 	// don't scan hosts till we're at least nearly done with syncing
 	if err := e.waitForSync(); err != nil {

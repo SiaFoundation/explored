@@ -169,7 +169,7 @@ func NewExplorer(cm ChainManager, store Store, indexCfg config.Index, scanCfg co
 			}
 		}
 	}()
-	go e.scanHosts()
+	go e.scanLoop()
 
 	e.unsubscribe = e.cm.OnReorg(func(index types.ChainIndex) {
 		select {
