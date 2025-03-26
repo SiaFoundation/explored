@@ -596,8 +596,8 @@ func TestScan(t *testing.T) {
 	}
 
 	// Manually scan all the hosts
-	for _, pk := range pubkeys {
-		e.ScanHost(pk)
+	if _, err := e.ScanHosts(pubkeys[:]...); err != nil {
+		t.Fatal(err)
 	}
 
 	runTests([]hostTest{

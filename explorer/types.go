@@ -330,7 +330,7 @@ type HostScan struct {
 	PublicKey types.PublicKey `json:"publicKey"`
 	Location  geoip.Location  `json:"location"`
 	Success   bool            `json:"success"`
-	Error     error           `json:"error"`
+	Error     string          `json:"error"`
 	Timestamp time.Time       `json:"timestamp"`
 	NextScan  time.Time       `json:"nextScan"`
 

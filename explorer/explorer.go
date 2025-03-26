@@ -421,50 +421,56 @@ func (e *Explorer) QueryHosts(params HostQuery, sortBy HostSortColumn, dir HostS
 	return e.s.QueryHosts(params, sortBy, dir, offset, limit)
 }
 
-// ScanHost synchronously scans a host.
-func (e *Explorer) ScanHost(pk types.PublicKey) error {
-	hosts, err := e.Hosts([]types.PublicKey{pk})
+// ScanHosts synchronously scans the provided host(s) and returns the resultant
+// scan details.  The errors encountered during scanner are contained in the
+// HostScan.Error field.  Errors retrieving hosts' net addresses from the
+// database or writing the scans to the database will make the returned error
+// value not equal to nil.
+func (e *Explorer) ScanHosts(pks ...types.PublicKey) ([]HostScan, error) {
+	hosts, err := e.Hosts(pks)
 	if err != nil {
-		return fmt.Errorf("failed to retrieve host: %w", err)
+		return nil, fmt.Errorf("failed to retrieve host: %w", err)
 	} else if len(hosts) == 0 {
-		return fmt.Errorf("could not find host with that pubkey")
-	}
-	host := hosts[0]
-	unscannedHost := UnscannedHost{
-		PublicKey:      host.PublicKey,
-		V2:             host.V2,
-		NetAddress:     host.NetAddress,
-		V2NetAddresses: host.V2NetAddresses,
+		return nil, fmt.Errorf("could not find any host with those pubkey(s)")
 	}
 
-	var scan HostScan
-	if host.V2 {
-		scan, err = e.scanV2Host(unscannedHost)
-	} else {
-		scan, err = e.scanV1Host(unscannedHost)
-	}
-
-	now := types.CurrentTimestamp()
-	if err != nil {
-		e.log.Debug("manual host scan failed", zap.Stringer("pk", host.PublicKey), zap.Error(err))
-		scan = HostScan{
-			PublicKey: host.PublicKey,
-			Success:   false,
-			Timestamp: now,
-			Error:     err,
+	scans := make([]HostScan, len(hosts))
+	for i, host := range hosts {
+		unscannedHost := UnscannedHost{
+			PublicKey:      host.PublicKey,
+			V2:             host.V2,
+			NetAddress:     host.NetAddress,
+			V2NetAddresses: host.V2NetAddresses,
 		}
-	} else {
-		e.log.Debug("manual host scan succeeded", zap.Stringer("pk", host.PublicKey))
-	}
-	// We don't apply the exponential delay penalty to manually scanned hosts.
-	// Given that this would mostly be used by someone setting up or
-	// configuring their host, it seems wrong to use it here.
-	scan.NextScan = now.Add(e.scanCfg.ScanInterval)
 
-	if err := e.s.AddHostScans(scan); err != nil {
-		return fmt.Errorf("failed to add host scans to DB: %w", err)
+		if host.V2 {
+			scans[i], err = e.scanV2Host(unscannedHost)
+		} else {
+			scans[i], err = e.scanV1Host(unscannedHost)
+		}
+
+		now := types.CurrentTimestamp()
+		if err != nil {
+			e.log.Debug("manual host scan failed", zap.Stringer("pk", host.PublicKey), zap.Error(err))
+			scans[i] = HostScan{
+				PublicKey: host.PublicKey,
+				Success:   false,
+				Timestamp: now,
+				Error:     err.Error(),
+			}
+		} else {
+			e.log.Debug("manual host scan succeeded", zap.Stringer("pk", host.PublicKey))
+		}
+		// We don't apply the exponential delay penalty to manually scanned hosts.
+		// Given that this would mostly be used by someone setting up or
+		// configuring their host, it seems wrong to use it here.
+		scans[i].NextScan = now.Add(e.scanCfg.ScanInterval)
 	}
-	return scan.Error
+
+	if err := e.s.AddHostScans(scans...); err != nil {
+		return nil, fmt.Errorf("failed to add host scans to DB: %w", err)
+	}
+	return scans, nil
 }
 
 // Search returns the type of an element (siacoin element, siafund element,
