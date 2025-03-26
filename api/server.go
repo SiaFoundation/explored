@@ -840,8 +840,9 @@ func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.Source, m
 		"GET    /v2/pubkey/:key/contracts": srv.v2PubkeyContractsHandler,
 
 		"GET    /pubkey/:key/contracts": srv.pubkeyContractsHandler,
-		"GET    /pubkey/:key/host":      srv.pubkeyHostHandler,
-		"POST   /pubkey/:key/host/scan": srv.pubkeyHostScanHandler,
+
+		"GET    /hosts/:key":      srv.pubkeyHostHandler,
+		"POST   /hosts/:key/scan": srv.pubkeyHostScanHandler,
 
 		"GET    /metrics/block":     srv.blocksMetricsHandler,
 		"GET    /metrics/block/:id": srv.blocksMetricsIDHandler,
