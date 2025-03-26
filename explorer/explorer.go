@@ -438,23 +438,24 @@ func (e *Explorer) TriggerHostScan(pk types.PublicKey) error {
 	}
 
 	var scan HostScan
+	var scanErr error
 	if host.V2 {
-		scan, err = e.scanV2Host(unscannedHost)
+		scan, scanErr = e.scanV2Host(unscannedHost)
 	} else {
-		scan, err = e.scanV1Host(unscannedHost)
+		scan, scanErr = e.scanV1Host(unscannedHost)
 	}
 
 	now := types.CurrentTimestamp()
-	if err != nil {
-		e.log.Debug("manual host scan failed", zap.Stringer("pk", host.PublicKey), zap.Error(err))
+	if scanErr != nil {
+		e.log.Debug("manual host scan failed", zap.Stringer("pk", host.PublicKey), zap.Error(scanErr))
 		scan = HostScan{
 			PublicKey: host.PublicKey,
 			Success:   false,
 			Timestamp: now,
-			Error:     err,
+			Error:     scanErr,
 		}
 	} else {
-		e.log.Debug("manual host scan succeeded", zap.Stringer("pk", host.PublicKey), zap.Error(err))
+		e.log.Debug("manual host scan succeeded", zap.Stringer("pk", host.PublicKey))
 	}
 	// We don't apply the exponential delay penalty to manually scanned hosts.
 	// Given that this would mostly be used by someone setting up or
@@ -464,7 +465,7 @@ func (e *Explorer) TriggerHostScan(pk types.PublicKey) error {
 	if err := e.s.AddHostScans([]HostScan{scan}); err != nil {
 		return fmt.Errorf("failed to add host scans to DB: %w", err)
 	}
-	return nil
+	return scanErr
 }
 
 // Search returns the type of an element (siacoin element, siafund element,
