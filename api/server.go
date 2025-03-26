@@ -124,6 +124,17 @@ type server struct {
 	startTime time.Time
 }
 
+func (s *server) checkAuth(jc jape.Context) bool {
+	// We could use jape.BasicAuth when defining the route in the map, but it
+	// makes the jape linter think that the route is undefined, so we have some
+	// auth code here.
+	if _, p, ok := jc.Request.BasicAuth(); !ok || s.apiPassword == "" || p != s.apiPassword {
+		jc.Error(errors.New("auth needed for manual scan"), http.StatusUnauthorized)
+		return false
+	}
+	return true
+}
+
 func (s *server) stateHandler(jc jape.Context) {
 	jc.Encode(StateResponse{
 		Version:   build.Version(),
@@ -135,6 +146,10 @@ func (s *server) stateHandler(jc jape.Context) {
 }
 
 func (s *server) syncerConnectHandler(jc jape.Context) {
+	if !s.checkAuth(jc) {
+		return
+	}
+
 	var addr string
 	if jc.Decode(&addr) != nil {
 		return
@@ -694,11 +709,7 @@ func (s *server) pubkeyHostHandler(jc jape.Context) {
 }
 
 func (s *server) pubkeyHostScanHandler(jc jape.Context) {
-	// We could use jape.BasicAuth when defining the route in the map, but it
-	// makes the jape linter think that the route is undefined, so we have some
-	// auth code here.
-	if _, p, ok := jc.Request.BasicAuth(); !ok || s.apiPassword == "" || p != s.apiPassword {
-		jc.Error(errors.New("auth needed for manual scan"), http.StatusUnauthorized)
+	if !s.checkAuth(jc) {
 		return
 	}
 
