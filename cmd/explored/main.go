@@ -61,7 +61,7 @@ var cfg = config.Config{
 		BatchSize: 1000,
 	},
 	Log: config.Log{
-		Level: "debug",
+		Level: "info",
 		StdOut: config.StdOut{
 			Enabled:    true,
 			Format:     "human",
@@ -298,8 +298,8 @@ func runRootCmd(ctx context.Context, log *zap.Logger) error {
 	}
 	go ex.Start(ctx)
 
-	manualScanPassword := os.Getenv("MANUAL_SCAN_PASSWORD")
-	api := api.NewServer(e, cm, s, ex, manualScanPassword)
+	apiPassword := os.Getenv("EXPLORED_API_PASSWORD")
+	api := api.NewServer(e, cm, s, ex, apiPassword)
 	server := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasPrefix(r.URL.Path, "/api") {

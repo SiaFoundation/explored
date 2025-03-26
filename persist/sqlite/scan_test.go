@@ -375,6 +375,7 @@ func TestScan(t *testing.T) {
 	}
 
 	waitForTip := func() {
+		t.Helper()
 		for {
 			tip, err := e.Tip()
 			if err != nil {
@@ -596,7 +597,7 @@ func TestScan(t *testing.T) {
 
 	// Manually scan all the hosts
 	for _, pk := range pubkeys {
-		e.TriggerHostScan(pk)
+		e.ScanHost(pk)
 	}
 
 	runTests([]hostTest{
