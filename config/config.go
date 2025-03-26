@@ -18,9 +18,6 @@ type (
 
 	// Scanner contains the configuration for the host scanner.
 	Scanner struct {
-		// EnableManualScan is true if we want to allow API users to manually
-		// invoke a scan of their host.
-		EnableManualScan bool `yaml:"enableManualScan,omitempty"`
 		// NumThreads represents the maximum number of hosts we will
 		// simultaneously scan.
 		NumThreads uint64 `yaml:"numThreads,omitempty"`
