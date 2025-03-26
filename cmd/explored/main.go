@@ -37,8 +37,8 @@ import (
 var cfg = config.Config{
 	Directory: ".",
 	HTTP: config.HTTP{
-		Address: ":9980",
-		Password; os.Getenv("EXPLORED_API_PASSWORD"),
+		Address:  ":9980",
+		Password: os.Getenv("EXPLORED_API_PASSWORD"),
 	},
 	Syncer: config.Syncer{
 		Address:    ":9981",
