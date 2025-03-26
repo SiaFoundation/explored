@@ -1170,7 +1170,7 @@ func (s *Store) AddHostScans(scans ...explorer.HostScan) error {
 					return fmt.Errorf("addHostScans: failed to execute successful statement: %w", err)
 				}
 			} else {
-				if _, err := unsuccessfulStmt.Exec(encode(scan.Timestamp), scan.Error.Error(), encode(scan.NextScan), encode(scan.PublicKey)); err != nil {
+				if _, err := unsuccessfulStmt.Exec(encode(scan.Timestamp), scan.Error, encode(scan.NextScan), encode(scan.PublicKey)); err != nil {
 					return fmt.Errorf("addHostScans: failed to execute unsuccessful statement: %w", err)
 				}
 			}

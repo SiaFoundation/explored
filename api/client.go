@@ -255,9 +255,9 @@ func (c *Client) Host(key types.PublicKey) (resp explorer.Host, err error) {
 	return
 }
 
-// TriggerHostScan triggers a manual host scan.
-func (c *Client) TriggerHostScan(key types.PublicKey) (err error) {
-	err = c.c.POST(fmt.Sprintf("/hosts/%s/scan", key), nil, nil)
+// ScanHost triggers a manual host scan.
+func (c *Client) ScanHost(key types.PublicKey) (resp explorer.HostScan, err error) {
+	err = c.c.POST(fmt.Sprintf("/hosts/%s/scan", key), nil, &resp)
 	return
 }
 
