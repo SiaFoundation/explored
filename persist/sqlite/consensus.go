@@ -1148,7 +1148,7 @@ func addHosts(tx *txn, hosts []explorer.Host) error {
 }
 
 // AddHostScans implements explorer.Store
-func (s *Store) AddHostScans(scans []explorer.HostScan) error {
+func (s *Store) AddHostScans(scans ...explorer.HostScan) error {
 	return s.transaction(func(tx *txn) error {
 		unsuccessfulStmt, err := tx.Prepare(`UPDATE host_info SET last_scan = ?, last_scan_successful = 0, last_scan_error = ?, next_scan = ?, total_scans = total_scans + 1, failed_interactions = failed_interactions + 1, failed_interactions_streak = failed_interactions_streak + 1 WHERE public_key = ?`)
 		if err != nil {
