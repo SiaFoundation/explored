@@ -456,7 +456,10 @@ func (e *Explorer) ScanHosts(pks ...types.PublicKey) ([]HostScan, error) {
 				PublicKey: host.PublicKey,
 				Success:   false,
 				Timestamp: now,
-				Error:     err.Error(),
+				Error: func() *string {
+					str := err.Error()
+					return &str
+				}(),
 			}
 		} else {
 			e.log.Debug("manual host scan succeeded", zap.Stringer("pk", host.PublicKey))
