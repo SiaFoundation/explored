@@ -438,21 +438,20 @@ func (e *Explorer) TriggerHostScan(pk types.PublicKey) error {
 	}
 
 	var scan HostScan
-	var scanErr error
 	if host.V2 {
-		scan, scanErr = e.scanV2Host(unscannedHost)
+		scan, err = e.scanV2Host(unscannedHost)
 	} else {
-		scan, scanErr = e.scanV1Host(unscannedHost)
+		scan, err = e.scanV1Host(unscannedHost)
 	}
 
 	now := types.CurrentTimestamp()
-	if scanErr != nil {
-		e.log.Debug("manual host scan failed", zap.Stringer("pk", host.PublicKey), zap.Error(scanErr))
+	if err != nil {
+		e.log.Debug("manual host scan failed", zap.Stringer("pk", host.PublicKey), zap.Error(err))
 		scan = HostScan{
 			PublicKey: host.PublicKey,
 			Success:   false,
 			Timestamp: now,
-			Error:     scanErr,
+			Error:     err,
 		}
 	} else {
 		e.log.Debug("manual host scan succeeded", zap.Stringer("pk", host.PublicKey))
@@ -465,7 +464,7 @@ func (e *Explorer) TriggerHostScan(pk types.PublicKey) error {
 	if err := e.s.AddHostScans([]HostScan{scan}); err != nil {
 		return fmt.Errorf("failed to add host scans to DB: %w", err)
 	}
-	return scanErr
+	return scan.Error
 }
 
 // Search returns the type of an element (siacoin element, siafund element,
