@@ -1740,7 +1740,10 @@ func TestHostAnnouncement(t *testing.T) {
 		PublicKey: hosts[0].PublicKey,
 		Success:   false,
 		Timestamp: time.Now(),
-		Error:     "error",
+		Error: func() *string {
+			x := "error"
+			return &x
+		}(),
 	}
 
 	{
