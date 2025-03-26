@@ -61,7 +61,7 @@ type Store interface {
 	Close() error
 
 	UpdateChainState(reverted []chain.RevertUpdate, applied []chain.ApplyUpdate) error
-	AddHostScans(scans []HostScan) error
+	AddHostScans(scans ...HostScan) error
 
 	Tip() (types.ChainIndex, error)
 	Block(id types.BlockID) (Block, error)
@@ -465,7 +465,7 @@ func (e *Explorer) ScanHost(pk types.PublicKey) error {
 	// configuring their host, it seems wrong to use it here.
 	scan.NextScan = now.Add(e.scanCfg.ScanInterval)
 
-	if err := e.s.AddHostScans([]HostScan{scan}); err != nil {
+	if err := e.s.AddHostScans(scan); err != nil {
 		return fmt.Errorf("failed to add host scans to DB: %w", err)
 	}
 	return scan.Error
