@@ -19,7 +19,7 @@ func scanV2FileContract(s scanner) (fce explorer.V2FileContract, err error) {
 		return
 	}
 
-	if resolutionType.Valid {
+	if resolutionType.Valid && resolutionType.V != explorer.V2ResolutionInvalid {
 		fce.ResolutionType = &resolutionType.V
 	}
 	if resolutionIndex != (types.ChainIndex{}) {
