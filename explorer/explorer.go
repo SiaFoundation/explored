@@ -20,6 +20,10 @@ var (
 	// database or there is no tips at all.
 	ErrNoTip = errors.New("no tip found")
 
+	// ErrNoBlock is returned when we are unable to find the block in the
+	// database.
+	ErrNoBlock = errors.New("block not found")
+
 	// ErrContractNotFound is returned when ContractRevisions is unable to find
 	// the specified contract ID.
 	ErrContractNotFound = errors.New("contract not found")
