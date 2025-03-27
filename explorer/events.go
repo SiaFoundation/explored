@@ -353,7 +353,6 @@ func CoreToExplorerV2Transaction(txn types.V2Transaction) (result V2Transaction)
 		parent.V2FileContractElement.StateElement = fcr.Parent.StateElement
 
 		var res any
-		var typ ResolutionType
 		switch v := fcr.Resolution.(type) {
 		case *types.V2FileContractRenewal:
 			res = V2FileContractRenewal{
@@ -366,17 +365,14 @@ func CoreToExplorerV2Transaction(txn types.V2Transaction) (result V2Transaction)
 				RenterSignature: v.RenterSignature,
 				HostSignature:   v.HostSignature,
 			}
-			typ = ResolutionTypeRenewal
 		case *types.V2StorageProof:
 			res = v
-			typ = ResolutionTypeStorageProof
 		case *types.V2FileContractExpiration:
 			res = v
-			typ = ResolutionTypeExpiration
 		}
 		result.FileContractResolutions = append(result.FileContractResolutions, V2FileContractResolution{
 			Parent:     parent,
-			Type:       typ,
+			Type:       V2ResolutionType(fcr.Resolution),
 			Resolution: res,
 		})
 	}
@@ -539,14 +535,14 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) (events []
 			missed = true
 		}
 
-		var typ ResolutionType
+		var typ V2Resolution
 		switch res.(type) {
 		case *types.V2FileContractRenewal:
-			typ = ResolutionTypeRenewal
+			typ = V2ResolutionRenewal
 		case *types.V2StorageProof:
-			typ = ResolutionTypeStorageProof
+			typ = V2ResolutionStorageProof
 		case *types.V2FileContractExpiration:
-			typ = ResolutionTypeStorageProof
+			typ = V2ResolutionStorageProof
 		default:
 			panic("unknown resolution type")
 		}

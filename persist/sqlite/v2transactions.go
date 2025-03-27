@@ -499,9 +499,10 @@ WHERE fc.id = ?`)
 
 				fcr := explorer.V2FileContractResolution{
 					Parent: parent,
+					Type:   explorer.V2Resolution(resolutionType),
 				}
-				switch resolutionType {
-				case 0: // V2FileContractRenewal
+				switch fcr.Type {
+				case explorer.V2ResolutionRenewal:
 					renewal := &explorer.V2FileContractRenewal{
 						FinalRenterOutput: finalRenterOutput,
 						FinalHostOutput:   finalHostOutput,
@@ -516,20 +517,15 @@ WHERE fc.id = ?`)
 							return fmt.Errorf("failed to scan new contract: %w", err)
 						}
 					}
-
-					fcr.Type = explorer.ResolutionTypeRenewal
 					fcr.Resolution = renewal
-				case 1: // V2StorageProof
+				case explorer.V2ResolutionStorageProof:
 					proof := &types.V2StorageProof{
 						ProofIndex: storageProofProofIndex,
 						Proof:      storageProofProof,
 						Leaf:       [64]byte(storageProofLeaf),
 					}
-
-					fcr.Type = explorer.ResolutionTypeStorageProof
 					fcr.Resolution = proof
-				case 2: // V2FileContractExpiration
-					fcr.Type = explorer.ResolutionTypeExpiration
+				case explorer.V2ResolutionExpiration:
 					fcr.Resolution = new(types.V2FileContractExpiration)
 				}
 

@@ -104,17 +104,73 @@ const (
 	SearchTypeHost SearchType = "host"
 )
 
-// A ResolutionType represents the type of a v2 file contract resolution.
-type ResolutionType string
+// A V2Resolution represents the type of a v2 file contract resolution.
+type V2Resolution int
 
 const (
-	// ResolutionTypeRenewal represents a file contract renewal.
-	ResolutionTypeRenewal ResolutionType = "renewal"
-	// ResolutionTypeStorageProof represents submission of a storage proof.
-	ResolutionTypeStorageProof ResolutionType = "storageProof"
-	// ResolutionTypeExpiration represents the expiration of a contract.
-	ResolutionTypeExpiration ResolutionType = "expiration"
+	// V2ResolutionInvalid represents an invalid resolution type.
+	V2ResolutionInvalid V2Resolution = iota
+	// V2ResolutionRenewal represents a renewal.
+	V2ResolutionRenewal
+	// V2ResolutionStorageProof represents a storage proof.
+	V2ResolutionStorageProof
+	// V2ResolutionExpiration represents contract expiry without renewal or a
+	// storage proof being submitted.
+	V2ResolutionExpiration
 )
+
+// MarshalJSON implements json.Marshaler.
+func (s V2Resolution) MarshalJSON() ([]byte, error) {
+	sourceToV2Resolution := map[V2Resolution]string{
+		V2ResolutionInvalid:      "invalid",
+		V2ResolutionRenewal:      "renewal",
+		V2ResolutionStorageProof: "storage_proof",
+		V2ResolutionExpiration:   "expiration",
+	}
+
+	str, ok := sourceToV2Resolution[s]
+	if !ok {
+		str = "invalid" // "invalid" if source is unknown
+	}
+	return json.Marshal(str)
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (s *V2Resolution) UnmarshalJSON(data []byte) error {
+	stringToV2Resolution := map[string]V2Resolution{
+		"invalid":       V2ResolutionInvalid,
+		"renewal":       V2ResolutionRenewal,
+		"storage_proof": V2ResolutionStorageProof,
+		"expiration":    V2ResolutionExpiration,
+	}
+
+	var str string
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
+	}
+
+	source, ok := stringToV2Resolution[str]
+	if !ok {
+		return errors.New("invalid resolution type")
+	}
+
+	*s = source
+	return nil
+}
+
+// V2ResolutionType determines the V2Resolution enum value from a v2 file
+// contract resolution.
+func V2ResolutionType(res types.V2FileContractResolutionType) (result V2Resolution) {
+	switch res.(type) {
+	case *types.V2FileContractRenewal:
+		result = V2ResolutionRenewal
+	case *types.V2StorageProof:
+		result = V2ResolutionStorageProof
+	case *types.V2FileContractExpiration:
+		result = V2ResolutionExpiration
+	}
+	return
+}
 
 // A SiacoinInput is a types.SiacoinInput with information about the parent
 // value.
@@ -213,6 +269,7 @@ type V2FileContract struct {
 	ConfirmationIndex         types.ChainIndex    `json:"confirmationIndex"`
 	ConfirmationTransactionID types.TransactionID `json:"confirmationTransactionID"`
 
+	ResolutionType          *V2Resolution        `json:"resolutionType"`
 	ResolutionIndex         *types.ChainIndex    `json:"resolutionIndex"`
 	ResolutionTransactionID *types.TransactionID `json:"resolutionTransactionID"`
 
@@ -251,7 +308,7 @@ type V2FileContractRenewal struct {
 // and expiration.
 type V2FileContractResolution struct {
 	Parent     V2FileContract `json:"parent"`
-	Type       ResolutionType `json:"string"`
+	Type       V2Resolution   `json:"type"`
 	Resolution any            `json:"resolution"`
 }
 
