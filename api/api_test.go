@@ -27,7 +27,9 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
-func newExplorer(t *testing.T, network *consensus.Network, genesisBlock types.Block) (*explorer.Explorer, *chain.Manager, error) {
+const testPassword = "password"
+
+func newExplorer(t *testing.T, network *consensus.Network, genesisBlock types.Block, scanCfg config.Scanner) (*explorer.Explorer, *chain.Manager, error) {
 	log := zaptest.NewLogger(t)
 	dir := t.TempDir()
 
@@ -50,13 +52,7 @@ func newExplorer(t *testing.T, network *consensus.Network, genesisBlock types.Bl
 
 	e, err := explorer.NewExplorer(cm, db, config.Index{
 		BatchSize: 1000,
-	}, config.Scanner{
-		NumThreads:          100,
-		ScanTimeout:         30 * time.Second,
-		ScanFrequency:       100 * time.Millisecond,
-		ScanInterval:        3 * time.Hour,
-		MinLastAnnouncement: 90 * 24 * time.Hour,
-	}, log)
+	}, scanCfg, log)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +75,7 @@ func newServer(t *testing.T, cm *chain.Manager, e *explorer.Explorer, listenAddr
 		exchangerates.CurrencyUSD: exchangerates.KrakenPairSiacoinUSD}, time.Second)
 	go ex.Start(ctx)
 
-	api := api.NewServer(e, cm, &syncer.Syncer{}, ex, "")
+	api := api.NewServer(e, cm, &syncer.Syncer{}, ex, testPassword)
 	server := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasPrefix(r.URL.Path, "/api") {
@@ -131,7 +127,14 @@ func TestAPI(t *testing.T) {
 	giftSC := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
 	giftSF := genesisBlock.Transactions[0].SiafundOutputs[0].Value
 
-	e, cm, err := newExplorer(t, network, genesisBlock)
+	scanCfg := config.Scanner{
+		NumThreads:          100,
+		ScanTimeout:         30 * time.Second,
+		ScanFrequency:       100 * time.Millisecond,
+		ScanInterval:        3 * time.Hour,
+		MinLastAnnouncement: 90 * 24 * time.Hour,
+	}
+	e, cm, err := newExplorer(t, network, genesisBlock, scanCfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,7 +237,7 @@ func TestAPI(t *testing.T) {
 	// Ensure explorer has time to add blocks
 	time.Sleep(2 * time.Second)
 
-	client := api.NewClient("http://"+listenAddr+"/api", "")
+	client := api.NewClient("http://"+listenAddr+"/api", testPassword)
 
 	subtests := []struct {
 		name string
@@ -589,6 +592,27 @@ func TestAPI(t *testing.T) {
 			host := hosts[0]
 			testutil.Equal(t, "pubkey", pubkey, host.PublicKey)
 			testutil.Equal(t, "net address", netAddr1, host.NetAddress)
+		}},
+		{"Manual scan", func(t *testing.T) {
+			pubkey := pk1.PublicKey()
+			scan, err := client.ScanHost(pubkey)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			testutil.Equal(t, "pubkey", pubkey, scan.PublicKey)
+			testutil.Equal(t, "success", false, scan.Success)
+			if scan.Error == nil {
+				t.Fatal("got no error when scannning an invalid host")
+			}
+		}},
+		{"Manual scan with invalid credential", func(t *testing.T) {
+			pubkey := pk1.PublicKey()
+			badAuthClient := api.NewClient("http://"+listenAddr+"/api", "")
+			_, err := badAuthClient.ScanHost(pubkey)
+			if err == nil {
+				t.Fatal("got no error when trying to use manual scan with bad auth")
+			}
 		}},
 	}
 
