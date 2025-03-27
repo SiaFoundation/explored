@@ -535,24 +535,13 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) (events []
 			missed = true
 		}
 
-		var typ V2Resolution
-		switch res.(type) {
-		case *types.V2FileContractRenewal:
-			typ = V2ResolutionRenewal
-		case *types.V2StorageProof:
-			typ = V2ResolutionStorageProof
-		case *types.V2FileContractExpiration:
-			typ = V2ResolutionStorageProof
-		default:
-			panic("unknown resolution type")
-		}
-
+		resolutionType := V2ResolutionType(res)
 		addV2Resolution := func(element types.SiacoinElement) {
 			efc := V2FileContract{V2FileContractElement: fce}
 			addEvent(types.Hash256(element.ID), element.MaturityHeight, wallet.EventTypeV2ContractResolution, EventV2ContractResolution{
 				Resolution: V2FileContractResolution{
 					Parent:     efc,
-					Type:       typ,
+					Type:       resolutionType,
 					Resolution: res,
 				},
 				SiacoinElement: SiacoinOutput{SiacoinElement: element},

@@ -168,6 +168,8 @@ func V2ResolutionType(res types.V2FileContractResolutionType) (result V2Resoluti
 		result = V2ResolutionStorageProof
 	case *types.V2FileContractExpiration:
 		result = V2ResolutionExpiration
+	default:
+		panic("unknown resolution type")
 	}
 	return
 }
