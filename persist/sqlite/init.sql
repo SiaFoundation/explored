@@ -335,7 +335,7 @@ CREATE TABLE v2_transaction_file_contract_resolutions (
     transaction_order INTEGER NOT NULL,
     parent_contract_id INTEGER REFERENCES v2_file_contract_elements(id) ON DELETE CASCADE NOT NULL, -- add an index to all foreign keys
 
-    -- V2FileContractRenewal = 0, V2StorageProof = 1, V2FileContractExpiration = 2
+    -- See explorer.V2Resolution for enum values.
     resolution_type INTEGER NOT NULL,
 
     -- V2FileContractRenewal
@@ -466,7 +466,7 @@ CREATE TABLE v2_last_contract_revision (
     confirmation_block_id BLOB NOT NULL REFERENCES blocks(id) ON DELETE CASCADE,
     confirmation_transaction_id BLOB NOT NULL REFERENCES v2_transactions(transaction_id),
 
-    -- V2FileContractRenewal = 0, V2StorageProof = 1, V2FileContractExpiration = 2
+    -- See explorer.V2Resolution for enum values.
     resolution_type INTEGER,
     resolution_height BLOB,
     resolution_block_id BLOB,
