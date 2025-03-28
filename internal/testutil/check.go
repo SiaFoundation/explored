@@ -221,7 +221,7 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 			} else {
 				CheckV2FC(t, v.NewContract, gotV.NewContract)
 
-				Equal(t, "type", "renewal", got.Type)
+				Equal(t, "type", explorer.V2ResolutionRenewal, got.Type)
 				Equal(t, "final renter output address", v.FinalRenterOutput.Address, gotV.FinalRenterOutput.Address)
 				Equal(t, "final renter output value", v.FinalRenterOutput.Value, gotV.FinalRenterOutput.Value)
 				Equal(t, "final host output address", v.FinalHostOutput.Address, gotV.FinalHostOutput.Address)
@@ -235,13 +235,13 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 			if gotV, ok := got.Resolution.(*types.V2StorageProof); !ok {
 				t.Fatalf("expected V2StorageProof, got %v", reflect.TypeOf(got.Resolution))
 			} else {
-				Equal(t, "type", "storageProof", got.Type)
+				Equal(t, "type", explorer.V2ResolutionStorageProof, got.Type)
 				Equal(t, "proof index", v.ProofIndex, gotV.ProofIndex)
 				Equal(t, "leaf", v.Leaf, gotV.Leaf)
 				Equal(t, "proof", v.Proof, gotV.Proof)
 			}
 		case *types.V2FileContractExpiration:
-			Equal(t, "type", "expiration", got.Type)
+			Equal(t, "type", explorer.V2ResolutionExpiration, got.Type)
 			if _, ok := got.Resolution.(*types.V2FileContractExpiration); !ok {
 				t.Fatalf("expected V2FileContractExpiration, got %v", reflect.TypeOf(got.Resolution))
 			}

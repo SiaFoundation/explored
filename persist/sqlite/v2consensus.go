@@ -264,7 +264,7 @@ func updateV2FileContractElements(tx *txn, revert bool, index types.ChainIndex, 
 }
 
 func updateV2FileContractIndices(tx *txn, revert bool, index types.ChainIndex, fces []explorer.V2FileContractUpdate) error {
-	resolutionIndexStmt, err := tx.Prepare(`UPDATE v2_last_contract_revision SET resolution_height = ?, resolution_block_id = ?, resolution_transaction_id = ? WHERE contract_id = ?`)
+	resolutionIndexStmt, err := tx.Prepare(`UPDATE v2_last_contract_revision SET resolution_type = ?, resolution_height = ?, resolution_block_id = ?, resolution_transaction_id = ? WHERE contract_id = ?`)
 	if err != nil {
 		return fmt.Errorf("updateV2FileContractIndices: failed to prepare resolution index statement: %w", err)
 	}
@@ -276,13 +276,14 @@ func updateV2FileContractIndices(tx *txn, revert bool, index types.ChainIndex, f
 
 		if revert {
 			if update.ResolutionTransactionID != nil {
-				if _, err := resolutionIndexStmt.Exec(nil, nil, nil, encode(fcID)); err != nil {
+				if _, err := resolutionIndexStmt.Exec(explorer.V2ResolutionInvalid, nil, nil, nil, encode(fcID)); err != nil {
 					return fmt.Errorf("updateV2FileContractIndices: failed to update resolution index: %w", err)
 				}
 			}
 		} else {
 			if update.ResolutionTransactionID != nil {
-				if _, err := resolutionIndexStmt.Exec(encode(index.Height), encode(index.ID), encode(update.ResolutionTransactionID), encode(fcID)); err != nil {
+				resolutionType := explorer.V2ResolutionType(update.Resolution)
+				if _, err := resolutionIndexStmt.Exec(resolutionType, encode(index.Height), encode(index.ID), encode(update.ResolutionTransactionID), encode(fcID)); err != nil {
 					return fmt.Errorf("updateV2FileContractIndices: failed to update resolution index: %w", err)
 				}
 			}
@@ -456,6 +457,7 @@ func addV2FileContractResolutions(tx *txn, txnID int64, txn types.V2Transaction,
 			return errors.New("addV2FileContractResolutions: parent dbID not in map")
 		}
 
+		resolutionType := explorer.V2ResolutionType(fcr.Resolution)
 		switch v := fcr.Resolution.(type) {
 		case *types.V2FileContractRenewal:
 			newDBID, ok := dbIDs[explorer.DBFileContract{
@@ -466,15 +468,15 @@ func addV2FileContractResolutions(tx *txn, txnID int64, txn types.V2Transaction,
 				return errors.New("addV2FileContractResolutions: renewal dbID not in map")
 			}
 
-			if _, err := renewalStmt.Exec(txnID, i, parentDBID, 0, newDBID, encode(v.FinalRenterOutput.Address), encode(v.FinalRenterOutput.Value), encode(v.FinalHostOutput.Address), encode(v.FinalHostOutput.Value), encode(v.RenterRollover), encode(v.HostRollover), encode(v.RenterSignature), encode(v.HostSignature)); err != nil {
+			if _, err := renewalStmt.Exec(txnID, i, parentDBID, resolutionType, newDBID, encode(v.FinalRenterOutput.Address), encode(v.FinalRenterOutput.Value), encode(v.FinalHostOutput.Address), encode(v.FinalHostOutput.Value), encode(v.RenterRollover), encode(v.HostRollover), encode(v.RenterSignature), encode(v.HostSignature)); err != nil {
 				return fmt.Errorf("addV2FileContractResolutions: failed to execute renewal statement: %w", err)
 			}
 		case *types.V2StorageProof:
-			if _, err := storageProofStmt.Exec(txnID, i, parentDBID, 1, encode(v.ProofIndex), v.Leaf[:], encode(v.Proof)); err != nil {
+			if _, err := storageProofStmt.Exec(txnID, i, parentDBID, resolutionType, encode(v.ProofIndex), v.Leaf[:], encode(v.Proof)); err != nil {
 				return fmt.Errorf("addV2FileContractResolutions: failed to execute storage proof statement: %w", err)
 			}
 		case *types.V2FileContractExpiration:
-			if _, err := expirationStmt.Exec(txnID, i, parentDBID, 2); err != nil {
+			if _, err := expirationStmt.Exec(txnID, i, parentDBID, resolutionType); err != nil {
 				return fmt.Errorf("addV2FileContractResolutions: failed to execute expiration statement: %w", err)
 			}
 		}
