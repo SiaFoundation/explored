@@ -238,6 +238,7 @@ func TestAPI(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	client := api.NewClient("http://"+listenAddr+"/api", testPassword)
+	badAuthClient := api.NewClient("http://"+listenAddr+"/api", "")
 
 	subtests := []struct {
 		name string
@@ -608,10 +609,15 @@ func TestAPI(t *testing.T) {
 		}},
 		{"Manual scan with invalid credential", func(t *testing.T) {
 			pubkey := pk1.PublicKey()
-			badAuthClient := api.NewClient("http://"+listenAddr+"/api", "")
 			_, err := badAuthClient.ScanHost(pubkey)
 			if err == nil {
 				t.Fatal("got no error when trying to use manual scan with bad auth")
+			}
+		}},
+		{"Syncer connect with invalid credential", func(t *testing.T) {
+			err := badAuthClient.SyncerConnect("127.0.0.0.1:65535")
+			if err == nil {
+				t.Fatal("got no error when trying to use syncer connect with bad auth")
 			}
 		}},
 	}
