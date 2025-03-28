@@ -5,7 +5,8 @@ import "time"
 type (
 	// HTTP contains the configuration for the HTTP server.
 	HTTP struct {
-		Address string `yaml:"address,omitempty"`
+		Address  string `yaml:"address,omitempty"`
+		Password string `yaml:"password,omitempty"`
 	}
 
 	// Syncer contains the configuration for the syncer.

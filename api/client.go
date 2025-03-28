@@ -251,7 +251,13 @@ func (c *Client) V2ContractsKey(key types.PublicKey) (resp []explorer.V2FileCont
 
 // Host returns information about the host with a given ed25519 key.
 func (c *Client) Host(key types.PublicKey) (resp explorer.Host, err error) {
-	err = c.c.GET(fmt.Sprintf("/pubkey/%s/host", key), &resp)
+	err = c.c.GET(fmt.Sprintf("/hosts/%s", key), &resp)
+	return
+}
+
+// ScanHost triggers a manual host scan.
+func (c *Client) ScanHost(key types.PublicKey) (resp explorer.HostScan, err error) {
+	err = c.c.POST(fmt.Sprintf("/hosts/%s/scan", key), nil, &resp)
 	return
 }
 

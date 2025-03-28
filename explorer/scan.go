@@ -12,7 +12,6 @@ import (
 	"go.sia.tech/core/types"
 	crhpv4 "go.sia.tech/coreutils/rhp/v4"
 	"go.sia.tech/coreutils/rhp/v4/siamux"
-	"go.sia.tech/explored/geoip"
 	rhpv2 "go.sia.tech/explored/internal/rhp/v2"
 	rhpv3 "go.sia.tech/explored/internal/rhp/v3"
 	"go.uber.org/zap"
@@ -108,7 +107,7 @@ func rhpv3PriceTable(ctx context.Context, publicKey types.PublicKey, netAddress 
 	return table, nil
 }
 
-func (e *Explorer) scanV1Host(locator geoip.Locator, host UnscannedHost) (HostScan, error) {
+func (e *Explorer) scanV1Host(host UnscannedHost) (HostScan, error) {
 	ctx, cancel := context.WithTimeout(e.ctx, e.scanCfg.ScanTimeout)
 	defer cancel()
 
@@ -132,7 +131,7 @@ func (e *Explorer) scanV1Host(locator geoip.Locator, host UnscannedHost) (HostSc
 		return HostScan{}, fmt.Errorf("scanV1Host: failed to resolve host address: %w", err)
 	}
 
-	location, err := locator.Locate(resolved)
+	location, err := e.locator.Locate(resolved)
 	if err != nil {
 		e.log.Debug("Failed to resolve IP geolocation, not setting country code", zap.String("addr", host.NetAddress))
 	}
@@ -148,7 +147,7 @@ func (e *Explorer) scanV1Host(locator geoip.Locator, host UnscannedHost) (HostSc
 	}, nil
 }
 
-func (e *Explorer) scanV2Host(locator geoip.Locator, host UnscannedHost) (HostScan, error) {
+func (e *Explorer) scanV2Host(host UnscannedHost) (HostScan, error) {
 	ctx, cancel := context.WithTimeout(e.ctx, e.scanCfg.ScanTimeout)
 	defer cancel()
 
@@ -178,7 +177,7 @@ func (e *Explorer) scanV2Host(locator geoip.Locator, host UnscannedHost) (HostSc
 		return HostScan{}, fmt.Errorf("scanHost: failed to resolve host address: %w", err)
 	}
 
-	location, err := locator.Locate(resolved)
+	location, err := e.locator.Locate(resolved)
 	if err != nil {
 		e.log.Debug("Failed to resolve IP geolocation, not setting country code", zap.String("addr", host.NetAddress))
 	}
@@ -202,7 +201,7 @@ func (e *Explorer) isClosed() bool {
 	}
 }
 
-func (e *Explorer) scanHosts() {
+func (e *Explorer) scanLoop() {
 	e.log.Info("Waiting for syncing to complete before scanning hosts")
 	// don't scan hosts till we're at least nearly done with syncing
 	if err := e.waitForSync(); err != nil {
@@ -210,13 +209,6 @@ func (e *Explorer) scanHosts() {
 		return
 	}
 	e.log.Info("Syncing complete, will begin scanning hosts")
-
-	locator, err := geoip.NewMaxMindLocator("")
-	if err != nil {
-		e.log.Info("failed to create geoip database:", zap.Error(err))
-		return
-	}
-	defer locator.Close()
 
 	for !e.isClosed() {
 		now := types.CurrentTimestamp()
@@ -245,9 +237,9 @@ func (e *Explorer) scanHosts() {
 
 				var err error
 				if host.IsV2() {
-					results[i], err = e.scanV2Host(locator, host)
+					results[i], err = e.scanV2Host(host)
 				} else {
-					results[i], err = e.scanV1Host(locator, host)
+					results[i], err = e.scanV1Host(host)
 				}
 				now := types.CurrentTimestamp()
 				if err != nil {
@@ -255,6 +247,10 @@ func (e *Explorer) scanHosts() {
 					results[i] = HostScan{
 						PublicKey: host.PublicKey,
 						Success:   false,
+						Error: func() *string {
+							str := err.Error()
+							return &str
+						}(),
 						Timestamp: now,
 						NextScan:  now.Add(e.scanCfg.ScanInterval * time.Duration(math.Pow(2, float64(host.FailedInteractionsStreak)+1))),
 					}
@@ -266,7 +262,7 @@ func (e *Explorer) scanHosts() {
 		}
 		e.wg.Wait()
 
-		if err := e.s.AddHostScans(results); err != nil {
+		if err := e.s.AddHostScans(results...); err != nil {
 			e.log.Info("failed to add host scans to DB:", zap.Error(err))
 			return
 		}

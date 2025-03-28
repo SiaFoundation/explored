@@ -73,6 +73,7 @@ type (
 		V2ContractRevisions(id types.FileContractID) (result []explorer.V2FileContract, err error)
 		Search(id string) (explorer.SearchType, error)
 
+		ScanHosts(pks ...types.PublicKey) ([]explorer.HostScan, error)
 		Hosts(pks []types.PublicKey) ([]explorer.Host, error)
 		QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortColumn, dir explorer.HostSortDir, offset, limit uint64) ([]explorer.Host, error)
 	}
@@ -114,12 +115,24 @@ var (
 )
 
 type server struct {
-	cm ChainManager
-	e  Explorer
-	s  Syncer
-	ex exchangerates.Source
+	cm          ChainManager
+	e           Explorer
+	s           Syncer
+	ex          exchangerates.Source
+	apiPassword string
 
 	startTime time.Time
+}
+
+func (s *server) checkAuth(jc jape.Context) bool {
+	// We could use jape.BasicAuth when defining the route in the map, but it
+	// makes the jape linter think that the route is undefined, so we have some
+	// auth code here.
+	if _, p, ok := jc.Request.BasicAuth(); !ok || s.apiPassword == "" || p != s.apiPassword {
+		jc.Error(errors.New("auth needed for manual scan"), http.StatusUnauthorized)
+		return false
+	}
+	return true
 }
 
 func (s *server) stateHandler(jc jape.Context) {
@@ -133,6 +146,10 @@ func (s *server) stateHandler(jc jape.Context) {
 }
 
 func (s *server) syncerConnectHandler(jc jape.Context) {
+	if !s.checkAuth(jc) {
+		return
+	}
+
 	var addr string
 	if jc.Decode(&addr) != nil {
 		return
@@ -691,6 +708,27 @@ func (s *server) pubkeyHostHandler(jc jape.Context) {
 	jc.Encode(hosts[0])
 }
 
+func (s *server) pubkeyHostScanHandler(jc jape.Context) {
+	if !s.checkAuth(jc) {
+		return
+	}
+
+	var key types.PublicKey
+	if jc.DecodeParam("key", &key) != nil {
+		return
+	}
+
+	scans, err := s.e.ScanHosts(key)
+	if jc.Check("non host error when attempting to scan hosts", err) != nil {
+		return
+	} else if len(scans) == 0 {
+		jc.Error(ErrHostNotFound, http.StatusNotFound)
+		return
+	}
+
+	jc.Encode(scans[0])
+}
+
 func (s *server) hostsHandler(jc jape.Context) {
 	var params explorer.HostQuery
 	if jc.Decode(&params) != nil {
@@ -760,14 +798,16 @@ func (s *server) exchangeRateHandler(jc jape.Context) {
 }
 
 // NewServer returns an HTTP handler that serves the explored API.
-func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.Source) http.Handler {
+func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.Source, apiPassword string) http.Handler {
 	srv := server{
-		cm:        cm,
-		e:         e,
-		s:         s,
-		ex:        ex,
-		startTime: time.Now().UTC(),
+		cm:          cm,
+		e:           e,
+		s:           s,
+		ex:          ex,
+		apiPassword: apiPassword,
+		startTime:   time.Now().UTC(),
 	}
+
 	return jape.Mux(map[string]jape.Handler{
 		"GET    /state":                  srv.stateHandler,
 		"GET    /syncer/peers":           srv.syncerPeersHandler,
@@ -817,7 +857,9 @@ func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.Source) h
 		"GET    /v2/pubkey/:key/contracts": srv.v2PubkeyContractsHandler,
 
 		"GET    /pubkey/:key/contracts": srv.pubkeyContractsHandler,
-		"GET    /pubkey/:key/host":      srv.pubkeyHostHandler,
+
+		"GET    /hosts/:key":      srv.pubkeyHostHandler,
+		"POST   /hosts/:key/scan": srv.pubkeyHostScanHandler,
 
 		"GET    /metrics/block":     srv.blocksMetricsHandler,
 		"GET    /metrics/block/:id": srv.blocksMetricsIDHandler,

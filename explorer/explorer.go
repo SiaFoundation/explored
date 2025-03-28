@@ -12,6 +12,7 @@ import (
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/config"
+	"go.sia.tech/explored/geoip"
 	"go.uber.org/zap"
 )
 
@@ -56,7 +57,7 @@ type Store interface {
 	Close() error
 
 	UpdateChainState(reverted []chain.RevertUpdate, applied []chain.ApplyUpdate) error
-	AddHostScans(scans []HostScan) error
+	AddHostScans(scans ...HostScan) error
 
 	Tip() (types.ChainIndex, error)
 	Block(id types.BlockID) (Block, error)
@@ -94,6 +95,7 @@ type Explorer struct {
 	cm ChainManager
 
 	scanCfg config.Scanner
+	locator geoip.Locator
 
 	log *zap.Logger
 
@@ -136,6 +138,13 @@ func NewExplorer(cm ChainManager, store Store, indexCfg config.Index, scanCfg co
 		log:       log,
 	}
 
+	locator, err := geoip.NewMaxMindLocator("")
+	if err != nil {
+		e.log.Info("failed to create geoip database:", zap.Error(err))
+		return nil, err
+	}
+	e.locator = locator
+
 	tip, err := e.s.Tip()
 	if errors.Is(err, ErrNoTip) {
 		tip = types.ChainIndex{}
@@ -160,8 +169,7 @@ func NewExplorer(cm ChainManager, store Store, indexCfg config.Index, scanCfg co
 			}
 		}
 	}()
-
-	go e.scanHosts()
+	go e.scanLoop()
 
 	e.unsubscribe = e.cm.OnReorg(func(index types.ChainIndex) {
 		select {
@@ -175,6 +183,7 @@ func NewExplorer(cm ChainManager, store Store, indexCfg config.Index, scanCfg co
 // Shutdown tries to close the scanning goroutines in the explorer.
 func (e *Explorer) Shutdown(ctx context.Context) error {
 	e.ctxCancel()
+	e.locator.Close()
 
 	done := make(chan struct{})
 	go func() {
@@ -410,6 +419,61 @@ func (e *Explorer) Hosts(pks []types.PublicKey) ([]Host, error) {
 // specified by dir.
 func (e *Explorer) QueryHosts(params HostQuery, sortBy HostSortColumn, dir HostSortDir, offset, limit uint64) ([]Host, error) {
 	return e.s.QueryHosts(params, sortBy, dir, offset, limit)
+}
+
+// ScanHosts synchronously scans the provided host(s) and returns the resultant
+// scan details.  The errors encountered during scanner are contained in the
+// HostScan.Error field.  Errors retrieving hosts' net addresses from the
+// database or writing the scans to the database will make the returned error
+// value not equal to nil.
+func (e *Explorer) ScanHosts(pks ...types.PublicKey) ([]HostScan, error) {
+	hosts, err := e.Hosts(pks)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve host: %w", err)
+	} else if len(hosts) == 0 {
+		return nil, fmt.Errorf("could not find any host with those pubkey(s)")
+	}
+
+	scans := make([]HostScan, len(hosts))
+	for i, host := range hosts {
+		unscannedHost := UnscannedHost{
+			PublicKey:      host.PublicKey,
+			V2:             host.V2,
+			NetAddress:     host.NetAddress,
+			V2NetAddresses: host.V2NetAddresses,
+		}
+
+		if host.V2 {
+			scans[i], err = e.scanV2Host(unscannedHost)
+		} else {
+			scans[i], err = e.scanV1Host(unscannedHost)
+		}
+
+		now := types.CurrentTimestamp()
+		if err != nil {
+			e.log.Debug("manual host scan failed", zap.Stringer("pk", host.PublicKey), zap.Error(err))
+			scans[i] = HostScan{
+				PublicKey: host.PublicKey,
+				Success:   false,
+				Timestamp: now,
+				Error: func() *string {
+					str := err.Error()
+					return &str
+				}(),
+			}
+		} else {
+			e.log.Debug("manual host scan succeeded", zap.Stringer("pk", host.PublicKey))
+		}
+		// We don't apply the exponential delay penalty to manually scanned hosts.
+		// Given that this would mostly be used by someone setting up or
+		// configuring their host, it seems wrong to use it here.
+		scans[i].NextScan = now.Add(e.scanCfg.ScanInterval)
+	}
+
+	if err := e.s.AddHostScans(scans...); err != nil {
+		return nil, fmt.Errorf("failed to add host scans to DB: %w", err)
+	}
+	return scans, nil
 }
 
 // Search returns the type of an element (siacoin element, siafund element,
