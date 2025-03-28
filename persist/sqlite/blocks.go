@@ -15,7 +15,9 @@ func (s *Store) Block(id types.BlockID) (result explorer.Block, err error) {
 		var v2Height uint64
 		var v2Commitment types.Hash256
 		err := tx.QueryRow(`SELECT parent_id, nonce, timestamp, height, leaf_index, v2_height, v2_commitment FROM blocks WHERE id = ?`, encode(id)).Scan(decode(&result.ParentID), decode(&result.Nonce), decode(&result.Timestamp), &result.Height, decode(&result.LeafIndex), decodeNull(&v2Height), decodeNull(&v2Commitment))
-		if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return explorer.ErrNoBlock
+		} else if err != nil {
 			return fmt.Errorf("failed to get block: %w", err)
 		}
 		result.MinerPayouts, err = blockMinerPayouts(tx, id)
@@ -49,6 +51,22 @@ func (s *Store) Block(id types.BlockID) (result explorer.Block, err error) {
 		result.Transactions, err = getTransactions(tx, transactionIDs)
 		if err != nil {
 			return fmt.Errorf("failed to get transactions: %w", err)
+		}
+
+		return nil
+	})
+	return
+}
+
+// Tip implements explorer.Store.
+func (s *Store) Tip() (result types.ChainIndex, err error) {
+	const query = `SELECT id, height FROM blocks ORDER BY height DESC LIMIT 1`
+	err = s.transaction(func(dbTxn *txn) error {
+		err := dbTxn.QueryRow(query).Scan(decode(&result.ID), &result.Height)
+		if errors.Is(err, sql.ErrNoRows) {
+			return explorer.ErrNoTip
+		} else if err != nil {
+			return err
 		}
 
 		return nil

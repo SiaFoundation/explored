@@ -1192,15 +1192,3 @@ func (s *Store) UpdateChainState(reverted []chain.RevertUpdate, applied []chain.
 		return nil
 	})
 }
-
-// Tip implements explorer.Store.
-func (s *Store) Tip() (result types.ChainIndex, err error) {
-	const query = `SELECT id, height FROM blocks ORDER BY height DESC LIMIT 1`
-	err = s.transaction(func(dbTxn *txn) error {
-		return dbTxn.QueryRow(query).Scan(decode(&result.ID), &result.Height)
-	})
-	if errors.Is(err, sql.ErrNoRows) {
-		return types.ChainIndex{}, explorer.ErrNoTip
-	}
-	return
-}

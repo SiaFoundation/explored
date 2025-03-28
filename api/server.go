@@ -278,7 +278,10 @@ func (s *server) blocksIDHandler(jc jape.Context) {
 		return
 	}
 	block, err := s.e.Block(id)
-	if jc.Check("failed to get block", err) != nil {
+	if errors.Is(err, explorer.ErrNoBlock) {
+		jc.Error(err, http.StatusNotFound)
+		return
+	} else if jc.Check("failed to get block", err) != nil {
 		return
 	}
 	jc.Encode(block)
