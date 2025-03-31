@@ -1055,6 +1055,21 @@ func TestV2FileContractResolution(t *testing.T) {
 		testutil.CheckV2FC(t, txn1.FileContracts[3], fcs[3])
 	}
 
+	// check that they are all not resolved before resolving
+	{
+		fcs, err := db.V2Contracts([]types.FileContractID{v2FC0ID, v2FC1ID, v2FC2ID, v2FC3ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, fc := range fcs {
+			testutil.Equal(t, "confirmation index", tip1, fc.ConfirmationIndex)
+			testutil.Equal(t, "confirmation transaction ID", txn1.ID(), fc.ConfirmationTransactionID)
+			testutil.Equal(t, "resolution type", nil, fc.ResolutionType)
+			testutil.Equal(t, "resolution index", nil, fc.ResolutionIndex)
+			testutil.Equal(t, "resolution transaction ID", nil, fc.ResolutionTransactionID)
+		}
+	}
+
 	// we will revert back here when we undo the resolutions
 	prevState := cm.TipState()
 
@@ -1111,6 +1126,7 @@ func TestV2FileContractResolution(t *testing.T) {
 
 		testutil.Equal(t, "confirmation index", tip1, dbTxns[0].FileContractResolutions[0].Parent.ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", txn1.ID(), dbTxns[0].FileContractResolutions[0].Parent.ConfirmationTransactionID)
+		testutil.Equal(t, "resolution type", explorer.V2ResolutionRenewal, *dbTxns[0].FileContractResolutions[0].Parent.ResolutionType)
 		testutil.Equal(t, "resolution index", cm.Tip(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionIndex)
 		testutil.Equal(t, "resolution transaction ID", txn2.ID(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionTransactionID)
 	}
@@ -1150,6 +1166,7 @@ func TestV2FileContractResolution(t *testing.T) {
 		testutil.CheckV2Transaction(t, txn3, dbTxns[0])
 		testutil.Equal(t, "confirmation index", tip1, dbTxns[0].FileContractResolutions[0].Parent.ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", txn1.ID(), dbTxns[0].FileContractResolutions[0].Parent.ConfirmationTransactionID)
+		testutil.Equal(t, "resolution type", explorer.V2ResolutionStorageProof, *dbTxns[0].FileContractResolutions[0].Parent.ResolutionType)
 		testutil.Equal(t, "resolution index", cm.Tip(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionIndex)
 		testutil.Equal(t, "resolution transaction ID", txn3.ID(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionTransactionID)
 	}
@@ -1177,6 +1194,7 @@ func TestV2FileContractResolution(t *testing.T) {
 		testutil.CheckV2Transaction(t, txn4, dbTxns[0])
 		testutil.Equal(t, "confirmation index", tip1, dbTxns[0].FileContractResolutions[0].Parent.ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", txn1.ID(), dbTxns[0].FileContractResolutions[0].Parent.ConfirmationTransactionID)
+		testutil.Equal(t, "resolution type", explorer.V2ResolutionExpiration, *dbTxns[0].FileContractResolutions[0].Parent.ResolutionType)
 		testutil.Equal(t, "resolution index", cm.Tip(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionIndex)
 		testutil.Equal(t, "resolution transaction ID", txn4.ID(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionTransactionID)
 	}
@@ -1283,6 +1301,21 @@ func TestV2FileContractResolution(t *testing.T) {
 		syncDB(t, db, cm)
 	}
 
+	// check that they are all not resolved after reverting resolution
+	{
+		fcs, err := db.V2Contracts([]types.FileContractID{v2FC0ID, v2FC1ID, v2FC2ID, v2FC3ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, fc := range fcs {
+			testutil.Equal(t, "confirmation index", tip1, fc.ConfirmationIndex)
+			testutil.Equal(t, "confirmation transaction ID", txn1.ID(), fc.ConfirmationTransactionID)
+			testutil.Equal(t, "resolution type", nil, fc.ResolutionType)
+			testutil.Equal(t, "resolution index", nil, fc.ResolutionIndex)
+			testutil.Equal(t, "resolution transaction ID", nil, fc.ResolutionTransactionID)
+		}
+	}
+
 	{
 		fcs, err := db.V2Contracts([]types.FileContractID{v2FC0ID, v2FC1ID, v2FC2ID, v2FC3ID})
 		if err != nil {
@@ -1317,6 +1350,7 @@ func TestV2FileContractResolution(t *testing.T) {
 		testutil.CheckV2Transaction(t, txn3, dbTxns[0])
 		testutil.Equal(t, "confirmation index", tip1, dbTxns[0].FileContractResolutions[0].Parent.ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", txn1.ID(), dbTxns[0].FileContractResolutions[0].Parent.ConfirmationTransactionID)
+		testutil.Equal(t, "resolution type", explorer.V2ResolutionStorageProof, *dbTxns[0].FileContractResolutions[0].Parent.ResolutionType)
 		testutil.Equal(t, "resolution index", cm.Tip(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionIndex)
 		testutil.Equal(t, "resolution transaction ID", txn3.ID(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionTransactionID)
 	}
@@ -1337,6 +1371,7 @@ func TestV2FileContractResolution(t *testing.T) {
 		testutil.CheckV2Transaction(t, txn4, dbTxns[0])
 		testutil.Equal(t, "confirmation index", tip1, dbTxns[0].FileContractResolutions[0].Parent.ConfirmationIndex)
 		testutil.Equal(t, "confirmation transaction ID", txn1.ID(), dbTxns[0].FileContractResolutions[0].Parent.ConfirmationTransactionID)
+		testutil.Equal(t, "resolution type", explorer.V2ResolutionExpiration, *dbTxns[0].FileContractResolutions[0].Parent.ResolutionType)
 		testutil.Equal(t, "resolution index", cm.Tip(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionIndex)
 		testutil.Equal(t, "resolution transaction ID", txn4.ID(), *dbTxns[0].FileContractResolutions[0].Parent.ResolutionTransactionID)
 	}
