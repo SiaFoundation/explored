@@ -506,6 +506,22 @@ func TestTip(t *testing.T) {
 	}
 }
 
+func TestMissingBlock(t *testing.T) {
+	_, _, cm, db := newStore(t, false, nil)
+
+	id := cm.Tip().ID
+	_, err := db.Block(id)
+	if err != nil {
+		t.Fatalf("error retrieving genesis block: %v", err)
+	}
+
+	id[0] ^= 255
+	_, err = db.Block(id)
+	if !errors.Is(err, explorer.ErrNoBlock) {
+		t.Fatalf("did not get ErrNoBlock retrieving missing block: %v", err)
+	}
+}
+
 func TestFileContract(t *testing.T) {
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
