@@ -89,6 +89,10 @@ const (
 )
 
 var (
+	// ErrInvalidAuth is returned when the supplied credentials for a protected
+	// endpoint are invalid.
+	ErrInvalidAuth = errors.New("invalid auth")
+
 	// ErrTransactionNotFound is returned by /transactions/:id when we are
 	// unable to find the transaction with that `id`.
 	ErrTransactionNotFound = errors.New("no transaction found")
@@ -104,10 +108,6 @@ var (
 	// ErrEventNotFound is returned by /events/:id when we can't find the event
 	// with the id `id`.
 	ErrEventNotFound = errors.New("no event found")
-
-	// ErrNoSearchResults is returned by /search/:id when we do not find any
-	// elements with that ID.
-	ErrNoSearchResults = errors.New("no search results found")
 
 	// ErrTooManyIDs is returned by the batch transaction and contract
 	// endpoints when more than maxIDs IDs are specified.
@@ -129,7 +129,7 @@ func (s *server) checkAuth(jc jape.Context) bool {
 	// makes the jape linter think that the route is undefined, so we have some
 	// auth code here.
 	if _, p, ok := jc.Request.BasicAuth(); !ok || s.apiPassword == "" || p != s.apiPassword {
-		jc.Error(errors.New("auth needed for manual scan"), http.StatusUnauthorized)
+		jc.Error(ErrInvalidAuth, http.StatusUnauthorized)
 		return false
 	}
 	return true
@@ -771,7 +771,7 @@ func (s *server) searchIDHandler(jc jape.Context) {
 
 	result, err := s.e.Search(id)
 	if errors.Is(err, explorer.ErrNoSearchResults) {
-		jc.Error(ErrNoSearchResults, http.StatusNotFound)
+		jc.Error(err, http.StatusNotFound)
 		return
 	} else if errors.Is(err, explorer.ErrSearchParse) {
 		jc.Error(err, http.StatusBadRequest)
