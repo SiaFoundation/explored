@@ -545,10 +545,10 @@ func TestAPI(t *testing.T) {
 			testutil.Equal(t, "search type", explorer.SearchTypeContract, resp)
 		}},
 		{"Search invalid", func(t *testing.T) {
-			if _, err := client.Search(":"); err == nil {
+			if _, err := client.Search(":"); err == nil || !strings.Contains(err.Error(), explorer.ErrSearchParse.Error()) {
 				t.Fatal("unparsable search should have failed")
 			}
-			if _, err := client.Search("nbcbsfdhjf"); err == nil {
+			if _, err := client.Search("nbcbsfdhjf"); err == nil || !strings.Contains(err.Error(), explorer.ErrSearchParse.Error()) {
 				t.Fatal("non hex search should have failed")
 			}
 		}},
@@ -610,14 +610,14 @@ func TestAPI(t *testing.T) {
 		{"Manual scan with invalid credential", func(t *testing.T) {
 			pubkey := pk1.PublicKey()
 			_, err := badAuthClient.ScanHost(pubkey)
-			if err == nil {
-				t.Fatal("got no error when trying to use manual scan with bad auth")
+			if err == nil || !strings.Contains(err.Error(), api.ErrInvalidAuth.Error()) {
+				t.Fatal("got wrong error when trying to use manual scan with bad auth", err)
 			}
 		}},
 		{"Syncer connect with invalid credential", func(t *testing.T) {
 			err := badAuthClient.SyncerConnect("127.0.0.0.1:65535")
-			if err == nil {
-				t.Fatal("got no error when trying to use syncer connect with bad auth")
+			if err == nil || !strings.Contains(err.Error(), api.ErrInvalidAuth.Error()) {
+				t.Fatal("got no error when trying to use syncer connect with bad auth", err)
 			}
 		}},
 	}
