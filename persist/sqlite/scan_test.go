@@ -376,13 +376,18 @@ func TestScan(t *testing.T) {
 
 	waitForTip := func() {
 		t.Helper()
+
+		const duration = time.Second
 		for {
 			tip, err := e.Tip()
-			if err != nil {
+			if errors.Is(err, explorer.ErrNoTip) {
+				time.Sleep(duration)
+				continue
+			} else if err != nil {
 				t.Fatal(err)
 			}
 			if tip != cm.Tip() {
-				time.Sleep(time.Second)
+				time.Sleep(duration)
 			} else {
 				break
 			}
