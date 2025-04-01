@@ -89,9 +89,9 @@ const (
 )
 
 var (
-	// ErrInvalidAuth is returned when the supplied credentials for a protected
+	// ErrBadCredentials is returned when the supplied credentials for a protected
 	// endpoint are invalid.
-	ErrInvalidAuth = errors.New("invalid auth")
+	ErrBadCredentials = errors.New("bad credentials")
 
 	// ErrTransactionNotFound is returned by /transactions/:id when we are
 	// unable to find the transaction with that `id`.
@@ -129,7 +129,7 @@ func (s *server) checkAuth(jc jape.Context) bool {
 	// makes the jape linter think that the route is undefined, so we have some
 	// auth code here.
 	if _, p, ok := jc.Request.BasicAuth(); !ok || s.apiPassword == "" || p != s.apiPassword {
-		jc.Error(ErrInvalidAuth, http.StatusUnauthorized)
+		jc.Error(ErrBadCredentials, http.StatusUnauthorized)
 		return false
 	}
 	return true
