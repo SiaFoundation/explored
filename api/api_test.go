@@ -610,13 +610,13 @@ func TestAPI(t *testing.T) {
 		{"Manual scan with invalid credential", func(t *testing.T) {
 			pubkey := pk1.PublicKey()
 			_, err := badAuthClient.ScanHost(pubkey)
-			if err == nil || !strings.Contains(err.Error(), api.ErrInvalidAuth.Error()) {
+			if err == nil || !strings.Contains(err.Error(), api.ErrBadCredentials.Error()) {
 				t.Fatal("got wrong error when trying to use manual scan with bad auth", err)
 			}
 		}},
 		{"Syncer connect with invalid credential", func(t *testing.T) {
 			err := badAuthClient.SyncerConnect("127.0.0.0.1:65535")
-			if err == nil || !strings.Contains(err.Error(), api.ErrInvalidAuth.Error()) {
+			if err == nil || !strings.Contains(err.Error(), api.ErrBadCredentials.Error()) {
 				t.Fatal("got no error when trying to use syncer connect with bad auth", err)
 			}
 		}},
