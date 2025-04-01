@@ -149,16 +149,6 @@ func NewExplorer(cm ChainManager, store Store, indexCfg config.Index, scanCfg co
 	}
 	e.locator = locator
 
-	tip, err := e.s.Tip()
-	if errors.Is(err, ErrNoTip) {
-		tip = types.ChainIndex{}
-	} else if err != nil {
-		return nil, fmt.Errorf("failed to get tip: %w", err)
-	}
-	if err := e.syncStore(tip, indexCfg.BatchSize); err != nil {
-		return nil, fmt.Errorf("failed to subscribe to chain manager: %w", err)
-	}
-
 	reorgChan := make(chan types.ChainIndex, 1)
 	go func() {
 		for range reorgChan {
