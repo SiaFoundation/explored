@@ -62,15 +62,13 @@ func (s *Store) Block(id types.BlockID) (result explorer.Block, err error) {
 func (s *Store) Tip() (result types.ChainIndex, err error) {
 	const query = `SELECT id, height FROM blocks ORDER BY height DESC LIMIT 1`
 	err = s.transaction(func(dbTxn *txn) error {
-		err := dbTxn.QueryRow(query).Scan(decode(&result.ID), &result.Height)
-		if errors.Is(err, sql.ErrNoRows) {
-			return explorer.ErrNoTip
-		} else if err != nil {
-			return err
-		}
-
-		return nil
+		return dbTxn.QueryRow(query).Scan(decode(&result.ID), &result.Height)
 	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return types.ChainIndex{}, nil
+	} else if err != nil {
+		return types.ChainIndex{}, err
+	}
 	return
 }
 
