@@ -378,7 +378,7 @@ func TestScan(t *testing.T) {
 		t.Helper()
 
 		for {
-			if tip, err := e.Tip(); err != nil && !errors.Is(err, explorer.ErrNoTip) {
+			if tip, err := e.Tip(); err != nil {
 				t.Fatal(err)
 			} else if tip == cm.Tip() {
 				break

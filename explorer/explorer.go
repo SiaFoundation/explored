@@ -149,6 +149,12 @@ func NewExplorer(cm ChainManager, store Store, indexCfg config.Index, scanCfg co
 	}
 	e.locator = locator
 
+	if _, err := e.s.Tip(); errors.Is(err, ErrNoTip) {
+		if err := e.syncStore(types.ChainIndex{}, 1); err != nil {
+			e.log.Panic("failed to add genesis block", zap.Error(err))
+		}
+	}
+
 	reorgChan := make(chan types.ChainIndex, 1)
 	go func() {
 		for range reorgChan {
