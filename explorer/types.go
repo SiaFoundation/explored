@@ -99,7 +99,7 @@ const (
 	// SearchTypeContract means we found a contract with the given ID.
 	SearchTypeContract SearchType = "contract"
 	// SearchTypeV2Contract means we found a V2 contract with the given ID.
-	SearchTypeV2Contract SearchType = "v2contract"
+	SearchTypeV2Contract SearchType = "v2Contract"
 	// SearchTypeHost means we found a host with the given pubkey.
 	SearchTypeHost SearchType = "host"
 )
