@@ -268,7 +268,8 @@ type Transaction struct {
 type V2FileContract struct {
 	TransactionID types.TransactionID `json:"transactionID"`
 
-	RenewedToID *types.FileContractID `json:"renewedToID"`
+	RenewedFromID *types.FileContractID `json:"renewedFromID"`
+	RenewedToID   *types.FileContractID `json:"renewedToID"`
 
 	ConfirmationIndex         types.ChainIndex    `json:"confirmationIndex"`
 	ConfirmationTransactionID types.TransactionID `json:"confirmationTransactionID"`
