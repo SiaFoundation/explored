@@ -471,6 +471,7 @@ CREATE TABLE v2_last_contract_revision (
     resolution_height BLOB,
     resolution_block_id BLOB,
     resolution_transaction_id BLOB REFERENCES v2_transactions(transaction_id),
+    renewed_to_id BLOB,
 
     contract_element_id INTEGER UNIQUE REFERENCES v2_file_contract_elements(id) ON DELETE CASCADE NOT NULL
 );
