@@ -289,7 +289,7 @@ func updateV2FileContractIndices(tx *txn, revert bool, index types.ChainIndex, f
 		} else {
 			if update.ResolutionTransactionID != nil {
 				var renewalToID any
-				if _, ok := update.Resolution.(*types.V2FileContractExpiration); ok {
+				if _, ok := update.Resolution.(*types.V2FileContractRenewal); ok {
 					renewalToID = encode(fcID.V2RenewalID())
 				}
 
