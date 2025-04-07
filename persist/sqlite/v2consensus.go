@@ -270,6 +270,12 @@ func updateV2FileContractIndices(tx *txn, revert bool, index types.ChainIndex, f
 	}
 	defer resolutionIndexStmt.Close()
 
+	renewedFromStmt, err := tx.Prepare(`UPDATE v2_last_contract_revision SET renewed_from_id = ? WHERE contract_id = ?`)
+	if err != nil {
+		return fmt.Errorf("updateV2FileContractIndices: failed to prepare renewed from statement: %w", err)
+	}
+	defer renewedFromStmt.Close()
+
 	for _, update := range fces {
 		// id stays the same even if revert happens so we don't need to check that here
 		fcID := update.FileContractElement.ID
@@ -290,6 +296,11 @@ func updateV2FileContractIndices(tx *txn, revert bool, index types.ChainIndex, f
 				resolutionType := explorer.V2ResolutionType(update.Resolution)
 				if _, err := resolutionIndexStmt.Exec(resolutionType, encode(index.Height), encode(index.ID), encode(update.ResolutionTransactionID), renewalToID, encode(fcID)); err != nil {
 					return fmt.Errorf("updateV2FileContractIndices: failed to update resolution index: %w", err)
+				}
+				if renewalToID != nil {
+					if _, err := renewedFromStmt.Exec(encode(fcID), renewalToID); err != nil {
+						return fmt.Errorf("updateV2FileContractIndices: failed to update renewed from ID: %w", err)
+					}
 				}
 			}
 		}
