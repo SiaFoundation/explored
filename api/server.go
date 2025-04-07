@@ -50,6 +50,7 @@ type (
 		Tip() (types.ChainIndex, error)
 		Block(id types.BlockID) (explorer.Block, error)
 		BestTip(height uint64) (types.ChainIndex, error)
+		MerkleProof(leafIndex uint64) ([]types.Hash256, error)
 		Metrics(id types.BlockID) (explorer.Metrics, error)
 		HostMetrics() (explorer.HostMetrics, error)
 		Transactions(ids []types.TransactionID) ([]explorer.Transaction, error)
@@ -763,6 +764,19 @@ func (s *server) hostsHandler(jc jape.Context) {
 	jc.Encode(hosts)
 }
 
+func (s *server) proofIndexHandler(jc jape.Context) {
+	var index uint64
+	if jc.DecodeParam("index", &index) != nil {
+		return
+	}
+
+	proof, err := s.e.MerkleProof(index)
+	if jc.Check("failed to get merkle proof", err) != nil {
+		return
+	}
+	jc.Encode(proof)
+}
+
 func (s *server) searchIDHandler(jc jape.Context) {
 	var id string
 	if jc.DecodeParam("id", &id) != nil {
@@ -869,6 +883,8 @@ func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.Source, a
 		"GET    /metrics/host":      srv.hostMetricsHandler,
 
 		"POST   /hosts": srv.hostsHandler,
+
+		"GET    /proof/:index": srv.proofIndexHandler,
 
 		"GET    /search/:id": srv.searchIDHandler,
 
