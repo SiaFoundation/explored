@@ -279,6 +279,12 @@ func (c *Client) HostMetrics() (resp explorer.HostMetrics, err error) {
 	return
 }
 
+// MerkleProof returns the current merkle proof of the element with that index.
+func (c *Client) MerkleProof(index uint64) (resp []types.Hash256, err error) {
+	err = c.c.GET(fmt.Sprintf("/proof/%d", index), &resp)
+	return
+}
+
 // Search returns what type of object an ID is.
 func (c *Client) Search(id string) (resp explorer.SearchType, err error) {
 	err = c.c.GET(fmt.Sprintf("/search/%s", id), &resp)
