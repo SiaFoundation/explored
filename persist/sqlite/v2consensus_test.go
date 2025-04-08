@@ -1067,7 +1067,7 @@ func TestV2FileContractResolution(t *testing.T) {
 			testutil.Equal(t, "resolution type", nil, fc.ResolutionType)
 			testutil.Equal(t, "resolution index", nil, fc.ResolutionIndex)
 			testutil.Equal(t, "resolution transaction ID", nil, fc.ResolutionTransactionID)
-			testutil.Equal(t, "renewed to", nil, fc.RenewedToID)
+			testutil.Equal(t, "renewed to", nil, fc.RenewedTo)
 		}
 	}
 
@@ -1131,8 +1131,8 @@ func TestV2FileContractResolution(t *testing.T) {
 		testutil.Equal(t, "resolution type", explorer.V2ResolutionRenewal, *fcr.Parent.ResolutionType)
 		testutil.Equal(t, "resolution index", cm.Tip(), *fcr.Parent.ResolutionIndex)
 		testutil.Equal(t, "resolution transaction ID", txn2.ID(), *fcr.Parent.ResolutionTransactionID)
-		testutil.Equal(t, "renewed to", v2FC1ID.V2RenewalID(), *fcr.Parent.RenewedToID)
-		testutil.Equal(t, "renewed from", v2FC1ID, *fcr.Resolution.(*explorer.V2FileContractRenewal).NewContract.RenewedFromID)
+		testutil.Equal(t, "renewed to", v2FC1ID.V2RenewalID(), *fcr.Parent.RenewedTo)
+		testutil.Equal(t, "renewed from", v2FC1ID, *fcr.Resolution.(*explorer.V2FileContractRenewal).NewContract.RenewedFrom)
 	}
 
 	b2 := testutil.MineV2Block(cm.TipState(), nil, types.VoidAddress)
@@ -1321,7 +1321,7 @@ func TestV2FileContractResolution(t *testing.T) {
 			testutil.Equal(t, "resolution type", nil, fc.ResolutionType)
 			testutil.Equal(t, "resolution index", nil, fc.ResolutionIndex)
 			testutil.Equal(t, "resolution transaction ID", nil, fc.ResolutionTransactionID)
-			testutil.Equal(t, "renewed to", nil, fc.RenewedToID)
+			testutil.Equal(t, "renewed to", nil, fc.RenewedTo)
 		}
 	}
 
@@ -1400,7 +1400,7 @@ func TestV2FileContractResolution(t *testing.T) {
 		testutil.CheckV2FC(t, txn1.FileContracts[1], fcs[1])
 
 		testutil.CheckV2FC(t, txn1.FileContracts[2], fcs[2])
-		testutil.Equal(t, "renewed to", nil, fcs[2].RenewedToID)
+		testutil.Equal(t, "renewed to", nil, fcs[2].RenewedTo)
 
 		testutil.CheckV2FC(t, txn1.FileContracts[3], fcs[3])
 	}
@@ -1480,8 +1480,8 @@ func TestV2FileContractRenewedToFrom(t *testing.T) {
 		testutil.CheckV2FC(t, txn1.FileContracts[0], fcs[0])
 	}
 
-	// Check that they it is not resolved and does not have RenewedTo set
-	// before renewing
+	// Check that it is not resolved and does not have RenewedTo set before
+	// renewing
 	{
 		fcs, err := db.V2Contracts([]types.FileContractID{v2FC0ID})
 		if err != nil {
@@ -1495,8 +1495,8 @@ func TestV2FileContractRenewedToFrom(t *testing.T) {
 		testutil.Equal(t, "resolution type", nil, fc.ResolutionType)
 		testutil.Equal(t, "resolution index", nil, fc.ResolutionIndex)
 		testutil.Equal(t, "resolution transaction ID", nil, fc.ResolutionTransactionID)
-		testutil.Equal(t, "renewed from", nil, fc.RenewedFromID)
-		testutil.Equal(t, "renewed to", nil, fc.RenewedToID)
+		testutil.Equal(t, "renewed from", nil, fc.RenewedFrom)
+		testutil.Equal(t, "renewed to", nil, fc.RenewedTo)
 	}
 
 	// Renew contract
@@ -1554,8 +1554,8 @@ func TestV2FileContractRenewedToFrom(t *testing.T) {
 		testutil.Equal(t, "resolution type", explorer.V2ResolutionRenewal, *fc.ResolutionType)
 		testutil.Equal(t, "resolution index", cm.Tip(), *fc.ResolutionIndex)
 		testutil.Equal(t, "resolution transaction ID", txn2.ID(), *fc.ResolutionTransactionID)
-		testutil.Equal(t, "renewed from", nil, fc.RenewedFromID)
-		testutil.Equal(t, "renewed to", v2FC0ID.V2RenewalID(), *fc.RenewedToID)
+		testutil.Equal(t, "renewed from", nil, fc.RenewedFrom)
+		testutil.Equal(t, "renewed to", v2FC0ID.V2RenewalID(), *fc.RenewedTo)
 
 		fcr := fcs[1]
 		testutil.Equal(t, "confirmation index", cm.Tip(), fcr.ConfirmationIndex)
@@ -1563,8 +1563,8 @@ func TestV2FileContractRenewedToFrom(t *testing.T) {
 		testutil.Equal(t, "resolution type", nil, fcr.ResolutionType)
 		testutil.Equal(t, "resolution index", nil, fcr.ResolutionIndex)
 		testutil.Equal(t, "resolution transaction ID", nil, fcr.ResolutionTransactionID)
-		testutil.Equal(t, "renewed from", v2FC0ID, *fcr.RenewedFromID)
-		testutil.Equal(t, "renewed to", nil, fcr.RenewedToID)
+		testutil.Equal(t, "renewed from", v2FC0ID, *fcr.RenewedFrom)
+		testutil.Equal(t, "renewed to", nil, fcr.RenewedTo)
 	}
 
 	{
@@ -1615,8 +1615,8 @@ func TestV2FileContractRenewedToFrom(t *testing.T) {
 		testutil.Equal(t, "resolution type", explorer.V2ResolutionRenewal, *fcr.ResolutionType)
 		testutil.Equal(t, "resolution index", cm.Tip(), *fcr.ResolutionIndex)
 		testutil.Equal(t, "resolution transaction ID", txn3.ID(), *fcr.ResolutionTransactionID)
-		testutil.Equal(t, "renewed from", v2FC0ID, *fcr.RenewedFromID)
-		testutil.Equal(t, "renewed to", v2FC0ID.V2RenewalID().V2RenewalID(), *fcr.RenewedToID)
+		testutil.Equal(t, "renewed from", v2FC0ID, *fcr.RenewedFrom)
+		testutil.Equal(t, "renewed to", v2FC0ID.V2RenewalID().V2RenewalID(), *fcr.RenewedTo)
 
 		fcrr := fcs[1]
 		testutil.Equal(t, "confirmation index", cm.Tip(), fcrr.ConfirmationIndex)
@@ -1624,8 +1624,8 @@ func TestV2FileContractRenewedToFrom(t *testing.T) {
 		testutil.Equal(t, "resolution type", nil, fcrr.ResolutionType)
 		testutil.Equal(t, "resolution index", nil, fcrr.ResolutionIndex)
 		testutil.Equal(t, "resolution transaction ID", nil, fcrr.ResolutionTransactionID)
-		testutil.Equal(t, "renewed from", v2FC0ID.V2RenewalID(), *fcrr.RenewedFromID)
-		testutil.Equal(t, "renewed to", nil, fcrr.RenewedToID)
+		testutil.Equal(t, "renewed from", v2FC0ID.V2RenewalID(), *fcrr.RenewedFrom)
+		testutil.Equal(t, "renewed to", nil, fcrr.RenewedTo)
 	}
 
 	// Revert the second renewal
@@ -1665,8 +1665,8 @@ func TestV2FileContractRenewedToFrom(t *testing.T) {
 		testutil.Equal(t, "resolution type", explorer.V2ResolutionRenewal, *fc.ResolutionType)
 		testutil.Equal(t, "resolution index", tip2, *fc.ResolutionIndex)
 		testutil.Equal(t, "resolution transaction ID", txn2.ID(), *fc.ResolutionTransactionID)
-		testutil.Equal(t, "renewed from", nil, fc.RenewedFromID)
-		testutil.Equal(t, "renewed to", v2FC0ID.V2RenewalID(), *fc.RenewedToID)
+		testutil.Equal(t, "renewed from", nil, fc.RenewedFrom)
+		testutil.Equal(t, "renewed to", v2FC0ID.V2RenewalID(), *fc.RenewedTo)
 
 		fcr := fcs[1]
 		testutil.Equal(t, "confirmation index", tip2, fcr.ConfirmationIndex)
@@ -1674,7 +1674,7 @@ func TestV2FileContractRenewedToFrom(t *testing.T) {
 		testutil.Equal(t, "resolution type", nil, fcr.ResolutionType)
 		testutil.Equal(t, "resolution index", nil, fcr.ResolutionIndex)
 		testutil.Equal(t, "resolution transaction ID", nil, fcr.ResolutionTransactionID)
-		testutil.Equal(t, "renewed from", v2FC0ID, *fcr.RenewedFromID)
-		testutil.Equal(t, "renewed to", nil, fcr.RenewedToID)
+		testutil.Equal(t, "renewed from", v2FC0ID, *fcr.RenewedFrom)
+		testutil.Equal(t, "renewed to", nil, fcr.RenewedTo)
 	}
 }

@@ -264,13 +264,13 @@ func updateV2FileContractElements(tx *txn, revert bool, index types.ChainIndex, 
 }
 
 func updateV2FileContractIndices(tx *txn, revert bool, index types.ChainIndex, fces []explorer.V2FileContractUpdate) error {
-	resolutionIndexStmt, err := tx.Prepare(`UPDATE v2_last_contract_revision SET resolution_type = ?, resolution_height = ?, resolution_block_id = ?, resolution_transaction_id = ?, renewed_to_id = ? WHERE contract_id = ?`)
+	resolutionIndexStmt, err := tx.Prepare(`UPDATE v2_last_contract_revision SET resolution_type = ?, resolution_height = ?, resolution_block_id = ?, resolution_transaction_id = ?, renewed_to = ? WHERE contract_id = ?`)
 	if err != nil {
 		return fmt.Errorf("updateV2FileContractIndices: failed to prepare resolution index statement: %w", err)
 	}
 	defer resolutionIndexStmt.Close()
 
-	renewedFromStmt, err := tx.Prepare(`UPDATE v2_last_contract_revision SET renewed_from_id = ? WHERE contract_id = ?`)
+	renewedFromStmt, err := tx.Prepare(`UPDATE v2_last_contract_revision SET renewed_from = ? WHERE contract_id = ?`)
 	if err != nil {
 		return fmt.Errorf("updateV2FileContractIndices: failed to prepare renewed from statement: %w", err)
 	}
