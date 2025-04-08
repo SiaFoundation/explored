@@ -173,6 +173,11 @@ func (s *Store) SiacoinElements(ids []types.SiacoinOutputID) (result []explorer.
 			if err != nil {
 				return fmt.Errorf("failed to scan siacoin output: %w", err)
 			}
+			sco.StateElement.MerkleProof, err = s.MerkleProof(sco.StateElement.LeafIndex)
+			if err != nil {
+				return fmt.Errorf("failed to get output merkle proof: %w", err)
+			}
+
 			result = append(result, sco)
 		}
 		return nil
@@ -198,6 +203,10 @@ func (s *Store) SiafundElements(ids []types.SiafundOutputID) (result []explorer.
 			sfo, err := scanSiafundOutput(rows)
 			if err != nil {
 				return fmt.Errorf("failed to scan siafund output: %w", err)
+			}
+			sfo.StateElement.MerkleProof, err = s.MerkleProof(sfo.StateElement.LeafIndex)
+			if err != nil {
+				return fmt.Errorf("failed to get output merkle proof: %w", err)
 			}
 			result = append(result, sfo)
 		}

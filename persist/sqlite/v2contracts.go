@@ -50,6 +50,10 @@ WHERE rev.contract_id = ?
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				return fmt.Errorf("failed to scan file contract: %w", err)
 			} else if err == nil {
+				fc.V2FileContractElement.StateElement.MerkleProof, err = s.MerkleProof(fc.V2FileContractElement.StateElement.LeafIndex)
+				if err != nil {
+					return fmt.Errorf("failed to get contract merkle proof: %w", err)
+				}
 				result = append(result, fc)
 			}
 		}
