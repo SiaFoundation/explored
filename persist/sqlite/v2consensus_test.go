@@ -23,14 +23,7 @@ func getSCE(t *testing.T, db explorer.Store, scid types.SiacoinOutputID) types.S
 	} else if len(sces) == 0 {
 		t.Fatal("can't find sce")
 	}
-	sce := sces[0]
-
-	sce.SiacoinElement.StateElement.MerkleProof, err = db.MerkleProof(sce.StateElement.LeafIndex)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return sce.SiacoinElement
+	return sces[0].SiacoinElement
 }
 
 func getSFE(t *testing.T, db explorer.Store, sfid types.SiafundOutputID) types.SiafundElement {
@@ -42,14 +35,7 @@ func getSFE(t *testing.T, db explorer.Store, sfid types.SiafundOutputID) types.S
 	} else if len(sfes) == 0 {
 		t.Fatal("can't find sfe")
 	}
-	sfe := sfes[0]
-
-	sfe.SiafundElement.StateElement.MerkleProof, err = db.MerkleProof(sfe.StateElement.LeafIndex)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return sfe.SiafundElement
+	return sfes[0].SiafundElement
 }
 
 func getFCE(t *testing.T, db explorer.Store, fcid types.FileContractID) types.V2FileContractElement {
@@ -61,14 +47,7 @@ func getFCE(t *testing.T, db explorer.Store, fcid types.FileContractID) types.V2
 	} else if len(fces) == 0 {
 		t.Fatal("can't find fces")
 	}
-	fce := fces[0]
-
-	fce.V2FileContractElement.StateElement.MerkleProof, err = db.MerkleProof(fce.V2FileContractElement.StateElement.LeafIndex)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return fce.V2FileContractElement
+	return fces[0].V2FileContractElement
 }
 
 func getCIE(t *testing.T, db explorer.Store, bid types.BlockID) types.ChainIndexElement {
