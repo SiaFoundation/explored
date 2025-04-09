@@ -1552,7 +1552,6 @@ func TestV2FileContractRenewedToFrom(t *testing.T) {
 			t.Fatal(err)
 		}
 		testutil.Equal(t, "len(fcs)", 1, len(fcs))
-
 	}
 
 	// Renew again
