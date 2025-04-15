@@ -149,13 +149,20 @@ func NewExplorer(cm ChainManager, store Store, indexCfg config.Index, scanCfg co
 	}
 	e.locator = locator
 
+	// add the genesis block if we do not have a tip
 	if _, err := e.s.Tip(); errors.Is(err, ErrNoTip) {
-		if err := e.syncStore(types.ChainIndex{}, 1); err != nil {
-			e.log.Panic("failed to add genesis block", zap.Error(err))
+		crus, caus, err := e.cm.UpdatesSince(types.ChainIndex{}, 1)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get genesis block update: %w", err)
+		}
+		if err := e.s.UpdateChainState(crus, caus); err != nil {
+			return nil, fmt.Errorf("failed to process genesis block updates: %w", err)
 		}
 	}
 
 	reorgChan := make(chan types.ChainIndex, 1)
+	// get loop to start syncing immediately
+	reorgChan <- types.ChainIndex{}
 	go func() {
 		for range reorgChan {
 			lastTip, err := e.s.Tip()
