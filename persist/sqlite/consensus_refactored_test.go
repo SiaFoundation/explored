@@ -84,7 +84,7 @@ func revertUpdate(t *testing.T, prevState consensus.State, bs consensus.V1BlockS
 	}
 }
 
-func TestOutputRefactored(t *testing.T) {
+func TestSiacoinOutputRefactored(t *testing.T) {
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
 
@@ -169,7 +169,7 @@ func TestOutputRefactored(t *testing.T) {
 	}
 }
 
-func TestEphemeralOutputRefactored(t *testing.T) {
+func TestEphemeralSiacoinOutputRefactored(t *testing.T) {
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
 
@@ -276,5 +276,193 @@ func TestEphemeralOutputRefactored(t *testing.T) {
 			t.Fatal(err)
 		}
 		testutil.Equal(t, "len(sces)", 0, len(sces))
+	}
+}
+
+func TestSiafundOutputRefactored(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
+	genesisBlock, cs, store, db := newStoreRefactored(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	})
+
+	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
+	scID := genesisBlock.Transactions[0].SiafundOutputID(0)
+	txn1 := types.Transaction{
+		SiafundInputs: []types.SiafundInput{{
+			ParentID:         scID,
+			UnlockConditions: unlockConditions,
+		}},
+		SiafundOutputs: []types.SiafundOutput{{
+			Address: addr2,
+			Value:   genesisBlock.Transactions[0].SiafundOutputs[0].Value,
+		}},
+	}
+	testutil.SignTransaction(cs, pk1, &txn1)
+
+	prevState := cs
+	b := testutil.MineBlock(cs, []types.Transaction{txn1}, types.VoidAddress)
+	cs, au := applyUpdate(t, cs, store.SupplementTipBlock(b), b)
+	if err := db.UpdateChainState(nil, []chain.ApplyUpdate{au}); err != nil {
+		t.Fatal(err)
+	}
+
+	{
+		sfes, err := db.SiafundElements([]types.SiafundOutputID{scID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(sfes)", 1, len(sfes))
+
+		sfe := sfes[0]
+		testutil.Equal(t, "sfe.SpentIndex", cs.Index, *sfe.SpentIndex)
+		testutil.Equal(t, "sfe.SiafundElement.SiafundOutput", genesisBlock.Transactions[0].SiafundOutputs[0], sfe.SiafundOutput)
+	}
+
+	{
+		sfes, err := db.SiafundElements([]types.SiafundOutputID{txn1.SiafundOutputID(0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(sfes)", 1, len(sfes))
+
+		sfe := sfes[0]
+		testutil.Equal(t, "sfe.SpentIndex", nil, sfe.SpentIndex)
+		testutil.Equal(t, "sfe.SiafundElement.SiafundOutput", txn1.SiafundOutputs[0], sfe.SiafundOutput)
+	}
+
+	ru := revertUpdate(t, prevState, store.SupplementTipBlock(b), b)
+	if err := db.UpdateChainState([]chain.RevertUpdate{ru}, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	{
+		sfes, err := db.SiafundElements([]types.SiafundOutputID{scID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(sfes)", 1, len(sfes))
+
+		sfe := sfes[0]
+		testutil.Equal(t, "sfe.SpentIndex", nil, sfe.SpentIndex)
+		testutil.Equal(t, "sfe.SiafundElement.SiafundOutput", genesisBlock.Transactions[0].SiafundOutputs[0], sfe.SiafundOutput)
+	}
+
+	{
+		sfes, err := db.SiafundElements([]types.SiafundOutputID{txn1.SiafundOutputID(0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(sfes)", 0, len(sfes))
+	}
+}
+
+func TestEphemeralSiafundOutputRefactored(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
+	genesisBlock, cs, store, db := newStoreRefactored(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	})
+
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	txn1 := types.Transaction{
+		SiafundInputs: []types.SiafundInput{{
+			ParentID:         genesisBlock.Transactions[0].SiafundOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiafundOutputs: []types.SiafundOutput{{
+			Address: addr2,
+			Value:   genesisBlock.Transactions[0].SiafundOutputs[0].Value,
+		}},
+	}
+	testutil.SignTransaction(cs, pk1, &txn1)
+
+	uc2 := types.StandardUnlockConditions(pk2.PublicKey())
+	txn2 := types.Transaction{
+		SiafundInputs: []types.SiafundInput{{
+			ParentID:         txn1.SiafundOutputID(0),
+			UnlockConditions: uc2,
+		}},
+		SiafundOutputs: []types.SiafundOutput{{
+			Address: types.VoidAddress,
+			Value:   txn1.SiafundOutputs[0].Value,
+		}},
+	}
+	testutil.SignTransaction(cs, pk2, &txn2)
+
+	prevState := cs
+	b := testutil.MineBlock(cs, []types.Transaction{txn1, txn2}, types.VoidAddress)
+	cs, au := applyUpdate(t, cs, store.SupplementTipBlock(b), b)
+	if err := db.UpdateChainState(nil, []chain.ApplyUpdate{au}); err != nil {
+		t.Fatal(err)
+	}
+
+	{
+		sfes, err := db.SiafundElements([]types.SiafundOutputID{genesisBlock.Transactions[0].SiafundOutputID(0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(sfes)", 1, len(sfes))
+
+		sfe := sfes[0]
+		testutil.Equal(t, "sfe.SpentIndex", cs.Index, *sfe.SpentIndex)
+		testutil.Equal(t, "sfe.SiafundElement.SiafundOutput", genesisBlock.Transactions[0].SiafundOutputs[0], sfe.SiafundOutput)
+	}
+
+	{
+		sfes, err := db.SiafundElements([]types.SiafundOutputID{txn1.SiafundOutputID(0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(sfes)", 1, len(sfes))
+
+		sfe := sfes[0]
+		testutil.Equal(t, "sfe.SpentIndex", cs.Index, *sfe.SpentIndex)
+		testutil.Equal(t, "sfe.SiafundElement.SiafundOutput", txn1.SiafundOutputs[0], sfe.SiafundOutput)
+	}
+
+	{
+		sfes, err := db.SiafundElements([]types.SiafundOutputID{txn2.SiafundOutputID(0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(sfes)", 1, len(sfes))
+
+		sfe := sfes[0]
+		testutil.Equal(t, "sfe.SpentIndex", nil, sfe.SpentIndex)
+		testutil.Equal(t, "sfe.SiafundElement.SiafundOutput", txn2.SiafundOutputs[0], sfe.SiafundOutput)
+	}
+
+	ru := revertUpdate(t, prevState, store.SupplementTipBlock(b), b)
+	if err := db.UpdateChainState([]chain.RevertUpdate{ru}, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	{
+		sfes, err := db.SiafundElements([]types.SiafundOutputID{genesisBlock.Transactions[0].SiafundOutputID(0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(sfes)", 1, len(sfes))
+
+		sfe := sfes[0]
+		testutil.Equal(t, "sfe.SpentIndex", nil, sfe.SpentIndex)
+		testutil.Equal(t, "sfe.SiafundElement.SiafundOutput", genesisBlock.Transactions[0].SiafundOutputs[0], sfe.SiafundOutput)
+	}
+
+	{
+		sfes, err := db.SiafundElements([]types.SiafundOutputID{txn1.SiafundOutputID(0), txn2.SiafundOutputID(0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(sfes)", 0, len(sfes))
 	}
 }
