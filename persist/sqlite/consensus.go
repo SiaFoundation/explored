@@ -1065,42 +1065,6 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 	return nil
 }
 
-func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
-	if err := updateMaturedBalances(ut.tx, true, state.Metrics.Index.Height); err != nil {
-		return fmt.Errorf("RevertIndex: failed to update matured balances: %w", err)
-	} else if _, err := addSiacoinElements(
-		ut.tx,
-		state.Metrics.Index,
-		state.SpentSiacoinElements,
-		append(state.NewSiacoinElements, state.EphemeralSiacoinElements...),
-	); err != nil {
-		return fmt.Errorf("RevertIndex: failed to update siacoin output state: %w", err)
-	} else if _, err := addSiafundElements(
-		ut.tx,
-		state.Metrics.Index,
-		state.SpentSiafundElements,
-		append(state.NewSiafundElements, state.EphemeralSiafundElements...),
-	); err != nil {
-		return fmt.Errorf("RevertIndex: failed to update siafund output state: %w", err)
-	} else if err := updateBalances(ut.tx, state.Metrics.Index.Height, state.SpentSiacoinElements, state.NewSiacoinElements, state.SpentSiafundElements, state.NewSiafundElements); err != nil {
-		return fmt.Errorf("RevertIndex: failed to update balances: %w", err)
-	} else if _, err := updateFileContractElements(ut.tx, true, state.Metrics.Index, state.Block, state.FileContractElements); err != nil {
-		return fmt.Errorf("RevertIndex: failed to update file contract state: %w", err)
-	} else if _, err := updateV2FileContractElements(ut.tx, true, state.Metrics.Index, state.Block, state.V2FileContractElements); err != nil {
-		return fmt.Errorf("ApplyIndex: failed to add v2 file contracts: %w", err)
-	} else if err := deleteBlock(ut.tx, state.Block.ID()); err != nil {
-		return fmt.Errorf("RevertIndex: failed to delete block: %w", err)
-	} else if err := updateStateTree(ut.tx, state.TreeUpdates); err != nil {
-		return fmt.Errorf("RevertIndex: failed to update state tree: %w", err)
-	} else if err := updateFileContractIndices(ut.tx, true, state.Metrics.Index, state.FileContractElements); err != nil {
-		return fmt.Errorf("RevertIndex: failed to update file contract element indices: %w", err)
-	} else if err := updateV2FileContractIndices(ut.tx, true, state.Metrics.Index, state.V2FileContractElements); err != nil {
-		return fmt.Errorf("ApplyIndex: failed to update v2 file contract element indices: %w", err)
-	}
-
-	return nil
-}
-
 func addHosts(tx *txn, hosts []explorer.Host) error {
 	if len(hosts) == 0 {
 		return nil

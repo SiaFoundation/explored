@@ -142,6 +142,16 @@ func TestSiacoinOutputRefactored(t *testing.T) {
 		testutil.Equal(t, "sce.SiacoinElement.SiacoinOutput", txn1.SiacoinOutputs[0], sce.SiacoinOutput)
 	}
 
+	{
+		txns, err := db.Transactions([]types.TransactionID{txn1.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(txns)", 1, len(txns))
+
+		testutil.CheckTransaction(t, txn1, txns[0])
+	}
+
 	ru := revertUpdate(t, prevState, store.SupplementTipBlock(b), b)
 	if err := db.UpdateChainState([]chain.RevertUpdate{ru}, nil); err != nil {
 		t.Fatal(err)
@@ -166,6 +176,14 @@ func TestSiacoinOutputRefactored(t *testing.T) {
 			t.Fatal(err)
 		}
 		testutil.Equal(t, "len(sces)", 0, len(sces))
+	}
+
+	{
+		txns, err := db.Transactions([]types.TransactionID{txn1.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(txns)", 0, len(txns))
 	}
 }
 
