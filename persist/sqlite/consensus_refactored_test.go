@@ -847,3 +847,98 @@ func TestSiafundBalances(t *testing.T) {
 		testutil.Equal(t, "addr2 SF", 0, sf)
 	}
 }
+
+func TestTipRefactored(t *testing.T) {
+	_, cs, store, db := newStoreRefactored(t, false, nil)
+
+	{
+		tip, err := db.Tip()
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "tip", cs.Index, tip)
+	}
+
+	prevState := cs
+	b := testutil.MineBlock(cs, nil, types.VoidAddress)
+	cs, au := applyUpdate(t, cs, store.SupplementTipBlock(b), b)
+	if err := db.UpdateChainState(nil, []chain.ApplyUpdate{au}); err != nil {
+		t.Fatal(err)
+	}
+
+	{
+		tip, err := db.Tip()
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "tip", cs.Index, tip)
+	}
+
+	ru := revertUpdate(t, prevState, store.SupplementTipBlock(b), b)
+	if err := db.UpdateChainState([]chain.RevertUpdate{ru}, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	{
+		tip, err := db.Tip()
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "tip", prevState.Index, tip)
+	}
+}
+
+func TestBestTip(t *testing.T) {
+	_, cs, store, db := newStoreRefactored(t, false, nil)
+
+	{
+		tip, err := db.Tip()
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "tip", cs.Index, tip)
+	}
+
+	prevState := cs
+	b := testutil.MineBlock(cs, nil, types.VoidAddress)
+	cs, au := applyUpdate(t, cs, store.SupplementTipBlock(b), b)
+	if err := db.UpdateChainState(nil, []chain.ApplyUpdate{au}); err != nil {
+		t.Fatal(err)
+	}
+
+	{
+		tip, err := db.BestTip(0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "tip", prevState.Index, tip)
+	}
+
+	{
+		tip, err := db.BestTip(1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "tip", cs.Index, tip)
+	}
+
+	ru := revertUpdate(t, prevState, store.SupplementTipBlock(b), b)
+	if err := db.UpdateChainState([]chain.RevertUpdate{ru}, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	{
+		tip, err := db.BestTip(0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "tip", prevState.Index, tip)
+	}
+
+	{
+		_, err := db.BestTip(1)
+		if !errors.Is(err, explorer.ErrNoTip) {
+			t.Fatal("should have got errors ErrNoTip, got", err)
+		}
+	}
+}
