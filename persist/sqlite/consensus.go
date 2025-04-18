@@ -1018,14 +1018,14 @@ func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("RevertIndex: failed to update file contract state: %w", err)
 	} else if _, err := updateV2FileContractElements(ut.tx, true, state.Metrics.Index, state.Block, state.V2FileContractElements); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add v2 file contracts: %w", err)
-	} else if err := deleteBlock(ut.tx, state.Block.ID()); err != nil {
-		return fmt.Errorf("RevertIndex: failed to delete block: %w", err)
-	} else if err := updateStateTree(ut.tx, state.TreeUpdates); err != nil {
-		return fmt.Errorf("RevertIndex: failed to update state tree: %w", err)
 	} else if err := updateFileContractIndices(ut.tx, true, state.Metrics.Index, state.FileContractElements); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update file contract element indices: %w", err)
 	} else if err := updateV2FileContractIndices(ut.tx, true, state.Metrics.Index, state.V2FileContractElements); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update v2 file contract element indices: %w", err)
+	} else if err := deleteBlock(ut.tx, state.Block.ID()); err != nil {
+		return fmt.Errorf("RevertIndex: failed to delete block: %w", err)
+	} else if err := updateStateTree(ut.tx, state.TreeUpdates); err != nil {
+		return fmt.Errorf("RevertIndex: failed to update state tree: %w", err)
 	}
 
 	return nil

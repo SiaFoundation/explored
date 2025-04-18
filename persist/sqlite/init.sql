@@ -168,13 +168,13 @@ CREATE TRIGGER delete_orphan_v1_transaction
 AFTER DELETE ON block_transactions
 FOR EACH ROW
 WHEN NOT EXISTS (
-    SELECT 1
-      FROM block_transactions
-     WHERE transaction_id = OLD.transaction_id
+	SELECT 1
+	FROM block_transactions
+	WHERE transaction_id = OLD.transaction_id
 )
 BEGIN
-    DELETE FROM transactions
-     WHERE id = OLD.transaction_id;
+	DELETE FROM transactions
+	WHERE id = OLD.transaction_id;
 END;
 
 CREATE TABLE transaction_arbitrary_data (
@@ -296,12 +296,12 @@ AFTER DELETE ON v2_block_transactions
 FOR EACH ROW
 WHEN NOT EXISTS (
 	SELECT 1
-		FROM v2_block_transactions
-		WHERE transaction_id = OLD.transaction_id
+	FROM v2_block_transactions
+	WHERE transaction_id = OLD.transaction_id
 )
 BEGIN
 	DELETE FROM v2_transactions
-		WHERE id = OLD.transaction_id;
+	WHERE id = OLD.transaction_id;
 END;
 
 CREATE TABLE v2_transaction_siacoin_inputs (
@@ -490,7 +490,7 @@ CREATE TABLE v2_last_contract_revision (
 
     confirmation_height BLOB NOT NULL,
     confirmation_block_id BLOB NOT NULL REFERENCES blocks(id) ON DELETE CASCADE,
-    confirmation_transaction_id BLOB NOT NULL REFERENCES v2_transactions(transaction_id),
+    confirmation_transaction_id BLOB NOT NULL REFERENCES v2_transactions(transaction_id) ON DELETE CASCADE,
 
     -- See explorer.V2Resolution for enum values.
     resolution_type INTEGER,
