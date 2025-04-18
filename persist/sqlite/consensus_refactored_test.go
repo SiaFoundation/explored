@@ -639,3 +639,211 @@ func TestBlock(t *testing.T) {
 		t.Fatal("expected missing block error for b2", err)
 	}
 }
+
+func TestSiacoinBalances(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
+	genesisBlock, cs, store, db := newStoreRefactored(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	val := genesisBlock.Transactions[0].SiacoinOutputs[0].Value
+
+	{
+		sc, immatureSC, sf, err := db.Balance(types.VoidAddress)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "VoidAddress SC", types.ZeroCurrency, sc)
+		testutil.Equal(t, "VoidAddress immatureSC", types.ZeroCurrency, immatureSC)
+		testutil.Equal(t, "VoidAddress SF", 0, sf)
+	}
+
+	{
+		sc, immatureSC, sf, err := db.Balance(addr1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "addr1 SC", val, sc)
+		testutil.Equal(t, "addr1 immatureSC", types.ZeroCurrency, immatureSC)
+		testutil.Equal(t, "addr1 SF", 0, sf)
+	}
+
+	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
+	scID := genesisBlock.Transactions[0].SiacoinOutputID(0)
+	txn1 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         scID,
+			UnlockConditions: unlockConditions,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr2,
+			Value:   val,
+		}},
+	}
+	testutil.SignTransaction(cs, pk1, &txn1)
+
+	prevState := cs
+	b := testutil.MineBlock(cs, []types.Transaction{txn1}, types.VoidAddress)
+	cs, au := applyUpdate(t, cs, store.SupplementTipBlock(b), b)
+	if err := db.UpdateChainState(nil, []chain.ApplyUpdate{au}); err != nil {
+		t.Fatal(err)
+	}
+
+	{
+		sc, immatureSC, sf, err := db.Balance(types.VoidAddress)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "VoidAddress SC", types.ZeroCurrency, sc)
+		testutil.Equal(t, "VoidAddress immatureSC", b.MinerPayouts[0].Value, immatureSC)
+		testutil.Equal(t, "VoidAddress SF", 0, sf)
+	}
+
+	{
+		sc, immatureSC, sf, err := db.Balance(addr1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "addr1 SC", types.ZeroCurrency, sc)
+		testutil.Equal(t, "addr1 immatureSC", types.ZeroCurrency, immatureSC)
+		testutil.Equal(t, "addr1 SF", 0, sf)
+	}
+
+	{
+		sc, immatureSC, sf, err := db.Balance(addr2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "addr2 SC", val, sc)
+		testutil.Equal(t, "addr2 immatureSC", types.ZeroCurrency, immatureSC)
+		testutil.Equal(t, "addr2 SF", 0, sf)
+	}
+
+	ru := revertUpdate(t, prevState, store.SupplementTipBlock(b), b)
+	if err := db.UpdateChainState([]chain.RevertUpdate{ru}, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	{
+		sc, immatureSC, sf, err := db.Balance(types.VoidAddress)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "VoidAddress SC", types.ZeroCurrency, sc)
+		testutil.Equal(t, "VoidAddress immatureSC", types.ZeroCurrency, immatureSC)
+		testutil.Equal(t, "VoidAddress SF", 0, sf)
+	}
+
+	{
+		sc, immatureSC, sf, err := db.Balance(addr1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "addr1 SC", val, sc)
+		testutil.Equal(t, "addr1 immatureSC", types.ZeroCurrency, immatureSC)
+		testutil.Equal(t, "addr1 SF", 0, sf)
+	}
+
+	{
+		sc, immatureSC, sf, err := db.Balance(addr2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "addr2 SC", types.ZeroCurrency, sc)
+		testutil.Equal(t, "addr2 immatureSC", types.ZeroCurrency, immatureSC)
+		testutil.Equal(t, "addr2 SF", 0, sf)
+	}
+}
+
+func TestSiafundBalances(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
+	genesisBlock, cs, store, db := newStoreRefactored(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	})
+	val := genesisBlock.Transactions[0].SiafundOutputs[0].Value
+
+	{
+		sc, immatureSC, sf, err := db.Balance(addr1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "addr1 SC", types.ZeroCurrency, sc)
+		testutil.Equal(t, "addr1 immatureSC", types.ZeroCurrency, immatureSC)
+		testutil.Equal(t, "addr1 SF", val, sf)
+	}
+
+	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
+	sfID := genesisBlock.Transactions[0].SiafundOutputID(0)
+	txn1 := types.Transaction{
+		SiafundInputs: []types.SiafundInput{{
+			ParentID:         sfID,
+			UnlockConditions: unlockConditions,
+		}},
+		SiafundOutputs: []types.SiafundOutput{{
+			Address: addr2,
+			Value:   val,
+		}},
+	}
+	testutil.SignTransaction(cs, pk1, &txn1)
+
+	prevState := cs
+	b := testutil.MineBlock(cs, []types.Transaction{txn1}, types.VoidAddress)
+	cs, au := applyUpdate(t, cs, store.SupplementTipBlock(b), b)
+	if err := db.UpdateChainState(nil, []chain.ApplyUpdate{au}); err != nil {
+		t.Fatal(err)
+	}
+
+	{
+		sc, immatureSC, sf, err := db.Balance(addr1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "addr1 SC", types.ZeroCurrency, sc)
+		testutil.Equal(t, "addr1 immatureSC", types.ZeroCurrency, immatureSC)
+		testutil.Equal(t, "addr1 SF", 0, sf)
+	}
+
+	{
+		sc, immatureSC, sf, err := db.Balance(addr2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "addr2 SC", types.ZeroCurrency, sc)
+		testutil.Equal(t, "addr2 immatureSC", types.ZeroCurrency, immatureSC)
+		testutil.Equal(t, "addr2 SF", val, sf)
+	}
+
+	ru := revertUpdate(t, prevState, store.SupplementTipBlock(b), b)
+	if err := db.UpdateChainState([]chain.RevertUpdate{ru}, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	{
+		sc, immatureSC, sf, err := db.Balance(addr1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "addr1 SC", types.ZeroCurrency, sc)
+		testutil.Equal(t, "addr1 immatureSC", types.ZeroCurrency, immatureSC)
+		testutil.Equal(t, "addr1 SF", val, sf)
+	}
+
+	{
+		sc, immatureSC, sf, err := db.Balance(addr2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "addr2 SC", types.ZeroCurrency, sc)
+		testutil.Equal(t, "addr2 immatureSC", types.ZeroCurrency, immatureSC)
+		testutil.Equal(t, "addr2 SF", 0, sf)
+	}
+}
