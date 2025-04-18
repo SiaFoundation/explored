@@ -84,7 +84,7 @@ func revertUpdate(t *testing.T, prevState consensus.State, bs consensus.V1BlockS
 	}
 }
 
-func TestSiacoinOutputRefactored(t *testing.T) {
+func TestSiacoinOutput(t *testing.T) {
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
 
@@ -187,7 +187,7 @@ func TestSiacoinOutputRefactored(t *testing.T) {
 	}
 }
 
-func TestEphemeralSiacoinOutputRefactored(t *testing.T) {
+func TestEphemeralSiacoinOutput(t *testing.T) {
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
 
@@ -297,7 +297,7 @@ func TestEphemeralSiacoinOutputRefactored(t *testing.T) {
 	}
 }
 
-func TestSiafundOutputRefactored(t *testing.T) {
+func TestSiafundOutput(t *testing.T) {
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
 
@@ -379,7 +379,7 @@ func TestSiafundOutputRefactored(t *testing.T) {
 	}
 }
 
-func TestEphemeralSiafundOutputRefactored(t *testing.T) {
+func TestEphemeralSiafundOutput(t *testing.T) {
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
 
@@ -483,4 +483,73 @@ func TestEphemeralSiafundOutputRefactored(t *testing.T) {
 		}
 		testutil.Equal(t, "len(sfes)", 0, len(sfes))
 	}
+}
+
+func TestTransactionChainIndices(t *testing.T) {
+	_, cs, store, db := newStoreRefactored(t, false, nil)
+
+	checkTransaction := func(expected types.Transaction) {
+		txns, err := db.Transactions([]types.TransactionID{expected.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(txns)", 1, len(txns))
+		testutil.CheckTransaction(t, expected, txns[0])
+	}
+
+	txn1 := types.Transaction{
+		ArbitraryData: [][]byte{{0}},
+	}
+	txn2 := types.Transaction{
+		ArbitraryData: [][]byte{{0}, {1}},
+	}
+
+	genesisState := cs
+	b1 := testutil.MineBlock(cs, []types.Transaction{txn1, txn2}, types.VoidAddress)
+	cs, au := applyUpdate(t, cs, store.SupplementTipBlock(b1), b1)
+	if err := db.UpdateChainState(nil, []chain.ApplyUpdate{au}); err != nil {
+		t.Fatal(err)
+	}
+
+	checkTransaction(txn1)
+	checkTransaction(txn2)
+	checkChainIndices(t, db, txn1.ID(), []types.ChainIndex{cs.Index})
+	checkChainIndices(t, db, txn2.ID(), []types.ChainIndex{cs.Index})
+
+	prevState := cs
+	b2 := testutil.MineBlock(cs, []types.Transaction{txn1, txn2}, types.VoidAddress)
+	cs, au = applyUpdate(t, cs, store.SupplementTipBlock(b2), b2)
+	if err := db.UpdateChainState(nil, []chain.ApplyUpdate{au}); err != nil {
+		t.Fatal(err)
+	}
+
+	checkTransaction(txn1)
+	checkTransaction(txn2)
+	checkChainIndices(t, db, txn1.ID(), []types.ChainIndex{cs.Index, prevState.Index})
+	checkChainIndices(t, db, txn2.ID(), []types.ChainIndex{cs.Index, prevState.Index})
+
+	ru := revertUpdate(t, prevState, store.SupplementTipBlock(b2), b2)
+	if err := db.UpdateChainState([]chain.RevertUpdate{ru}, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	checkTransaction(txn1)
+	checkTransaction(txn2)
+	checkChainIndices(t, db, txn1.ID(), []types.ChainIndex{prevState.Index})
+	checkChainIndices(t, db, txn2.ID(), []types.ChainIndex{prevState.Index})
+
+	ru = revertUpdate(t, genesisState, store.SupplementTipBlock(b1), b1)
+	if err := db.UpdateChainState([]chain.RevertUpdate{ru}, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	{
+		txns, err := db.Transactions([]types.TransactionID{txn1.ID(), txn2.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(txns)", 0, len(txns))
+	}
+	checkChainIndices(t, db, txn1.ID(), nil)
+	checkChainIndices(t, db, txn2.ID(), nil)
 }
