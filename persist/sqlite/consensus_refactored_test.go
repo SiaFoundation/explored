@@ -1,6 +1,7 @@
 package sqlite_test
 
 import (
+	"errors"
 	"math"
 	"path/filepath"
 	"testing"
@@ -552,4 +553,89 @@ func TestTransactionChainIndices(t *testing.T) {
 	}
 	checkChainIndices(t, db, txn1.ID(), nil)
 	checkChainIndices(t, db, txn2.ID(), nil)
+}
+
+func TestBlock(t *testing.T) {
+	_, cs, store, db := newStoreRefactored(t, false, nil)
+
+	checkBlock := func(expected types.Block) {
+		got, err := db.Block(expected.ID())
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "ParentID", expected.ParentID, got.ParentID)
+		testutil.Equal(t, "Nonce", expected.Nonce, got.Nonce)
+		testutil.Equal(t, "Timestamp", expected.Timestamp, got.Timestamp)
+
+		for i, mp := range expected.MinerPayouts {
+			id := expected.ID().MinerOutputID(i)
+			scos, err := db.SiacoinElements([]types.SiacoinOutputID{id})
+			if err != nil {
+				t.Fatal(err)
+			}
+			testutil.Equal(t, "len(scos)", 1, len(scos))
+
+			sco := scos[0]
+			testutil.Equal(t, "Address", mp.Address, sco.SiacoinOutput.Address)
+			testutil.Equal(t, "Value", mp.Value, sco.SiacoinOutput.Value)
+			testutil.Equal(t, "ID", id, sco.ID)
+			testutil.Equal(t, "SpentIndex", nil, sco.SpentIndex)
+		}
+		for i, txn := range expected.Transactions {
+			txns, err := db.Transactions([]types.TransactionID{txn.ID()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			testutil.Equal(t, "len(txns)", 1, len(txns))
+			testutil.CheckTransaction(t, txn, got.Transactions[i])
+		}
+	}
+
+	txn1 := types.Transaction{
+		ArbitraryData: [][]byte{{0}},
+	}
+	txn2 := types.Transaction{
+		ArbitraryData: [][]byte{{0}, {1}},
+	}
+
+	genesisState := cs
+	b1 := testutil.MineBlock(cs, []types.Transaction{txn1, txn2}, types.VoidAddress)
+	cs, au := applyUpdate(t, cs, store.SupplementTipBlock(b1), b1)
+	if err := db.UpdateChainState(nil, []chain.ApplyUpdate{au}); err != nil {
+		t.Fatal(err)
+	}
+
+	checkBlock(b1)
+
+	prevState := cs
+	b2 := testutil.MineBlock(cs, []types.Transaction{txn1, txn2}, types.VoidAddress)
+	cs, au = applyUpdate(t, cs, store.SupplementTipBlock(b2), b2)
+	if err := db.UpdateChainState(nil, []chain.ApplyUpdate{au}); err != nil {
+		t.Fatal(err)
+	}
+
+	checkBlock(b1)
+	checkBlock(b2)
+
+	ru := revertUpdate(t, prevState, store.SupplementTipBlock(b2), b2)
+	if err := db.UpdateChainState([]chain.RevertUpdate{ru}, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	checkBlock(b1)
+	if _, err := db.Block(b2.ID()); !errors.Is(err, explorer.ErrNoBlock) {
+		t.Fatal("expected missing block error for b2", err)
+	}
+
+	ru = revertUpdate(t, genesisState, store.SupplementTipBlock(b1), b1)
+	if err := db.UpdateChainState([]chain.RevertUpdate{ru}, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := db.Block(b1.ID()); !errors.Is(err, explorer.ErrNoBlock) {
+		t.Fatal("expected missing block error for b1", err)
+	}
+	if _, err := db.Block(b2.ID()); !errors.Is(err, explorer.ErrNoBlock) {
+		t.Fatal("expected missing block error for b2", err)
+	}
 }
