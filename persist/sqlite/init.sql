@@ -164,6 +164,19 @@ CREATE INDEX block_transactions_block_id_index ON block_transactions(block_id);
 CREATE INDEX block_transactions_transaction_id_index ON block_transactions(transaction_id);
 CREATE INDEX block_transactions_transaction_id_block_id ON block_transactions(transaction_id, block_id);
 
+CREATE TRIGGER delete_orphan_v1_transaction
+AFTER DELETE ON block_transactions
+FOR EACH ROW
+WHEN NOT EXISTS (
+	SELECT 1
+	FROM block_transactions
+	WHERE transaction_id = OLD.transaction_id
+)
+BEGIN
+	DELETE FROM transactions
+	WHERE id = OLD.transaction_id;
+END;
+
 CREATE TABLE transaction_arbitrary_data (
 	transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL,
 	transaction_order INTEGER NOT NULL,
@@ -277,6 +290,19 @@ CREATE TABLE v2_block_transactions (
 );
 CREATE INDEX v2_block_transactions_block_id_index ON v2_block_transactions(block_id);
 CREATE INDEX v2_block_transactions_transaction_id_block_id ON v2_block_transactions(transaction_id, block_id);
+
+CREATE TRIGGER delete_orphan_v2_transaction
+AFTER DELETE ON v2_block_transactions
+FOR EACH ROW
+WHEN NOT EXISTS (
+	SELECT 1
+	FROM v2_block_transactions
+	WHERE transaction_id = OLD.transaction_id
+)
+BEGIN
+	DELETE FROM v2_transactions
+	WHERE id = OLD.transaction_id;
+END;
 
 CREATE TABLE v2_transaction_siacoin_inputs (
     transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL,
@@ -464,7 +490,7 @@ CREATE TABLE v2_last_contract_revision (
 
     confirmation_height BLOB NOT NULL,
     confirmation_block_id BLOB NOT NULL REFERENCES blocks(id) ON DELETE CASCADE,
-    confirmation_transaction_id BLOB NOT NULL REFERENCES v2_transactions(transaction_id),
+    confirmation_transaction_id BLOB NOT NULL REFERENCES v2_transactions(transaction_id) ON DELETE CASCADE,
 
     -- See explorer.V2Resolution for enum values.
     resolution_type INTEGER,

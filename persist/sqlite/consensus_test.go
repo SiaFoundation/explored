@@ -83,8 +83,8 @@ func newStore(t *testing.T, v2 bool, f func(*consensus.Network, types.Block)) (*
 	return network, genesisBlock, cm, db
 }
 
-// CheckMetrics checks the that the metrics from the DB match what we expect.
-func CheckMetrics(t *testing.T, db explorer.Store, cm *chain.Manager, expected explorer.Metrics) {
+// checkMetrics checks the that the metrics from the DB match what we expect.
+func checkMetrics(t *testing.T, db explorer.Store, cm *chain.Manager, expected explorer.Metrics) {
 	t.Helper()
 
 	tip, err := db.Tip()
@@ -107,9 +107,9 @@ func CheckMetrics(t *testing.T, db explorer.Store, cm *chain.Manager, expected e
 	// don't check circulating supply here because it requires a lot of accounting
 }
 
-// CheckChainIndices checks that the chain indices that a transaction was in
+// checkChainIndices checks that the chain indices that a transaction was in
 // from the explorer match the expected chain indices.
-func CheckChainIndices(t *testing.T, db explorer.Store, txnID types.TransactionID, expected []types.ChainIndex) {
+func checkChainIndices(t *testing.T, db explorer.Store, txnID types.TransactionID, expected []types.ChainIndex) {
 	t.Helper()
 
 	indices, err := db.TransactionChainIndices(txnID, 0, 100)
@@ -124,8 +124,8 @@ func CheckChainIndices(t *testing.T, db explorer.Store, txnID types.TransactionI
 	}
 }
 
-// CheckFCRevisions checks that the revision numbers for the file contracts match.
-func CheckFCRevisions(t *testing.T, confirmationIndex types.ChainIndex, confirmationTransactionID types.TransactionID, valid, missed []types.SiacoinOutput, revisionNumbers []uint64, fcs []explorer.ExtendedFileContract) {
+// checkFCRevisions checks that the revision numbers for the file contracts match.
+func checkFCRevisions(t *testing.T, confirmationIndex types.ChainIndex, confirmationTransactionID types.TransactionID, valid, missed []types.SiacoinOutput, revisionNumbers []uint64, fcs []explorer.ExtendedFileContract) {
 	t.Helper()
 
 	testutil.Equal(t, "number of revisions", len(revisionNumbers), len(fcs))
@@ -401,7 +401,7 @@ func TestSendTransactions(t *testing.T) {
 		}
 		syncDB(t, db, cm)
 
-		CheckMetrics(t, db, cm, explorer.Metrics{})
+		checkMetrics(t, db, cm, explorer.Metrics{})
 
 		testutil.CheckBalance(t, db, addr1, addr1SCs, types.ZeroCurrency, addr1SFs)
 		testutil.CheckBalance(t, db, addr2, types.Siacoins(1).Mul64(uint64(i+1)), types.ZeroCurrency, 1*uint64(i+1))
@@ -428,7 +428,7 @@ func TestSendTransactions(t *testing.T) {
 		// with the actual transactions
 		for i := range b.Transactions {
 			testutil.CheckTransaction(t, b.Transactions[i], block.Transactions[i])
-			CheckChainIndices(t, db, b.Transactions[i].ID(), []types.ChainIndex{cm.Tip()})
+			checkChainIndices(t, db, b.Transactions[i].ID(), []types.ChainIndex{cm.Tip()})
 
 			txns, err := db.Transactions([]types.TransactionID{b.Transactions[i].ID()})
 			if err != nil {
@@ -585,7 +585,7 @@ func TestFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		CheckFCRevisions(t, confirmationIndex, confirmationTransactionID, fc.ValidProofOutputs, fc.MissedProofOutputs, []uint64{0}, dbFCs)
+		checkFCRevisions(t, confirmationIndex, confirmationTransactionID, fc.ValidProofOutputs, fc.MissedProofOutputs, []uint64{0}, dbFCs)
 	}
 
 	{
@@ -647,7 +647,7 @@ func TestFileContract(t *testing.T) {
 		testutil.Equal(t, "confirmation transaction ID", txn.ID(), hostContracts[0].ConfirmationTransactionID)
 	}
 
-	CheckMetrics(t, db, cm, explorer.Metrics{
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
 		StorageUtilization: testutil.ContractFilesize,
@@ -668,7 +668,7 @@ func TestFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		CheckFCRevisions(t, confirmationIndex, confirmationTransactionID, fc.ValidProofOutputs, fc.MissedProofOutputs, []uint64{0, 1}, dbFCs)
+		checkFCRevisions(t, confirmationIndex, confirmationTransactionID, fc.ValidProofOutputs, fc.MissedProofOutputs, []uint64{0, 1}, dbFCs)
 	}
 
 	{
@@ -690,7 +690,7 @@ func TestFileContract(t *testing.T) {
 	}
 
 	for i := cm.Tip().Height; i < windowEnd; i++ {
-		CheckMetrics(t, db, cm, explorer.Metrics{
+		checkMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    1,
 			StorageUtilization: 1 * testutil.ContractFilesize,
@@ -702,7 +702,7 @@ func TestFileContract(t *testing.T) {
 		syncDB(t, db, cm)
 	}
 
-	CheckMetrics(t, db, cm, explorer.Metrics{
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:          0,
 		ActiveContracts:     0,
 		FailedContracts:     1,
@@ -785,7 +785,7 @@ func TestFileContract(t *testing.T) {
 		testutil.Equal(t, "confirmation transaction ID", txn.ID(), hostContracts[0].ConfirmationTransactionID)
 	}
 
-	CheckMetrics(t, db, cm, explorer.Metrics{
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:          0,
 		ActiveContracts:     0,
 		FailedContracts:     1,
@@ -856,7 +856,7 @@ func TestEphemeralFileContract(t *testing.T) {
 	confirmationIndex := cm.Tip()
 	confirmationTransactionID := txn.ID()
 
-	CheckMetrics(t, db, cm, explorer.Metrics{
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
 		StorageUtilization: testutil.ContractFilesize,
@@ -893,7 +893,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		CheckFCRevisions(t, confirmationIndex, confirmationTransactionID, fc.ValidProofOutputs, fc.MissedProofOutputs, []uint64{0, 1}, dbFCs)
+		checkFCRevisions(t, confirmationIndex, confirmationTransactionID, fc.ValidProofOutputs, fc.MissedProofOutputs, []uint64{0, 1}, dbFCs)
 	}
 
 	{
@@ -953,7 +953,7 @@ func TestEphemeralFileContract(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	CheckMetrics(t, db, cm, explorer.Metrics{
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
 		StorageUtilization: testutil.ContractFilesize,
@@ -975,7 +975,7 @@ func TestEphemeralFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		CheckFCRevisions(t, confirmationIndex, confirmationTransactionID, fc.ValidProofOutputs, fc.MissedProofOutputs, []uint64{0, 1, 2, 3}, dbFCs)
+		checkFCRevisions(t, confirmationIndex, confirmationTransactionID, fc.ValidProofOutputs, fc.MissedProofOutputs, []uint64{0, 1, 2, 3}, dbFCs)
 	}
 
 	{
@@ -1046,7 +1046,7 @@ func TestRevertTip(t *testing.T) {
 		testutil.Equal(t, "tip", cm.Tip(), tip)
 	}
 
-	CheckMetrics(t, db, cm, explorer.Metrics{
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -1073,7 +1073,7 @@ func TestRevertTip(t *testing.T) {
 		testutil.Equal(t, "tip", cm.Tip(), tip)
 	}
 
-	CheckMetrics(t, db, cm, explorer.Metrics{
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -1151,7 +1151,7 @@ func TestRevertBalance(t *testing.T) {
 		}
 		syncDB(t, db, cm)
 
-		CheckMetrics(t, db, cm, explorer.Metrics{
+		checkMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    0,
 			StorageUtilization: 0,
@@ -1223,7 +1223,7 @@ func TestRevertBalance(t *testing.T) {
 		testutil.Equal(t, "spent_index", b.Transactions[1].SiacoinOutputs[0].SpentIndex, (*types.ChainIndex)(nil))
 	}
 
-	CheckMetrics(t, db, cm, explorer.Metrics{
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -1411,7 +1411,7 @@ func TestRevertSendTransactions(t *testing.T) {
 		blocks = append(blocks, b)
 		syncDB(t, db, cm)
 
-		CheckMetrics(t, db, cm, explorer.Metrics{
+		checkMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    0,
 			StorageUtilization: 0,
@@ -1442,7 +1442,7 @@ func TestRevertSendTransactions(t *testing.T) {
 		// with the actual transactions
 		for i := range b.Transactions {
 			testutil.CheckTransaction(t, b.Transactions[i], block.Transactions[i])
-			CheckChainIndices(t, db, b.Transactions[i].ID(), []types.ChainIndex{cm.Tip()})
+			checkChainIndices(t, db, b.Transactions[i].ID(), []types.ChainIndex{cm.Tip()})
 
 			txns, err := db.Transactions([]types.TransactionID{b.Transactions[i].ID()})
 			if err != nil {
@@ -1582,7 +1582,7 @@ func TestRevertSendTransactions(t *testing.T) {
 		}
 	}
 
-	CheckMetrics(t, db, cm, explorer.Metrics{
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -1626,7 +1626,7 @@ func TestHostAnnouncement(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	CheckMetrics(t, db, cm, explorer.Metrics{
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         1,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -1654,7 +1654,7 @@ func TestHostAnnouncement(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	CheckMetrics(t, db, cm, explorer.Metrics{
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         3,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -1833,7 +1833,7 @@ func TestMultipleReorg(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	CheckMetrics(t, db, cm, explorer.Metrics{
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    0,
 		StorageUtilization: 0,
@@ -2141,7 +2141,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	confirmationIndex := cm.Tip()
 	confirmationTransactionID := txn.ID()
 
-	CheckMetrics(t, db, cm, explorer.Metrics{
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
 		StorageUtilization: testutil.ContractFilesize,
@@ -2164,7 +2164,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		CheckFCRevisions(t, confirmationIndex, confirmationTransactionID, fc.ValidProofOutputs, fc.MissedProofOutputs, []uint64{0}, dbFCs)
+		checkFCRevisions(t, confirmationIndex, confirmationTransactionID, fc.ValidProofOutputs, fc.MissedProofOutputs, []uint64{0}, dbFCs)
 	}
 
 	{
@@ -2215,7 +2215,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 	syncDB(t, db, cm)
 	prevState2 := cm.TipState()
 
-	CheckMetrics(t, db, cm, explorer.Metrics{
+	checkMetrics(t, db, cm, explorer.Metrics{
 		TotalHosts:         0,
 		ActiveContracts:    1,
 		StorageUtilization: testutil.ContractFilesize + 10,
@@ -2255,7 +2255,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		CheckFCRevisions(t, confirmationIndex, confirmationTransactionID, fc.ValidProofOutputs, fc.MissedProofOutputs, []uint64{0, 1}, dbFCs)
+		checkFCRevisions(t, confirmationIndex, confirmationTransactionID, fc.ValidProofOutputs, fc.MissedProofOutputs, []uint64{0, 1}, dbFCs)
 	}
 
 	{
@@ -2314,12 +2314,12 @@ func TestMultipleReorgFileContract(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			CheckFCRevisions(t, confirmationIndex, confirmationTransactionID, fc.ValidProofOutputs, fc.MissedProofOutputs, []uint64{0}, dbFCs)
+			checkFCRevisions(t, confirmationIndex, confirmationTransactionID, fc.ValidProofOutputs, fc.MissedProofOutputs, []uint64{0}, dbFCs)
 		}
 
 		// storage utilization should be back to testutil.ContractFilesize instead of
 		// testutil.ContractFilesize + 10
-		CheckMetrics(t, db, cm, explorer.Metrics{
+		checkMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    1,
 			StorageUtilization: testutil.ContractFilesize,
@@ -2361,7 +2361,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		}
 
 		// should have revision filesize
-		CheckMetrics(t, db, cm, explorer.Metrics{
+		checkMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts:         0,
 			ActiveContracts:    1,
 			StorageUtilization: testutil.ContractFilesize + 10,
@@ -2417,7 +2417,7 @@ func TestMultipleReorgFileContract(t *testing.T) {
 		}
 
 		// no more contracts or storage utilization
-		CheckMetrics(t, db, cm, explorer.Metrics{
+		checkMetrics(t, db, cm, explorer.Metrics{
 			TotalHosts: 0,
 		})
 	}
