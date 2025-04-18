@@ -259,26 +259,38 @@ func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction) (map[
 	txnDBIds := make(map[types.TransactionID]txnDBId)
 	for i, txn := range txns {
 		var exist bool
-		var txnID int64
-		if err := checkTransactionStmt.QueryRow(encode(txn.ID())).Scan(&txnID); err != nil && err != sql.ErrNoRows {
+		var dbID int64
+		txnID := txn.ID()
+		if err := checkTransactionStmt.QueryRow(encode(txnID)).Scan(&dbID); err != nil && err != sql.ErrNoRows {
 			return nil, fmt.Errorf("failed to insert transaction ID: %w", err)
 		} else if err == nil {
 			exist = true
 		}
 
 		if !exist {
-			result, err := insertTransactionStmt.Exec(encode(txn.ID()))
+			result, err := insertTransactionStmt.Exec(encode(txnID))
 			if err != nil {
 				return nil, fmt.Errorf("failed to insert into transactions: %w", err)
 			}
-			txnID, err = result.LastInsertId()
+			dbID, err = result.LastInsertId()
 			if err != nil {
 				return nil, fmt.Errorf("failed to get transaction ID: %w", err)
 			}
 		}
-		txnDBIds[txn.ID()] = txnDBId{id: txnID, exist: exist}
 
-		if _, err := blockTransactionsStmt.Exec(encode(bid), txnID, i); err != nil {
+		// If we have the same transaction multiple times in one block, exist
+		// will be true after the above query after the first time the
+		// transaction is encountered by this loop.  If we update the exist
+		// value in the map to true, then the transactions fields will never
+		// be inserted.  Therefore, if we have seen a transaction but it did
+		// not exist the first time we saw it in this block, we need to set
+		// exist to false.
+		if v, ok := txnDBIds[txnID]; ok && !v.exist {
+			exist = false
+		}
+		txnDBIds[txnID] = txnDBId{id: dbID, exist: exist}
+
+		if _, err := blockTransactionsStmt.Exec(encode(bid), dbID, i); err != nil {
 			return nil, fmt.Errorf("failed to insert into block_transactions: %w", err)
 		}
 	}
@@ -288,7 +300,8 @@ func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction) (map[
 
 func addTransactionFields(tx *txn, txns []types.Transaction, scDBIds map[types.SiacoinOutputID]int64, sfDBIds map[types.SiafundOutputID]int64, fcDBIds map[explorer.DBFileContract]int64, txnDBIds map[types.TransactionID]txnDBId) error {
 	for _, txn := range txns {
-		dbID, ok := txnDBIds[txn.ID()]
+		txnID := txn.ID()
+		dbID, ok := txnDBIds[txnID]
 		if !ok {
 			panic(fmt.Errorf("txn %v should be in txnDBIds", txn.ID()))
 		}
@@ -297,6 +310,9 @@ func addTransactionFields(tx *txn, txns []types.Transaction, scDBIds map[types.S
 		if dbID.exist {
 			continue
 		}
+		// set exist = true so we don't re-insert fields in case we have
+		// multiple of the same transaction in a block
+		txnDBIds[txnID] = txnDBId{id: dbID.id, exist: true}
 
 		if err := addMinerFees(tx, dbID.id, txn); err != nil {
 			return fmt.Errorf("failed to add miner fees: %w", err)

@@ -490,6 +490,8 @@ func TestTransactionChainIndices(t *testing.T) {
 	_, cs, store, db := newStoreRefactored(t, false, nil)
 
 	checkTransaction := func(expected types.Transaction) {
+		t.Helper()
+
 		txns, err := db.Transactions([]types.TransactionID{expected.ID()})
 		if err != nil {
 			t.Fatal(err)
@@ -506,7 +508,7 @@ func TestTransactionChainIndices(t *testing.T) {
 	}
 
 	genesisState := cs
-	b1 := testutil.MineBlock(cs, []types.Transaction{txn1, txn2}, types.VoidAddress)
+	b1 := testutil.MineBlock(cs, []types.Transaction{txn1, txn1, txn2}, types.VoidAddress)
 	cs, au := applyUpdate(t, cs, store.SupplementTipBlock(b1), b1)
 	if err := db.UpdateChainState(nil, []chain.ApplyUpdate{au}); err != nil {
 		t.Fatal(err)
@@ -518,7 +520,7 @@ func TestTransactionChainIndices(t *testing.T) {
 	checkChainIndices(t, db, txn2.ID(), []types.ChainIndex{cs.Index})
 
 	prevState := cs
-	b2 := testutil.MineBlock(cs, []types.Transaction{txn1, txn2}, types.VoidAddress)
+	b2 := testutil.MineBlock(cs, []types.Transaction{txn1, txn1, txn2}, types.VoidAddress)
 	cs, au = applyUpdate(t, cs, store.SupplementTipBlock(b2), b2)
 	if err := db.UpdateChainState(nil, []chain.ApplyUpdate{au}); err != nil {
 		t.Fatal(err)
@@ -559,6 +561,8 @@ func TestBlock(t *testing.T) {
 	_, cs, store, db := newStoreRefactored(t, false, nil)
 
 	checkBlock := func(expected types.Block) {
+		t.Helper()
+
 		got, err := db.Block(expected.ID())
 		if err != nil {
 			t.Fatal(err)
@@ -567,20 +571,15 @@ func TestBlock(t *testing.T) {
 		testutil.Equal(t, "Nonce", expected.Nonce, got.Nonce)
 		testutil.Equal(t, "Timestamp", expected.Timestamp, got.Timestamp)
 
+		testutil.Equal(t, "len(MinerPayouts)", len(expected.MinerPayouts), len(got.MinerPayouts))
 		for i, mp := range expected.MinerPayouts {
-			id := expected.ID().MinerOutputID(i)
-			scos, err := db.SiacoinElements([]types.SiacoinOutputID{id})
-			if err != nil {
-				t.Fatal(err)
-			}
-			testutil.Equal(t, "len(scos)", 1, len(scos))
-
-			sco := scos[0]
+			sco := got.MinerPayouts[i]
 			testutil.Equal(t, "Address", mp.Address, sco.SiacoinOutput.Address)
 			testutil.Equal(t, "Value", mp.Value, sco.SiacoinOutput.Value)
-			testutil.Equal(t, "ID", id, sco.ID)
+			testutil.Equal(t, "ID", expected.ID().MinerOutputID(i), sco.ID)
 			testutil.Equal(t, "SpentIndex", nil, sco.SpentIndex)
 		}
+		testutil.Equal(t, "len(Transactions)", len(expected.Transactions), len(got.Transactions))
 		for i, txn := range expected.Transactions {
 			txns, err := db.Transactions([]types.TransactionID{txn.ID()})
 			if err != nil {
@@ -599,7 +598,7 @@ func TestBlock(t *testing.T) {
 	}
 
 	genesisState := cs
-	b1 := testutil.MineBlock(cs, []types.Transaction{txn1, txn2}, types.VoidAddress)
+	b1 := testutil.MineBlock(cs, []types.Transaction{txn1, txn1, txn2}, types.VoidAddress)
 	cs, au := applyUpdate(t, cs, store.SupplementTipBlock(b1), b1)
 	if err := db.UpdateChainState(nil, []chain.ApplyUpdate{au}); err != nil {
 		t.Fatal(err)
