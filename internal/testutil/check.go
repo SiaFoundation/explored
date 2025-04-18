@@ -59,6 +59,7 @@ func CheckTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer
 
 		Equal(t, "address", expected.Address, got.Address)
 		Equal(t, "value", expected.Value, got.Value)
+		Equal(t, "id", expectTxn.SiacoinOutputID(i), gotTxn.SiacoinOutputs[i].ID)
 		Equal(t, "source", explorer.SourceTransaction, gotTxn.SiacoinOutputs[i].Source)
 	}
 
@@ -83,6 +84,7 @@ func CheckTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer
 
 		Equal(t, "address", expected.Address, got.Address)
 		Equal(t, "value", expected.Value, got.Value)
+		Equal(t, "id", expectTxn.SiafundOutputID(i), gotTxn.SiafundOutputs[i].ID)
 	}
 
 	Equal(t, "arbitrary data", len(expectTxn.ArbitraryData), len(gotTxn.ArbitraryData))
@@ -133,6 +135,7 @@ func CheckTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer
 func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn explorer.V2Transaction) {
 	t.Helper()
 
+	txnID := expectTxn.ID()
 	Equal(t, "new foundation address", expectTxn.NewFoundationAddress, gotTxn.NewFoundationAddress)
 	Equal(t, "miner fee", expectTxn.MinerFee, gotTxn.MinerFee)
 
@@ -160,6 +163,7 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 		Equal(t, "address", expected.Address, got.Address)
 		Equal(t, "value", expected.Value, got.Value)
 		Equal(t, "source", explorer.SourceTransaction, gotTxn.SiacoinOutputs[i].Source)
+		Equal(t, "id", expectTxn.SiacoinOutputID(txnID, i), gotTxn.SiacoinOutputs[i].ID)
 	}
 
 	Equal(t, "siafund inputs", len(expectTxn.SiafundInputs), len(gotTxn.SiafundInputs))
@@ -185,6 +189,7 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 
 		Equal(t, "address", expected.Address, got.Address)
 		Equal(t, "value", expected.Value, got.Value)
+		Equal(t, "id", expectTxn.SiafundOutputID(txnID, i), gotTxn.SiafundOutputs[i].ID)
 	}
 
 	Equal(t, "file contracts", len(expectTxn.FileContracts), len(gotTxn.FileContracts))
@@ -192,7 +197,7 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 		expected := expectTxn.FileContracts[i]
 		got := gotTxn.FileContracts[i]
 
-		Equal(t, "id", expectTxn.V2FileContractID(expectTxn.ID(), i), types.FileContractID(got.ID))
+		Equal(t, "id", expectTxn.V2FileContractID(txnID, i), types.FileContractID(got.ID))
 		CheckV2FC(t, expected, got)
 	}
 
