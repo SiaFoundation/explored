@@ -6,7 +6,7 @@ toolchain go1.24.1
 
 require (
 	github.com/google/go-cmp v0.7.0
-	github.com/mattn/go-sqlite3 v1.14.27
+	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/oschwald/geoip2-golang v1.11.0
 	go.sia.tech/core v0.10.5
 	go.sia.tech/coreutils v0.12.2-0.20250317235740-9e6e9fe76b2e
