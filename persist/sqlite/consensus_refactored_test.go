@@ -1,0 +1,290 @@
+package sqlite_test
+
+import (
+	"math"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"go.sia.tech/core/consensus"
+	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils"
+	"go.sia.tech/coreutils/chain"
+	ctestutil "go.sia.tech/coreutils/testutil"
+	"go.sia.tech/explored/explorer"
+	"go.sia.tech/explored/internal/testutil"
+	"go.sia.tech/explored/persist/sqlite"
+	"go.uber.org/zap/zaptest"
+)
+
+func newStoreRefactored(t *testing.T, v2 bool, f func(*consensus.Network, types.Block)) (types.Block, consensus.State, *chain.DBStore, explorer.Store) {
+	log := zaptest.NewLogger(t)
+	dir := t.TempDir()
+
+	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var network *consensus.Network
+	var genesisBlock types.Block
+	if v2 {
+		network, genesisBlock = ctestutil.V2Network()
+	} else {
+		network, genesisBlock = ctestutil.Network()
+	}
+	if f != nil {
+		f(network, genesisBlock)
+	}
+
+	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bs := consensus.V1BlockSupplement{Transactions: make([]consensus.V1TransactionSupplement, len(genesisBlock.Transactions))}
+	_, au := applyUpdate(t, network.GenesisState(), bs, genesisBlock)
+	if err := db.UpdateChainState(nil, []chain.ApplyUpdate{au}); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		db.Close()
+		bdb.Close()
+	})
+	return genesisBlock, genesisState, store, db
+}
+
+func applyUpdate(t *testing.T, cs consensus.State, bs consensus.V1BlockSupplement, b types.Block) (consensus.State, chain.ApplyUpdate) {
+	if cs.Index.Height != math.MaxUint64 {
+		// don't validate genesis block
+		if err := consensus.ValidateBlock(cs, b, bs); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cs, au := consensus.ApplyBlock(cs, b, bs, time.Time{})
+	return cs, chain.ApplyUpdate{
+		ApplyUpdate: au,
+		Block:       b,
+		State:       cs,
+	}
+}
+
+func revertUpdate(t *testing.T, prevState consensus.State, bs consensus.V1BlockSupplement, b types.Block) chain.RevertUpdate {
+	ru := consensus.RevertBlock(prevState, b, bs)
+	return chain.RevertUpdate{
+		RevertUpdate: ru,
+		Block:        b,
+		State:        prevState,
+	}
+}
+
+func TestSiacoinOutput(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
+	genesisBlock, cs, store, db := newStoreRefactored(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+
+	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
+	scID := genesisBlock.Transactions[0].SiacoinOutputID(0)
+	txn1 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         scID,
+			UnlockConditions: unlockConditions,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr2,
+			Value:   genesisBlock.Transactions[0].SiacoinOutputs[0].Value,
+		}},
+	}
+	testutil.SignTransaction(cs, pk1, &txn1)
+
+	prevState := cs
+	b := testutil.MineBlock(cs, []types.Transaction{txn1}, types.VoidAddress)
+	cs, au := applyUpdate(t, cs, store.SupplementTipBlock(b), b)
+	if err := db.UpdateChainState(nil, []chain.ApplyUpdate{au}); err != nil {
+		t.Fatal(err)
+	}
+
+	{
+		sces, err := db.SiacoinElements([]types.SiacoinOutputID{scID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(sces)", 1, len(sces))
+
+		sce := sces[0]
+		testutil.Equal(t, "sce.Source", explorer.SourceTransaction, sce.Source)
+		testutil.Equal(t, "sce.SpentIndex", cs.Index, *sce.SpentIndex)
+		testutil.Equal(t, "sce.SiacoinElement.SiacoinOutput", genesisBlock.Transactions[0].SiacoinOutputs[0], sce.SiacoinOutput)
+	}
+
+	{
+		sces, err := db.SiacoinElements([]types.SiacoinOutputID{txn1.SiacoinOutputID(0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(sces)", 1, len(sces))
+
+		sce := sces[0]
+		testutil.Equal(t, "sce.Source", explorer.SourceTransaction, sce.Source)
+		testutil.Equal(t, "sce.SpentIndex", nil, sce.SpentIndex)
+		testutil.Equal(t, "sce.SiacoinElement.SiacoinOutput", txn1.SiacoinOutputs[0], sce.SiacoinOutput)
+	}
+
+	{
+		txns, err := db.Transactions([]types.TransactionID{txn1.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(txns)", 1, len(txns))
+
+		testutil.CheckTransaction(t, txn1, txns[0])
+	}
+
+	ru := revertUpdate(t, prevState, store.SupplementTipBlock(b), b)
+	if err := db.UpdateChainState([]chain.RevertUpdate{ru}, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	{
+		sces, err := db.SiacoinElements([]types.SiacoinOutputID{scID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(sces)", 1, len(sces))
+
+		sce := sces[0]
+		testutil.Equal(t, "sce.Source", explorer.SourceTransaction, sce.Source)
+		testutil.Equal(t, "sce.SpentIndex", nil, sce.SpentIndex)
+		testutil.Equal(t, "sce.SiacoinElement.SiacoinOutput", genesisBlock.Transactions[0].SiacoinOutputs[0], sce.SiacoinOutput)
+	}
+
+	{
+		sces, err := db.SiacoinElements([]types.SiacoinOutputID{txn1.SiacoinOutputID(0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(sces)", 0, len(sces))
+	}
+}
+
+func TestEphemeralSiacoinOutput(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
+	genesisBlock, cs, store, db := newStoreRefactored(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	txn1 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         genesisBlock.Transactions[0].SiacoinOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr2,
+			Value:   genesisBlock.Transactions[0].SiacoinOutputs[0].Value,
+		}},
+	}
+	testutil.SignTransaction(cs, pk1, &txn1)
+
+	uc2 := types.StandardUnlockConditions(pk2.PublicKey())
+	txn2 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         txn1.SiacoinOutputID(0),
+			UnlockConditions: uc2,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: types.VoidAddress,
+			Value:   txn1.SiacoinOutputs[0].Value,
+		}},
+	}
+	testutil.SignTransaction(cs, pk2, &txn2)
+
+	prevState := cs
+	b := testutil.MineBlock(cs, []types.Transaction{txn1, txn2}, types.VoidAddress)
+	cs, au := applyUpdate(t, cs, store.SupplementTipBlock(b), b)
+	if err := db.UpdateChainState(nil, []chain.ApplyUpdate{au}); err != nil {
+		t.Fatal(err)
+	}
+
+	{
+		sces, err := db.SiacoinElements([]types.SiacoinOutputID{genesisBlock.Transactions[0].SiacoinOutputID(0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(sces)", 1, len(sces))
+
+		sce := sces[0]
+		testutil.Equal(t, "sce.Source", explorer.SourceTransaction, sce.Source)
+		testutil.Equal(t, "sce.SpentIndex", cs.Index, *sce.SpentIndex)
+		testutil.Equal(t, "sce.SiacoinElement.SiacoinOutput", genesisBlock.Transactions[0].SiacoinOutputs[0], sce.SiacoinOutput)
+	}
+
+	{
+		sces, err := db.SiacoinElements([]types.SiacoinOutputID{txn1.SiacoinOutputID(0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(sces)", 1, len(sces))
+
+		sce := sces[0]
+		testutil.Equal(t, "sce.Source", explorer.SourceTransaction, sce.Source)
+		testutil.Equal(t, "sce.SpentIndex", cs.Index, *sce.SpentIndex)
+		testutil.Equal(t, "sce.SiacoinElement.SiacoinOutput", txn1.SiacoinOutputs[0], sce.SiacoinOutput)
+	}
+
+	{
+		sces, err := db.SiacoinElements([]types.SiacoinOutputID{txn2.SiacoinOutputID(0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(sces)", 1, len(sces))
+
+		sce := sces[0]
+		testutil.Equal(t, "sce.Source", explorer.SourceTransaction, sce.Source)
+		testutil.Equal(t, "sce.SpentIndex", nil, sce.SpentIndex)
+		testutil.Equal(t, "sce.SiacoinElement.SiacoinOutput", txn2.SiacoinOutputs[0], sce.SiacoinOutput)
+	}
+
+	ru := revertUpdate(t, prevState, store.SupplementTipBlock(b), b)
+	if err := db.UpdateChainState([]chain.RevertUpdate{ru}, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	{
+		sces, err := db.SiacoinElements([]types.SiacoinOutputID{genesisBlock.Transactions[0].SiacoinOutputID(0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(sces)", 1, len(sces))
+
+		sce := sces[0]
+		testutil.Equal(t, "sce.Source", explorer.SourceTransaction, sce.Source)
+		testutil.Equal(t, "sce.SpentIndex", nil, sce.SpentIndex)
+		testutil.Equal(t, "sce.SiacoinElement.SiacoinOutput", genesisBlock.Transactions[0].SiacoinOutputs[0], sce.SiacoinOutput)
+	}
+
+	{
+		sces, err := db.SiacoinElements([]types.SiacoinOutputID{txn1.SiacoinOutputID(0), txn2.SiacoinOutputID(0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(sces)", 0, len(sces))
+	}
+}
