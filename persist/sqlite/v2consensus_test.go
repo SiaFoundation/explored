@@ -72,6 +72,15 @@ func getCIE(t *testing.T, db explorer.Store, bid types.BlockID) types.ChainIndex
 	}
 }
 
+func checkV2Transaction(t *testing.T, db explorer.Store, expected types.V2Transaction) {
+	txns, err := db.V2Transactions([]types.TransactionID{expected.ID()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	testutil.Equal(t, "len(txns)", 1, len(txns))
+	testutil.CheckV2Transaction(t, expected, txns[0])
+}
+
 func TestV2ArbitraryData(t *testing.T) {
 	_, _, cm, db := newStore(t, true, func(network *consensus.Network, genesisBlock types.Block) {
 		network.HardforkV2.AllowHeight = 1
@@ -102,14 +111,8 @@ func TestV2ArbitraryData(t *testing.T) {
 		testutil.CheckV2Transaction(t, txn2, b.V2.Transactions[1])
 	}
 
-	{
-		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID(), txn2.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
-		testutil.CheckV2Transaction(t, txn2, dbTxns[1])
-	}
+	checkV2Transaction(t, db, txn1)
+	checkV2Transaction(t, db, txn2)
 
 	txn3 := types.V2Transaction{
 		ArbitraryData: []byte("12345"),
@@ -131,15 +134,9 @@ func TestV2ArbitraryData(t *testing.T) {
 		testutil.CheckV2Transaction(t, txn3, b.V2.Transactions[2])
 	}
 
-	{
-		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID(), txn2.ID(), txn3.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
-		testutil.CheckV2Transaction(t, txn2, dbTxns[1])
-		testutil.CheckV2Transaction(t, txn3, dbTxns[2])
-	}
+	checkV2Transaction(t, db, txn1)
+	checkV2Transaction(t, db, txn2)
+	checkV2Transaction(t, db, txn3)
 
 	testutil.CheckV2ChainIndices(t, db, txn1.ID(), []types.ChainIndex{cm.Tip(), prev})
 	testutil.CheckV2ChainIndices(t, db, txn2.ID(), []types.ChainIndex{cm.Tip(), prev})
@@ -173,13 +170,7 @@ func TestV2MinerFee(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	{
-		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
-	}
+	checkV2Transaction(t, db, txn1)
 }
 
 func TestV2FoundationAddress(t *testing.T) {
@@ -214,13 +205,7 @@ func TestV2FoundationAddress(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	{
-		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
-	}
+	checkV2Transaction(t, db, txn1)
 
 	{
 		events, err := db.AddressEvents(addr1, 0, math.MaxInt64)
@@ -292,13 +277,7 @@ func TestV2Attestations(t *testing.T) {
 		testutil.CheckTransaction(t, genesisBlock.Transactions[0], events[1].Data.(explorer.EventV1Transaction).Transaction)
 	}
 
-	{
-		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
-	}
+	checkV2Transaction(t, db, txn1)
 }
 
 func TestV2SiacoinOutput(t *testing.T) {
@@ -340,13 +319,7 @@ func TestV2SiacoinOutput(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	{
-		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
-	}
+	checkV2Transaction(t, db, txn1)
 
 	testutil.CheckBalance(t, db, addr1, giftSC.Div64(2), types.ZeroCurrency, 0)
 	testutil.CheckBalance(t, db, addr2, giftSC.Div64(2), types.ZeroCurrency, 0)
@@ -391,13 +364,7 @@ func TestV2SiafundOutput(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	{
-		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
-	}
+	checkV2Transaction(t, db, txn1)
 
 	testutil.CheckBalance(t, db, addr1, types.ZeroCurrency, types.ZeroCurrency, giftSF/2)
 	testutil.CheckBalance(t, db, addr2, types.ZeroCurrency, types.ZeroCurrency, giftSF/2)
@@ -458,13 +425,7 @@ func TestV2FileContract(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	{
-		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
-	}
+	checkV2Transaction(t, db, txn1)
 
 	txn2 := types.V2Transaction{
 		SiacoinInputs: []types.V2SiacoinInput{{
@@ -486,13 +447,7 @@ func TestV2FileContract(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	{
-		dbTxns, err := db.V2Transactions([]types.TransactionID{txn2.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.CheckV2Transaction(t, txn2, dbTxns[0])
-	}
+	checkV2Transaction(t, db, txn2)
 
 	for i := cm.Tip().Height; i < v2FC.ExpirationHeight; i++ {
 		if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
@@ -500,14 +455,8 @@ func TestV2FileContract(t *testing.T) {
 		}
 	}
 
-	{
-		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID(), txn2.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
-		testutil.CheckV2Transaction(t, txn2, dbTxns[1])
-	}
+	checkV2Transaction(t, db, txn1)
+	checkV2Transaction(t, db, txn2)
 }
 
 func TestV2FileContractRevert(t *testing.T) {
@@ -567,13 +516,7 @@ func TestV2FileContractRevert(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	{
-		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
-	}
+	checkV2Transaction(t, db, txn1)
 
 	{
 		fcs, err := db.V2Contracts([]types.FileContractID{txn1.V2FileContractID(txn1.ID(), 0), txn1.V2FileContractID(txn1.ID(), 1)})
@@ -660,13 +603,7 @@ func TestV2FileContractRevert(t *testing.T) {
 		testutil.CheckV2Transaction(t, txn2, b.V2.Transactions[0])
 	}
 
-	{
-		dbTxns, err := db.V2Transactions([]types.TransactionID{txn2.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.CheckV2Transaction(t, txn2, dbTxns[0])
-	}
+	checkV2Transaction(t, db, txn2)
 
 	{
 		fcs, err := db.V2Contracts([]types.FileContractID{txn2.V2FileContractID(txn2.ID(), 0)})
@@ -742,13 +679,7 @@ func TestV2FileContractKey(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	{
-		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
-	}
+	checkV2Transaction(t, db, txn1)
 
 	{
 		fcs, err := db.V2Contracts([]types.FileContractID{txn1.V2FileContractID(txn1.ID(), 0)})
@@ -788,13 +719,7 @@ func TestV2FileContractKey(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	{
-		dbTxns, err := db.V2Transactions([]types.TransactionID{txn2.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.CheckV2Transaction(t, txn2, dbTxns[0])
-	}
+	checkV2Transaction(t, db, txn2)
 
 	{
 		fcs, err := db.V2Contracts([]types.FileContractID{txn2.V2FileContractID(txn2.ID(), 0)})
@@ -906,13 +831,7 @@ func TestV2FileContractRevision(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	{
-		dbTxns, err := db.V2Transactions([]types.TransactionID{txn2.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.CheckV2Transaction(t, txn2, dbTxns[0])
-	}
+	checkV2Transaction(t, db, txn2)
 
 	{
 		fcs, err := db.V2Contracts([]types.FileContractID{txn1.V2FileContractID(txn1.ID(), 0)})
@@ -1053,13 +972,7 @@ func TestV2FileContractResolution(t *testing.T) {
 	// we will revert back here when we undo the resolutions
 	prevState := cm.TipState()
 
-	{
-		dbTxns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.CheckV2Transaction(t, txn1, dbTxns[0])
-	}
+	checkV2Transaction(t, db, txn1)
 
 	v2FCFinalRevision := v2FC
 	v2FCFinalRevision.Filesize--
@@ -1692,21 +1605,6 @@ func TestBlockSameV2Transaction(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	{
-		txns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "len(txns)", 1, len(txns))
-		testutil.CheckV2Transaction(t, txn1, txns[0])
-	}
-
-	{
-		txns, err := db.V2Transactions([]types.TransactionID{txn2.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "len(txns)", 1, len(txns))
-		testutil.CheckV2Transaction(t, txn2, txns[0])
-	}
+	checkV2Transaction(t, db, txn1)
+	checkV2Transaction(t, db, txn2)
 }

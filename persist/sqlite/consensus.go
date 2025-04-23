@@ -262,7 +262,7 @@ func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction) (map[
 		var dbID int64
 		txnID := txn.ID()
 		if err := checkTransactionStmt.QueryRow(encode(txnID)).Scan(&dbID); err != nil && err != sql.ErrNoRows {
-			return nil, fmt.Errorf("failed to insert transaction ID: %w", err)
+			return nil, fmt.Errorf("failed to check if transaction exists: %w", err)
 		} else if err == nil {
 			exist = true
 		}
@@ -280,15 +280,11 @@ func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction) (map[
 
 		// If we have the same transaction multiple times in one block, exist
 		// will be true after the above query after the first time the
-		// transaction is encountered by this loop. If we update the exist
-		// value in the map to true, then the transactions fields will never
-		// be inserted. Therefore, if we have seen a transaction but it did
-		// not exist the first time we saw it in this block, we need to set
-		// exist to false.
-		if v, ok := txnDBIds[txnID]; ok && !v.exist {
-			exist = false
+		// transaction is encountered by this loop. So we only set the value in
+		// the map for each transaction once.
+		if _, ok := txnDBIds[txnID]; !ok {
+			txnDBIds[txnID] = txnDBId{id: dbID, exist: exist}
 		}
-		txnDBIds[txnID] = txnDBId{id: dbID, exist: exist}
 
 		if _, err := blockTransactionsStmt.Exec(encode(bid), dbID, i); err != nil {
 			return nil, fmt.Errorf("failed to insert into block_transactions: %w", err)
