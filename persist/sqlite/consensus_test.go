@@ -156,6 +156,15 @@ func CheckFCRevisions(t *testing.T, confirmationIndex types.ChainIndex, confirma
 	}
 }
 
+func checkTransaction(t *testing.T, db explorer.Store, expected types.Transaction) {
+	txns, err := db.Transactions([]types.TransactionID{expected.ID()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	testutil.Equal(t, "len(txns)", 1, len(txns))
+	testutil.CheckTransaction(t, expected, txns[0])
+}
+
 func TestBalance(t *testing.T) {
 	_, _, cm, db := newStore(t, false, nil)
 
@@ -430,12 +439,7 @@ func TestSendTransactions(t *testing.T) {
 			testutil.CheckTransaction(t, b.Transactions[i], block.Transactions[i])
 			CheckChainIndices(t, db, b.Transactions[i].ID(), []types.ChainIndex{cm.Tip()})
 
-			txns, err := db.Transactions([]types.TransactionID{b.Transactions[i].ID()})
-			if err != nil {
-				t.Fatal(err)
-			}
-			testutil.Equal(t, "transactions", 1, len(txns))
-			testutil.CheckTransaction(t, b.Transactions[i], txns[0])
+			checkTransaction(t, db, b.Transactions[i])
 		}
 
 		type expectedUTXOs struct {
@@ -1444,12 +1448,7 @@ func TestRevertSendTransactions(t *testing.T) {
 			testutil.CheckTransaction(t, b.Transactions[i], block.Transactions[i])
 			CheckChainIndices(t, db, b.Transactions[i].ID(), []types.ChainIndex{cm.Tip()})
 
-			txns, err := db.Transactions([]types.TransactionID{b.Transactions[i].ID()})
-			if err != nil {
-				t.Fatal(err)
-			}
-			testutil.Equal(t, "transactions", 1, len(txns))
-			testutil.CheckTransaction(t, b.Transactions[i], txns[0])
+			checkTransaction(t, db, b.Transactions[i])
 		}
 
 		type expectedUTXOs struct {
@@ -1671,17 +1670,10 @@ func TestHostAnnouncement(t *testing.T) {
 		testutil.Equal(t, "txns[2].ID", txn4.ID(), b.Transactions[2].ID)
 	}
 
-	{
-		dbTxns, err := db.Transactions([]types.TransactionID{txn1.ID(), txn2.ID(), txn3.ID(), txn4.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "len(txns)", 4, len(dbTxns))
-		testutil.Equal(t, "txns[0].ID", txn1.ID(), dbTxns[0].ID)
-		testutil.Equal(t, "txns[1].ID", txn2.ID(), dbTxns[1].ID)
-		testutil.Equal(t, "txns[2].ID", txn3.ID(), dbTxns[2].ID)
-		testutil.Equal(t, "txns[3].ID", txn4.ID(), dbTxns[3].ID)
-	}
+	checkTransaction(t, db, txn1)
+	checkTransaction(t, db, txn2)
+	checkTransaction(t, db, txn3)
+	checkTransaction(t, db, txn4)
 
 	{
 		events, err := db.AddressEvents(addr1, 0, math.MaxInt64)
@@ -1693,29 +1685,9 @@ func TestHostAnnouncement(t *testing.T) {
 		testutil.CheckTransaction(t, genesisBlock.Transactions[0], events[1].Data.(explorer.EventV1Transaction).Transaction)
 	}
 
-	{
-		dbTxns, err := db.Transactions([]types.TransactionID{txn1.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.CheckTransaction(t, txn1, dbTxns[0])
-	}
-
-	{
-		dbTxns, err := db.Transactions([]types.TransactionID{txn2.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.CheckTransaction(t, txn2, dbTxns[0])
-	}
-
-	{
-		dbTxns, err := db.Transactions([]types.TransactionID{txn3.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.CheckTransaction(t, txn3, dbTxns[0])
-	}
+	checkTransaction(t, db, txn1)
+	checkTransaction(t, db, txn2)
+	checkTransaction(t, db, txn3)
 
 	hosts, err := db.HostsForScanning(time.Unix(0, 0), 100)
 	if err != nil {
@@ -2525,21 +2497,6 @@ func TestBlockSameTransaction(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	{
-		txns, err := db.Transactions([]types.TransactionID{txn1.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "len(txns)", 1, len(txns))
-		testutil.CheckTransaction(t, txn1, txns[0])
-	}
-
-	{
-		txns, err := db.Transactions([]types.TransactionID{txn2.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "len(txns)", 1, len(txns))
-		testutil.CheckTransaction(t, txn2, txns[0])
-	}
+	checkTransaction(t, db, txn1)
+	checkTransaction(t, db, txn2)
 }
