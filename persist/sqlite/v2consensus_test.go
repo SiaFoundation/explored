@@ -1656,3 +1656,57 @@ func TestV2FileContractRenewedToFrom(t *testing.T) {
 		testutil.Equal(t, "renewed to", nil, fcr.RenewedTo)
 	}
 }
+
+func TestBlockSameV2Transaction(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+
+	_, _, cm, db := newStore(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		network.HardforkV2.AllowHeight = 1
+		network.HardforkV2.RequireHeight = 2
+	})
+	cs := cm.TipState()
+
+	att1 := types.Attestation{
+		PublicKey: pk1.PublicKey(),
+		Key:       "hello",
+		Value:     []byte("world"),
+	}
+	att1.Signature = pk1.SignHash(cs.AttestationSigHash(att1))
+
+	att2 := types.Attestation{
+		PublicKey: pk1.PublicKey(),
+		Key:       "123",
+		Value:     []byte("456"),
+	}
+	att2.Signature = pk1.SignHash(cs.AttestationSigHash(att2))
+
+	txn1 := types.V2Transaction{
+		Attestations: []types.Attestation{att1},
+	}
+	txn2 := types.V2Transaction{
+		Attestations: []types.Attestation{att1, att2},
+	}
+
+	if err := cm.AddBlocks([]types.Block{testutil.MineV2Block(cs, []types.V2Transaction{txn1, txn1, txn2}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	{
+		txns, err := db.V2Transactions([]types.TransactionID{txn1.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(txns)", 1, len(txns))
+		testutil.CheckV2Transaction(t, txn1, txns[0])
+	}
+
+	{
+		txns, err := db.V2Transactions([]types.TransactionID{txn2.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(txns)", 1, len(txns))
+		testutil.CheckV2Transaction(t, txn2, txns[0])
+	}
+}
