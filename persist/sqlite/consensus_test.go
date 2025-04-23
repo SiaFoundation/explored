@@ -2509,3 +2509,37 @@ func TestMetricCirculatingSupply(t *testing.T) {
 		testutil.Equal(t, "circulating supply", circulatingSupply, metrics.CirculatingSupply)
 	}
 }
+
+func TestBlockSameTransaction(t *testing.T) {
+	_, _, cm, db := newStore(t, false, nil)
+
+	txn1 := types.Transaction{
+		ArbitraryData: [][]byte{{0}},
+	}
+	txn2 := types.Transaction{
+		ArbitraryData: [][]byte{{0}, {1}},
+	}
+
+	if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), []types.Transaction{txn1, txn1, txn2}, types.VoidAddress)}); err != nil {
+		t.Fatal(err)
+	}
+	syncDB(t, db, cm)
+
+	{
+		txns, err := db.Transactions([]types.TransactionID{txn1.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(txns)", 1, len(txns))
+		testutil.CheckTransaction(t, txn1, txns[0])
+	}
+
+	{
+		txns, err := db.Transactions([]types.TransactionID{txn2.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(txns)", 1, len(txns))
+		testutil.CheckTransaction(t, txn2, txns[0])
+	}
+}
