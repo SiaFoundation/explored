@@ -2513,7 +2513,7 @@ func TestDeletedOrphanedTransaction(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	checkTransaction(t, db, txn1)
+	checkTransaction(t, db, txn)
 
 	{
 		// mine to trigger a reorg
