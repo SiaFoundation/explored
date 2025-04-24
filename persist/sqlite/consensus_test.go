@@ -2513,14 +2513,7 @@ func TestDeletedOrphanedTransaction(t *testing.T) {
 	}
 	syncDB(t, db, cm)
 
-	{
-		txns, err := db.Transactions([]types.TransactionID{txn.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "len(txns)", 1, len(txns))
-		testutil.CheckTransaction(t, txn, txns[0])
-	}
+	checkTransaction(t, db, txn1)
 
 	{
 		// mine to trigger a reorg
