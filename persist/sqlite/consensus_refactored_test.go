@@ -44,7 +44,7 @@ func newStoreRefactored(t *testing.T, v2 bool, f func(*consensus.Network, types.
 		f(network, genesisBlock)
 	}
 
-	store, genesisState, err := chain.NewDBStore(chain.NewMemDB(), network, genesisBlock)
+	store, genesisState, err := chain.NewDBStore(chain.NewMemDB(), network, genesisBlock, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
