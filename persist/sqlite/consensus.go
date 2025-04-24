@@ -1169,6 +1169,7 @@ func (s *Store) UpdateChainState(reverted []chain.RevertUpdate, applied []chain.
 	})
 }
 
+// ResetChainState implements explorer.Store
 func (s *Store) ResetChainState() error {
 	return s.transaction(func(tx *txn) error {
 		tables := []string{"blocks", "transactions", "v2_transactions", "host_info", "address_balance", "state_tree"}

@@ -114,19 +114,24 @@ type Explorer struct {
 
 func (e *Explorer) syncStore(index types.ChainIndex, batchSize int) error {
 	for index != e.cm.Tip() {
-		crus, caus, err := e.cm.UpdatesSince(index, batchSize)
-		if err != nil {
-			return fmt.Errorf("failed to subscribe to chain manager: %w", err)
-		}
+		select {
+		case <-e.ctx.Done():
+			return nil
+		default:
+			crus, caus, err := e.cm.UpdatesSince(index, batchSize)
+			if err != nil {
+				return fmt.Errorf("failed to subscribe to chain manager: %w", err)
+			}
 
-		if err := e.s.UpdateChainState(crus, caus); err != nil {
-			return fmt.Errorf("failed to process updates: %w", err)
-		}
-		if len(crus) > 0 {
-			index = crus[len(crus)-1].State.Index
-		}
-		if len(caus) > 0 {
-			index = caus[len(caus)-1].State.Index
+			if err := e.s.UpdateChainState(crus, caus); err != nil {
+				return fmt.Errorf("failed to process updates: %w", err)
+			}
+			if len(crus) > 0 {
+				index = crus[len(crus)-1].State.Index
+			}
+			if len(caus) > 0 {
+				index = caus[len(caus)-1].State.Index
+			}
 		}
 	}
 	return nil
