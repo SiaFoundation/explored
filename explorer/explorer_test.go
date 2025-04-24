@@ -22,14 +22,6 @@ func TestChainMigration(t *testing.T) {
 	log := zaptest.NewLogger(t)
 	dir := t.TempDir()
 
-	cfg := config.Scanner{
-		NumThreads:          100,
-		ScanTimeout:         100 * time.Millisecond,
-		ScanFrequency:       100 * time.Millisecond,
-		ScanInterval:        3 * time.Hour,
-		MinLastAnnouncement: 90 * 24 * time.Hour,
-	}
-
 	n, genesis := ctestutil.Network()
 	store, genesisState, err := chain.NewDBStore(chain.NewMemDB(), n, genesis, chain.NewZapMigrationLogger(zap.NewNop()))
 	if err != nil {
@@ -63,7 +55,7 @@ func TestChainMigration(t *testing.T) {
 	testutil.Equal(t, "explorer tip", cs.Index, explorerTip)
 	testutil.Equal(t, "cm tip", genesisState.Index, cm.Tip())
 
-	e, err := explorer.NewExplorer(cm, db, config.Index{BatchSize: 1000}, cfg, log)
+	e, err := explorer.NewExplorer(cm, db, config.Index{BatchSize: 1000}, config.Scanner{}, log)
 	if err != nil {
 		t.Fatal(err)
 	}
