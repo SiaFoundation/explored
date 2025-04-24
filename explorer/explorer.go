@@ -116,7 +116,7 @@ func (e *Explorer) syncStore(index types.ChainIndex, batchSize int) error {
 	for index != e.cm.Tip() {
 		select {
 		case <-e.ctx.Done():
-			return nil
+			return e.ctx.Err()
 		default:
 			crus, caus, err := e.cm.UpdatesSince(index, batchSize)
 			if err != nil {
@@ -181,7 +181,7 @@ func NewExplorer(cm ChainManager, store Store, indexCfg config.Index, scanCfg co
 			if err := e.syncStore(lastTip, indexCfg.BatchSize); err != nil {
 				switch {
 				case errors.Is(err, context.Canceled):
-					break
+					return
 				case strings.Contains(err.Error(), "missing block at index"):
 					log.Warn("missing block at index, resetting chain state", zap.Stringer("id", lastTip.ID), zap.Uint64("height", lastTip.Height))
 					if err := e.s.ResetChainState(); err != nil {
