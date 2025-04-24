@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -60,6 +61,7 @@ type ChainManager interface {
 type Store interface {
 	Close() error
 
+	ResetChainState() error
 	UpdateChainState(reverted []chain.RevertUpdate, applied []chain.ApplyUpdate) error
 	AddHostScans(scans ...HostScan) error
 
@@ -172,7 +174,19 @@ func NewExplorer(cm ChainManager, store Store, indexCfg config.Index, scanCfg co
 				e.log.Error("failed to get tip", zap.Error(err))
 			}
 			if err := e.syncStore(lastTip, indexCfg.BatchSize); err != nil {
-				e.log.Panic("failed to sync store", zap.Error(err))
+				switch {
+				case errors.Is(err, context.Canceled):
+					break
+				case strings.Contains(err.Error(), "missing block at index"):
+					log.Warn("missing block at index, resetting chain state", zap.Stringer("id", lastTip.ID), zap.Uint64("height", lastTip.Height))
+					if err := e.s.ResetChainState(); err != nil {
+						log.Panic("failed to reset explorer state", zap.Error(err))
+					}
+					// trigger resync
+					reorgChan <- types.ChainIndex{}
+				default:
+					e.log.Panic("failed to sync store", zap.Error(err))
+				}
 			}
 		}
 	}()

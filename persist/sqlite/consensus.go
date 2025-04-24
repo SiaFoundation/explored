@@ -1204,3 +1204,16 @@ func (s *Store) UpdateChainState(reverted []chain.RevertUpdate, applied []chain.
 		return nil
 	})
 }
+
+func (s *Store) ResetChainState() error {
+	return s.transaction(func(tx *txn) error {
+		tables := []string{"blocks", "transactions", "v2_transactions", "host_info", "address_balance", "state_tree"}
+		for _, table := range tables {
+			_, err := tx.Exec(fmt.Sprintf(`DELETE FROM %s`, table))
+			if err != nil {
+				return fmt.Errorf("ResetChainState: failed to delete from table %s: %w", table, err)
+			}
+		}
+		return nil
+	})
+}
