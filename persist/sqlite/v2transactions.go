@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"go.sia.tech/core/types"
@@ -113,7 +114,9 @@ func getV2TransactionBase(tx *txn, txnIDs []types.TransactionID) ([]int64, []exp
 	for _, id := range txnIDs {
 		var txn explorer.V2Transaction
 		var newFoundationAddress types.Address
-		if err := stmt.QueryRow(encode(id)).Scan(&dbID, decode(&txn.ID), decodeNull(&newFoundationAddress), decode(&txn.MinerFee), &txn.ArbitraryData); err != nil {
+		if err := stmt.QueryRow(encode(id)).Scan(&dbID, decode(&txn.ID), decodeNull(&newFoundationAddress), decode(&txn.MinerFee), &txn.ArbitraryData); errors.Is(err, sql.ErrNoRows) {
+			continue
+		} else if err != nil {
 			return nil, nil, fmt.Errorf("failed to scan base transaction: %w", err)
 		}
 		if (newFoundationAddress != types.Address{}) {
