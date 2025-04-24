@@ -205,7 +205,7 @@ func runRootCmd(ctx context.Context, log *zap.Logger) error {
 	}
 	defer bdb.Close()
 
-	dbstore, tipState, err := chain.NewDBStore(bdb, network, genesisBlock)
+	dbstore, tipState, err := chain.NewDBStore(bdb, network, genesisBlock, chain.NewZapMigrationLogger(log.Named("chaindb")))
 	if err != nil {
 		return fmt.Errorf("failed to create chain store: %w", err)
 	}

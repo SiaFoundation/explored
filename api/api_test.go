@@ -43,7 +43,7 @@ func newExplorer(t *testing.T, network *consensus.Network, genesisBlock types.Bl
 		t.Fatal(err)
 	}
 
-	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
+	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock, chain.NewZapMigrationLogger(log.Named("chaindb")))
 	if err != nil {
 		t.Fatal(err)
 	}
