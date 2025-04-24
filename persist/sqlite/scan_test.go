@@ -31,7 +31,7 @@ import (
 )
 
 func startTestNode(tb testing.TB, n *consensus.Network, genesis types.Block) (*chain.Manager, *syncer.Syncer, *wallet.SingleAddressWallet) {
-	db, tipstate, err := chain.NewDBStore(chain.NewMemDB(), n, genesis)
+	db, tipstate, err := chain.NewDBStore(chain.NewMemDB(), n, genesis, chain.NewZapMigrationLogger(zap.NewNop()))
 	if err != nil {
 		tb.Fatal(err)
 	}

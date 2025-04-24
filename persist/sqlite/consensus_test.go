@@ -69,7 +69,7 @@ func newStore(t *testing.T, v2 bool, f func(*consensus.Network, types.Block)) (*
 		f(network, genesisBlock)
 	}
 
-	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
+	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock, chain.NewZapMigrationLogger(log.Named("chaindb")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1326,7 +1326,7 @@ func TestRevertSendTransactions(t *testing.T) {
 	genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
 	giftSF := genesisBlock.Transactions[0].SiafundOutputs[0].Value
 
-	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock)
+	store, genesisState, err := chain.NewDBStore(bdb, network, genesisBlock, chain.NewZapMigrationLogger(log.Named("chaindb")))
 	if err != nil {
 		t.Fatal(err)
 	}
