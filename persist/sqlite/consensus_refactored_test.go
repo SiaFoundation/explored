@@ -16,7 +16,7 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
-type node struct {
+type testChain struct {
 	db    explorer.Store
 	store *chain.DBStore
 
@@ -24,7 +24,7 @@ type node struct {
 	states []consensus.State
 }
 
-func newStoreRefactored(t *testing.T, v2 bool, f func(*consensus.Network, types.Block)) *node {
+func newTestChain(t *testing.T, v2 bool, modifyGenesis func(*consensus.Network, types.Block)) *testChain {
 	log := zaptest.NewLogger(t)
 	dir := t.TempDir()
 
@@ -32,6 +32,9 @@ func newStoreRefactored(t *testing.T, v2 bool, f func(*consensus.Network, types.
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		db.Close()
+	})
 
 	var network *consensus.Network
 	var genesisBlock types.Block
@@ -40,8 +43,12 @@ func newStoreRefactored(t *testing.T, v2 bool, f func(*consensus.Network, types.
 	} else {
 		network, genesisBlock = ctestutil.Network()
 	}
-	if f != nil {
-		f(network, genesisBlock)
+	if v2 {
+		network.HardforkV2.AllowHeight = 1
+		network.HardforkV2.RequireHeight = 2
+	}
+	if modifyGenesis != nil {
+		modifyGenesis(network, genesisBlock)
 	}
 
 	store, genesisState, err := chain.NewDBStore(chain.NewMemDB(), network, genesisBlock, nil)
@@ -59,10 +66,7 @@ func newStoreRefactored(t *testing.T, v2 bool, f func(*consensus.Network, types.
 		t.Fatal(err)
 	}
 
-	t.Cleanup(func() {
-		db.Close()
-	})
-	return &node{
+	return &testChain{
 		db:    db,
 		store: store,
 
@@ -71,15 +75,15 @@ func newStoreRefactored(t *testing.T, v2 bool, f func(*consensus.Network, types.
 	}
 }
 
-func (n *node) genesis() types.Block {
+func (n *testChain) genesis() types.Block {
 	return n.blocks[0]
 }
 
-func (n *node) tipState() consensus.State {
+func (n *testChain) tipState() consensus.State {
 	return n.states[len(n.states)-1]
 }
 
-func (n *node) applyBlock(t *testing.T, b types.Block) {
+func (n *testChain) applyBlock(t *testing.T, b types.Block) {
 	cs := n.tipState()
 	bs := n.store.SupplementTipBlock(b)
 	if cs.Index.Height != math.MaxUint64 {
@@ -102,7 +106,7 @@ func (n *node) applyBlock(t *testing.T, b types.Block) {
 	n.blocks = append(n.blocks, b)
 }
 
-func (n *node) revertBlock(t *testing.T) {
+func (n *testChain) revertBlock(t *testing.T) {
 	b := n.blocks[len(n.blocks)-1]
 	prevState := n.states[len(n.states)-2]
 
@@ -119,7 +123,12 @@ func (n *node) revertBlock(t *testing.T) {
 	n.blocks = n.blocks[:len(n.blocks)-1]
 }
 
-func (n *node) assertTransaction(t *testing.T, expected ...types.Transaction) {
+func (n *testChain) mineTransactions(t *testing.T, txns ...types.Transaction) {
+	b := testutil.MineBlock(n.tipState(), txns, types.VoidAddress)
+	n.applyBlock(t, b)
+}
+
+func (n *testChain) assertTransactions(t *testing.T, expected ...types.Transaction) {
 	t.Helper()
 
 	for _, txn := range expected {
@@ -134,7 +143,7 @@ func (n *node) assertTransaction(t *testing.T, expected ...types.Transaction) {
 }
 
 // helper to assert the Siacoin element in the db has the right source, index and output
-func (n *node) assertSCE(t *testing.T, scID types.SiacoinOutputID, index *types.ChainIndex, sco types.SiacoinOutput) {
+func (n *testChain) assertSCE(t *testing.T, scID types.SiacoinOutputID, index *types.ChainIndex, sco types.SiacoinOutput) {
 	t.Helper()
 
 	sces, err := n.db.SiacoinElements([]types.SiacoinOutputID{scID})
@@ -158,7 +167,7 @@ func TestSiacoinOutput(t *testing.T) {
 	uc2 := types.StandardUnlockConditions(pk2.PublicKey())
 	addr2 := uc2.UnlockHash()
 
-	n := newStoreRefactored(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
 
@@ -179,8 +188,7 @@ func TestSiacoinOutput(t *testing.T) {
 	}
 	testutil.SignTransaction(n.tipState(), pk1, &txn1)
 
-	b := testutil.MineBlock(n.tipState(), []types.Transaction{txn1}, types.VoidAddress)
-	n.applyBlock(t, b)
+	n.mineTransactions(t, txn1)
 
 	// genesis output should be spent
 	tip := n.tipState().Index
@@ -215,7 +223,7 @@ func TestEphemeralSiacoinOutput(t *testing.T) {
 	uc2 := types.StandardUnlockConditions(pk2.PublicKey())
 	addr2 := uc2.UnlockHash()
 
-	n := newStoreRefactored(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
 
@@ -247,8 +255,7 @@ func TestEphemeralSiacoinOutput(t *testing.T) {
 	}
 	testutil.SignTransaction(n.tipState(), pk2, &txn2)
 
-	b := testutil.MineBlock(n.tipState(), []types.Transaction{txn1, txn2}, types.VoidAddress)
-	n.applyBlock(t, b)
+	n.mineTransactions(t, txn1, txn2)
 
 	tip := n.tipState().Index
 	// genesis output should be spent
