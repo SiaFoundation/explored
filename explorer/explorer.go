@@ -188,7 +188,10 @@ func NewExplorer(cm ChainManager, store Store, indexCfg config.Index, scanCfg co
 						log.Panic("failed to reset explorer state", zap.Error(err))
 					}
 					// trigger resync
-					reorgChan <- types.ChainIndex{}
+					select {
+					case reorgChan <- types.ChainIndex{}:
+					default:
+					}
 				default:
 					e.log.Panic("failed to sync store", zap.Error(err))
 				}
