@@ -65,7 +65,6 @@ func addMinerFees(tx *txn, id int64, txn types.Transaction) error {
 
 func addArbitraryData(tx *txn, id int64, txn types.Transaction) error {
 	stmt, err := tx.Prepare(`INSERT INTO transaction_arbitrary_data(transaction_id, transaction_order, data) VALUES (?, ?, ?)`)
-
 	if err != nil {
 		return fmt.Errorf("addArbitraryData: failed to prepare statement: %w", err)
 	}
@@ -1207,14 +1206,47 @@ func (s *Store) UpdateChainState(reverted []chain.RevertUpdate, applied []chain.
 
 // ResetChainState implements explorer.Store
 func (s *Store) ResetChainState() error {
-	return s.transaction(func(tx *txn) error {
-		tables := []string{"blocks", "transactions", "v2_transactions", "host_info", "address_balance", "state_tree"}
-		for _, table := range tables {
-			_, err := tx.Exec(fmt.Sprintf(`DELETE FROM %s`, table))
-			if err != nil {
-				return fmt.Errorf("ResetChainState: failed to delete from table %s: %w", table, err)
+	if _, err := s.db.Exec(`PRAGMA foreign_keys = OFF;`); err != nil {
+		return fmt.Errorf("failed to disable foreign key constraints: %w", err)
+	}
+	if err := s.transaction(func(tx *txn) error {
+		rows, err := tx.Query(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`)
+		if err != nil {
+			return fmt.Errorf("failed to get list of tables")
+		}
+
+		var names []string
+		for rows.Next() {
+			var name string
+			if err := rows.Scan(&name); err != nil {
+				return fmt.Errorf("failed to scan table name: %w", err)
+			}
+			names = append(names, name)
+		}
+		rows.Close()
+
+		for _, name := range names {
+			if _, err := tx.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, name)); err != nil {
+				return fmt.Errorf("failed to drop table %s: %w", name, err)
 			}
 		}
+
+		target := int64(len(migrations) + 1)
+		if err := s.initNewDatabase(tx, target); err != nil {
+			return fmt.Errorf("failed to reinit tables: %w", err)
+		}
+
 		return nil
-	})
+	}); err != nil {
+		return fmt.Errorf("ResetChainState: failed to delete and reinit database: %w", err)
+	}
+	if _, err := s.db.Exec(`PRAGMA foreign_keys = ON;`); err != nil {
+		return fmt.Errorf("failed to enabale foreign key constraints: %w", err)
+	}
+
+	if _, err := s.db.Exec(`VACUUM`); err != nil {
+		return fmt.Errorf("ResetChainState: failed to vacuum database: %w", err)
+	}
+
+	return nil
 }

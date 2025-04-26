@@ -16,15 +16,13 @@ import (
 //go:embed init.sql
 var initDatabase string
 
-func (s *Store) initNewDatabase(target int64) error {
-	return s.transaction(func(tx *txn) error {
-		if _, err := tx.Exec(initDatabase); err != nil {
-			return fmt.Errorf("failed to initialize database: %w", err)
-		} else if err := setDBVersion(tx, target); err != nil {
-			return fmt.Errorf("failed to set initial database version: %w", err)
-		}
-		return nil
-	})
+func (s *Store) initNewDatabase(tx *txn, target int64) error {
+	if _, err := tx.Exec(initDatabase); err != nil {
+		return fmt.Errorf("failed to initialize database: %w", err)
+	} else if err := setDBVersion(tx, target); err != nil {
+		return fmt.Errorf("failed to set initial database version: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) upgradeDatabase(current, target int64) error {
@@ -68,7 +66,9 @@ func (s *Store) init() error {
 	version := getDBVersion(s.db)
 	switch {
 	case version == 0:
-		return s.initNewDatabase(target)
+		return s.transaction(func(tx *txn) error {
+			return s.initNewDatabase(tx, target)
+		})
 	case version < target:
 		return s.upgradeDatabase(version, target)
 	case version > target:
