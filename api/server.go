@@ -39,10 +39,10 @@ type (
 		Addr() string
 		Peers() []*syncer.Peer
 		Connect(ctx context.Context, addr string) (*syncer.Peer, error)
-		BroadcastHeader(bh types.BlockHeader)
-		BroadcastTransactionSet(txns []types.Transaction)
-		BroadcastV2TransactionSet(index types.ChainIndex, txns []types.V2Transaction)
-		BroadcastV2BlockOutline(bo gateway.V2BlockOutline)
+		BroadcastHeader(bh types.BlockHeader) error
+		BroadcastTransactionSet(txns []types.Transaction) error
+		BroadcastV2TransactionSet(index types.ChainIndex, txns []types.V2Transaction) error
+		BroadcastV2BlockOutline(bo gateway.V2BlockOutline) error
 	}
 
 	// Explorer implements a Sia explorer.
@@ -176,9 +176,13 @@ func (s *server) syncerBroadcastBlockHandler(jc jape.Context) {
 		return
 	}
 	if b.V2 == nil {
-		s.s.BroadcastHeader(b.Header())
+		if jc.Check("failed to broadcast header", s.s.BroadcastHeader(b.Header())) != nil {
+			return
+		}
 	} else {
-		s.s.BroadcastV2BlockOutline(gateway.OutlineBlock(b, s.cm.PoolTransactions(), s.cm.V2PoolTransactions()))
+		if jc.Check("failed to broadcast block outline", s.s.BroadcastV2BlockOutline(gateway.OutlineBlock(b, s.cm.PoolTransactions(), s.cm.V2PoolTransactions()))) != nil {
+			return
+		}
 	}
 }
 
@@ -208,14 +212,18 @@ func (s *server) txpoolBroadcastHandler(jc jape.Context) {
 		if jc.Check("invalid transaction set", err) != nil {
 			return
 		}
-		s.s.BroadcastTransactionSet(tbr.Transactions)
+		if jc.Check("failed to broadcast transaction set", s.s.BroadcastTransactionSet(tbr.Transactions)) != nil {
+			return
+		}
 	}
 	if len(tbr.V2Transactions) != 0 {
 		_, err := s.cm.AddV2PoolTransactions(tip, tbr.V2Transactions)
 		if jc.Check("invalid v2 transaction set", err) != nil {
 			return
 		}
-		s.s.BroadcastV2TransactionSet(tip, tbr.V2Transactions)
+		if jc.Check("failed to broadcast v2 transaction set", s.s.BroadcastV2TransactionSet(tip, tbr.V2Transactions)) != nil {
+			return
+		}
 	}
 }
 
