@@ -8,9 +8,9 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/oschwald/geoip2-golang v1.11.0
-	go.sia.tech/core v0.11.0
-	go.sia.tech/coreutils v0.13.1
-	go.sia.tech/jape v0.13.0
+	go.sia.tech/core v0.12.0
+	go.sia.tech/coreutils v0.13.2
+	go.sia.tech/jape v0.13.1
 	go.uber.org/zap v1.27.0
 	gopkg.in/yaml.v3 v3.0.1
 	lukechampine.com/frand v1.5.1
