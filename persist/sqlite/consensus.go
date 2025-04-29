@@ -1170,25 +1170,58 @@ func (s *Store) UpdateChainState(reverted []chain.RevertUpdate, applied []chain.
 
 // ResetChainState implements explorer.Store
 func (s *Store) ResetChainState() error {
-	if _, err := s.db.Exec(`PRAGMA foreign_keys = OFF;`); err != nil {
-		return fmt.Errorf("failed to disable foreign key constraints: %w", err)
-	}
 	if err := s.transaction(func(tx *txn) error {
-		rows, err := tx.Query(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`)
-		if err != nil {
-			return fmt.Errorf("failed to get list of tables")
-		}
-		defer rows.Close()
-
-		var names []string
-		for rows.Next() {
-			var name string
-			if err := rows.Scan(&name); err != nil {
-				return fmt.Errorf("failed to scan table name: %w", err)
-			}
-			names = append(names, name)
+		if _, err := tx.Exec(`PRAGMA defer_foreign_keys=ON`); err != nil {
+			return fmt.Errorf("failed to defer foreign key checks: %w", err)
 		}
 
+		names := []string{
+			"network_metrics",
+			"file_contract_valid_proof_outputs",
+			"file_contract_missed_proof_outputs",
+			"miner_payouts",
+			"block_transactions",
+			"transaction_arbitrary_data",
+			"transaction_miner_fees",
+			"transaction_signatures",
+			"transaction_storage_proofs",
+			"transaction_siacoin_inputs",
+			"transaction_siacoin_outputs",
+			"transaction_siafund_inputs",
+			"transaction_siafund_outputs",
+			"transaction_file_contracts",
+			"transaction_file_contract_revisions",
+			"v2_block_transactions",
+			"v2_transaction_siacoin_inputs",
+			"v2_transaction_siacoin_outputs",
+			"v2_transaction_siafund_inputs",
+			"v2_transaction_siafund_outputs",
+			"v2_transaction_file_contracts",
+			"v2_transaction_file_contract_revisions",
+			"v2_transaction_file_contract_resolutions",
+			"v2_transaction_attestations",
+			"event_addresses",
+			"v1_transaction_events",
+			"v2_transaction_events",
+			"payout_events",
+			"v1_contract_resolution_events",
+			"v2_contract_resolution_events",
+			"last_contract_revision",
+			"v2_last_contract_revision",
+			"host_info_v2_netaddresses",
+			"file_contract_elements",
+			"v2_file_contract_elements",
+			"transactions",
+			"v2_transactions",
+			"address_balance",
+			"siacoin_elements",
+			"siafund_elements",
+			"events",
+			"blocks",
+			"host_info",
+			"state_tree",
+			"global_settings",
+		}
 		for _, name := range names {
 			if _, err := tx.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, name)); err != nil {
 				return fmt.Errorf("failed to drop table %s: %w", name, err)
@@ -1203,9 +1236,6 @@ func (s *Store) ResetChainState() error {
 		return nil
 	}); err != nil {
 		return fmt.Errorf("ResetChainState: failed to delete and reinit database: %w", err)
-	}
-	if _, err := s.db.Exec(`PRAGMA foreign_keys = ON;`); err != nil {
-		return fmt.Errorf("failed to enabale foreign key constraints: %w", err)
 	}
 
 	if _, err := s.db.Exec(`VACUUM`); err != nil {
