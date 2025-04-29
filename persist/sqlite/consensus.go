@@ -1219,6 +1219,7 @@ func (s *Store) ResetChainState() error {
 		for rows.Next() {
 			var name string
 			if err := rows.Scan(&name); err != nil {
+				rows.Close()
 				return fmt.Errorf("failed to scan table name: %w", err)
 			}
 			names = append(names, name)
