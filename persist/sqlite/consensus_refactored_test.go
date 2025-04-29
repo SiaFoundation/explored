@@ -120,11 +120,17 @@ func (n *testChain) revertBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	n.states = n.states[:len(n.states)-1]
 	n.blocks = n.blocks[:len(n.blocks)-1]
 }
 
 func (n *testChain) mineTransactions(t *testing.T, txns ...types.Transaction) {
 	b := testutil.MineBlock(n.tipState(), txns, types.VoidAddress)
+	n.applyBlock(t, b)
+}
+
+func (n *testChain) mineV2Transactions(t *testing.T, txns ...types.V2Transaction) {
+	b := testutil.MineV2Block(n.tipState(), txns, types.VoidAddress)
 	n.applyBlock(t, b)
 }
 
@@ -139,6 +145,50 @@ func (n *testChain) assertTransactions(t *testing.T, expected ...types.Transacti
 		testutil.Equal(t, "len(txns)", 1, len(txns))
 
 		testutil.CheckTransaction(t, txn, txns[0])
+	}
+}
+
+func (n *testChain) assertV2Transactions(t *testing.T, expected ...types.V2Transaction) {
+	t.Helper()
+
+	for _, txn := range expected {
+		txns, err := n.db.V2Transactions([]types.TransactionID{txn.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(txns)", 1, len(txns))
+
+		testutil.CheckV2Transaction(t, txn, txns[0])
+	}
+}
+
+func (n *testChain) assertChainIndices(t *testing.T, txnID types.TransactionID, expected ...types.ChainIndex) {
+	t.Helper()
+
+	indices, err := n.db.TransactionChainIndices(txnID, 0, math.MaxInt64)
+	if err != nil {
+		t.Fatal(err)
+	} else if len(indices) != len(expected) {
+		t.Fatalf("expected %d indices, got %d", len(expected), len(indices))
+	}
+
+	for i := range indices {
+		testutil.Equal(t, "index", expected[i], indices[i])
+	}
+}
+
+func (n *testChain) assertV2ChainIndices(t *testing.T, txnID types.TransactionID, expected ...types.ChainIndex) {
+	t.Helper()
+
+	indices, err := n.db.V2TransactionChainIndices(txnID, 0, math.MaxInt64)
+	if err != nil {
+		t.Fatal(err)
+	} else if len(indices) != len(expected) {
+		t.Fatalf("expected %d indices, got %d", len(expected), len(indices))
+	}
+
+	for i := range indices {
+		testutil.Equal(t, "index", expected[i], indices[i])
 	}
 }
 
@@ -280,4 +330,102 @@ func TestEphemeralSiacoinOutput(t *testing.T) {
 		}
 		testutil.Equal(t, "len(sces)", 0, len(sces))
 	}
+}
+
+func TestTransactionChainIndices(t *testing.T) {
+	n := newTestChain(t, false, nil)
+
+	txn1 := types.Transaction{
+		ArbitraryData: [][]byte{{0}},
+	}
+	txn2 := types.Transaction{
+		ArbitraryData: [][]byte{{0}, {1}},
+	}
+
+	// mine block with txn1 twice and txn2
+	n.mineTransactions(t, txn1, txn1, txn2)
+	cs1 := n.tipState()
+
+	n.assertTransactions(t, txn1, txn2)
+	// both transactions should only be in the first block
+	n.assertChainIndices(t, txn1.ID(), cs1.Index)
+	n.assertChainIndices(t, txn2.ID(), cs1.Index)
+
+	// mine same block again
+	n.mineTransactions(t, txn1, txn1, txn2)
+	cs2 := n.tipState()
+
+	// both transactions should be in the blocks
+	n.assertTransactions(t, txn1, txn2)
+	n.assertChainIndices(t, txn1.ID(), cs2.Index, cs1.Index)
+	n.assertChainIndices(t, txn2.ID(), cs2.Index, cs1.Index)
+
+	n.revertBlock(t)
+
+	// after revert both transactions should only be in the first block
+	n.assertTransactions(t, txn1, txn2)
+	n.assertChainIndices(t, txn1.ID(), cs1.Index)
+	n.assertChainIndices(t, txn2.ID(), cs1.Index)
+
+	n.revertBlock(t)
+
+	// after reverting the first block there should be no transactions
+	{
+		txns, err := n.db.Transactions([]types.TransactionID{txn1.ID(), txn2.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(txns)", 0, len(txns))
+	}
+	n.assertChainIndices(t, txn1.ID())
+	n.assertChainIndices(t, txn2.ID())
+}
+
+func TestV2TransactionChainIndices(t *testing.T) {
+	n := newTestChain(t, true, nil)
+
+	txn1 := types.V2Transaction{
+		ArbitraryData: []byte{0},
+	}
+	txn2 := types.V2Transaction{
+		ArbitraryData: []byte{0, 1},
+	}
+
+	// mine block with txn1 twice and txn2
+	n.mineV2Transactions(t, txn1, txn1, txn2)
+	cs1 := n.tipState()
+
+	n.assertV2Transactions(t, txn1, txn2)
+	// both transactions should only be in the first block
+	n.assertV2ChainIndices(t, txn1.ID(), cs1.Index)
+	n.assertV2ChainIndices(t, txn2.ID(), cs1.Index)
+
+	// mine same block again
+	n.mineV2Transactions(t, txn1, txn1, txn2)
+	cs2 := n.tipState()
+
+	// both transactions should be in the blocks
+	n.assertV2Transactions(t, txn1, txn2)
+	n.assertV2ChainIndices(t, txn1.ID(), cs2.Index, cs1.Index)
+	n.assertV2ChainIndices(t, txn2.ID(), cs2.Index, cs1.Index)
+
+	n.revertBlock(t)
+
+	// after revert both transactions should only be in the first block
+	n.assertV2Transactions(t, txn1, txn2)
+	n.assertV2ChainIndices(t, txn1.ID(), cs1.Index)
+	n.assertV2ChainIndices(t, txn2.ID(), cs1.Index)
+
+	n.revertBlock(t)
+
+	// after reverting the first block there should be no transactions
+	{
+		txns, err := n.db.V2Transactions([]types.TransactionID{txn1.ID(), txn2.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(txns)", 0, len(txns))
+	}
+	n.assertV2ChainIndices(t, txn1.ID())
+	n.assertV2ChainIndices(t, txn2.ID())
 }
