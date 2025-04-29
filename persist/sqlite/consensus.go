@@ -1178,17 +1178,16 @@ func (s *Store) ResetChainState() error {
 		if err != nil {
 			return fmt.Errorf("failed to get list of tables")
 		}
+		defer rows.Close()
 
 		var names []string
 		for rows.Next() {
 			var name string
 			if err := rows.Scan(&name); err != nil {
-				rows.Close()
 				return fmt.Errorf("failed to scan table name: %w", err)
 			}
 			names = append(names, name)
 		}
-		rows.Close()
 
 		for _, name := range names {
 			if _, err := tx.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, name)); err != nil {
