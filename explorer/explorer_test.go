@@ -75,4 +75,14 @@ func TestChainMigration(t *testing.T) {
 	}
 	testutil.Equal(t, "explorer tip", cm.Tip(), explorerTip)
 	testutil.Equal(t, "cm tip", genesisState.Index, cm.Tip())
+
+	// check that data is indexed in DB
+	for _, expected := range genesis.Transactions {
+		txns, err := db.Transactions([]types.TransactionID{expected.ID()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(txns)", 1, len(txns))
+		testutil.CheckTransaction(t, expected, txns[0])
+	}
 }
