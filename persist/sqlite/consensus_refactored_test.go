@@ -568,3 +568,278 @@ func TestV2TransactionChainIndices(t *testing.T) {
 	n.assertV2ChainIndices(t, txn1.ID())
 	n.assertV2ChainIndices(t, txn2.ID())
 }
+
+func TestSiacoinBalance(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	pk2 := types.GeneratePrivateKey()
+	uc2 := types.StandardUnlockConditions(pk2.PublicKey())
+	addr2 := uc2.UnlockHash()
+
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+
+	checkBalance := func(addr types.Address, expectedSC, expectedImmatureSC types.Currency) {
+		t.Helper()
+
+		sc, immatureSC, sf, err := n.db.Balance(addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "siacoins", expectedSC, sc)
+		testutil.Equal(t, "immature siacoins", expectedImmatureSC, immatureSC)
+		testutil.Equal(t, "siafunds", 0, sf)
+	}
+
+	// only addr1 should have SC from genesis block
+	checkBalance(types.VoidAddress, types.ZeroCurrency, types.ZeroCurrency)
+	checkBalance(addr1, val, types.ZeroCurrency)
+	checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency)
+
+	txn1 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         n.genesis().Transactions[0].SiacoinOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr2,
+			Value:   val,
+		}},
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+
+	// send addr1 output to addr2
+	b := testutil.MineBlock(n.tipState(), []types.Transaction{txn1}, types.VoidAddress)
+	n.applyBlock(t, b)
+
+	// addr2 should have SC and the void address should have immature SC from
+	// block
+	checkBalance(types.VoidAddress, types.ZeroCurrency, b.MinerPayouts[0].Value)
+	checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency)
+	checkBalance(addr2, val, types.ZeroCurrency)
+
+	n.revertBlock(t)
+
+	// after revert, addr1 should have funds again and the void address should
+	// have nothing
+	checkBalance(types.VoidAddress, types.ZeroCurrency, types.ZeroCurrency)
+	checkBalance(addr1, val, types.ZeroCurrency)
+	checkBalance(addr2, types.ZeroCurrency, types.ZeroCurrency)
+}
+
+func TestSiafundBalance(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	pk2 := types.GeneratePrivateKey()
+	uc2 := types.StandardUnlockConditions(pk2.PublicKey())
+	addr2 := uc2.UnlockHash()
+
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiafundOutputs[0].Value
+
+	checkBalance := func(addr types.Address, expectedSF uint64) {
+		t.Helper()
+
+		sc, immatureSC, sf, err := n.db.Balance(addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "siacoins", types.ZeroCurrency, sc)
+		if addr != types.VoidAddress {
+			testutil.Equal(t, "immature siacoins", types.ZeroCurrency, immatureSC)
+		}
+		testutil.Equal(t, "siafunds", expectedSF, sf)
+	}
+
+	// addr1 should have SF from genesis block
+	checkBalance(types.VoidAddress, 0)
+	checkBalance(addr1, val)
+	checkBalance(addr2, 0)
+
+	txn1 := types.Transaction{
+		SiafundInputs: []types.SiafundInput{{
+			ParentID:         n.genesis().Transactions[0].SiafundOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiafundOutputs: []types.SiafundOutput{{
+			Address: addr2,
+			Value:   val,
+		}},
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+
+	// send addr1 SF to addr2
+	n.mineTransactions(t, txn1)
+
+	// addr2 should have SF now
+	checkBalance(types.VoidAddress, 0)
+	checkBalance(addr1, 0)
+	checkBalance(addr2, val)
+
+	n.revertBlock(t)
+
+	// after revert, addr1 should have SF again
+	checkBalance(types.VoidAddress, 0)
+	checkBalance(addr1, val)
+	checkBalance(addr2, 0)
+}
+
+func TestEphemeralSiacoinBalance(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	pk2 := types.GeneratePrivateKey()
+	uc2 := types.StandardUnlockConditions(pk2.PublicKey())
+	addr2 := uc2.UnlockHash()
+
+	pk3 := types.GeneratePrivateKey()
+	uc3 := types.StandardUnlockConditions(pk3.PublicKey())
+	addr3 := uc3.UnlockHash()
+
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+
+	checkBalance := func(addr types.Address, expectedSC types.Currency) {
+		t.Helper()
+
+		sc, immatureSC, sf, err := n.db.Balance(addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "siacoins", expectedSC, sc)
+		testutil.Equal(t, "immature siacoins", types.ZeroCurrency, immatureSC)
+		testutil.Equal(t, "siafunds", 0, sf)
+	}
+
+	// only addr1 should have SC from genesis block
+	checkBalance(addr1, val)
+	checkBalance(addr2, types.ZeroCurrency)
+	checkBalance(addr3, types.ZeroCurrency)
+
+	txn1 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         n.genesis().Transactions[0].SiacoinOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr2,
+			Value:   val,
+		}},
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+
+	txn2 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         txn1.SiacoinOutputID(0),
+			UnlockConditions: uc2,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr3,
+			Value:   val,
+		}},
+	}
+	testutil.SignTransaction(n.tipState(), pk2, &txn2)
+
+	// net effect of txn1 and txn2 is to send addr1 output to addr3
+	n.mineTransactions(t, txn1, txn2)
+
+	// addr3 should have all the value now
+	checkBalance(addr1, types.ZeroCurrency)
+	checkBalance(addr2, types.ZeroCurrency)
+	checkBalance(addr3, val)
+
+	n.revertBlock(t)
+
+	// after revert, addr1 should have funds again and the others should
+	// have nothing
+	checkBalance(addr1, val)
+	checkBalance(addr2, types.ZeroCurrency)
+	checkBalance(addr3, types.ZeroCurrency)
+}
+
+func TestEphemeralSiafundBalance(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	pk2 := types.GeneratePrivateKey()
+	uc2 := types.StandardUnlockConditions(pk2.PublicKey())
+	addr2 := uc2.UnlockHash()
+
+	pk3 := types.GeneratePrivateKey()
+	uc3 := types.StandardUnlockConditions(pk3.PublicKey())
+	addr3 := uc3.UnlockHash()
+
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiafundOutputs[0].Value
+
+	checkBalance := func(addr types.Address, expectedSF uint64) {
+		t.Helper()
+
+		sc, immatureSC, sf, err := n.db.Balance(addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "siacoins", types.ZeroCurrency, sc)
+		testutil.Equal(t, "immature siacoins", types.ZeroCurrency, immatureSC)
+		testutil.Equal(t, "siafunds", expectedSF, sf)
+	}
+
+	// only addr1 should have SF from genesis block
+	checkBalance(addr1, val)
+	checkBalance(addr2, 0)
+	checkBalance(addr3, 0)
+
+	txn1 := types.Transaction{
+		SiafundInputs: []types.SiafundInput{{
+			ParentID:         n.genesis().Transactions[0].SiafundOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiafundOutputs: []types.SiafundOutput{{
+			Address: addr2,
+			Value:   val,
+		}},
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+
+	txn2 := types.Transaction{
+		SiafundInputs: []types.SiafundInput{{
+			ParentID:         txn1.SiafundOutputID(0),
+			UnlockConditions: uc2,
+		}},
+		SiafundOutputs: []types.SiafundOutput{{
+			Address: addr3,
+			Value:   val,
+		}},
+	}
+	testutil.SignTransaction(n.tipState(), pk2, &txn2)
+
+	// net effect of txn1 and txn2 is to send addr1 output to addr3
+	n.mineTransactions(t, txn1, txn2)
+
+	// addr3 should have all the value now
+	checkBalance(addr1, 0)
+	checkBalance(addr2, 0)
+	checkBalance(addr3, val)
+
+	n.revertBlock(t)
+
+	// after revert, addr1 should have funds again and the others should
+	// have nothing
+	checkBalance(addr1, val)
+	checkBalance(addr2, 0)
+	checkBalance(addr3, 0)
+}
