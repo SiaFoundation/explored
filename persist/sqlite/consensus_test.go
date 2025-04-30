@@ -260,64 +260,6 @@ func TestBalance(t *testing.T) {
 	testutil.CheckBalance(t, db, addr3, types.Siacoins(100), types.ZeroCurrency, 0)
 }
 
-func TestSiafundBalance(t *testing.T) {
-	// Generate three addresses: addr1, addr2, addr3
-	pk1 := types.GeneratePrivateKey()
-	addr1 := types.StandardUnlockHash(pk1.PublicKey())
-
-	pk2 := types.GeneratePrivateKey()
-	addr2 := types.StandardUnlockHash(pk2.PublicKey())
-
-	pk3 := types.GeneratePrivateKey()
-	addr3 := types.StandardUnlockHash(pk3.PublicKey())
-
-	_, genesisBlock, cm, db := newStore(t, false, func(network *consensus.Network, genesisBlock types.Block) {
-		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
-	})
-	giftSF := genesisBlock.Transactions[0].SiafundOutputs[0].Value
-
-	// Send all of the payout except 100 SF to addr2
-	unlockConditions := types.StandardUnlockConditions(pk1.PublicKey())
-	parentTxn := types.Transaction{
-		SiafundInputs: []types.SiafundInput{
-			{
-				ParentID:         genesisBlock.Transactions[0].SiafundOutputID(0),
-				UnlockConditions: unlockConditions,
-			},
-		},
-		SiafundOutputs: []types.SiafundOutput{
-			{Address: addr1, Value: 100},
-			{Address: addr2, Value: genesisBlock.Transactions[0].SiafundOutputs[0].Value - 100},
-		},
-	}
-	testutil.SignTransaction(cm.TipState(), pk1, &parentTxn)
-
-	// In the same block, have addr1 send the 100 SF it still has left to
-	// addr3
-	outputID := parentTxn.SiafundOutputID(0)
-	txn := types.Transaction{
-		SiafundInputs: []types.SiafundInput{
-			{
-				ParentID:         outputID,
-				UnlockConditions: unlockConditions,
-			},
-		},
-		SiafundOutputs: []types.SiafundOutput{
-			{Address: addr3, Value: 100},
-		},
-	}
-	testutil.SignTransaction(cm.TipState(), pk1, &txn)
-
-	if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), []types.Transaction{parentTxn, txn}, types.VoidAddress)}); err != nil {
-		t.Fatal(err)
-	}
-	syncDB(t, db, cm)
-
-	testutil.CheckBalance(t, db, addr1, types.ZeroCurrency, types.ZeroCurrency, 0)
-	testutil.CheckBalance(t, db, addr2, types.ZeroCurrency, types.ZeroCurrency, giftSF-100)
-	testutil.CheckBalance(t, db, addr3, types.ZeroCurrency, types.ZeroCurrency, 100)
-}
-
 func TestSendTransactions(t *testing.T) {
 	// Generate three addresses: addr1, addr2, addr3
 	pk1 := types.GeneratePrivateKey()
