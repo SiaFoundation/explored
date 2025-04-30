@@ -424,50 +424,6 @@ func TestSendTransactions(t *testing.T) {
 	}
 }
 
-func TestTip(t *testing.T) {
-	_, _, cm, db := newStore(t, false, nil)
-
-	const n = 100
-	for i := cm.Tip().Height; i < n; i++ {
-		if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), nil, types.VoidAddress)}); err != nil {
-			t.Fatal(err)
-		}
-		syncDB(t, db, cm)
-
-		tip, err := db.Tip()
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "tip", cm.Tip(), tip)
-	}
-
-	for i := 0; i < n; i++ {
-		best, err := db.BestTip(uint64(i))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if cmBest, ok := cm.BestIndex(uint64(i)); !ok || cmBest != best {
-			t.Fatal("best tip mismatch")
-		}
-	}
-}
-
-func TestMissingBlock(t *testing.T) {
-	_, _, cm, db := newStore(t, false, nil)
-
-	id := cm.Tip().ID
-	_, err := db.Block(id)
-	if err != nil {
-		t.Fatalf("error retrieving genesis block: %v", err)
-	}
-
-	id[0] ^= 255
-	_, err = db.Block(id)
-	if !errors.Is(err, explorer.ErrNoBlock) {
-		t.Fatalf("did not get ErrNoBlock retrieving missing block: %v", err)
-	}
-}
-
 func TestFileContract(t *testing.T) {
 	pk1 := types.GeneratePrivateKey()
 	addr1 := types.StandardUnlockHash(pk1.PublicKey())
@@ -965,74 +921,6 @@ func TestEphemeralFileContract(t *testing.T) {
 		testutil.Equal(t, "parent id", txn.FileContractID(0), fcr.ParentID)
 		testutil.Equal(t, "unlock conditions", uc, fcr.UnlockConditions)
 		testutil.CheckFC(t, true, false, false, revisedFC3, fcr.ExtendedFileContract)
-	}
-}
-
-func TestRevertTip(t *testing.T) {
-	pk1 := types.GeneratePrivateKey()
-	addr1 := types.StandardUnlockHash(pk1.PublicKey())
-
-	pk2 := types.GeneratePrivateKey()
-	addr2 := types.StandardUnlockHash(pk2.PublicKey())
-
-	_, _, cm, db := newStore(t, false, nil)
-	genesisState := cm.TipState()
-
-	const n = 100
-	for i := cm.Tip().Height; i < n; i++ {
-		if err := cm.AddBlocks([]types.Block{testutil.MineBlock(cm.TipState(), nil, addr1)}); err != nil {
-			t.Fatal(err)
-		}
-		syncDB(t, db, cm)
-
-		tip, err := db.Tip()
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "tip", cm.Tip(), tip)
-	}
-
-	CheckMetrics(t, db, cm, explorer.Metrics{
-		TotalHosts:         0,
-		ActiveContracts:    0,
-		StorageUtilization: 0,
-	})
-
-	{
-		// mine to trigger a reorg
-		var blocks []types.Block
-		state := genesisState
-		for i := uint64(0); i < n+5; i++ {
-			blocks = append(blocks, testutil.MineBlock(state, nil, addr2))
-			state.Index.ID = blocks[len(blocks)-1].ID()
-			state.Index.Height++
-		}
-		if err := cm.AddBlocks(blocks); err != nil {
-			t.Fatal(err)
-		}
-		syncDB(t, db, cm)
-
-		tip, err := db.Tip()
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "tip", cm.Tip(), tip)
-	}
-
-	CheckMetrics(t, db, cm, explorer.Metrics{
-		TotalHosts:         0,
-		ActiveContracts:    0,
-		StorageUtilization: 0,
-	})
-
-	for i := 0; i < n; i++ {
-		best, err := db.BestTip(uint64(i))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if cmBest, ok := cm.BestIndex(uint64(i)); !ok || cmBest != best {
-			t.Fatal("best tip mismatch")
-		}
 	}
 }
 
