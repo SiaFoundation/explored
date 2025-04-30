@@ -208,6 +208,21 @@ func (n *testChain) assertSCE(t *testing.T, scID types.SiacoinOutputID, index *t
 	testutil.Equal(t, "sce.SiacoinElement.SiacoinOutput", sco, sce.SiacoinOutput)
 }
 
+// helper to assert the Siafund element in the db has the right source, index and output
+func (n *testChain) assertSFE(t *testing.T, sfID types.SiafundOutputID, index *types.ChainIndex, sfo types.SiafundOutput) {
+	t.Helper()
+
+	sfes, err := n.db.SiafundElements([]types.SiafundOutputID{sfID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	testutil.Equal(t, "len(sfes)", 1, len(sfes))
+
+	sfe := sfes[0]
+	testutil.Equal(t, "sfe.SpentIndex", index, sfe.SpentIndex)
+	testutil.Equal(t, "sfe.SiafundElement.SiafundOutput", sfo, sfe.SiafundOutput)
+}
+
 func TestSiacoinOutput(t *testing.T) {
 	pk1 := types.GeneratePrivateKey()
 	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
@@ -329,6 +344,130 @@ func TestEphemeralSiacoinOutput(t *testing.T) {
 			t.Fatal(err)
 		}
 		testutil.Equal(t, "len(sces)", 0, len(sces))
+	}
+}
+
+func TestSiafundOutput(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	pk2 := types.GeneratePrivateKey()
+	uc2 := types.StandardUnlockConditions(pk2.PublicKey())
+	addr2 := uc2.UnlockHash()
+
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	})
+	sfID := n.genesis().Transactions[0].SiafundOutputID(0)
+
+	// genesis output should be unspent
+	// so spentIndex = nil
+	n.assertSFE(t, sfID, nil, n.genesis().Transactions[0].SiafundOutputs[0])
+
+	txn1 := types.Transaction{
+		SiafundInputs: []types.SiafundInput{{
+			ParentID:         sfID,
+			UnlockConditions: uc1,
+		}},
+		SiafundOutputs: []types.SiafundOutput{{
+			Address: addr2,
+			Value:   n.genesis().Transactions[0].SiafundOutputs[0].Value,
+		}},
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+
+	n.mineTransactions(t, txn1)
+
+	// genesis output should be spent
+	tip := n.tipState().Index
+	n.assertSFE(t, sfID, &tip, n.genesis().Transactions[0].SiafundOutputs[0])
+
+	// the output from txn1 should exist now that the block with txn1 was
+	// mined
+	n.assertSFE(t, txn1.SiafundOutputID(0), nil, txn1.SiafundOutputs[0])
+
+	n.revertBlock(t)
+
+	// the genesis output should be unspent now because we reverted the block
+	// containing txn1 which spent it
+	n.assertSFE(t, sfID, nil, n.genesis().Transactions[0].SiafundOutputs[0])
+
+	// the output from txn1 should not exist after txn1 reverted
+	{
+		sfes, err := n.db.SiafundElements([]types.SiafundOutputID{txn1.SiafundOutputID(0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(sfes)", 0, len(sfes))
+	}
+}
+
+func TestEphemeralSiafundOutput(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	pk2 := types.GeneratePrivateKey()
+	uc2 := types.StandardUnlockConditions(pk2.PublicKey())
+	addr2 := uc2.UnlockHash()
+
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	})
+	sfID := n.genesis().Transactions[0].SiafundOutputID(0)
+
+	// genesis output should be unspent
+	// so spentIndex = nil
+	n.assertSFE(t, sfID, nil, n.genesis().Transactions[0].SiafundOutputs[0])
+
+	txn1 := types.Transaction{
+		SiafundInputs: []types.SiafundInput{{
+			ParentID:         sfID,
+			UnlockConditions: uc1,
+		}},
+		SiafundOutputs: []types.SiafundOutput{{
+			Address: addr2,
+			Value:   n.genesis().Transactions[0].SiafundOutputs[0].Value,
+		}},
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+
+	txn2 := types.Transaction{
+		SiafundInputs: []types.SiafundInput{{
+			ParentID:         txn1.SiafundOutputID(0),
+			UnlockConditions: uc2,
+		}},
+		SiafundOutputs: []types.SiafundOutput{{
+			Address: types.VoidAddress,
+			Value:   txn1.SiafundOutputs[0].Value,
+		}},
+	}
+	testutil.SignTransaction(n.tipState(), pk2, &txn2)
+
+	n.mineTransactions(t, txn1, txn2)
+
+	tip := n.tipState().Index
+	// genesis output should be spent
+	n.assertSFE(t, sfID, &tip, n.genesis().Transactions[0].SiafundOutputs[0])
+
+	// now that txn1 and txn2 are mined the outputs from them should exist
+	n.assertSFE(t, txn1.SiafundOutputID(0), &tip, txn1.SiafundOutputs[0])
+	n.assertSFE(t, txn2.SiafundOutputID(0), nil, txn2.SiafundOutputs[0])
+
+	n.revertBlock(t)
+
+	// genesis output should be unspent now that we reverted
+	n.assertSFE(t, sfID, nil, n.genesis().Transactions[0].SiafundOutputs[0])
+
+	// outputs from txn1 and txn2 should not exist because those transactions
+	// were reverted
+	{
+		sfes, err := n.db.SiafundElements([]types.SiafundOutputID{txn1.SiafundOutputID(0), txn2.SiafundOutputID(0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(sfes)", 0, len(sfes))
 	}
 }
 
