@@ -1,6 +1,7 @@
 package sqlite_test
 
 import (
+	"errors"
 	"math"
 	"path/filepath"
 	"testing"
@@ -842,4 +843,69 @@ func TestEphemeralSiafundBalance(t *testing.T) {
 	checkBalance(addr1, val)
 	checkBalance(addr2, 0)
 	checkBalance(addr3, 0)
+}
+
+func TestTip(t *testing.T) {
+	n := newTestChain(t, false, nil)
+
+	checkTips := func() {
+		t.Helper()
+
+		tip, err := n.db.Tip()
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "tip", n.tipState().Index, tip)
+
+		for _, state := range n.states {
+			best, err := n.db.BestTip(state.Index.Height)
+			if err != nil {
+				t.Fatal(err)
+			}
+			testutil.Equal(t, "best tip", state.Index, best)
+		}
+	}
+	checkTips()
+
+	n.mineTransactions(t)
+	checkTips()
+
+	n.mineTransactions(t)
+	checkTips()
+
+	n.revertBlock(t)
+	checkTips()
+
+	n.revertBlock(t)
+	checkTips()
+}
+
+func TestMissingTip(t *testing.T) {
+	n := newTestChain(t, false, nil)
+
+	_, err := n.db.BestTip(n.tipState().Index.Height)
+	if err != nil {
+		t.Fatalf("error retrieving tip known to exist: %v", err)
+	}
+
+	_, err = n.db.BestTip(n.tipState().Index.Height + 1)
+	if !errors.Is(err, explorer.ErrNoTip) {
+		t.Fatalf("should have got ErrNoTip retrieving: %v", err)
+	}
+}
+
+func TestMissingBlock(t *testing.T) {
+	n := newTestChain(t, false, nil)
+
+	id := n.tipState().Index.ID
+	_, err := n.db.Block(id)
+	if err != nil {
+		t.Fatalf("error retrieving genesis block: %v", err)
+	}
+
+	id[0] ^= 255
+	_, err = n.db.Block(id)
+	if !errors.Is(err, explorer.ErrNoBlock) {
+		t.Fatalf("did not get ErrNoBlock retrieving missing block: %v", err)
+	}
 }
