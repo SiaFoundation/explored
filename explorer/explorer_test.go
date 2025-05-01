@@ -59,9 +59,11 @@ func TestChainMigration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer timeoutCancel()
-	defer e.Shutdown(timeoutCtx)
+	t.Cleanup(func() {
+		timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer timeoutCancel()
+		e.Shutdown(timeoutCtx)
+	})
 
 	time.Sleep(1 * time.Second)
 

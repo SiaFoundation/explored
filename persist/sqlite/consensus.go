@@ -431,14 +431,14 @@ func updateBalances(tx *txn, height uint64, spentSiacoinElements, newSiacoinElem
 	stmt, err := tx.Prepare(`INSERT INTO address_balance(address, siacoin_balance, immature_siacoin_balance, siafund_balance)
        VALUES (?, ?, ?, ?)
        ON CONFLICT(address)
-       DO UPDATE set siacoin_balance = ?, immature_siacoin_balance = ?, siafund_balance = ?`)
+       DO UPDATE set siacoin_balance = EXCLUDED.siacoin_balance, immature_siacoin_balance = EXCLUDED.immature_siacoin_balance, siafund_balance = EXCLUDED.siafund_balance`)
 	if err != nil {
 		return fmt.Errorf("updateBalances: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for addr, bal := range addresses {
-		if _, err := stmt.Exec(encode(addr), encode(bal.sc), encode(bal.immatureSC), encode(bal.sf), encode(bal.sc), encode(bal.immatureSC), encode(bal.sf)); err != nil {
+		if _, err := stmt.Exec(encode(addr), encode(bal.sc), encode(bal.immatureSC), encode(bal.sf)); err != nil {
 			return fmt.Errorf("updateBalances: failed to exec statement: %w", err)
 		}
 		// log.Println(addr, "=", bal.sc)
@@ -507,7 +507,7 @@ func updateMaturedBalances(tx *txn, revert bool, height uint64) error {
 	stmt, err := tx.Prepare(`INSERT INTO address_balance(address, siacoin_balance, immature_siacoin_balance, siafund_balance)
     VALUES (?, ?, ?, ?)
     ON CONFLICT(address)
-    DO UPDATE set siacoin_balance = ?, immature_siacoin_balance = ?`)
+    DO UPDATE set siacoin_balance = EXCLUDED.siacoin_balance, immature_siacoin_balance = EXCLUDED.immature_siacoin_balance`)
 	if err != nil {
 		return fmt.Errorf("updateMaturedBalances: failed to prepare statement: %w", err)
 	}
@@ -515,7 +515,7 @@ func updateMaturedBalances(tx *txn, revert bool, height uint64) error {
 
 	initialSF := encode(uint64(0))
 	for addr, bal := range addresses {
-		if _, err := stmt.Exec(encode(addr), encode(bal.sc), encode(bal.immatureSC), initialSF, encode(bal.sc), encode(bal.immatureSC)); err != nil {
+		if _, err := stmt.Exec(encode(addr), encode(bal.sc), encode(bal.immatureSC), initialSF); err != nil {
 			return fmt.Errorf("updateMaturedBalances: failed to exec statement: %w", err)
 		}
 	}
@@ -545,7 +545,7 @@ func addSiacoinElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 		stmt, err := tx.Prepare(`INSERT INTO siacoin_elements(output_id, block_id, leaf_index, source, maturity_height, address, value)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (output_id)
-                DO UPDATE SET leaf_index = ?, spent_index = NULL
+                DO UPDATE SET leaf_index = EXCLUDED.leaf_index, spent_index = NULL
                 RETURNING id;`)
 		if err != nil {
 			return nil, fmt.Errorf("addSiacoinElements: failed to prepare siacoin_elements statement: %w", err)
@@ -554,7 +554,7 @@ func addSiacoinElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 
 		for _, sce := range newElements {
 			var dbID int64
-			if err := stmt.QueryRow(encode(sce.ID), encode(index.ID), encode(sce.StateElement.LeafIndex), int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), encode(sce.StateElement.LeafIndex)).Scan(&dbID); err != nil {
+			if err := stmt.QueryRow(encode(sce.ID), encode(index.ID), encode(sce.StateElement.LeafIndex), int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value)).Scan(&dbID); err != nil {
 				return nil, fmt.Errorf("addSiacoinElements: failed to execute siacoin_elements statement: %w", err)
 			}
 
@@ -565,7 +565,7 @@ func addSiacoinElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 		stmt, err := tx.Prepare(`INSERT INTO siacoin_elements(output_id, block_id, leaf_index, spent_index, source, maturity_height, address, value)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (output_id)
-                DO UPDATE SET spent_index = ?, leaf_index = ?
+                DO UPDATE SET spent_index = ?, leaf_index = EXCLUDED.leaf_index
                 RETURNING id;`)
 		if err != nil {
 			return nil, fmt.Errorf("addSiacoinElements: failed to prepare siacoin_elements statement: %w", err)
@@ -574,7 +574,7 @@ func addSiacoinElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 
 		for _, sce := range spentElements {
 			var dbID int64
-			if err := stmt.QueryRow(encode(sce.ID), encode(index.ID), encode(sce.StateElement.LeafIndex), encode(index), int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), encode(index), encode(sce.StateElement.LeafIndex)).Scan(&dbID); err != nil {
+			if err := stmt.QueryRow(encode(sce.ID), encode(index.ID), encode(sce.StateElement.LeafIndex), encode(index), int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), encode(index)).Scan(&dbID); err != nil {
 				return nil, fmt.Errorf("addSiacoinElements: failed to execute siacoin_elements statement: %w", err)
 			}
 
@@ -591,7 +591,7 @@ func addSiafundElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 		stmt, err := tx.Prepare(`INSERT INTO siafund_elements(output_id, block_id, leaf_index, claim_start, address, value)
             VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT
-            DO UPDATE SET leaf_index = ?, spent_index = NULL
+            DO UPDATE SET leaf_index = EXCLUDED.leaf_index, spent_index = NULL
             RETURNING id;`)
 		if err != nil {
 			return nil, fmt.Errorf("addSiafundElements: failed to prepare siafund_elements statement: %w", err)
@@ -600,7 +600,7 @@ func addSiafundElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 
 		for _, sfe := range newElements {
 			var dbID int64
-			if err := stmt.QueryRow(encode(sfe.ID), encode(index.ID), encode(sfe.StateElement.LeafIndex), encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), encode(sfe.StateElement.LeafIndex)).Scan(&dbID); err != nil {
+			if err := stmt.QueryRow(encode(sfe.ID), encode(index.ID), encode(sfe.StateElement.LeafIndex), encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value)).Scan(&dbID); err != nil {
 				return nil, fmt.Errorf("addSiafundElements: failed to execute siafund_elements statement: %w", err)
 			}
 
@@ -611,7 +611,7 @@ func addSiafundElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 		stmt, err := tx.Prepare(`INSERT INTO siafund_elements(output_id, block_id, leaf_index, spent_index, claim_start, address, value)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT
-            DO UPDATE SET leaf_index = ?, spent_index = ?
+            DO UPDATE SET leaf_index = EXCLUDED.leaf_index, spent_index = ?
             RETURNING id;`)
 		if err != nil {
 			return nil, fmt.Errorf("addSiafundElements: failed to prepare siafund_elements statement: %w", err)
@@ -620,7 +620,7 @@ func addSiafundElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 
 		for _, sfe := range spentElements {
 			var dbID int64
-			if err := stmt.QueryRow(encode(sfe.ID), encode(index.ID), encode(sfe.StateElement.LeafIndex), encode(index), encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), encode(sfe.StateElement.LeafIndex), encode(index)).Scan(&dbID); err != nil {
+			if err := stmt.QueryRow(encode(sfe.ID), encode(index.ID), encode(sfe.StateElement.LeafIndex), encode(index), encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), encode(index)).Scan(&dbID); err != nil {
 				return nil, fmt.Errorf("addSiafundElements: failed to execute siafund_elements statement: %w", err)
 			}
 
@@ -748,7 +748,7 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
 	stmt, err := tx.Prepare(`INSERT INTO file_contract_elements(contract_id, block_id, transaction_id, leaf_index, resolved, valid, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number)
         VALUES (?, ?, ?, ?, FALSE, FALSE, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (contract_id, revision_number)
-        DO UPDATE SET resolved = ?, valid = ?, leaf_index = ?
+        DO UPDATE SET resolved = ?, valid = ?, leaf_index = EXCLUDED.leaf_index
         RETURNING id;`)
 	if err != nil {
 		return nil, fmt.Errorf("updateFileContractElements: failed to prepare main statement: %w", err)
@@ -829,7 +829,7 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
 	addFC := func(fcID types.FileContractID, leafIndex uint64, fc types.FileContract, confirmationTransactionID *types.TransactionID, resolved, valid, lastRevision bool) error {
 		var dbID int64
 		dbFC := explorer.DBFileContract{ID: fcID, RevisionNumber: fc.RevisionNumber}
-		err := stmt.QueryRow(encode(fcID), encode(index.ID), encode(fcTxns[dbFC]), encode(leafIndex), encode(fc.Filesize), encode(fc.FileMerkleRoot), encode(fc.WindowStart), encode(fc.WindowEnd), encode(fc.Payout), encode(fc.UnlockHash), encode(fc.RevisionNumber), resolved, valid, encode(leafIndex)).Scan(&dbID)
+		err := stmt.QueryRow(encode(fcID), encode(index.ID), encode(fcTxns[dbFC]), encode(leafIndex), encode(fc.Filesize), encode(fc.FileMerkleRoot), encode(fc.WindowStart), encode(fc.WindowEnd), encode(fc.Payout), encode(fc.UnlockHash), encode(fc.RevisionNumber), resolved, valid).Scan(&dbID)
 		if err != nil {
 			return fmt.Errorf("failed to execute file_contract_elements statement: %w", err)
 		}

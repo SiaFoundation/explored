@@ -74,7 +74,7 @@ func updateV2FileContractElements(tx *txn, revert bool, index types.ChainIndex, 
 	stmt, err := tx.Prepare(`INSERT INTO v2_file_contract_elements(contract_id, block_id, transaction_id, leaf_index, capacity, filesize, file_merkle_root, proof_height, expiration_height, renter_output_address, renter_output_value, host_output_address, host_output_value, missed_host_value, total_collateral, renter_public_key, host_public_key, revision_number, renter_signature, host_signature)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (contract_id, revision_number)
-        DO UPDATE SET leaf_index = ?
+        DO UPDATE SET leaf_index = EXCLUDED.leaf_index
         RETURNING id;`)
 	if err != nil {
 		return nil, fmt.Errorf("updateV2FileContractElements: failed to prepare main statement: %w", err)
@@ -127,7 +127,7 @@ func updateV2FileContractElements(tx *txn, revert bool, index types.ChainIndex, 
 	addFC := func(fcID types.FileContractID, leafIndex uint64, fc types.V2FileContract, confirmationTransactionID *types.TransactionID, lastRevision bool) error {
 		var dbID int64
 		dbFC := explorer.DBFileContract{ID: fcID, RevisionNumber: fc.RevisionNumber}
-		err := stmt.QueryRow(encode(fcID), encode(b.ID()), encode(fcTxns[dbFC]), encode(leafIndex), encode(fc.Capacity), encode(fc.Filesize), encode(fc.FileMerkleRoot), encode(fc.ProofHeight), encode(fc.ExpirationHeight), encode(fc.RenterOutput.Address), encode(fc.RenterOutput.Value), encode(fc.HostOutput.Address), encode(fc.HostOutput.Value), encode(fc.MissedHostValue), encode(fc.TotalCollateral), encode(fc.RenterPublicKey), encode(fc.HostPublicKey), encode(fc.RevisionNumber), encode(fc.RenterSignature), encode(fc.HostSignature), encode(leafIndex)).Scan(&dbID)
+		err := stmt.QueryRow(encode(fcID), encode(b.ID()), encode(fcTxns[dbFC]), encode(leafIndex), encode(fc.Capacity), encode(fc.Filesize), encode(fc.FileMerkleRoot), encode(fc.ProofHeight), encode(fc.ExpirationHeight), encode(fc.RenterOutput.Address), encode(fc.RenterOutput.Value), encode(fc.HostOutput.Address), encode(fc.HostOutput.Value), encode(fc.MissedHostValue), encode(fc.TotalCollateral), encode(fc.RenterPublicKey), encode(fc.HostPublicKey), encode(fc.RevisionNumber), encode(fc.RenterSignature), encode(fc.HostSignature)).Scan(&dbID)
 		if err != nil {
 			return fmt.Errorf("failed to execute v2_file_contract_elements statement: %w", err)
 		}
