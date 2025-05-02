@@ -66,21 +66,21 @@ func getV2Transactions(tx *txn, ids []types.TransactionID) ([]explorer.V2Transac
 	dbIDs, txns, err := getV2TransactionBase(tx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("getV2Transactions: failed to get base transactions: %w", err)
-	} else if err := fillV2TransactionAttestations(tx, dbIDs, txns); err != nil {
+	} else if err := decorateV2Attestations(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getV2Transactions: failed to get attestations: %w", err)
-	} else if err := fillV2TransactionSiacoinInputs(tx, dbIDs, txns); err != nil {
+	} else if err := decorateV2SiacoinInputs(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getV2Transactions: failed to get siacoin inputs: %w", err)
-	} else if err := fillV2TransactionSiacoinOutputs(tx, dbIDs, txns); err != nil {
+	} else if err := decorateV2SiacoinOutputs(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getV2Transactions: failed to get siacoin outputs: %w", err)
-	} else if err := fillV2TransactionSiafundInputs(tx, dbIDs, txns); err != nil {
+	} else if err := decorateV2SiafundInputs(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getV2Transactions: failed to get siafund inputs: %w", err)
-	} else if err := fillV2TransactionSiafundOutputs(tx, dbIDs, txns); err != nil {
+	} else if err := decorateV2SiafundOutputs(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getV2Transactions: failed to get siafund outputs: %w", err)
-	} else if err := fillV2TransactionFileContracts(tx, dbIDs, txns); err != nil {
+	} else if err := decorateV2FileContracts(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getV2Transactions: failed to get file contracts: %w", err)
-	} else if err := fillV2TransactionFileContractRevisions(tx, dbIDs, txns); err != nil {
+	} else if err := decorateV2FileContractRevisions(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getV2Transactions: failed to get file contract revisions: %w", err)
-	} else if err := fillV2TransactionFileContractResolutions(tx, dbIDs, txns); err != nil {
+	} else if err := decorateV2FileContractResolutions(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getV2Transactions: failed to get file contract resolutions: %w", err)
 	}
 
@@ -129,9 +129,9 @@ func getV2TransactionBase(tx *txn, txnIDs []types.TransactionID) ([]int64, []exp
 	return dbIDs, txns, nil
 }
 
-// fillV2TransactionAttestations fills in the attestations for each
+// decorateV2Attestations fills in the attestations for each
 // transaction.
-func fillV2TransactionAttestations(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
+func decorateV2Attestations(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
 	stmt, err := tx.Prepare(`SELECT public_key, key, value, signature FROM v2_transaction_attestations WHERE transaction_id = ? ORDER BY transaction_order`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare attestations statement: %w", err)
@@ -162,9 +162,9 @@ func fillV2TransactionAttestations(tx *txn, dbIDs []int64, txns []explorer.V2Tra
 	return nil
 }
 
-// fillV2TransactionSiacoinInputs fills in the siacoin inputs for each
+// decorateV2SiacoinInputs fills in the siacoin inputs for each
 // transaction.
-func fillV2TransactionSiacoinInputs(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
+func decorateV2SiacoinInputs(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
 	stmt, err := tx.Prepare(`SELECT ts.satisfied_policy, sc.output_id, sc.leaf_index, sc.maturity_height, sc.address, sc.value
 FROM siacoin_elements sc
 INNER JOIN v2_transaction_siacoin_inputs ts ON (ts.parent_id = sc.id)
@@ -200,9 +200,9 @@ ORDER BY ts.transaction_order ASC`)
 	return nil
 }
 
-// fillV2TransactionSiacoinOutputs fills in the siacoin outputs for each
+// decorateV2SiacoinOutputs fills in the siacoin outputs for each
 // transaction.
-func fillV2TransactionSiacoinOutputs(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
+func decorateV2SiacoinOutputs(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
 	stmt, err := tx.Prepare(`SELECT sc.output_id, sc.leaf_index, sc.spent_index, sc.source, sc.maturity_height, sc.address, sc.value
 FROM siacoin_elements sc
 INNER JOIN v2_transaction_siacoin_outputs ts ON (ts.output_id = sc.id)
@@ -242,9 +242,9 @@ ORDER BY ts.transaction_order ASC`)
 	return nil
 }
 
-// fillV2TransactionSiafundInputs fills in the siacoin inputs for each
+// decorateV2SiafundInputs fills in the siacoin inputs for each
 // transaction.
-func fillV2TransactionSiafundInputs(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
+func decorateV2SiafundInputs(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
 	stmt, err := tx.Prepare(`SELECT ts.satisfied_policy, ts.claim_address, sf.output_id, sf.leaf_index, sf.address, sf.value
 FROM siafund_elements sf
 INNER JOIN v2_transaction_siafund_inputs ts ON (ts.parent_id = sf.id)
@@ -280,9 +280,9 @@ ORDER BY ts.transaction_order ASC`)
 	return nil
 }
 
-// fillV2TransactionSiafundOutputs fills in the siafund outputs for each
+// decorateV2SiafundOutputs fills in the siafund outputs for each
 // transaction.
-func fillV2TransactionSiafundOutputs(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
+func decorateV2SiafundOutputs(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
 	stmt, err := tx.Prepare(`SELECT sf.output_id, sf.leaf_index, sf.spent_index, sf.claim_start, sf.address, sf.value
 FROM siafund_elements sf
 INNER JOIN v2_transaction_siafund_outputs ts ON (ts.output_id = sf.id)
@@ -322,9 +322,9 @@ ORDER BY ts.transaction_order ASC`)
 	return nil
 }
 
-// fillV2TransactionFileContracts fills in the file contracts for each
+// decorateV2FileContracts fills in the file contracts for each
 // transaction.
-func fillV2TransactionFileContracts(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
+func decorateV2FileContracts(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
 	stmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.resolution_type, rev.resolution_height, rev.resolution_block_id, rev.resolution_transaction_id, rev.renewed_from, rev.renewed_to, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
 FROM v2_file_contract_elements fc
 INNER JOIN v2_transaction_file_contracts ts ON (ts.contract_id = fc.id)
@@ -361,9 +361,9 @@ ORDER BY ts.transaction_order ASC`)
 	return nil
 }
 
-// fillV2TransactionFileContractRevisions fills in the file contract revisions
+// decorateV2FileContractRevisions fills in the file contract revisions
 // for each transaction.
-func fillV2TransactionFileContractRevisions(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
+func decorateV2FileContractRevisions(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
 	parentStmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.resolution_type, rev.resolution_height, rev.resolution_block_id, rev.resolution_transaction_id, rev.renewed_from, rev.renewed_to, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
 FROM v2_file_contract_elements fc
 INNER JOIN v2_transaction_file_contract_revisions ts ON (ts.parent_contract_id = fc.id)
@@ -430,9 +430,9 @@ ORDER BY ts.transaction_order ASC`)
 	return nil
 }
 
-// fillV2TransactionFileContractResolutions fills in the file contract
+// decorateV2FileContractResolutions fills in the file contract
 // resolutions for each transaction.
-func fillV2TransactionFileContractResolutions(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
+func decorateV2FileContractResolutions(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
 	consolidatedStmt, err := tx.Prepare(`
         SELECT 
             parent_contract_id, resolution_type,

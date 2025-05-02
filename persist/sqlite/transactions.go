@@ -38,8 +38,8 @@ LIMIT ? OFFSET ?`, encode(txnID), limit, offset)
 	return
 }
 
-// transactionMinerFee returns the miner fees for each transaction.
-func transactionMinerFee(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
+// decorateMinerFees returns the miner fees for each transaction.
+func decorateMinerFees(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
 	stmt, err := tx.Prepare(`SELECT fee
 FROM transaction_miner_fees
 WHERE transaction_id = ?
@@ -73,8 +73,8 @@ ORDER BY transaction_order ASC`)
 	return nil
 }
 
-// transactionArbitraryData returns the arbitrary data for each transaction.
-func transactionArbitraryData(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
+// decorateArbitraryData returns the arbitrary data for each transaction.
+func decorateArbitraryData(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
 	stmt, err := tx.Prepare(`SELECT data
 FROM transaction_arbitrary_data
 WHERE transaction_id = ?
@@ -108,8 +108,8 @@ ORDER BY transaction_order ASC`)
 	return nil
 }
 
-// transactionSignatures returns the signatures for each transaction.
-func transactionSignatures(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
+// decorateSignatures returns the signatures for each transaction.
+func decorateSignatures(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
 	stmt, err := tx.Prepare(`SELECT parent_id, public_key_index, timelock, covered_fields, signature
 FROM transaction_signatures
 WHERE transaction_id = ?
@@ -143,8 +143,8 @@ ORDER BY transaction_order ASC`)
 	return nil
 }
 
-// transactionSiacoinOutputs returns the siacoin outputs for each transaction.
-func transactionSiacoinOutputs(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
+// decorateSiacoinOutputs returns the siacoin outputs for each transaction.
+func decorateSiacoinOutputs(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
 	stmt, err := tx.Prepare(`SELECT sc.output_id, sc.leaf_index, sc.spent_index, sc.source, sc.maturity_height, sc.address, sc.value
 FROM siacoin_elements sc
 INNER JOIN transaction_siacoin_outputs ts ON ts.output_id = sc.id
@@ -183,8 +183,8 @@ ORDER BY ts.transaction_order ASC`)
 	return nil
 }
 
-// transactionSiacoinInputs returns the siacoin inputs for each transaction.
-func transactionSiacoinInputs(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
+// decorateSiacoinInputs returns the siacoin inputs for each transaction.
+func decorateSiacoinInputs(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
 	stmt, err := tx.Prepare(`SELECT sc.output_id, ts.unlock_conditions, sc.value
 FROM siacoin_elements sc
 INNER JOIN transaction_siacoin_inputs ts ON ts.parent_id = sc.id
@@ -220,8 +220,8 @@ ORDER BY ts.transaction_order ASC`)
 	return nil
 }
 
-// transactionSiafundInputs returns the siafund inputs for each transaction.
-func transactionSiafundInputs(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
+// decorateSiafundInputs returns the siafund inputs for each transaction.
+func decorateSiafundInputs(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
 	stmt, err := tx.Prepare(`SELECT sf.output_id, ts.unlock_conditions, ts.claim_address, sf.value
 FROM siafund_elements sf
 INNER JOIN transaction_siafund_inputs ts ON ts.parent_id = sf.id
@@ -257,8 +257,8 @@ ORDER BY ts.transaction_order ASC`)
 	return nil
 }
 
-// transactionSiafundOutputs returns the siafund outputs for each transaction.
-func transactionSiafundOutputs(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
+// decorateSiafundOutputs returns the siafund outputs for each transaction.
+func decorateSiafundOutputs(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
 	stmt, err := tx.Prepare(`SELECT sf.output_id, sf.leaf_index, sf.spent_index, sf.claim_start, sf.address, sf.value
 FROM siafund_elements sf
 INNER JOIN transaction_siafund_outputs ts ON ts.output_id = sf.id
@@ -335,8 +335,8 @@ ORDER BY contract_order`, contractID)
 	return valid, missed, nil
 }
 
-// transactionFileContracts returns the file contracts for each transaction.
-func transactionFileContracts(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
+// decorateFileContracts returns the file contracts for each transaction.
+func decorateFileContracts(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
 	stmt, err := tx.Prepare(`SELECT fc.id, fc.contract_id, fc.resolved, fc.valid, fc.transaction_id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.proof_height, rev.proof_block_id, rev.proof_transaction_id, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
 FROM file_contract_elements fc
 INNER JOIN transaction_file_contracts ts ON ts.contract_id = fc.id
@@ -372,8 +372,8 @@ ORDER BY ts.transaction_order ASC`)
 	return nil
 }
 
-// transactionFileContracts returns the file contract revisions for each transaction.
-func transactionFileContractRevisions(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
+// decorateFileContractRevisions returns the file contract revisions for each transaction.
+func decorateFileContractRevisions(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
 	stmt, err := tx.Prepare(`SELECT fc.id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.proof_height, rev.proof_block_id, rev.proof_transaction_id, ts.parent_id, ts.unlock_conditions, fc.contract_id, fc.resolved, fc.valid, fc.transaction_id, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
 FROM file_contract_elements fc
 INNER JOIN transaction_file_contract_revisions ts ON ts.contract_id = fc.id
@@ -425,8 +425,8 @@ ORDER BY ts.transaction_order ASC`)
 	return nil
 }
 
-// transactionStorageProofs returns the storage proofs for each transaction.
-func transactionStorageProofs(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
+// decorateStorageProofs returns the storage proofs for each transaction.
+func decorateStorageProofs(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
 	stmt, err := tx.Prepare(`SELECT transaction_id, parent_id, leaf, proof
 FROM transaction_storage_proofs
 WHERE transaction_id = ?
@@ -546,25 +546,25 @@ func getTransactions(tx *txn, ids []types.TransactionID) ([]explorer.Transaction
 	dbIDs, txns, err := transactionDatabaseIDs(tx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get base transactions: %w", err)
-	} else if err := transactionArbitraryData(tx, dbIDs, txns); err != nil {
+	} else if err := decorateArbitraryData(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get arbitrary data: %w", err)
-	} else if err := transactionMinerFee(tx, dbIDs, txns); err != nil {
+	} else if err := decorateMinerFees(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get miner fees: %w", err)
-	} else if err := transactionSignatures(tx, dbIDs, txns); err != nil {
+	} else if err := decorateSignatures(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get signatures: %w", err)
-	} else if err := transactionSiacoinInputs(tx, dbIDs, txns); err != nil {
+	} else if err := decorateSiacoinInputs(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get siacoin inputs: %w", err)
-	} else if err := transactionSiacoinOutputs(tx, dbIDs, txns); err != nil {
+	} else if err := decorateSiacoinOutputs(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get siacoin outputs: %w", err)
-	} else if err := transactionSiafundInputs(tx, dbIDs, txns); err != nil {
+	} else if err := decorateSiafundInputs(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get siafund inputs: %w", err)
-	} else if err := transactionSiafundOutputs(tx, dbIDs, txns); err != nil {
+	} else if err := decorateSiafundOutputs(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get siafund outputs: %w", err)
-	} else if err := transactionFileContracts(tx, dbIDs, txns); err != nil {
+	} else if err := decorateFileContracts(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get file contracts: %w", err)
-	} else if err := transactionFileContractRevisions(tx, dbIDs, txns); err != nil {
+	} else if err := decorateFileContractRevisions(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get file contract revisions: %w", err)
-	} else if err := transactionStorageProofs(tx, dbIDs, txns); err != nil {
+	} else if err := decorateStorageProofs(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get storage proofs: %w", err)
 	}
 
