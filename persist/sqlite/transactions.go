@@ -302,7 +302,7 @@ func fileContractOutputs(tx *txn, contractID int64) (valid []explorer.ContractSi
 	validRows, err := tx.Query(`SELECT id, address, value
 	FROM file_contract_valid_proof_outputs
 	WHERE contract_id = ?
-	ORDER BY contract_order`, contractID)
+	ORDER BY contract_order ASC`, contractID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -319,7 +319,7 @@ func fileContractOutputs(tx *txn, contractID int64) (valid []explorer.ContractSi
 	missedRows, err := tx.Query(`SELECT id, address, value
 FROM file_contract_missed_proof_outputs
 WHERE contract_id = ?
-ORDER BY contract_order`, contractID)
+ORDER BY contract_order ASC`, contractID)
 	if err != nil {
 		return nil, nil, err
 	}
