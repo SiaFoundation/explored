@@ -15,10 +15,18 @@ func encodedIDs(ids []types.FileContractID) []any {
 	return result
 }
 
-func scanFileContract(s scanner) (contractID int64, fc explorer.ExtendedFileContract, err error) {
+func scanFileContract(tx *txn, s scanner) (contractID int64, fc explorer.ExtendedFileContract, err error) {
 	var proofIndex types.ChainIndex
 	var proofTransactionID types.TransactionID
 	err = s.Scan(&contractID, decode(&fc.ID), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decode(&fc.ConfirmationIndex.Height), decode(&fc.ConfirmationIndex.ID), decode(&fc.ConfirmationTransactionID), decodeNull(&proofIndex.Height), decodeNull(&proofIndex.ID), decodeNull(&proofTransactionID), decode(&fc.Filesize), decode(&fc.FileMerkleRoot), decode(&fc.WindowStart), decode(&fc.WindowEnd), decode(&fc.Payout), decode(&fc.UnlockHash), decode(&fc.RevisionNumber))
+	if err != nil {
+		return
+	}
+
+	fc.ValidProofOutputs, fc.MissedProofOutputs, err = fileContractOutputs(tx, contractID)
+	if err != nil {
+		return
+	}
 
 	if proofIndex != (types.ChainIndex{}) {
 		fc.ProofIndex = &proofIndex
@@ -43,29 +51,11 @@ func (s *Store) Contracts(ids []types.FileContractID) (result []explorer.Extende
 		}
 		defer rows.Close()
 
-		var contractIDs []int64
-		idContract := make(map[int64]explorer.ExtendedFileContract)
 		for rows.Next() {
-			var contractID int64
-			var fc explorer.ExtendedFileContract
-
-			contractID, fc, err := scanFileContract(rows)
+			_, fc, err := scanFileContract(tx, rows)
 			if err != nil {
 				return fmt.Errorf("failed to scan file contract: %w", err)
 			}
-
-			idContract[contractID] = fc
-			contractIDs = append(contractIDs, contractID)
-		}
-
-		proofOutputs, err := fileContractOutputs(tx, contractIDs)
-		if err != nil {
-			return fmt.Errorf("failed to get file contract outputs: %w", err)
-		}
-		for contractID, output := range proofOutputs {
-			fc := idContract[contractID]
-			fc.ValidProofOutputs = output.valid
-			fc.MissedProofOutputs = output.missed
 			result = append(result, fc)
 		}
 
@@ -89,40 +79,12 @@ func (s *Store) ContractRevisions(id types.FileContractID) (revisions []explorer
 		}
 		defer rows.Close()
 
-		// fetch revisions
-		type fce struct {
-			ID           int64
-			FileContract explorer.ExtendedFileContract
-		}
-		var fces []fce
-		var contractIDs []int64
 		for rows.Next() {
-			contractID, fc, err := scanFileContract(rows)
+			_, fc, err := scanFileContract(tx, rows)
 			if err != nil {
 				return fmt.Errorf("failed to scan file contract: %w", err)
 			}
-
-			fces = append(fces, fce{ID: contractID, FileContract: fc})
-			contractIDs = append(contractIDs, contractID)
-		}
-
-		// fetch corresponding outputs
-		proofOutputs, err := fileContractOutputs(tx, contractIDs)
-		if err != nil {
-			return fmt.Errorf("failed to get file contract outputs: %w", err)
-		}
-
-		// merge outputs into revisions
-		revisions = make([]explorer.ExtendedFileContract, len(fces))
-		for i, revision := range fces {
-			output, found := proofOutputs[revision.ID]
-			if !found {
-				// contracts always have outputs
-				return fmt.Errorf("missing proof outputs for contract %v", contractIDs[i])
-			}
-			revisions[i] = revision.FileContract
-			revisions[i].ValidProofOutputs = output.valid
-			revisions[i].MissedProofOutputs = output.missed
+			revisions = append(revisions, fc)
 		}
 
 		if len(revisions) == 0 {
@@ -146,30 +108,15 @@ func (s *Store) ContractsKey(key types.PublicKey) (result []explorer.ExtendedFil
 		}
 		defer rows.Close()
 
-		var contractIDs []int64
-		idContract := make(map[int64]explorer.ExtendedFileContract)
 		for rows.Next() {
-			contractID, fc, err := scanFileContract(rows)
+			_, fc, err := scanFileContract(tx, rows)
 			if err != nil {
 				return fmt.Errorf("failed to scan file contract: %w", err)
 			}
-
-			idContract[contractID] = fc
-			contractIDs = append(contractIDs, contractID)
-		}
-
-		proofOutputs, err := fileContractOutputs(tx, contractIDs)
-		if err != nil {
-			return fmt.Errorf("failed to get file contract outputs: %w", err)
-		}
-		for contractID, output := range proofOutputs {
-			fc := idContract[contractID]
-			fc.ValidProofOutputs = output.valid
-			fc.MissedProofOutputs = output.missed
 			result = append(result, fc)
 		}
 
-		return nil
+		return rows.Err()
 	})
 
 	return

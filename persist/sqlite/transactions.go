@@ -1,6 +1,8 @@
 package sqlite
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 
 	"go.sia.tech/core/types"
@@ -37,385 +39,427 @@ LIMIT ? OFFSET ?`, encode(txnID), limit, offset)
 }
 
 // transactionMinerFee returns the miner fees for each transaction.
-func transactionMinerFee(tx *txn, txnIDs []int64) (map[int64][]types.Currency, error) {
-	query := `SELECT transaction_id, fee
+func transactionMinerFee(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
+	stmt, err := tx.Prepare(`SELECT fee
 FROM transaction_miner_fees
-WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
-ORDER BY transaction_order ASC`
-	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+WHERE transaction_id = ?
+ORDER BY transaction_order ASC`)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
-	defer rows.Close()
+	defer stmt.Close()
 
-	result := make(map[int64][]types.Currency)
-	for rows.Next() {
-		var txnID int64
-		var fee types.Currency
-		if err := rows.Scan(&txnID, decode(&fee)); err != nil {
-			return nil, fmt.Errorf("failed to scan arbitrary data: %w", err)
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := stmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query: %w", err)
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var fee types.Currency
+				if err := rows.Scan(decode(&fee)); err != nil {
+					return fmt.Errorf("failed to scan: %w", err)
+				}
+				txns[i].MinerFees = append(txns[i].MinerFees, fee)
+			}
+			return rows.Err()
+		}()
+		if err != nil {
+			return err
 		}
-		result[txnID] = append(result[txnID], fee)
 	}
-	return result, nil
+	return nil
 }
 
 // transactionArbitraryData returns the arbitrary data for each transaction.
-func transactionArbitraryData(tx *txn, txnIDs []int64) (map[int64][][]byte, error) {
-	query := `SELECT transaction_id, data
+func transactionArbitraryData(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
+	stmt, err := tx.Prepare(`SELECT data
 FROM transaction_arbitrary_data
-WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
-ORDER BY transaction_order ASC`
-	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+WHERE transaction_id = ?
+ORDER BY transaction_order ASC`)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
-	defer rows.Close()
+	defer stmt.Close()
 
-	result := make(map[int64][][]byte)
-	for rows.Next() {
-		var txnID int64
-		var data []byte
-		if err := rows.Scan(&txnID, &data); err != nil {
-			return nil, fmt.Errorf("failed to scan arbitrary data: %w", err)
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := stmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query: %w", err)
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var data []byte
+				if err := rows.Scan(&data); err != nil {
+					return fmt.Errorf("failed to scan: %w", err)
+				}
+				txns[i].ArbitraryData = append(txns[i].ArbitraryData, data)
+			}
+			return rows.Err()
+		}()
+		if err != nil {
+			return err
 		}
-		result[txnID] = append(result[txnID], data)
 	}
-	return result, nil
+	return nil
 }
 
 // transactionSignatures returns the signatures for each transaction.
-func transactionSignatures(tx *txn, txnIDs []int64) (map[int64][]types.TransactionSignature, error) {
-	query := `SELECT transaction_id, parent_id, public_key_index, timelock, covered_fields, signature
+func transactionSignatures(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
+	stmt, err := tx.Prepare(`SELECT parent_id, public_key_index, timelock, covered_fields, signature
 FROM transaction_signatures
-WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
-ORDER BY transaction_order ASC`
-	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+WHERE transaction_id = ?
+ORDER BY transaction_order ASC`)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
-	defer rows.Close()
+	defer stmt.Close()
 
-	result := make(map[int64][]types.TransactionSignature)
-	for rows.Next() {
-		var txnID int64
-		var sig types.TransactionSignature
-		if err := rows.Scan(&txnID, decode(&sig.ParentID), &sig.PublicKeyIndex, decode(&sig.Timelock), decode(&sig.CoveredFields), &sig.Signature); err != nil {
-			return nil, fmt.Errorf("failed to scan signature: %w", err)
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := stmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query: %w", err)
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var sig types.TransactionSignature
+				if err := rows.Scan(decode(&sig.ParentID), &sig.PublicKeyIndex, decode(&sig.Timelock), decode(&sig.CoveredFields), &sig.Signature); err != nil {
+					return fmt.Errorf("failed to scan: %w", err)
+				}
+				txns[i].Signatures = append(txns[i].Signatures, sig)
+			}
+			return rows.Err()
+		}()
+		if err != nil {
+			return err
 		}
-		result[txnID] = append(result[txnID], sig)
 	}
-	return result, nil
+	return nil
 }
 
 // transactionSiacoinOutputs returns the siacoin outputs for each transaction.
-func transactionSiacoinOutputs(tx *txn, txnIDs []int64) (map[int64][]explorer.SiacoinOutput, error) {
-	query := `SELECT ts.transaction_id, sc.output_id, sc.leaf_index, sc.spent_index, sc.source, sc.maturity_height, sc.address, sc.value
+func transactionSiacoinOutputs(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
+	stmt, err := tx.Prepare(`SELECT sc.output_id, sc.leaf_index, sc.spent_index, sc.source, sc.maturity_height, sc.address, sc.value
 FROM siacoin_elements sc
 INNER JOIN transaction_siacoin_outputs ts ON ts.output_id = sc.id
-WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
-ORDER BY ts.transaction_order ASC`
-	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+WHERE ts.transaction_id = ?
+ORDER BY ts.transaction_order ASC`)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query siacoin output ids: %w", err)
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
-	defer rows.Close()
+	defer stmt.Close()
 
-	// map transaction ID to output list
-	result := make(map[int64][]explorer.SiacoinOutput)
-	for rows.Next() {
-		var txnID int64
-		var spentIndex types.ChainIndex
-		var sco explorer.SiacoinOutput
-		if err := rows.Scan(&txnID, decode(&sco.ID), decode(&sco.StateElement.LeafIndex), decodeNull(&spentIndex), &sco.Source, &sco.MaturityHeight, decode(&sco.SiacoinOutput.Address), decode(&sco.SiacoinOutput.Value)); err != nil {
-			return nil, fmt.Errorf("failed to scan siacoin output: %w", err)
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := stmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query: %w", err)
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var spentIndex types.ChainIndex
+				var sco explorer.SiacoinOutput
+				if err := rows.Scan(decode(&sco.ID), decode(&sco.StateElement.LeafIndex), decodeNull(&spentIndex), &sco.Source, &sco.MaturityHeight, decode(&sco.SiacoinOutput.Address), decode(&sco.SiacoinOutput.Value)); err != nil {
+					return fmt.Errorf("failed to scan siacoin output: %w", err)
+				}
+				if spentIndex != (types.ChainIndex{}) {
+					sco.SpentIndex = &spentIndex
+				}
+				txns[i].SiacoinOutputs = append(txns[i].SiacoinOutputs, sco)
+			}
+			return rows.Err()
+		}()
+		if err != nil {
+			return err
 		}
-		if spentIndex != (types.ChainIndex{}) {
-			sco.SpentIndex = &spentIndex
-		}
-		result[txnID] = append(result[txnID], sco)
 	}
-	return result, nil
+	return nil
 }
 
 // transactionSiacoinInputs returns the siacoin inputs for each transaction.
-func transactionSiacoinInputs(tx *txn, txnIDs []int64) (map[int64][]explorer.SiacoinInput, error) {
-	query := `SELECT sc.id, ts.transaction_id, sc.output_id, ts.unlock_conditions, sc.value
+func transactionSiacoinInputs(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
+	stmt, err := tx.Prepare(`SELECT sc.output_id, ts.unlock_conditions, sc.value
 FROM siacoin_elements sc
 INNER JOIN transaction_siacoin_inputs ts ON ts.parent_id = sc.id
-WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
-ORDER BY ts.transaction_order ASC`
-	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+WHERE ts.transaction_id = ?
+ORDER BY ts.transaction_order ASC`)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
-	defer rows.Close()
+	defer stmt.Close()
 
-	result := make(map[int64][]explorer.SiacoinInput)
-	for rows.Next() {
-		var dbID, txnID int64
-		var sci explorer.SiacoinInput
-		if err := rows.Scan(&dbID, &txnID, decode(&sci.ParentID), decode(&sci.UnlockConditions), decode(&sci.Value)); err != nil {
-			return nil, fmt.Errorf("failed to scan siacoin input: %w", err)
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := stmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query: %w", err)
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var sci explorer.SiacoinInput
+				if err := rows.Scan(decode(&sci.ParentID), decode(&sci.UnlockConditions), decode(&sci.Value)); err != nil {
+					return fmt.Errorf("failed to scan: %w", err)
+				}
+				sci.Address = sci.UnlockConditions.UnlockHash()
+				txns[i].SiacoinInputs = append(txns[i].SiacoinInputs, sci)
+			}
+			return rows.Err()
+		}()
+		if err != nil {
+			return err
 		}
-		sci.Address = sci.UnlockConditions.UnlockHash()
-		result[txnID] = append(result[txnID], sci)
 	}
-	return result, nil
+	return nil
 }
 
 // transactionSiafundInputs returns the siafund inputs for each transaction.
-func transactionSiafundInputs(tx *txn, txnIDs []int64) (map[int64][]explorer.SiafundInput, error) {
-	query := `SELECT ts.transaction_id, sf.output_id, ts.unlock_conditions, ts.claim_address, sf.value
+func transactionSiafundInputs(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
+	stmt, err := tx.Prepare(`SELECT sf.output_id, ts.unlock_conditions, ts.claim_address, sf.value
 FROM siafund_elements sf
 INNER JOIN transaction_siafund_inputs ts ON ts.parent_id = sf.id
-WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
-ORDER BY ts.transaction_order ASC`
-	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+WHERE ts.transaction_id = ?
+ORDER BY ts.transaction_order ASC`)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
-	defer rows.Close()
+	defer stmt.Close()
 
-	result := make(map[int64][]explorer.SiafundInput)
-	for rows.Next() {
-		var txnID int64
-		var sfi explorer.SiafundInput
-		if err := rows.Scan(&txnID, decode(&sfi.ParentID), decode(&sfi.UnlockConditions), decode(&sfi.ClaimAddress), decode(&sfi.Value)); err != nil {
-			return nil, fmt.Errorf("failed to scan siafund input: %w", err)
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := stmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query: %w", err)
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var sfi explorer.SiafundInput
+				if err := rows.Scan(decode(&sfi.ParentID), decode(&sfi.UnlockConditions), decode(&sfi.ClaimAddress), decode(&sfi.Value)); err != nil {
+					return fmt.Errorf("failed to scan: %w", err)
+				}
+				sfi.Address = sfi.UnlockConditions.UnlockHash()
+				txns[i].SiafundInputs = append(txns[i].SiafundInputs, sfi)
+			}
+			return rows.Err()
+		}()
+		if err != nil {
+			return err
 		}
-
-		sfi.Address = sfi.UnlockConditions.UnlockHash()
-		result[txnID] = append(result[txnID], sfi)
 	}
-	return result, nil
+	return nil
 }
 
 // transactionSiafundOutputs returns the siafund outputs for each transaction.
-func transactionSiafundOutputs(tx *txn, txnIDs []int64) (map[int64][]explorer.SiafundOutput, error) {
-	query := `SELECT ts.transaction_id, sf.output_id, sf.leaf_index, sf.spent_index, sf.claim_start, sf.address, sf.value
+func transactionSiafundOutputs(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
+	stmt, err := tx.Prepare(`SELECT sf.output_id, sf.leaf_index, sf.spent_index, sf.claim_start, sf.address, sf.value
 FROM siafund_elements sf
 INNER JOIN transaction_siafund_outputs ts ON ts.output_id = sf.id
-WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
-ORDER BY ts.transaction_order ASC`
-	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+WHERE ts.transaction_id = ?
+ORDER BY ts.transaction_order ASC`)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query siafund output ids: %w", err)
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
-	defer rows.Close()
+	defer stmt.Close()
 
-	// map transaction ID to output list
-	result := make(map[int64][]explorer.SiafundOutput)
-	for rows.Next() {
-		var txnID int64
-		var spentIndex types.ChainIndex
-		var sfo explorer.SiafundOutput
-		if err := rows.Scan(&txnID, decode(&sfo.ID), decode(&sfo.StateElement.LeafIndex), decodeNull(&spentIndex), decode(&sfo.ClaimStart), decode(&sfo.SiafundOutput.Address), decode(&sfo.SiafundOutput.Value)); err != nil {
-			return nil, fmt.Errorf("failed to scan siafund output: %w", err)
-		}
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := stmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query: %w", err)
+			}
+			defer rows.Close()
 
-		if spentIndex != (types.ChainIndex{}) {
-			sfo.SpentIndex = &spentIndex
+			for rows.Next() {
+				var spentIndex types.ChainIndex
+				var sfo explorer.SiafundOutput
+				if err := rows.Scan(decode(&sfo.ID), decode(&sfo.StateElement.LeafIndex), decodeNull(&spentIndex), decode(&sfo.ClaimStart), decode(&sfo.SiafundOutput.Address), decode(&sfo.SiafundOutput.Value)); err != nil {
+					return fmt.Errorf("failed to scan: %w", err)
+				}
+
+				if spentIndex != (types.ChainIndex{}) {
+					sfo.SpentIndex = &spentIndex
+				}
+				txns[i].SiafundOutputs = append(txns[i].SiafundOutputs, sfo)
+			}
+			return rows.Err()
+		}()
+		if err != nil {
+			return err
 		}
-		result[txnID] = append(result[txnID], sfo)
 	}
-	return result, nil
+	return nil
 }
 
-type fileContractProofOutputs struct {
-	valid  []explorer.ContractSiacoinOutput
-	missed []explorer.ContractSiacoinOutput
-}
-
-func fileContractOutputs(tx *txn, contractIDs []int64) (map[int64]fileContractProofOutputs, error) {
-	result := make(map[int64]fileContractProofOutputs)
-
-	validQuery := `SELECT contract_id, id, address, value
-FROM file_contract_valid_proof_outputs
-WHERE contract_id IN (` + queryPlaceHolders(len(contractIDs)) + `)
-ORDER BY contract_order`
-	validRows, err := tx.Query(validQuery, queryArgs(contractIDs)...)
+func fileContractOutputs(tx *txn, contractID int64) (valid []explorer.ContractSiacoinOutput, missed []explorer.ContractSiacoinOutput, err error) {
+	validRows, err := tx.Query(`SELECT id, address, value
+	FROM file_contract_valid_proof_outputs
+	WHERE contract_id = ?
+	ORDER BY contract_order`, contractID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer validRows.Close()
 
 	for validRows.Next() {
-		var contractID int64
 		var sco explorer.ContractSiacoinOutput
-		if err := validRows.Scan(&contractID, decode(&sco.ID), decode(&sco.Address), decode(&sco.Value)); err != nil {
-			return nil, fmt.Errorf("failed to scan valid proof output: %w", err)
+		if err := validRows.Scan(decode(&sco.ID), decode(&sco.Address), decode(&sco.Value)); err != nil {
+			return nil, nil, fmt.Errorf("failed to scan valid proof output: %w", err)
 		}
-
-		r := result[contractID]
-		r.valid = append(r.valid, sco)
-		result[contractID] = r
+		valid = append(valid, sco)
 	}
 
-	missedQuery := `SELECT contract_id, id, address, value
+	missedRows, err := tx.Query(`SELECT id, address, value
 FROM file_contract_missed_proof_outputs
-WHERE contract_id IN (` + queryPlaceHolders(len(contractIDs)) + `)
-ORDER BY contract_order`
-	missedRows, err := tx.Query(missedQuery, queryArgs(contractIDs)...)
+WHERE contract_id = ?
+ORDER BY contract_order`, contractID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer missedRows.Close()
 
 	for missedRows.Next() {
-		var contractID int64
 		var sco explorer.ContractSiacoinOutput
-		if err := missedRows.Scan(&contractID, decode(&sco.ID), decode(&sco.Address), decode(&sco.Value)); err != nil {
-			return nil, fmt.Errorf("failed to scan missed proof output: %w", err)
+		if err := missedRows.Scan(decode(&sco.ID), decode(&sco.Address), decode(&sco.Value)); err != nil {
+			return nil, nil, fmt.Errorf("failed to scan valid proof output: %w", err)
 		}
-
-		r := result[contractID]
-		r.missed = append(r.missed, sco)
-		result[contractID] = r
+		missed = append(missed, sco)
 	}
-
-	return result, nil
-}
-
-type contractOrder struct {
-	txnID            int64
-	transactionOrder int64
+	return valid, missed, nil
 }
 
 // transactionFileContracts returns the file contracts for each transaction.
-func transactionFileContracts(tx *txn, txnIDs []int64) (map[int64][]explorer.ExtendedFileContract, error) {
-	query := `SELECT ts.transaction_id, fc.id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.proof_height, rev.proof_block_id, rev.proof_transaction_id, fc.contract_id, fc.resolved, fc.valid, fc.transaction_id, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
+func transactionFileContracts(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
+	stmt, err := tx.Prepare(`SELECT fc.id, fc.contract_id, fc.resolved, fc.valid, fc.transaction_id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.proof_height, rev.proof_block_id, rev.proof_transaction_id, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
 FROM file_contract_elements fc
 INNER JOIN transaction_file_contracts ts ON ts.contract_id = fc.id
 INNER JOIN last_contract_revision rev ON rev.contract_id = fc.contract_id
-WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
-ORDER BY ts.transaction_order ASC`
-	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+WHERE ts.transaction_id = ?
+ORDER BY ts.transaction_order ASC`)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query contract output ids: %w", err)
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
-	defer rows.Close()
+	defer stmt.Close()
 
-	var contractIDs []int64
-	// map transaction ID to contract list
-	result := make(map[int64][]explorer.ExtendedFileContract)
-	// map contract ID to transaction ID
-	contractTransaction := make(map[int64]contractOrder)
-	for rows.Next() {
-		var txnID, contractID int64
-		var fc explorer.ExtendedFileContract
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := stmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query: %w", err)
+			}
+			defer rows.Close()
 
-		var proofIndex types.ChainIndex
-		var proofTransactionID types.TransactionID
-		if err := rows.Scan(&txnID, &contractID, decode(&fc.ConfirmationIndex.Height), decode(&fc.ConfirmationIndex.ID), decode(&fc.ConfirmationTransactionID), decodeNull(&proofIndex.Height), decodeNull(&proofIndex.ID), decodeNull(&proofTransactionID), decode(&fc.ID), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decode(&fc.Filesize), decode(&fc.FileMerkleRoot), decode(&fc.WindowStart), decode(&fc.WindowEnd), decode(&fc.Payout), decode(&fc.UnlockHash), decode(&fc.RevisionNumber)); err != nil {
-			return nil, fmt.Errorf("failed to scan file contract: %w", err)
+			for rows.Next() {
+				_, fc, err := scanFileContract(tx, rows)
+				if err != nil {
+					return fmt.Errorf("failed to scan file contract: %w", err)
+				}
+				txns[i].FileContracts = append(txns[i].FileContracts, fc)
+			}
+			return rows.Err()
+		}()
+		if err != nil {
+			return err
 		}
-
-		if proofIndex != (types.ChainIndex{}) {
-			fc.ProofIndex = &proofIndex
-		}
-		if proofTransactionID != (types.TransactionID{}) {
-			fc.ProofTransactionID = &proofTransactionID
-		}
-
-		result[txnID] = append(result[txnID], fc)
-		contractIDs = append(contractIDs, contractID)
-		contractTransaction[contractID] = contractOrder{txnID, int64(len(result[txnID])) - 1}
 	}
-
-	proofOutputs, err := fileContractOutputs(tx, contractIDs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get file contract outputs: %w", err)
-	}
-	for contractID, output := range proofOutputs {
-		index := contractTransaction[contractID]
-		result[index.txnID][index.transactionOrder].ValidProofOutputs = output.valid
-		result[index.txnID][index.transactionOrder].MissedProofOutputs = output.missed
-	}
-
-	return result, nil
+	return nil
 }
 
 // transactionFileContracts returns the file contract revisions for each transaction.
-func transactionFileContractRevisions(tx *txn, txnIDs []int64) (map[int64][]explorer.FileContractRevision, error) {
-	query := `SELECT ts.transaction_id, fc.id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.proof_height, rev.proof_block_id, rev.proof_transaction_id, ts.parent_id, ts.unlock_conditions, fc.contract_id, fc.resolved, fc.valid, fc.transaction_id, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
+func transactionFileContractRevisions(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
+	stmt, err := tx.Prepare(`SELECT fc.id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.proof_height, rev.proof_block_id, rev.proof_transaction_id, ts.parent_id, ts.unlock_conditions, fc.contract_id, fc.resolved, fc.valid, fc.transaction_id, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
 FROM file_contract_elements fc
 INNER JOIN transaction_file_contract_revisions ts ON ts.contract_id = fc.id
 INNER JOIN last_contract_revision rev ON rev.contract_id = fc.contract_id
-WHERE ts.transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
-ORDER BY ts.transaction_order ASC`
-	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+WHERE ts.transaction_id = ?
+ORDER BY ts.transaction_order ASC`)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query contract output ids: %w", err)
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
-	defer rows.Close()
+	defer stmt.Close()
 
-	var contractIDs []int64
-	// map transaction ID to contract list
-	result := make(map[int64][]explorer.FileContractRevision)
-	// map contract ID to transaction ID
-	contractTransaction := make(map[int64]contractOrder)
-	for rows.Next() {
-		var txnID, contractID int64
-		var fc explorer.FileContractRevision
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := stmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query: %w", err)
+			}
+			defer rows.Close()
 
-		var proofIndex types.ChainIndex
-		var proofTransactionID types.TransactionID
-		if err := rows.Scan(&txnID, &contractID, decode(&fc.ConfirmationIndex.Height), decode(&fc.ConfirmationIndex.ID), decode(&fc.ConfirmationTransactionID), decodeNull(&proofIndex.Height), decodeNull(&proofIndex.ID), decodeNull(&proofTransactionID), decode(&fc.ParentID), decode(&fc.UnlockConditions), decode(&fc.ID), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decode(&fc.ExtendedFileContract.Filesize), decode(&fc.ExtendedFileContract.FileMerkleRoot), decode(&fc.ExtendedFileContract.WindowStart), decode(&fc.ExtendedFileContract.WindowEnd), decode(&fc.ExtendedFileContract.Payout), decode(&fc.ExtendedFileContract.UnlockHash), decode(&fc.ExtendedFileContract.RevisionNumber)); err != nil {
-			return nil, fmt.Errorf("failed to scan file contract: %w", err)
+			for rows.Next() {
+				var contractID int64
+				var fc explorer.FileContractRevision
+
+				var proofIndex types.ChainIndex
+				var proofTransactionID types.TransactionID
+				if err := rows.Scan(&contractID, decode(&fc.ConfirmationIndex.Height), decode(&fc.ConfirmationIndex.ID), decode(&fc.ConfirmationTransactionID), decodeNull(&proofIndex.Height), decodeNull(&proofIndex.ID), decodeNull(&proofTransactionID), decode(&fc.ParentID), decode(&fc.UnlockConditions), decode(&fc.ID), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decode(&fc.ExtendedFileContract.Filesize), decode(&fc.ExtendedFileContract.FileMerkleRoot), decode(&fc.ExtendedFileContract.WindowStart), decode(&fc.ExtendedFileContract.WindowEnd), decode(&fc.ExtendedFileContract.Payout), decode(&fc.ExtendedFileContract.UnlockHash), decode(&fc.ExtendedFileContract.RevisionNumber)); err != nil {
+					return fmt.Errorf("failed to scan file contract: %w", err)
+				}
+				fc.ValidProofOutputs, fc.MissedProofOutputs, err = fileContractOutputs(tx, contractID)
+				if err != nil {
+					return fmt.Errorf("failed to get contract proof outputs: %w", err)
+				}
+
+				if proofIndex != (types.ChainIndex{}) {
+					fc.ProofIndex = &proofIndex
+				}
+				if proofTransactionID != (types.TransactionID{}) {
+					fc.ProofTransactionID = &proofTransactionID
+				}
+
+				txns[i].FileContractRevisions = append(txns[i].FileContractRevisions, fc)
+			}
+			return rows.Err()
+		}()
+		if err != nil {
+			return err
 		}
-
-		if proofIndex != (types.ChainIndex{}) {
-			fc.ProofIndex = &proofIndex
-		}
-		if proofTransactionID != (types.TransactionID{}) {
-			fc.ProofTransactionID = &proofTransactionID
-		}
-
-		result[txnID] = append(result[txnID], fc)
-		contractIDs = append(contractIDs, contractID)
-		contractTransaction[contractID] = contractOrder{txnID, int64(len(result[txnID])) - 1}
 	}
-
-	proofOutputs, err := fileContractOutputs(tx, contractIDs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get file contract outputs: %w", err)
-	}
-	for contractID, output := range proofOutputs {
-		index := contractTransaction[contractID]
-		result[index.txnID][index.transactionOrder].ExtendedFileContract.ValidProofOutputs = output.valid
-		result[index.txnID][index.transactionOrder].ExtendedFileContract.MissedProofOutputs = output.missed
-	}
-
-	return result, nil
+	return nil
 }
 
 // transactionStorageProofs returns the storage proofs for each transaction.
-func transactionStorageProofs(tx *txn, txnIDs []int64) (map[int64][]types.StorageProof, error) {
-	query := `SELECT transaction_id, parent_id, leaf, proof
+func transactionStorageProofs(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
+	stmt, err := tx.Prepare(`SELECT transaction_id, parent_id, leaf, proof
 FROM transaction_storage_proofs
-WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `)
-ORDER BY transaction_order ASC`
-	rows, err := tx.Query(query, queryArgs(txnIDs)...)
+WHERE transaction_id = ?
+ORDER BY transaction_order ASC`)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
-	defer rows.Close()
+	defer stmt.Close()
 
-	result := make(map[int64][]types.StorageProof)
-	for rows.Next() {
-		var txnID int64
-		var proof types.StorageProof
+	for i, dbID := range dbIDs {
+		err := func() error {
+			rows, err := stmt.Query(dbID)
+			if err != nil {
+				return fmt.Errorf("failed to query: %w", err)
+			}
+			defer rows.Close()
 
-		leaf := make([]byte, 64)
-		if err := rows.Scan(&txnID, decode(&proof.ParentID), &leaf, decode(&proof.Proof)); err != nil {
-			return nil, fmt.Errorf("failed to scan arbitrary data: %w", err)
+			for rows.Next() {
+				var proof types.StorageProof
+				leaf := make([]byte, 64)
+				if err := rows.Scan(decode(&proof.ParentID), &leaf, decode(&proof.Proof)); err != nil {
+					return fmt.Errorf("failed to scan: %w", err)
+				}
+				proof.Leaf = [64]byte(leaf)
+				txns[i].StorageProofs = append(txns[i].StorageProofs, proof)
+			}
+			return rows.Err()
+		}()
+		if err != nil {
+			return err
 		}
-		proof.Leaf = [64]byte(leaf)
-
-		result[txnID] = append(result[txnID], proof)
 	}
-	return result, nil
+	return nil
 }
 
 type transactionID struct {
@@ -425,8 +469,8 @@ type transactionID struct {
 
 // blockTransactionIDs returns the database ID for each transaction in the
 // block.
-func blockTransactionIDs(tx *txn, blockID types.BlockID) (idMap map[int64]transactionID, err error) {
-	rows, err := tx.Query(`SELECT bt.transaction_id, block_order, t.transaction_id
+func blockTransactionIDs(tx *txn, blockID types.BlockID) (txnIDs []types.TransactionID, err error) {
+	rows, err := tx.Query(`SELECT t.transaction_id
 FROM block_transactions bt
 INNER JOIN transactions t ON t.id = bt.transaction_id
 WHERE block_id = ? ORDER BY block_order ASC`, encode(blockID))
@@ -435,16 +479,14 @@ WHERE block_id = ? ORDER BY block_order ASC`, encode(blockID))
 	}
 	defer rows.Close()
 
-	idMap = make(map[int64]transactionID)
 	for rows.Next() {
-		var dbID int64
-		var blockOrder int64
 		var txnID types.TransactionID
-		if err := rows.Scan(&dbID, &blockOrder, decode(&txnID)); err != nil {
+		if err := rows.Scan(decode(&txnID)); err != nil {
 			return nil, fmt.Errorf("failed to scan block transaction: %w", err)
 		}
-		idMap[blockOrder] = transactionID{id: txnID, dbID: dbID}
+		txnIDs = append(txnIDs, txnID)
 	}
+
 	return
 }
 
@@ -477,128 +519,71 @@ ORDER BY mp.block_order ASC`
 }
 
 // transactionDatabaseIDs returns the database ID for each transaction.
-func transactionDatabaseIDs(tx *txn, txnIDs []types.TransactionID) (dbIDs map[int64]transactionID, err error) {
-	encodedIDs := func(ids []types.TransactionID) []any {
-		result := make([]any, len(ids))
-		for i, id := range ids {
-			result[i] = encode(id)
-		}
-		return result
-	}
-
-	query := `SELECT id, transaction_id FROM transactions WHERE transaction_id IN (` + queryPlaceHolders(len(txnIDs)) + `) ORDER BY id`
-	rows, err := tx.Query(query, encodedIDs(txnIDs)...)
+func transactionDatabaseIDs(tx *txn, txnIDs []types.TransactionID) (dbIDs []int64, txns []explorer.Transaction, err error) {
+	stmt, err := tx.Prepare(`SELECT id FROM transactions WHERE transaction_id = ?`)
 	if err != nil {
-		return nil, err
+		return nil, nil, fmt.Errorf("failed to prepare statement: %w", err)
 	}
-	defer rows.Close()
+	defer stmt.Close()
 
-	var i int64
-	dbIDs = make(map[int64]transactionID)
-	for rows.Next() {
+	for _, txnID := range txnIDs {
 		var dbID int64
-		var txnID types.TransactionID
-		if err := rows.Scan(&dbID, decode(&txnID)); err != nil {
-			return nil, fmt.Errorf("failed to scan transaction: %w", err)
+		if err := stmt.QueryRow(encode(txnID)).Scan(&dbID); errors.Is(err, sql.ErrNoRows) {
+			continue
+		} else if err != nil {
+			return nil, nil, fmt.Errorf("failed to get transaction database ID: %w", err)
 		}
-		dbIDs[i] = transactionID{id: txnID, dbID: dbID}
-		i++
+
+		dbIDs = append(dbIDs, dbID)
+		txns = append(txns, explorer.Transaction{
+			ID: txnID,
+		})
 	}
 	return
 }
 
-func getTransactions(tx *txn, idMap map[int64]transactionID) ([]explorer.Transaction, error) {
-	dbIDs := make([]int64, len(idMap))
-	for order, id := range idMap {
-		dbIDs[order] = id.dbID
-	}
-
-	txnArbitraryData, err := transactionArbitraryData(tx, dbIDs)
+func getTransactions(tx *txn, ids []types.TransactionID) ([]explorer.Transaction, error) {
+	dbIDs, txns, err := transactionDatabaseIDs(tx, ids)
 	if err != nil {
+		return nil, fmt.Errorf("getTransactions: failed to get base transactions: %w", err)
+	} else if err := transactionArbitraryData(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get arbitrary data: %w", err)
-	}
-
-	txnMinerFees, err := transactionMinerFee(tx, dbIDs)
-	if err != nil {
+	} else if err := transactionMinerFee(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get miner fees: %w", err)
-	}
-
-	txnSignatures, err := transactionSignatures(tx, dbIDs)
-	if err != nil {
+	} else if err := transactionSignatures(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get signatures: %w", err)
-	}
-
-	txnSiacoinInputs, err := transactionSiacoinInputs(tx, dbIDs)
-	if err != nil {
+	} else if err := transactionSiacoinInputs(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get siacoin inputs: %w", err)
-	}
-
-	txnSiacoinOutputs, err := transactionSiacoinOutputs(tx, dbIDs)
-	if err != nil {
+	} else if err := transactionSiacoinOutputs(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get siacoin outputs: %w", err)
-	}
-
-	txnSiafundInputs, err := transactionSiafundInputs(tx, dbIDs)
-	if err != nil {
+	} else if err := transactionSiafundInputs(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get siafund inputs: %w", err)
-	}
-
-	txnSiafundOutputs, err := transactionSiafundOutputs(tx, dbIDs)
-	if err != nil {
+	} else if err := transactionSiafundOutputs(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get siafund outputs: %w", err)
-	}
-
-	txnFileContracts, err := transactionFileContracts(tx, dbIDs)
-	if err != nil {
+	} else if err := transactionFileContracts(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get file contracts: %w", err)
-	}
-
-	txnFileContractRevisions, err := transactionFileContractRevisions(tx, dbIDs)
-	if err != nil {
+	} else if err := transactionFileContractRevisions(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get file contract revisions: %w", err)
-	}
-
-	txnStorageProofs, err := transactionStorageProofs(tx, dbIDs)
-	if err != nil {
+	} else if err := transactionStorageProofs(tx, dbIDs, txns); err != nil {
 		return nil, fmt.Errorf("getTransactions: failed to get storage proofs: %w", err)
 	}
 
-	var results []explorer.Transaction
-	for order, dbID := range dbIDs {
-		txn := explorer.Transaction{
-			ID:                    idMap[int64(order)].id,
-			SiacoinInputs:         txnSiacoinInputs[dbID],
-			SiacoinOutputs:        txnSiacoinOutputs[dbID],
-			SiafundInputs:         txnSiafundInputs[dbID],
-			SiafundOutputs:        txnSiafundOutputs[dbID],
-			FileContracts:         txnFileContracts[dbID],
-			FileContractRevisions: txnFileContractRevisions[dbID],
-			StorageProofs:         txnStorageProofs[dbID],
-			MinerFees:             txnMinerFees[dbID],
-			ArbitraryData:         txnArbitraryData[dbID],
-			Signatures:            txnSignatures[dbID],
-		}
-
-		for _, arb := range txn.ArbitraryData {
+	for i := range txns {
+		for _, arb := range txns[i].ArbitraryData {
 			var ha chain.HostAnnouncement
 			if ha.FromArbitraryData(arb) {
-				txn.HostAnnouncements = append(txn.HostAnnouncements, ha)
+				txns[i].HostAnnouncements = append(txns[i].HostAnnouncements, ha)
 			}
 		}
-
-		results = append(results, txn)
 	}
-	return results, nil
+
+	return txns, nil
 }
 
 // Transactions implements explorer.Store.
 func (s *Store) Transactions(ids []types.TransactionID) (results []explorer.Transaction, err error) {
 	err = s.transaction(func(tx *txn) error {
-		dbIDs, err := transactionDatabaseIDs(tx, ids)
-		if err != nil {
-			return fmt.Errorf("failed to get transaction IDs: %w", err)
-		}
-		results, err = getTransactions(tx, dbIDs)
+		results, err = getTransactions(tx, ids)
 		if err != nil {
 			return fmt.Errorf("failed to get transactions: %w", err)
 		}
