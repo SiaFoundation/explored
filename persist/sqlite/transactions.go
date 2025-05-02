@@ -357,7 +357,7 @@ ORDER BY ts.transaction_order ASC`)
 			defer rows.Close()
 
 			for rows.Next() {
-				_, fc, err := scanFileContract(tx, rows)
+				fc, err := scanFileContract(tx, rows)
 				if err != nil {
 					return fmt.Errorf("failed to scan file contract: %w", err)
 				}
