@@ -15,7 +15,8 @@ func encodedIDs(ids []types.FileContractID) []any {
 	return result
 }
 
-func scanFileContract(tx *txn, s scanner) (contractID int64, fc explorer.ExtendedFileContract, err error) {
+func scanFileContract(tx *txn, s scanner) (fc explorer.ExtendedFileContract, err error) {
+	var contractID int64
 	var proofIndex types.ChainIndex
 	var proofTransactionID types.TransactionID
 	err = s.Scan(&contractID, decode(&fc.ID), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decode(&fc.ConfirmationIndex.Height), decode(&fc.ConfirmationIndex.ID), decode(&fc.ConfirmationTransactionID), decodeNull(&proofIndex.Height), decodeNull(&proofIndex.ID), decodeNull(&proofTransactionID), decode(&fc.Filesize), decode(&fc.FileMerkleRoot), decode(&fc.WindowStart), decode(&fc.WindowEnd), decode(&fc.Payout), decode(&fc.UnlockHash), decode(&fc.RevisionNumber))
@@ -52,7 +53,7 @@ func (s *Store) Contracts(ids []types.FileContractID) (result []explorer.Extende
 		defer rows.Close()
 
 		for rows.Next() {
-			_, fc, err := scanFileContract(tx, rows)
+			fc, err := scanFileContract(tx, rows)
 			if err != nil {
 				return fmt.Errorf("failed to scan file contract: %w", err)
 			}
@@ -80,7 +81,7 @@ func (s *Store) ContractRevisions(id types.FileContractID) (revisions []explorer
 		defer rows.Close()
 
 		for rows.Next() {
-			_, fc, err := scanFileContract(tx, rows)
+			fc, err := scanFileContract(tx, rows)
 			if err != nil {
 				return fmt.Errorf("failed to scan file contract: %w", err)
 			}
@@ -109,7 +110,7 @@ func (s *Store) ContractsKey(key types.PublicKey) (result []explorer.ExtendedFil
 		defer rows.Close()
 
 		for rows.Next() {
-			_, fc, err := scanFileContract(tx, rows)
+			fc, err := scanFileContract(tx, rows)
 			if err != nil {
 				return fmt.Errorf("failed to scan file contract: %w", err)
 			}
