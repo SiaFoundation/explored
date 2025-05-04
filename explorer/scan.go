@@ -23,7 +23,7 @@ func isSynced(b Block) bool {
 }
 
 func (e *Explorer) waitForSync(ctx context.Context) error {
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -202,7 +202,6 @@ func (e *Explorer) scanLoop() {
 	}
 	e.log.Info("Syncing complete, will begin scanning hosts")
 
-	var hasSuccess bool
 	var wg sync.WaitGroup
 	for {
 		select {
@@ -259,7 +258,9 @@ func (e *Explorer) scanLoop() {
 					}
 					return
 				} else {
-					hasSuccess = true
+					e.mu.Lock()
+					e.lastSuccessScan = time.Now()
+					e.mu.Unlock()
 					results[i].NextScan = now.Add(e.scanCfg.ScanInterval)
 				}
 			}(i, host)
@@ -269,10 +270,6 @@ func (e *Explorer) scanLoop() {
 		if err := e.s.AddHostScans(results...); err != nil {
 			e.log.Info("failed to add host scans to DB:", zap.Error(err))
 			return
-		} else if hasSuccess {
-			e.mu.Lock()
-			e.lastSuccessScan = time.Now()
-			e.mu.Unlock()
 		}
 	}
 }

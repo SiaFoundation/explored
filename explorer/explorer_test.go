@@ -143,7 +143,7 @@ func TestHealthz(t *testing.T) {
 	testV2Host(t, cm)
 	waitForSync(t, cm, e)
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(time.Second)
 	if err := e.Healthz(); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}

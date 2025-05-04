@@ -87,6 +87,7 @@ type Store interface {
 	BestTip(height uint64) (types.ChainIndex, error)
 	MerkleProof(leafIndex uint64) ([]types.Hash256, error)
 	Metrics(id types.BlockID) (Metrics, error)
+	LastSuccessScan() (time.Time, error)
 	HostMetrics() (HostMetrics, error)
 	Transactions(ids []types.TransactionID) ([]Transaction, error)
 	TransactionChainIndices(txid types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error)
@@ -181,6 +182,11 @@ func NewExplorer(cm ChainManager, store Store, indexCfg config.Index, scanCfg co
 		return nil, err
 	}
 	e.locator = locator
+
+	e.lastSuccessScan, err = store.LastSuccessScan()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get last successful scan: %w", err)
+	}
 
 	// add the genesis block if we do not have a tip
 	if _, err := e.s.Tip(); errors.Is(err, ErrNoTip) {
@@ -277,12 +283,12 @@ func (e *Explorer) Healthz() error {
 		return fmt.Errorf("failed to get tip: %w", err)
 	}
 
-	maxSyncedDelta := uint64((3 * time.Hour) / cs.Network.BlockInterval)
+	maxSyncedDelta := uint64(maxReorgPeriod / cs.Network.BlockInterval)
 	if delta(cs.Index.Height, syncedTip.Height) > maxSyncedDelta {
 		// skip scan check if not synced
 		return nil
-	} else if n := time.Since(e.lastSuccessScan); n > 2*e.scanCfg.ScanFrequency {
-		// 2x the scan frequency to allow some leeway
+	} else if n := time.Since(e.lastSuccessScan); n > 2*e.scanCfg.ScanInterval {
+		// 2x the scan interval to allow some leeway
 		// before we consider the explorer to be unhealthy
 		return fmt.Errorf("last successful scan was %s ago: %w", n, ErrNotScanning)
 	}

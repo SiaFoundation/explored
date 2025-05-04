@@ -10,6 +10,18 @@ import (
 	"go.sia.tech/explored/explorer"
 )
 
+// LastSuccessScan returns the last time a successful scan was performed.
+// If no successful scan has been performed, it returns the zero time.
+func (s *Store) LastSuccessScan() (lastScan time.Time, err error) {
+	err = s.transaction(func(tx *txn) error {
+		return tx.QueryRow(`SELECT COALESCE(MAX(last_scan), 0) FROM host_info`).Scan(decode(&lastScan))
+	})
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to get last scan: %w", err)
+	}
+	return
+}
+
 // HostsForScanning returns hosts ordered by their time to next scan.  Hosts
 // which are repeatedly offline will face an exponentially growing next scan
 // time to avoid wasting resources.
