@@ -1,11 +1,13 @@
 package explorer
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	"go.sia.tech/core/consensus"
@@ -15,6 +17,14 @@ import (
 	"go.sia.tech/explored/config"
 	"go.sia.tech/explored/geoip"
 	"go.uber.org/zap"
+	"golang.org/x/exp/constraints"
+)
+
+const (
+	// maxReorgPeriod is the maximum time between
+	// blocks before we consider the explorer to be
+	// out of sync.
+	maxReorgPeriod = 3 * time.Hour
 )
 
 var (
@@ -41,6 +51,13 @@ var (
 	// ErrNoSortColumn is returned when a host query requests that we sort by a
 	// column that does not exist.
 	ErrNoSortColumn = errors.New("no such sort column")
+
+	// ErrNotSyncing is returned when the explorer has not
+	// had a block change within the last 3 hours.
+	ErrNotSyncing = errors.New("not syncing")
+	// ErrNotScanning is returned when the explorer has not
+	// had a successful host scan within the last 3 hours.
+	ErrNotScanning = errors.New("not scanning")
 )
 
 // A ChainManager manages the consensus state
@@ -107,6 +124,10 @@ type Explorer struct {
 	tg  *threadgroup.ThreadGroup
 
 	unsubscribe func()
+
+	mu              sync.Mutex // protects the fields below
+	lastReorg       time.Time
+	lastSuccessScan time.Time
 }
 
 func (e *Explorer) syncStore(index types.ChainIndex, batchSize int) error {
@@ -136,6 +157,10 @@ func (e *Explorer) syncStore(index types.ChainIndex, batchSize int) error {
 				index = caus[len(caus)-1].State.Index
 			}
 		}
+
+		e.mu.Lock()
+		e.lastReorg = time.Now()
+		e.mu.Unlock()
 	}
 	return nil
 }
@@ -225,6 +250,43 @@ func (e *Explorer) Shutdown(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+func delta[T constraints.Integer | constraints.Float](a, b T) T {
+	if cmp.Compare(a, b) > 0 {
+		return a - b
+	}
+	return b - a
+}
+
+// Healthz checks if the explorer is healthy. It ensures that hosts are
+// being scanned and that the explorer has recently added blocks. If
+// the explorer is synced, it will also check that there was a recent
+// successful scan.
+func (e *Explorer) Healthz() error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if n := time.Since(e.lastReorg); n > maxReorgPeriod {
+		return fmt.Errorf("last reorg was %s ago: %w", n, ErrNotSyncing)
+	}
+
+	cs := e.cm.TipState()
+	syncedTip, err := e.s.Tip()
+	if err != nil {
+		return fmt.Errorf("failed to get tip: %w", err)
+	}
+
+	maxSyncedDelta := uint64((3 * time.Hour) / cs.Network.BlockInterval)
+	if delta(cs.Index.Height, syncedTip.Height) > maxSyncedDelta {
+		// skip scan check if not synced
+		return nil
+	} else if n := time.Since(e.lastSuccessScan); n > 2*e.scanCfg.ScanFrequency {
+		// 2x the scan frequency to allow some leeway
+		// before we consider the explorer to be unhealthy
+		return fmt.Errorf("last successful scan was %s ago: %w", n, ErrNotScanning)
+	}
+	return nil
 }
 
 // Tip returns the tip of the best known valid chain.
