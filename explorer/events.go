@@ -279,19 +279,10 @@ func CoreToExplorerV1Transaction(txn types.Transaction) (result Transaction) {
 			ExtendedFileContract: coreToExplorerFC(fcr.ParentID, fcr.FileContract),
 		})
 	}
-	for _, sp := range txn.StorageProofs {
-		result.StorageProofs = append(result.StorageProofs, sp)
-	}
-	for _, fee := range txn.MinerFees {
-		result.MinerFees = append(result.MinerFees, fee)
-	}
-	for _, arb := range txn.ArbitraryData {
-		result.ArbitraryData = append(result.ArbitraryData, arb)
-	}
-	for _, sig := range txn.Signatures {
-		result.Signatures = append(result.Signatures, sig)
-	}
-
+	result.StorageProofs = append(result.StorageProofs, txn.StorageProofs...)
+	result.MinerFees = append(result.MinerFees, txn.MinerFees...)
+	result.ArbitraryData = append(result.ArbitraryData, txn.ArbitraryData...)
+	result.Signatures = append(result.Signatures, txn.Signatures...)
 	return
 }
 
@@ -313,9 +304,7 @@ func CoreToExplorerV2Transaction(txn types.V2Transaction) (result V2Transaction)
 		}
 	}
 
-	for _, sci := range txn.SiacoinInputs {
-		result.SiacoinInputs = append(result.SiacoinInputs, sci)
-	}
+	result.SiacoinInputs = append(result.SiacoinInputs, txn.SiacoinInputs...)
 	for i, sco := range txn.SiacoinOutputs {
 		sce := types.SiacoinElement{
 			ID:            txn.SiacoinOutputID(result.ID, i),
@@ -325,9 +314,8 @@ func CoreToExplorerV2Transaction(txn types.V2Transaction) (result V2Transaction)
 			SiacoinElement: sce,
 		})
 	}
-	for _, sfi := range txn.SiafundInputs {
-		result.SiafundInputs = append(result.SiafundInputs, sfi)
-	}
+
+	result.SiafundInputs = append(result.SiafundInputs, txn.SiafundInputs...)
 	for i, sfo := range txn.SiafundOutputs {
 		sfe := types.SiafundElement{
 			ID:            txn.SiafundOutputID(result.ID, i),
@@ -388,9 +376,7 @@ func CoreToExplorerV2Transaction(txn types.V2Transaction) (result V2Transaction)
 			})
 		}
 	}
-	for _, arb := range txn.ArbitraryData {
-		result.ArbitraryData = append(result.ArbitraryData, arb)
-	}
+	result.ArbitraryData = append(result.ArbitraryData, txn.ArbitraryData...)
 	result.NewFoundationAddress = txn.NewFoundationAddress
 	result.MinerFee = txn.MinerFee
 

@@ -73,7 +73,7 @@ type (
 		V2ContractRevisions(id types.FileContractID) (result []explorer.V2FileContract, err error)
 		Search(id string) (explorer.SearchType, error)
 
-		ScanHosts(pks ...types.PublicKey) ([]explorer.HostScan, error)
+		ScanHosts(context.Context, ...types.PublicKey) ([]explorer.HostScan, error)
 		Hosts(pks []types.PublicKey) ([]explorer.Host, error)
 		QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortColumn, dir explorer.HostSortDir, offset, limit uint64) ([]explorer.Host, error)
 	}
@@ -729,7 +729,7 @@ func (s *server) pubkeyHostScanHandler(jc jape.Context) {
 		return
 	}
 
-	scans, err := s.e.ScanHosts(key)
+	scans, err := s.e.ScanHosts(jc.Request.Context(), key)
 	if jc.Check("non host error when attempting to scan hosts", err) != nil {
 		return
 	} else if len(scans) == 0 {

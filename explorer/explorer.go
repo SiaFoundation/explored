@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"math"
 	"strings"
-	"sync"
 	"time"
 
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
+	"go.sia.tech/coreutils/threadgroup"
 	"go.sia.tech/explored/config"
 	"go.sia.tech/explored/geoip"
 	"go.uber.org/zap"
@@ -104,19 +104,22 @@ type Explorer struct {
 	locator geoip.Locator
 
 	log *zap.Logger
-
-	wg        sync.WaitGroup
-	ctx       context.Context
-	ctxCancel context.CancelFunc
+	tg  *threadgroup.ThreadGroup
 
 	unsubscribe func()
 }
 
 func (e *Explorer) syncStore(index types.ChainIndex, batchSize int) error {
+	ctx, cancel, err := e.tg.AddContext(context.Background())
+	if err != nil {
+		return err
+	}
+	defer cancel()
+
 	for index != e.cm.Tip() {
 		select {
-		case <-e.ctx.Done():
-			return e.ctx.Err()
+		case <-ctx.Done():
+			return ctx.Err()
 		default:
 			crus, caus, err := e.cm.UpdatesSince(index, batchSize)
 			if err != nil {
@@ -139,14 +142,12 @@ func (e *Explorer) syncStore(index types.ChainIndex, batchSize int) error {
 
 // NewExplorer returns a Sia explorer.
 func NewExplorer(cm ChainManager, store Store, indexCfg config.Index, scanCfg config.Scanner, log *zap.Logger) (*Explorer, error) {
-	ctx, ctxCancel := context.WithCancel(context.Background())
 	e := &Explorer{
-		s:         store,
-		cm:        cm,
-		scanCfg:   scanCfg,
-		ctx:       ctx,
-		ctxCancel: ctxCancel,
-		log:       log,
+		s:       store,
+		cm:      cm,
+		tg:      threadgroup.New(),
+		scanCfg: scanCfg,
+		log:     log,
 	}
 
 	locator, err := geoip.NewMaxMindLocator("")
@@ -211,16 +212,13 @@ func NewExplorer(cm ChainManager, store Store, indexCfg config.Index, scanCfg co
 
 // Shutdown tries to close the scanning goroutines in the explorer.
 func (e *Explorer) Shutdown(ctx context.Context) error {
-	e.ctxCancel()
+	done := make(chan struct{}, 1)
+	go func() {
+		defer close(done)
+		e.tg.Stop()
+	}()
 	e.locator.Close()
 
-	done := make(chan struct{})
-	go func() {
-		e.wg.Wait()
-		close(done)
-	}()
-
-	// Wait for the WaitGroup to finish or the context to be cancelled
 	select {
 	case <-done:
 		return nil
@@ -455,7 +453,13 @@ func (e *Explorer) QueryHosts(params HostQuery, sortBy HostSortColumn, dir HostS
 // HostScan.Error field.  Errors retrieving hosts' net addresses from the
 // database or writing the scans to the database will make the returned error
 // value not equal to nil.
-func (e *Explorer) ScanHosts(pks ...types.PublicKey) ([]HostScan, error) {
+func (e *Explorer) ScanHosts(ctx context.Context, pks ...types.PublicKey) ([]HostScan, error) {
+	ctx, cancel, err := e.tg.AddContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer cancel()
+
 	hosts, err := e.Hosts(pks)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve host: %w", err)
@@ -472,11 +476,13 @@ func (e *Explorer) ScanHosts(pks ...types.PublicKey) ([]HostScan, error) {
 			V2NetAddresses: host.V2NetAddresses,
 		}
 
+		scanCtx, scanCancel := context.WithTimeout(ctx, e.scanCfg.ScanTimeout)
 		if host.V2 {
-			scans[i], err = e.scanV2Host(unscannedHost)
+			scans[i], err = e.scanV2Host(scanCtx, unscannedHost)
 		} else {
-			scans[i], err = e.scanV1Host(unscannedHost)
+			scans[i], err = e.scanV1Host(scanCtx, unscannedHost)
 		}
+		scanCancel()
 
 		now := types.CurrentTimestamp()
 		if err != nil {
