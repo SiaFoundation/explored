@@ -17,7 +17,7 @@ func (s *Store) LastSuccessScan() (lastScan time.Time, err error) {
 		return tx.QueryRow(`SELECT COALESCE(MAX(last_scan), 0) FROM host_info`).Scan(decode(&lastScan))
 	})
 	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to get last scan: %w", err)
+		return time.Time{}, err
 	}
 	return
 }
