@@ -95,6 +95,16 @@ func CheckTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer
 		Equal(t, "miner fee", expectTxn.MinerFees[i], gotTxn.MinerFees[i])
 	}
 
+	Equal(t, "storage proofs", len(expectTxn.StorageProofs), len(gotTxn.StorageProofs))
+	for i := range expectTxn.StorageProofs {
+		expected := expectTxn.StorageProofs[i]
+		got := gotTxn.StorageProofs[i]
+
+		Equal(t, "parent ID", expected.ParentID, got.ParentID)
+		Equal(t, "leaf", expected.Leaf, got.Leaf)
+		Equal(t, "parent ID", expected.Proof, got.Proof)
+	}
+
 	Equal(t, "signatures", len(expectTxn.Signatures), len(gotTxn.Signatures))
 	for i := range expectTxn.Signatures {
 		expected := expectTxn.Signatures[i]
