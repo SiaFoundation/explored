@@ -427,7 +427,7 @@ ORDER BY ts.transaction_order ASC`)
 
 // decorateStorageProofs returns the storage proofs for each transaction.
 func decorateStorageProofs(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
-	stmt, err := tx.Prepare(`SELECT transaction_id, parent_id, leaf, proof
+	stmt, err := tx.Prepare(`SELECT parent_id, leaf, proof
 FROM transaction_storage_proofs
 WHERE transaction_id = ?
 ORDER BY transaction_order ASC`)

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"go.sia.tech/core/consensus"
+	proto2 "go.sia.tech/core/rhp/v2"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	ctestutil "go.sia.tech/coreutils/testutil"
@@ -21,8 +22,9 @@ type testChain struct {
 	db    explorer.Store
 	store *chain.DBStore
 
-	blocks []types.Block
-	states []consensus.State
+	blocks      []types.Block
+	supplements []consensus.V1BlockSupplement
+	states      []consensus.State
 }
 
 func newTestChain(t *testing.T, v2 bool, modifyGenesis func(*consensus.Network, types.Block)) *testChain {
@@ -71,8 +73,9 @@ func newTestChain(t *testing.T, v2 bool, modifyGenesis func(*consensus.Network, 
 		db:    db,
 		store: store,
 
-		blocks: []types.Block{genesisBlock},
-		states: []consensus.State{genesisState},
+		blocks:      []types.Block{genesisBlock},
+		supplements: []consensus.V1BlockSupplement{bs},
+		states:      []consensus.State{genesisState},
 	}
 }
 
@@ -103,15 +106,20 @@ func (n *testChain) applyBlock(t *testing.T, b types.Block) {
 		t.Fatal(err)
 	}
 
-	n.states = append(n.states, cs)
+	n.store.AddState(cs)
+	n.store.AddBlock(b, &bs)
+	n.store.ApplyBlock(cs, au)
+
 	n.blocks = append(n.blocks, b)
+	n.supplements = append(n.supplements, bs)
+	n.states = append(n.states, cs)
 }
 
 func (n *testChain) revertBlock(t *testing.T) {
 	b := n.blocks[len(n.blocks)-1]
+	bs := n.supplements[len(n.supplements)-1]
 	prevState := n.states[len(n.states)-2]
 
-	bs := n.store.SupplementTipBlock(b)
 	ru := consensus.RevertBlock(prevState, b, bs)
 	if err := n.db.UpdateChainState([]chain.RevertUpdate{{
 		RevertUpdate: ru,
@@ -121,8 +129,11 @@ func (n *testChain) revertBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	n.states = n.states[:len(n.states)-1]
+	n.store.RevertBlock(prevState, ru)
+
 	n.blocks = n.blocks[:len(n.blocks)-1]
+	n.supplements = n.supplements[:len(n.supplements)-1]
+	n.states = n.states[:len(n.states)-1]
 }
 
 func (n *testChain) mineTransactions(t *testing.T, txns ...types.Transaction) {
@@ -908,4 +919,57 @@ func TestMissingBlock(t *testing.T) {
 	if !errors.Is(err, explorer.ErrNoBlock) {
 		t.Fatalf("did not get ErrNoBlock retrieving missing block: %v", err)
 	}
+}
+
+func TestTransactionStorageProof(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	prepareContract := func(endHeight uint64) types.FileContract {
+		rk := types.GeneratePrivateKey().PublicKey()
+		rAddr := types.StandardUnlockHash(rk)
+		hk := types.GeneratePrivateKey().PublicKey()
+		hs := proto2.HostSettings{
+			WindowSize: 1,
+			Address:    types.StandardUnlockHash(hk),
+		}
+		sc := types.Siacoins(1)
+		fc := proto2.PrepareContractFormation(rk, hk, sc.Mul64(5), sc.Mul64(5), endHeight, hs, rAddr)
+		fc.UnlockHash = addr1
+		return fc
+	}
+
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+
+	fc := prepareContract(n.tipState().Index.Height + 1)
+	txn1 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         n.genesis().Transactions[0].SiacoinOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   val.Sub(fc.Payout),
+		}},
+		FileContracts: []types.FileContract{fc},
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+
+	n.mineTransactions(t, txn1)
+
+	n.assertTransactions(t, txn1)
+
+	sp := types.StorageProof{
+		ParentID: txn1.FileContractID(0),
+	}
+	txn2 := types.Transaction{
+		StorageProofs: []types.StorageProof{sp},
+	}
+	n.mineTransactions(t, txn2)
+
+	n.assertTransactions(t, txn1, txn2)
 }
