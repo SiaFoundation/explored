@@ -302,3 +302,8 @@ func (c *Client) ExchangeRate(currency string) (resp float64, err error) {
 	err = c.c.GET(context.Background(), fmt.Sprintf("/exchange-rate/siacoin/%s", currency), &resp)
 	return
 }
+
+// Healthz checks the health of the explored daemon.
+func (c *Client) Healthz() error {
+	return c.c.GET(context.Background(), "/healthz", nil)
+}
