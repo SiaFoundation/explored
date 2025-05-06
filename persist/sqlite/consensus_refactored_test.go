@@ -22,6 +22,7 @@ type testChain struct {
 	db    explorer.Store
 	store *chain.DBStore
 
+	network     *consensus.Network
 	blocks      []types.Block
 	supplements []consensus.V1BlockSupplement
 	states      []consensus.State
@@ -73,6 +74,7 @@ func newTestChain(t *testing.T, v2 bool, modifyGenesis func(*consensus.Network, 
 		db:    db,
 		store: store,
 
+		network:     network,
 		blocks:      []types.Block{genesisBlock},
 		supplements: []consensus.V1BlockSupplement{bs},
 		states:      []consensus.State{genesisState},
@@ -233,6 +235,40 @@ func (n *testChain) assertSFE(t *testing.T, sfID types.SiafundOutputID, index *t
 	sfe := sfes[0]
 	testutil.Equal(t, "sfe.SpentIndex", index, sfe.SpentIndex)
 	testutil.Equal(t, "sfe.SiafundElement.SiafundOutput", sfo, sfe.SiafundOutput)
+}
+
+func (n *testChain) assertBlock(t *testing.T, cs consensus.State, block types.Block) {
+	got, err := n.db.Block(block.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testutil.Equal(t, "ParentID", block.ParentID, got.ParentID)
+	testutil.Equal(t, "Nonce", block.Nonce, got.Nonce)
+	testutil.Equal(t, "Timestamp", block.Timestamp, got.Timestamp)
+	testutil.Equal(t, "Height", cs.Index.Height, got.Height)
+
+	testutil.Equal(t, "len(MinerPayouts)", len(block.MinerPayouts), len(got.MinerPayouts))
+	for i, sco := range got.MinerPayouts {
+		testutil.Equal(t, "Source", explorer.SourceMinerPayout, sco.Source)
+		testutil.Equal(t, "SpentIndex", nil, sco.SpentIndex)
+		testutil.Equal(t, "SiacoinOutput", block.MinerPayouts[i], sco.SiacoinOutput)
+	}
+
+	testutil.Equal(t, "len(Transactions)", len(block.Transactions), len(got.Transactions))
+	for i, txn := range got.Transactions {
+		testutil.CheckTransaction(t, block.Transactions[i], txn)
+	}
+
+	if block.V2 != nil {
+		testutil.Equal(t, "Height", block.V2.Height, got.V2.Height)
+		testutil.Equal(t, "Commitment", block.V2.Commitment, got.V2.Commitment)
+
+		testutil.Equal(t, "len(V2Transactions)", len(block.V2.Transactions), len(got.V2.Transactions))
+		for i, txn := range got.V2.Transactions {
+			testutil.CheckV2Transaction(t, block.V2.Transactions[i], txn)
+		}
+	}
 }
 
 func TestSiacoinOutput(t *testing.T) {
@@ -856,6 +892,242 @@ func TestEphemeralSiafundBalance(t *testing.T) {
 	checkBalance(addr3, 0)
 }
 
+func TestMaturedSiacoinBalance(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	n := newTestChain(t, false, nil)
+
+	checkBalance := func(addr types.Address, expectedSC, expectedImmatureSC types.Currency) {
+		t.Helper()
+
+		sc, immatureSC, sf, err := n.db.Balance(addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "siacoins", expectedSC, sc)
+		testutil.Equal(t, "immature siacoins", expectedImmatureSC, immatureSC)
+		testutil.Equal(t, "siafunds", 0, sf)
+	}
+
+	checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency)
+
+	b := testutil.MineBlock(n.tipState(), nil, addr1)
+	n.applyBlock(t, b)
+
+	val := b.MinerPayouts[0].Value
+
+	for range n.network.MaturityDelay {
+		checkBalance(addr1, types.ZeroCurrency, val)
+		n.mineTransactions(t)
+	}
+
+	checkBalance(addr1, val, types.ZeroCurrency)
+
+	for range n.network.MaturityDelay {
+		n.revertBlock(t)
+		checkBalance(addr1, types.ZeroCurrency, val)
+	}
+
+	n.revertBlock(t)
+	checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency)
+}
+
+func TestUnspentSiacoinOutputs(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	pk2 := types.GeneratePrivateKey()
+	uc2 := types.StandardUnlockConditions(pk2.PublicKey())
+	addr2 := uc2.UnlockHash()
+
+	pk3 := types.GeneratePrivateKey()
+	uc3 := types.StandardUnlockConditions(pk3.PublicKey())
+	addr3 := uc3.UnlockHash()
+
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	genesisOutput := n.genesis().Transactions[0].SiacoinOutputs[0]
+	genesisOutputID := n.genesis().Transactions[0].SiacoinOutputID(0)
+
+	checkSiacoinOutputs := func(addr types.Address, expected ...explorer.SiacoinOutput) {
+		t.Helper()
+
+		scos, err := n.db.UnspentSiacoinOutputs(addr, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(scos)", len(expected), len(scos))
+
+		for i := range scos {
+			testutil.Equal(t, "Source", expected[i].Source, scos[i].Source)
+			testutil.Equal(t, "SpentIndex", expected[i].SpentIndex, scos[i].SpentIndex)
+			testutil.Equal(t, "SiacoinOutput", expected[i].SiacoinOutput, scos[i].SiacoinOutput)
+		}
+	}
+
+	// only addr1 should have SC from genesis block
+	checkSiacoinOutputs(addr1, explorer.SiacoinOutput{
+		Source: explorer.SourceTransaction,
+		SiacoinElement: types.SiacoinElement{
+			ID:            genesisOutputID,
+			SiacoinOutput: genesisOutput,
+		},
+	})
+	checkSiacoinOutputs(addr2)
+	checkSiacoinOutputs(addr3)
+
+	txn1 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         genesisOutputID,
+			UnlockConditions: uc1,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr2,
+			Value:   genesisOutput.Value,
+		}},
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+
+	txn2 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         txn1.SiacoinOutputID(0),
+			UnlockConditions: uc2,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr3,
+			Value:   genesisOutput.Value,
+		}},
+	}
+	testutil.SignTransaction(n.tipState(), pk2, &txn2)
+
+	// net effect of txn1 and txn2 is to send addr1 output to addr3
+	n.mineTransactions(t, txn1, txn2)
+
+	// addr3 should have all the value now
+	checkSiacoinOutputs(addr1)
+	checkSiacoinOutputs(addr2)
+	checkSiacoinOutputs(addr3, explorer.SiacoinOutput{
+		Source: explorer.SourceTransaction,
+		SiacoinElement: types.SiacoinElement{
+			ID:            txn2.SiacoinOutputID(0),
+			SiacoinOutput: txn2.SiacoinOutputs[0],
+		},
+	})
+
+	n.revertBlock(t)
+
+	// after revert, addr1 should have the output again and the others should
+	// have nothing
+	checkSiacoinOutputs(addr1, explorer.SiacoinOutput{
+		Source: explorer.SourceTransaction,
+		SiacoinElement: types.SiacoinElement{
+			ID:            genesisOutputID,
+			SiacoinOutput: genesisOutput,
+		},
+	})
+	checkSiacoinOutputs(addr2)
+	checkSiacoinOutputs(addr3)
+}
+
+func TestUnspentSiafundOutputs(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	pk2 := types.GeneratePrivateKey()
+	uc2 := types.StandardUnlockConditions(pk2.PublicKey())
+	addr2 := uc2.UnlockHash()
+
+	pk3 := types.GeneratePrivateKey()
+	uc3 := types.StandardUnlockConditions(pk3.PublicKey())
+	addr3 := uc3.UnlockHash()
+
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	})
+	genesisOutput := n.genesis().Transactions[0].SiafundOutputs[0]
+	genesisOutputID := n.genesis().Transactions[0].SiafundOutputID(0)
+
+	checkSiafundOutputs := func(addr types.Address, expected ...explorer.SiafundOutput) {
+		t.Helper()
+
+		sfos, err := n.db.UnspentSiafundOutputs(addr, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(sfos)", len(expected), len(sfos))
+
+		for i := range sfos {
+			testutil.Equal(t, "SpentIndex", expected[i].SpentIndex, sfos[i].SpentIndex)
+			testutil.Equal(t, "SiafundOutput", expected[i].SiafundOutput, sfos[i].SiafundOutput)
+		}
+	}
+
+	// only addr1 should have SF from genesis block
+	checkSiafundOutputs(addr1, explorer.SiafundOutput{
+		SiafundElement: types.SiafundElement{
+			ID:            genesisOutputID,
+			SiafundOutput: genesisOutput,
+		},
+	})
+	checkSiafundOutputs(addr2)
+	checkSiafundOutputs(addr3)
+
+	txn1 := types.Transaction{
+		SiafundInputs: []types.SiafundInput{{
+			ParentID:         genesisOutputID,
+			UnlockConditions: uc1,
+		}},
+		SiafundOutputs: []types.SiafundOutput{{
+			Address: addr2,
+			Value:   genesisOutput.Value,
+		}},
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+
+	txn2 := types.Transaction{
+		SiafundInputs: []types.SiafundInput{{
+			ParentID:         txn1.SiafundOutputID(0),
+			UnlockConditions: uc2,
+		}},
+		SiafundOutputs: []types.SiafundOutput{{
+			Address: addr3,
+			Value:   genesisOutput.Value,
+		}},
+	}
+	testutil.SignTransaction(n.tipState(), pk2, &txn2)
+
+	// net effect of txn1 and txn2 is to send addr1 output to addr3
+	n.mineTransactions(t, txn1, txn2)
+
+	// addr3 should have all the value now
+	checkSiafundOutputs(addr1)
+	checkSiafundOutputs(addr2)
+	checkSiafundOutputs(addr3, explorer.SiafundOutput{
+		SiafundElement: types.SiafundElement{
+			ID:            txn2.SiafundOutputID(0),
+			SiafundOutput: txn2.SiafundOutputs[0],
+		},
+	})
+
+	n.revertBlock(t)
+
+	// after revert, addr1 should have the output again and the others should
+	// have nothing
+	checkSiafundOutputs(addr1, explorer.SiafundOutput{
+		SiafundElement: types.SiafundElement{
+			ID:            genesisOutputID,
+			SiafundOutput: genesisOutput,
+		},
+	})
+	checkSiafundOutputs(addr2)
+	checkSiafundOutputs(addr3)
+}
+
 func TestTip(t *testing.T) {
 	n := newTestChain(t, false, nil)
 
@@ -972,4 +1244,87 @@ func TestTransactionStorageProof(t *testing.T) {
 	n.mineTransactions(t, txn2)
 
 	n.assertTransactions(t, txn1, txn2)
+}
+
+func TestEventPayout(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	n := newTestChain(t, false, nil)
+
+	b := testutil.MineBlock(n.tipState(), nil, addr1)
+	n.applyBlock(t, b)
+
+	{
+		events, err := n.db.AddressEvents(addr1, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "events", 1, len(events))
+
+		ev0 := events[0].Data.(explorer.EventPayout)
+		testutil.Equal(t, "event 0 output ID", n.tipState().Index.ID.MinerOutputID(0), ev0.SiacoinElement.ID)
+		testutil.Equal(t, "event 0 output source", explorer.SourceMinerPayout, ev0.SiacoinElement.Source)
+	}
+
+	n.revertBlock(t)
+
+	{
+		events, err := n.db.AddressEvents(addr1, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "events", 0, len(events))
+	}
+}
+
+func TestBlock(t *testing.T) {
+	n := newTestChain(t, false, nil)
+
+	checkBlocks := func(count int) {
+		t.Helper()
+
+		testutil.Equal(t, "blocks", count, len(n.blocks))
+		for i := range n.blocks {
+			testutil.Equal(t, "block height", uint64(i), n.states[i].Index.Height)
+			testutil.Equal(t, "block ID", n.blocks[i].ID(), n.states[i].Index.ID)
+			n.assertBlock(t, n.states[i], n.blocks[i])
+		}
+	}
+
+	checkBlocks(1)
+
+	n.mineTransactions(t, types.Transaction{ArbitraryData: [][]byte{{0}}})
+
+	checkBlocks(2)
+
+	n.revertBlock(t)
+
+	checkBlocks(1)
+}
+
+func TestV2Block(t *testing.T) {
+	n := newTestChain(t, true, nil)
+
+	checkBlocks := func(count int) {
+		t.Helper()
+
+		testutil.Equal(t, "blocks", count, len(n.blocks))
+		for i := range n.blocks {
+			testutil.Equal(t, "block height", uint64(i), n.states[i].Index.Height)
+			testutil.Equal(t, "block ID", n.blocks[i].ID(), n.states[i].Index.ID)
+			n.assertBlock(t, n.states[i], n.blocks[i])
+		}
+	}
+
+	checkBlocks(1)
+
+	n.mineV2Transactions(t, types.V2Transaction{ArbitraryData: []byte{0}})
+
+	checkBlocks(2)
+
+	n.revertBlock(t)
+
+	checkBlocks(1)
 }

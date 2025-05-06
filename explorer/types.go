@@ -361,6 +361,14 @@ type Block struct {
 	V2 *V2BlockData `json:"v2,omitempty"`
 }
 
+// V2Transactions returns the block's v2 transactions, if present.
+func (b *Block) V2Transactions() []V2Transaction {
+	if b.V2 != nil {
+		return b.V2.Transactions
+	}
+	return nil
+}
+
 // Metrics contains various statistics relevant to the health of the Sia network.
 type Metrics struct {
 	// Current chain index
