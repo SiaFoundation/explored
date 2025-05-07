@@ -1458,7 +1458,7 @@ func TestFileContractValid(t *testing.T) {
 	tip := n.tipState().Index
 	txnID := txn2.ID()
 
-	// should be resovled
+	// should be resolved
 	fceResolved := fce
 	fceResolved.Resolved = true
 	fceResolved.Valid = true
@@ -1474,15 +1474,22 @@ func TestFileContractValid(t *testing.T) {
 	n.assertFCE(t, fce.ID, fce)
 	n.assertTransactionContracts(t, txn1.ID(), false, fce)
 
-	// FCE should not exist
 	n.revertBlock(t)
 
+	// FCE should not exist
 	{
 		fces, err := n.db.Contracts([]types.FileContractID{fce.ID})
 		if err != nil {
 			t.Fatal(err)
 		}
 		testutil.Equal(t, "len(fces)", 0, len(fces))
+	}
+
+	{
+		_, err := n.db.ContractRevisions(fce.ID)
+		if !errors.Is(err, explorer.ErrContractNotFound) {
+			t.Fatal("should have got contract not found error for reverted contract:", err)
+		}
 	}
 }
 
@@ -1535,14 +1542,21 @@ func TestFileContractMissed(t *testing.T) {
 	n.assertFCE(t, fce.ID, fce)
 	n.assertTransactionContracts(t, txn1.ID(), false, fce)
 
-	// FCE should not exist
 	n.revertBlock(t)
 
+	// FCE should not exist
 	{
 		fces, err := n.db.Contracts([]types.FileContractID{fce.ID})
 		if err != nil {
 			t.Fatal(err)
 		}
 		testutil.Equal(t, "len(fces)", 0, len(fces))
+	}
+
+	{
+		_, err := n.db.ContractRevisions(fce.ID)
+		if !errors.Is(err, explorer.ErrContractNotFound) {
+			t.Fatal("should have got contract not found error for reverted contract:", err)
+		}
 	}
 }

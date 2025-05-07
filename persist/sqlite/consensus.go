@@ -874,21 +874,22 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
 		var fce *types.FileContractElement
 
 		if revert {
-			// Reverting
-			if update.Revision != nil {
-				// Contract revision reverted.
-				// We are reverting the revision, so get the contract before
-				// the revision.
-				fce = &update.FileContractElement
-			} else {
-				// Contract formation reverted.
-				// The contract update has no revision, therefore it refers
-				// to the original contract formation. There still may be
-				// resolved/valid state to update, so we still need to readd
-				// the contract.
-				fce = &update.FileContractElement
+			// If there is no revision (so we do not need to set the
+			// last contract revision as the pre revision contract),
+			// and the contract has not been resolved, then we are
+			// reverting the formation of the contract, and therefore
+			// do not want to call addFC or we will have a lingering
+			// contract in the database.
+			if update.Revision == nil && !update.Resolved {
+				continue
 			}
 
+			// Otherwise, we can upsert the contract element to update the
+			// resolved/valid change if there was any. If we are reverting
+			// a block with a contract revision in it (i.e., update.Revision !=
+			// nil), this will ensure that the contract before the revision is
+			// set as the last revision in last_contract_revision.
+			fce = &update.FileContractElement
 			if update.Resolved {
 				update.Resolved = false
 			}
