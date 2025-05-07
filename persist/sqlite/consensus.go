@@ -745,20 +745,20 @@ func deleteBlock(tx *txn, bid types.BlockID) error {
 }
 
 func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b types.Block, fces []explorer.FileContractUpdate) (map[explorer.DBFileContract]int64, error) {
-	stmt, err := tx.Prepare(`INSERT INTO file_contract_elements(contract_id, block_id, transaction_id, leaf_index, resolved, valid, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number)
-        VALUES (?, ?, ?, ?, FALSE, FALSE, ?, ?, ?, ?, ?, ?, ?)
+	stmt, err := tx.Prepare(`INSERT INTO file_contract_elements(contract_id, block_id, transaction_id, leaf_index, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (contract_id, revision_number)
-        DO UPDATE SET resolved = ?, valid = ?, leaf_index = ?
+        DO UPDATE SET leaf_index = ?
         RETURNING id;`)
 	if err != nil {
 		return nil, fmt.Errorf("updateFileContractElements: failed to prepare main statement: %w", err)
 	}
 	defer stmt.Close()
 
-	revisionStmt, err := tx.Prepare(`INSERT INTO last_contract_revision(contract_id, contract_element_id, ed25519_renter_key, ed25519_host_key, confirmation_height, confirmation_block_id, confirmation_transaction_id)
-    VALUES (?, ?, ?, ?, COALESCE(?, X''), COALESCE(?, X''), COALESCE(?, X''))
+	revisionStmt, err := tx.Prepare(`INSERT INTO last_contract_revision(contract_id, contract_element_id, resolved, valid, ed25519_renter_key, ed25519_host_key, confirmation_height, confirmation_block_id, confirmation_transaction_id)
+    VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, X''), COALESCE(?, X''), COALESCE(?, X''))
     ON CONFLICT (contract_id)
-    DO UPDATE SET contract_element_id = ?, ed25519_renter_key = COALESCE(?, ed25519_renter_key), ed25519_host_key = COALESCE(?, ed25519_host_key), confirmation_height = COALESCE(?, confirmation_height), confirmation_block_id = COALESCE(?, confirmation_block_id), confirmation_transaction_id = COALESCE(?, confirmation_transaction_id)`)
+    DO UPDATE SET resolved = EXCLUDED.resolved, valid = EXCLUDED.valid, contract_element_id = ?, ed25519_renter_key = COALESCE(?, ed25519_renter_key), ed25519_host_key = COALESCE(?, ed25519_host_key), confirmation_height = COALESCE(?, confirmation_height), confirmation_block_id = COALESCE(?, confirmation_block_id), confirmation_transaction_id = COALESCE(?, confirmation_transaction_id)`)
 	if err != nil {
 		return nil, fmt.Errorf("updateFileContractElements: failed to prepare last_contract_revision statement: %w", err)
 	}
@@ -829,7 +829,7 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
 	addFC := func(fcID types.FileContractID, leafIndex uint64, fc types.FileContract, confirmationTransactionID *types.TransactionID, resolved, valid, lastRevision bool) error {
 		var dbID int64
 		dbFC := explorer.DBFileContract{ID: fcID, RevisionNumber: fc.RevisionNumber}
-		err := stmt.QueryRow(encode(fcID), encode(index.ID), encode(fcTxns[dbFC]), encode(leafIndex), encode(fc.Filesize), encode(fc.FileMerkleRoot), encode(fc.WindowStart), encode(fc.WindowEnd), encode(fc.Payout), encode(fc.UnlockHash), encode(fc.RevisionNumber), resolved, valid, encode(leafIndex)).Scan(&dbID)
+		err := stmt.QueryRow(encode(fcID), encode(index.ID), encode(fcTxns[dbFC]), encode(leafIndex), encode(fc.Filesize), encode(fc.FileMerkleRoot), encode(fc.WindowStart), encode(fc.WindowEnd), encode(fc.Payout), encode(fc.UnlockHash), encode(fc.RevisionNumber), encode(leafIndex)).Scan(&dbID)
 		if err != nil {
 			return fmt.Errorf("failed to execute file_contract_elements statement: %w", err)
 		}
@@ -861,7 +861,7 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
 				encodedConfirmationTransactionID = encode(*confirmationTransactionID).([]byte)
 			}
 
-			if _, err := revisionStmt.Exec(encode(fcID), dbID, encodedRenterKey, encodedHostKey, encodedHeight, encodedBlockID, encodedConfirmationTransactionID, dbID, encodedRenterKey, encodedHostKey, encodedHeight, encodedBlockID, encodedConfirmationTransactionID); err != nil {
+			if _, err := revisionStmt.Exec(encode(fcID), dbID, resolved, valid, encodedRenterKey, encodedHostKey, encodedHeight, encodedBlockID, encodedConfirmationTransactionID, dbID, encodedRenterKey, encodedHostKey, encodedHeight, encodedBlockID, encodedConfirmationTransactionID); err != nil {
 				return fmt.Errorf("failed to update last revision number: %w", err)
 			}
 		}

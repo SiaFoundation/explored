@@ -337,7 +337,7 @@ ORDER BY contract_order ASC`, contractID)
 
 // decorateFileContracts returns the file contracts for each transaction.
 func decorateFileContracts(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
-	stmt, err := tx.Prepare(`SELECT fc.id, fc.contract_id, fc.resolved, fc.valid, fc.transaction_id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.proof_height, rev.proof_block_id, rev.proof_transaction_id, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
+	stmt, err := tx.Prepare(`SELECT fc.id, fc.contract_id, rev.resolved, rev.valid, fc.transaction_id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.proof_height, rev.proof_block_id, rev.proof_transaction_id, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
 FROM file_contract_elements fc
 INNER JOIN transaction_file_contracts ts ON ts.contract_id = fc.id
 INNER JOIN last_contract_revision rev ON rev.contract_id = fc.contract_id
@@ -374,7 +374,7 @@ ORDER BY ts.transaction_order ASC`)
 
 // decorateFileContractRevisions returns the file contract revisions for each transaction.
 func decorateFileContractRevisions(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
-	stmt, err := tx.Prepare(`SELECT fc.id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.proof_height, rev.proof_block_id, rev.proof_transaction_id, ts.parent_id, ts.unlock_conditions, fc.contract_id, fc.resolved, fc.valid, fc.transaction_id, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
+	stmt, err := tx.Prepare(`SELECT fc.id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.proof_height, rev.proof_block_id, rev.proof_transaction_id, ts.parent_id, ts.unlock_conditions, fc.contract_id, rev.resolved, rev.valid, fc.transaction_id, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
 FROM file_contract_elements fc
 INNER JOIN transaction_file_contract_revisions ts ON ts.contract_id = fc.id
 INNER JOIN last_contract_revision rev ON rev.contract_id = fc.contract_id

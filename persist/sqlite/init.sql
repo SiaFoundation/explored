@@ -86,9 +86,6 @@ CREATE TABLE file_contract_elements (
 	contract_id BLOB NOT NULL,
 	leaf_index BLOB NOT NULL,
 
-	resolved INTEGER NOT NULL,
-	valid INTEGER NOT NULL,
-
 	filesize BLOB NOT NULL,
 	file_merkle_root BLOB NOT NULL,
 	window_start BLOB NOT NULL,
@@ -102,6 +99,9 @@ CREATE INDEX file_contract_elements_contract_id_revision_number_index ON file_co
 
 CREATE TABLE last_contract_revision (
 	contract_id BLOB PRIMARY KEY NOT NULL,
+
+	resolved INTEGER NOT NULL,
+	valid INTEGER NOT NULL,
 
 	ed25519_renter_key BLOB,
 	ed25519_host_key BLOB,
