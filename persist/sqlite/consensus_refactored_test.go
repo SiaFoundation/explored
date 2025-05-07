@@ -215,24 +215,10 @@ func (n *testChain) assertFCE(t *testing.T, fcID types.FileContractID, expected 
 	testutil.Equal(t, "len(fces)", 1, len(fces))
 
 	fce := fces[0]
-	// t.Logf("Got: %+v", fce)
-	testutil.Equal(t, "Resolved", expected.Resolved, fce.Resolved)
-	testutil.Equal(t, "Valid", expected.Valid, fce.Valid)
-	testutil.Equal(t, "TransactionID", expected.TransactionID, fce.TransactionID)
-	testutil.Equal(t, "ConfirmationIndex", expected.ConfirmationIndex, fce.ConfirmationIndex)
-	testutil.Equal(t, "ConfirmationTransactionID", expected.ConfirmationTransactionID, fce.ConfirmationTransactionID)
-	testutil.Equal(t, "ProofIndex", expected.ProofIndex, fce.ProofIndex)
-	testutil.Equal(t, "ProofTransactionID", expected.ProofTransactionID, fce.ProofTransactionID)
-	testutil.Equal(t, "ID", expected.ID, fce.ID)
-	testutil.Equal(t, "Filesize", expected.Filesize, fce.Filesize)
-	testutil.Equal(t, "FileMerkleRoot", expected.FileMerkleRoot, fce.FileMerkleRoot)
-	testutil.Equal(t, "WindowStart", expected.WindowStart, fce.WindowStart)
-	testutil.Equal(t, "WindowEnd", expected.WindowEnd, fce.WindowEnd)
-	testutil.Equal(t, "Payout", expected.Payout, fce.Payout)
-	testutil.Equal(t, "UnlockHash", expected.UnlockHash, fce.UnlockHash)
-	testutil.Equal(t, "RevisionNumber", expected.RevisionNumber, fce.RevisionNumber)
-	testutil.Equal(t, "ValidProofOutputs", len(expected.ValidProofOutputs), len(fce.ValidProofOutputs))
-	testutil.Equal(t, "MissedProofOutputs", expected.MissedProofOutputs, fce.MissedProofOutputs)
+	// We aren't trying to compare a core type with an explorer type so we can
+	// just directly compare.  If they are not equal a diff with field names will
+	// be printed.
+	testutil.Equal(t, "ExtendedFileContract", expected, fce)
 }
 
 func (n *testChain) assertBlock(t *testing.T, cs consensus.State, block types.Block) {
@@ -265,6 +251,27 @@ func (n *testChain) assertBlock(t *testing.T, cs consensus.State, block types.Bl
 		testutil.Equal(t, "len(V2Transactions)", len(block.V2.Transactions), len(got.V2.Transactions))
 		for i, txn := range got.V2.Transactions {
 			testutil.CheckV2Transaction(t, block.V2.Transactions[i], txn)
+		}
+	}
+}
+
+func (n *testChain) assertTransactionContracts(t *testing.T, txnID types.TransactionID, revisions bool, expected ...explorer.ExtendedFileContract) {
+	txns, err := n.db.Transactions([]types.TransactionID{txnID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	testutil.Equal(t, "len(txns)", 1, len(txns))
+
+	txn := txns[0]
+	if !revisions {
+		testutil.Equal(t, "len(txn.FileContracts)", len(expected), len(txn.FileContracts))
+		for i := range expected {
+			testutil.Equal(t, "ExtendedFileContract", expected[i], txn.FileContracts[i])
+		}
+	} else {
+		testutil.Equal(t, "len(txn.FileContractRevisions)", len(expected), len(txn.FileContractRevisions))
+		for i := range expected {
+			testutil.Equal(t, "ExtendedFileContract", expected[i], txn.FileContractRevisions[i].ExtendedFileContract)
 		}
 	}
 }
@@ -1317,6 +1324,7 @@ func TestFileContractValid(t *testing.T) {
 		RevisionNumber:     fc.RevisionNumber,
 	}
 	n.assertFCE(t, fcID, fce)
+	n.assertTransactionContracts(t, txn1.ID(), false, fce)
 
 	sp := types.StorageProof{
 		ParentID: txn1.FileContractID(0),
@@ -1337,11 +1345,13 @@ func TestFileContractValid(t *testing.T) {
 	fceResolved.ProofTransactionID = &txnID
 
 	n.assertFCE(t, fcID, fceResolved)
+	n.assertTransactionContracts(t, txn1.ID(), false, fceResolved)
 
 	n.revertBlock(t)
 
 	// should have old FCE back
 	n.assertFCE(t, fcID, fce)
+	n.assertTransactionContracts(t, txn1.ID(), false, fce)
 
 	// FCE should not exist
 	n.revertBlock(t)
@@ -1409,11 +1419,13 @@ func TestFileContractMissed(t *testing.T) {
 	fceResolved.Valid = false
 
 	n.assertFCE(t, fcID, fceResolved)
+	n.assertTransactionContracts(t, txn1.ID(), false, fceResolved)
 
 	n.revertBlock(t)
 
 	// should have old FCE back
 	n.assertFCE(t, fcID, fce)
+	n.assertTransactionContracts(t, txn1.ID(), false, fce)
 
 	// FCE should not exist
 	n.revertBlock(t)
