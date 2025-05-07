@@ -883,8 +883,15 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
 			} else {
 				// Contract formation reverted.
 				// The contract update has no revision, therefore it refers
-				// to the original contract formation.
-				continue
+				// to the original contract formation.  There still may be
+				// resolved/valid state to update, so do not just ignore.
+				fce = &update.FileContractElement
+			}
+			if update.Resolved {
+				update.Resolved = false
+			}
+			if update.Valid {
+				update.Valid = false
 			}
 		} else {
 			// Applying

@@ -143,11 +143,6 @@ func (n *testChain) mineTransactions(t *testing.T, txns ...types.Transaction) {
 	n.applyBlock(t, b)
 }
 
-func (n *testChain) mineV2Transactions(t *testing.T, txns ...types.V2Transaction) {
-	b := testutil.MineV2Block(n.tipState(), txns, types.VoidAddress)
-	n.applyBlock(t, b)
-}
-
 func (n *testChain) assertTransactions(t *testing.T, expected ...types.Transaction) {
 	t.Helper()
 
@@ -159,20 +154,6 @@ func (n *testChain) assertTransactions(t *testing.T, expected ...types.Transacti
 		testutil.Equal(t, "len(txns)", 1, len(txns))
 
 		testutil.CheckTransaction(t, txn, txns[0])
-	}
-}
-
-func (n *testChain) assertV2Transactions(t *testing.T, expected ...types.V2Transaction) {
-	t.Helper()
-
-	for _, txn := range expected {
-		txns, err := n.db.V2Transactions([]types.TransactionID{txn.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "len(txns)", 1, len(txns))
-
-		testutil.CheckV2Transaction(t, txn, txns[0])
 	}
 }
 
@@ -191,22 +172,7 @@ func (n *testChain) assertChainIndices(t *testing.T, txnID types.TransactionID, 
 	}
 }
 
-func (n *testChain) assertV2ChainIndices(t *testing.T, txnID types.TransactionID, expected ...types.ChainIndex) {
-	t.Helper()
-
-	indices, err := n.db.V2TransactionChainIndices(txnID, 0, math.MaxInt64)
-	if err != nil {
-		t.Fatal(err)
-	} else if len(indices) != len(expected) {
-		t.Fatalf("expected %d indices, got %d", len(expected), len(indices))
-	}
-
-	for i := range indices {
-		testutil.Equal(t, "index", expected[i], indices[i])
-	}
-}
-
-// helper to assert the Siacoin element in the db has the right source, index and output
+// assertSCE asserts the Siacoin element in the db has the right source, index and output
 func (n *testChain) assertSCE(t *testing.T, scID types.SiacoinOutputID, index *types.ChainIndex, sco types.SiacoinOutput) {
 	t.Helper()
 
@@ -222,7 +188,7 @@ func (n *testChain) assertSCE(t *testing.T, scID types.SiacoinOutputID, index *t
 	testutil.Equal(t, "sce.SiacoinElement.SiacoinOutput", sco, sce.SiacoinOutput)
 }
 
-// helper to assert the Siafund element in the db has the right source, index and output
+// assertSFE asserts the Siafund element in the db has the right source, index and output
 func (n *testChain) assertSFE(t *testing.T, sfID types.SiafundOutputID, index *types.ChainIndex, sfo types.SiafundOutput) {
 	t.Helper()
 
@@ -235,6 +201,38 @@ func (n *testChain) assertSFE(t *testing.T, sfID types.SiafundOutputID, index *t
 	sfe := sfes[0]
 	testutil.Equal(t, "sfe.SpentIndex", index, sfe.SpentIndex)
 	testutil.Equal(t, "sfe.SiafundElement.SiafundOutput", sfo, sfe.SiafundOutput)
+}
+
+// assertFCE asserts the contract element in the db has the right state and
+// block/transaction indices
+func (n *testChain) assertFCE(t *testing.T, fcID types.FileContractID, expected explorer.ExtendedFileContract) {
+	t.Helper()
+
+	fces, err := n.db.Contracts([]types.FileContractID{fcID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	testutil.Equal(t, "len(fces)", 1, len(fces))
+
+	fce := fces[0]
+	// t.Logf("Got: %+v", fce)
+	testutil.Equal(t, "Resolved", expected.Resolved, fce.Resolved)
+	testutil.Equal(t, "Valid", expected.Valid, fce.Valid)
+	testutil.Equal(t, "TransactionID", expected.TransactionID, fce.TransactionID)
+	testutil.Equal(t, "ConfirmationIndex", expected.ConfirmationIndex, fce.ConfirmationIndex)
+	testutil.Equal(t, "ConfirmationTransactionID", expected.ConfirmationTransactionID, fce.ConfirmationTransactionID)
+	testutil.Equal(t, "ProofIndex", expected.ProofIndex, fce.ProofIndex)
+	testutil.Equal(t, "ProofTransactionID", expected.ProofTransactionID, fce.ProofTransactionID)
+	testutil.Equal(t, "ID", expected.ID, fce.ID)
+	testutil.Equal(t, "Filesize", expected.Filesize, fce.Filesize)
+	testutil.Equal(t, "FileMerkleRoot", expected.FileMerkleRoot, fce.FileMerkleRoot)
+	testutil.Equal(t, "WindowStart", expected.WindowStart, fce.WindowStart)
+	testutil.Equal(t, "WindowEnd", expected.WindowEnd, fce.WindowEnd)
+	testutil.Equal(t, "Payout", expected.Payout, fce.Payout)
+	testutil.Equal(t, "UnlockHash", expected.UnlockHash, fce.UnlockHash)
+	testutil.Equal(t, "RevisionNumber", expected.RevisionNumber, fce.RevisionNumber)
+	testutil.Equal(t, "ValidProofOutputs", len(expected.ValidProofOutputs), len(fce.ValidProofOutputs))
+	testutil.Equal(t, "MissedProofOutputs", expected.MissedProofOutputs, fce.MissedProofOutputs)
 }
 
 func (n *testChain) assertBlock(t *testing.T, cs consensus.State, block types.Block) {
@@ -269,6 +267,40 @@ func (n *testChain) assertBlock(t *testing.T, cs consensus.State, block types.Bl
 			testutil.CheckV2Transaction(t, block.V2.Transactions[i], txn)
 		}
 	}
+}
+
+func prepareContract(addr types.Address, endHeight uint64) types.FileContract {
+	rk := types.GeneratePrivateKey().PublicKey()
+	rAddr := types.StandardUnlockHash(rk)
+	hk := types.GeneratePrivateKey().PublicKey()
+	hs := proto2.HostSettings{
+		WindowSize: 1,
+		Address:    types.StandardUnlockHash(hk),
+	}
+	sc := types.Siacoins(1)
+	fc := proto2.PrepareContractFormation(rk, hk, sc.Mul64(5), sc.Mul64(5), endHeight, hs, rAddr)
+	fc.UnlockHash = addr
+	return fc
+}
+
+func contractOutputs(fcID types.FileContractID, fc types.FileContract, valid bool) []explorer.ContractSiacoinOutput {
+	var result []explorer.ContractSiacoinOutput
+	if valid {
+		for i, sco := range fc.ValidProofOutputs {
+			result = append(result, explorer.ContractSiacoinOutput{
+				SiacoinOutput: sco,
+				ID:            fcID.ValidOutputID(i),
+			})
+		}
+	} else {
+		for i, sco := range fc.MissedProofOutputs {
+			result = append(result, explorer.ContractSiacoinOutput{
+				SiacoinOutput: sco,
+				ID:            fcID.MissedOutputID(i),
+			})
+		}
+	}
+	return result
 }
 
 func TestSiacoinOutput(t *testing.T) {
@@ -566,55 +598,6 @@ func TestTransactionChainIndices(t *testing.T) {
 	}
 	n.assertChainIndices(t, txn1.ID())
 	n.assertChainIndices(t, txn2.ID())
-}
-
-func TestV2TransactionChainIndices(t *testing.T) {
-	n := newTestChain(t, true, nil)
-
-	txn1 := types.V2Transaction{
-		ArbitraryData: []byte{0},
-	}
-	txn2 := types.V2Transaction{
-		ArbitraryData: []byte{0, 1},
-	}
-
-	// mine block with txn1 twice and txn2
-	n.mineV2Transactions(t, txn1, txn1, txn2)
-	cs1 := n.tipState()
-
-	n.assertV2Transactions(t, txn1, txn2)
-	// both transactions should only be in the first block
-	n.assertV2ChainIndices(t, txn1.ID(), cs1.Index)
-	n.assertV2ChainIndices(t, txn2.ID(), cs1.Index)
-
-	// mine same block again
-	n.mineV2Transactions(t, txn1, txn1, txn2)
-	cs2 := n.tipState()
-
-	// both transactions should be in the blocks
-	n.assertV2Transactions(t, txn1, txn2)
-	n.assertV2ChainIndices(t, txn1.ID(), cs2.Index, cs1.Index)
-	n.assertV2ChainIndices(t, txn2.ID(), cs2.Index, cs1.Index)
-
-	n.revertBlock(t)
-
-	// after revert both transactions should only be in the first block
-	n.assertV2Transactions(t, txn1, txn2)
-	n.assertV2ChainIndices(t, txn1.ID(), cs1.Index)
-	n.assertV2ChainIndices(t, txn2.ID(), cs1.Index)
-
-	n.revertBlock(t)
-
-	// after reverting the first block there should be no transactions
-	{
-		txns, err := n.db.V2Transactions([]types.TransactionID{txn1.ID(), txn2.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "len(txns)", 0, len(txns))
-	}
-	n.assertV2ChainIndices(t, txn1.ID())
-	n.assertV2ChainIndices(t, txn2.ID())
 }
 
 func TestSiacoinBalance(t *testing.T) {
@@ -1198,26 +1181,12 @@ func TestTransactionStorageProof(t *testing.T) {
 	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
 	addr1 := uc1.UnlockHash()
 
-	prepareContract := func(endHeight uint64) types.FileContract {
-		rk := types.GeneratePrivateKey().PublicKey()
-		rAddr := types.StandardUnlockHash(rk)
-		hk := types.GeneratePrivateKey().PublicKey()
-		hs := proto2.HostSettings{
-			WindowSize: 1,
-			Address:    types.StandardUnlockHash(hk),
-		}
-		sc := types.Siacoins(1)
-		fc := proto2.PrepareContractFormation(rk, hk, sc.Mul64(5), sc.Mul64(5), endHeight, hs, rAddr)
-		fc.UnlockHash = addr1
-		return fc
-	}
-
 	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
 	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
 
-	fc := prepareContract(n.tipState().Index.Height + 1)
+	fc := prepareContract(addr1, n.tipState().Index.Height+1)
 	txn1 := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
 			ParentID:         n.genesis().Transactions[0].SiacoinOutputID(0),
@@ -1304,27 +1273,156 @@ func TestBlock(t *testing.T) {
 	checkBlocks(1)
 }
 
-func TestV2Block(t *testing.T) {
-	n := newTestChain(t, true, nil)
+func TestFileContractValid(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
 
-	checkBlocks := func(count int) {
-		t.Helper()
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
 
-		testutil.Equal(t, "blocks", count, len(n.blocks))
-		for i := range n.blocks {
-			testutil.Equal(t, "block height", uint64(i), n.states[i].Index.Height)
-			testutil.Equal(t, "block ID", n.blocks[i].ID(), n.states[i].Index.ID)
-			n.assertBlock(t, n.states[i], n.blocks[i])
-		}
+	fc := prepareContract(addr1, n.tipState().Index.Height+1)
+	txn1 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         n.genesis().Transactions[0].SiacoinOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   val.Sub(fc.Payout),
+		}},
+		FileContracts: []types.FileContract{fc},
 	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn1)
 
-	checkBlocks(1)
+	n.mineTransactions(t, txn1)
 
-	n.mineV2Transactions(t, types.V2Transaction{ArbitraryData: []byte{0}})
+	fcID := txn1.FileContractID(0)
+	fce := explorer.ExtendedFileContract{
+		TransactionID:             txn1.ID(),
+		ConfirmationIndex:         n.tipState().Index,
+		ConfirmationTransactionID: txn1.ID(),
 
-	checkBlocks(2)
+		ID:                 fcID,
+		Filesize:           fc.Filesize,
+		FileMerkleRoot:     fc.FileMerkleRoot,
+		WindowStart:        fc.WindowStart,
+		WindowEnd:          fc.WindowEnd,
+		Payout:             fc.Payout,
+		ValidProofOutputs:  contractOutputs(fcID, fc, true),
+		MissedProofOutputs: contractOutputs(fcID, fc, false),
+		UnlockHash:         fc.UnlockHash,
+		RevisionNumber:     fc.RevisionNumber,
+	}
+	n.assertFCE(t, fcID, fce)
+
+	sp := types.StorageProof{
+		ParentID: txn1.FileContractID(0),
+	}
+	txn2 := types.Transaction{
+		StorageProofs: []types.StorageProof{sp},
+	}
+	n.mineTransactions(t, txn2)
+
+	tip := n.tipState().Index
+	txnID := txn2.ID()
+
+	// should be resovled
+	fceResolved := fce
+	fceResolved.Resolved = true
+	fceResolved.Valid = true
+	fceResolved.ProofIndex = &tip
+	fceResolved.ProofTransactionID = &txnID
+
+	n.assertFCE(t, fcID, fceResolved)
 
 	n.revertBlock(t)
 
-	checkBlocks(1)
+	// should have old FCE back
+	n.assertFCE(t, fcID, fce)
+
+	// FCE should not exist
+	n.revertBlock(t)
+
+	{
+		fces, err := n.db.Contracts([]types.FileContractID{fcID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(fces)", 0, len(fces))
+	}
+}
+
+func TestFileContractMissed(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+
+	fc := prepareContract(addr1, n.tipState().Index.Height+1)
+	txn1 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         n.genesis().Transactions[0].SiacoinOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   val.Sub(fc.Payout),
+		}},
+		FileContracts: []types.FileContract{fc},
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+
+	n.mineTransactions(t, txn1)
+
+	fcID := txn1.FileContractID(0)
+	fce := explorer.ExtendedFileContract{
+		TransactionID:             txn1.ID(),
+		ConfirmationIndex:         n.tipState().Index,
+		ConfirmationTransactionID: txn1.ID(),
+
+		ID:                 fcID,
+		Filesize:           fc.Filesize,
+		FileMerkleRoot:     fc.FileMerkleRoot,
+		WindowStart:        fc.WindowStart,
+		WindowEnd:          fc.WindowEnd,
+		Payout:             fc.Payout,
+		ValidProofOutputs:  contractOutputs(fcID, fc, true),
+		MissedProofOutputs: contractOutputs(fcID, fc, false),
+		UnlockHash:         fc.UnlockHash,
+		RevisionNumber:     fc.RevisionNumber,
+	}
+	n.assertFCE(t, fcID, fce)
+
+	for i := n.tipState().Index.Height; i < fc.WindowEnd; i++ {
+		n.mineTransactions(t)
+	}
+
+	fceResolved := fce
+	fceResolved.Resolved = true
+	fceResolved.Valid = false
+
+	n.assertFCE(t, fcID, fceResolved)
+
+	n.revertBlock(t)
+
+	// should have old FCE back
+	n.assertFCE(t, fcID, fce)
+
+	// FCE should not exist
+	n.revertBlock(t)
+
+	{
+		fces, err := n.db.Contracts([]types.FileContractID{fcID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(fces)", 0, len(fces))
+	}
 }
