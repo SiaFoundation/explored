@@ -290,26 +290,6 @@ func prepareContract(addr types.Address, endHeight uint64) types.FileContract {
 	return fc
 }
 
-func contractOutputs(fcID types.FileContractID, fc types.FileContract, valid bool) []explorer.ContractSiacoinOutput {
-	var result []explorer.ContractSiacoinOutput
-	if valid {
-		for i, sco := range fc.ValidProofOutputs {
-			result = append(result, explorer.ContractSiacoinOutput{
-				SiacoinOutput: sco,
-				ID:            fcID.ValidOutputID(i),
-			})
-		}
-	} else {
-		for i, sco := range fc.MissedProofOutputs {
-			result = append(result, explorer.ContractSiacoinOutput{
-				SiacoinOutput: sco,
-				ID:            fcID.MissedOutputID(i),
-			})
-		}
-	}
-	return result
-}
-
 func (n *testChain) assertBlock(t *testing.T, cs consensus.State, block types.Block) {
 	got, err := n.db.Block(block.ID())
 	if err != nil {
@@ -1402,6 +1382,37 @@ func TestV2Block(t *testing.T) {
 	checkBlocks(1)
 }
 
+func coreToExplorerFC(fcID types.FileContractID, fc types.FileContract) explorer.ExtendedFileContract {
+	var valid []explorer.ContractSiacoinOutput
+	for i, sco := range fc.ValidProofOutputs {
+		valid = append(valid, explorer.ContractSiacoinOutput{
+			SiacoinOutput: sco,
+			ID:            fcID.ValidOutputID(i),
+		})
+	}
+
+	var missed []explorer.ContractSiacoinOutput
+	for i, sco := range fc.MissedProofOutputs {
+		missed = append(missed, explorer.ContractSiacoinOutput{
+			SiacoinOutput: sco,
+			ID:            fcID.MissedOutputID(i),
+		})
+	}
+
+	return explorer.ExtendedFileContract{
+		ID:                 fcID,
+		Filesize:           fc.Filesize,
+		FileMerkleRoot:     fc.FileMerkleRoot,
+		WindowStart:        fc.WindowStart,
+		WindowEnd:          fc.WindowEnd,
+		Payout:             fc.Payout,
+		ValidProofOutputs:  valid,
+		MissedProofOutputs: missed,
+		UnlockHash:         fc.UnlockHash,
+		RevisionNumber:     fc.RevisionNumber,
+	}
+}
+
 func TestFileContractValid(t *testing.T) {
 	pk1 := types.GeneratePrivateKey()
 	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
@@ -1428,24 +1439,12 @@ func TestFileContractValid(t *testing.T) {
 
 	n.mineTransactions(t, txn1)
 
-	fcID := txn1.FileContractID(0)
-	fce := explorer.ExtendedFileContract{
-		TransactionID:             txn1.ID(),
-		ConfirmationIndex:         n.tipState().Index,
-		ConfirmationTransactionID: txn1.ID(),
+	fce := coreToExplorerFC(txn1.FileContractID(0), fc)
+	fce.TransactionID = txn1.ID()
+	fce.ConfirmationIndex = n.tipState().Index
+	fce.ConfirmationTransactionID = txn1.ID()
 
-		ID:                 fcID,
-		Filesize:           fc.Filesize,
-		FileMerkleRoot:     fc.FileMerkleRoot,
-		WindowStart:        fc.WindowStart,
-		WindowEnd:          fc.WindowEnd,
-		Payout:             fc.Payout,
-		ValidProofOutputs:  contractOutputs(fcID, fc, true),
-		MissedProofOutputs: contractOutputs(fcID, fc, false),
-		UnlockHash:         fc.UnlockHash,
-		RevisionNumber:     fc.RevisionNumber,
-	}
-	n.assertFCE(t, fcID, fce)
+	n.assertFCE(t, fce.ID, fce)
 	n.assertTransactionContracts(t, txn1.ID(), false, fce)
 
 	sp := types.StorageProof{
@@ -1466,20 +1465,20 @@ func TestFileContractValid(t *testing.T) {
 	fceResolved.ProofIndex = &tip
 	fceResolved.ProofTransactionID = &txnID
 
-	n.assertFCE(t, fcID, fceResolved)
+	n.assertFCE(t, fce.ID, fceResolved)
 	n.assertTransactionContracts(t, txn1.ID(), false, fceResolved)
 
 	n.revertBlock(t)
 
 	// should have old FCE back
-	n.assertFCE(t, fcID, fce)
+	n.assertFCE(t, fce.ID, fce)
 	n.assertTransactionContracts(t, txn1.ID(), false, fce)
 
 	// FCE should not exist
 	n.revertBlock(t)
 
 	{
-		fces, err := n.db.Contracts([]types.FileContractID{fcID})
+		fces, err := n.db.Contracts([]types.FileContractID{fce.ID})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1513,24 +1512,11 @@ func TestFileContractMissed(t *testing.T) {
 
 	n.mineTransactions(t, txn1)
 
-	fcID := txn1.FileContractID(0)
-	fce := explorer.ExtendedFileContract{
-		TransactionID:             txn1.ID(),
-		ConfirmationIndex:         n.tipState().Index,
-		ConfirmationTransactionID: txn1.ID(),
-
-		ID:                 fcID,
-		Filesize:           fc.Filesize,
-		FileMerkleRoot:     fc.FileMerkleRoot,
-		WindowStart:        fc.WindowStart,
-		WindowEnd:          fc.WindowEnd,
-		Payout:             fc.Payout,
-		ValidProofOutputs:  contractOutputs(fcID, fc, true),
-		MissedProofOutputs: contractOutputs(fcID, fc, false),
-		UnlockHash:         fc.UnlockHash,
-		RevisionNumber:     fc.RevisionNumber,
-	}
-	n.assertFCE(t, fcID, fce)
+	fce := coreToExplorerFC(txn1.FileContractID(0), fc)
+	fce.TransactionID = txn1.ID()
+	fce.ConfirmationIndex = n.tipState().Index
+	fce.ConfirmationTransactionID = txn1.ID()
+	n.assertFCE(t, fce.ID, fce)
 
 	for i := n.tipState().Index.Height; i < fc.WindowEnd; i++ {
 		n.mineTransactions(t)
@@ -1540,20 +1526,20 @@ func TestFileContractMissed(t *testing.T) {
 	fceResolved.Resolved = true
 	fceResolved.Valid = false
 
-	n.assertFCE(t, fcID, fceResolved)
+	n.assertFCE(t, fce.ID, fceResolved)
 	n.assertTransactionContracts(t, txn1.ID(), false, fceResolved)
 
 	n.revertBlock(t)
 
 	// should have old FCE back
-	n.assertFCE(t, fcID, fce)
+	n.assertFCE(t, fce.ID, fce)
 	n.assertTransactionContracts(t, txn1.ID(), false, fce)
 
 	// FCE should not exist
 	n.revertBlock(t)
 
 	{
-		fces, err := n.db.Contracts([]types.FileContractID{fcID})
+		fces, err := n.db.Contracts([]types.FileContractID{fce.ID})
 		if err != nil {
 			t.Fatal(err)
 		}
