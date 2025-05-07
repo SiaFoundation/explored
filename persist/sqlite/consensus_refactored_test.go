@@ -206,7 +206,7 @@ func (n *testChain) assertV2ChainIndices(t *testing.T, txnID types.TransactionID
 	}
 }
 
-// helper to assert the Siacoin element in the db has the right source, index and output
+// assertSCE asserts the Siacoin element in the db has the right source, index and output
 func (n *testChain) assertSCE(t *testing.T, scID types.SiacoinOutputID, index *types.ChainIndex, sco types.SiacoinOutput) {
 	t.Helper()
 
@@ -222,7 +222,7 @@ func (n *testChain) assertSCE(t *testing.T, scID types.SiacoinOutputID, index *t
 	testutil.Equal(t, "sce.SiacoinElement.SiacoinOutput", sco, sce.SiacoinOutput)
 }
 
-// helper to assert the Siafund element in the db has the right source, index and output
+// assertSFE asserts the Siafund element in the db has the right source, index and output
 func (n *testChain) assertSFE(t *testing.T, sfID types.SiafundOutputID, index *types.ChainIndex, sfo types.SiafundOutput) {
 	t.Helper()
 
@@ -235,6 +235,79 @@ func (n *testChain) assertSFE(t *testing.T, sfID types.SiafundOutputID, index *t
 	sfe := sfes[0]
 	testutil.Equal(t, "sfe.SpentIndex", index, sfe.SpentIndex)
 	testutil.Equal(t, "sfe.SiafundElement.SiafundOutput", sfo, sfe.SiafundOutput)
+}
+
+// assertFCE asserts the contract element in the db has the right state and
+// block/transaction indices
+func (n *testChain) assertFCE(t *testing.T, fcID types.FileContractID, expected explorer.ExtendedFileContract) {
+	t.Helper()
+
+	fces, err := n.db.Contracts([]types.FileContractID{fcID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	testutil.Equal(t, "len(fces)", 1, len(fces))
+
+	fce := fces[0]
+	// We aren't trying to compare a core type with an explorer type so we can
+	// just directly compare.  If they are not equal a diff with field names will
+	// be printed.
+	testutil.Equal(t, "ExtendedFileContract", expected, fce)
+}
+
+func (n *testChain) assertTransactionContracts(t *testing.T, txnID types.TransactionID, revisions bool, expected ...explorer.ExtendedFileContract) {
+	txns, err := n.db.Transactions([]types.TransactionID{txnID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	testutil.Equal(t, "len(txns)", 1, len(txns))
+
+	txn := txns[0]
+	if !revisions {
+		testutil.Equal(t, "len(txn.FileContracts)", len(expected), len(txn.FileContracts))
+		for i := range expected {
+			testutil.Equal(t, "ExtendedFileContract", expected[i], txn.FileContracts[i])
+		}
+	} else {
+		testutil.Equal(t, "len(txn.FileContractRevisions)", len(expected), len(txn.FileContractRevisions))
+		for i := range expected {
+			testutil.Equal(t, "ExtendedFileContract", expected[i], txn.FileContractRevisions[i].ExtendedFileContract)
+		}
+	}
+}
+
+func prepareContract(addr types.Address, endHeight uint64) types.FileContract {
+	rk := types.GeneratePrivateKey().PublicKey()
+	rAddr := types.StandardUnlockHash(rk)
+	hk := types.GeneratePrivateKey().PublicKey()
+	hs := proto2.HostSettings{
+		WindowSize: 1,
+		Address:    types.StandardUnlockHash(hk),
+	}
+	sc := types.Siacoins(1)
+	fc := proto2.PrepareContractFormation(rk, hk, sc.Mul64(5), sc.Mul64(5), endHeight, hs, rAddr)
+	fc.UnlockHash = addr
+	return fc
+}
+
+func contractOutputs(fcID types.FileContractID, fc types.FileContract, valid bool) []explorer.ContractSiacoinOutput {
+	var result []explorer.ContractSiacoinOutput
+	if valid {
+		for i, sco := range fc.ValidProofOutputs {
+			result = append(result, explorer.ContractSiacoinOutput{
+				SiacoinOutput: sco,
+				ID:            fcID.ValidOutputID(i),
+			})
+		}
+	} else {
+		for i, sco := range fc.MissedProofOutputs {
+			result = append(result, explorer.ContractSiacoinOutput{
+				SiacoinOutput: sco,
+				ID:            fcID.MissedOutputID(i),
+			})
+		}
+	}
+	return result
 }
 
 func (n *testChain) assertBlock(t *testing.T, cs consensus.State, block types.Block) {
@@ -1327,4 +1400,163 @@ func TestV2Block(t *testing.T) {
 	n.revertBlock(t)
 
 	checkBlocks(1)
+}
+
+func TestFileContractValid(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+
+	fc := prepareContract(addr1, n.tipState().Index.Height+1)
+	txn1 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         n.genesis().Transactions[0].SiacoinOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   val.Sub(fc.Payout),
+		}},
+		FileContracts: []types.FileContract{fc},
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+
+	n.mineTransactions(t, txn1)
+
+	fcID := txn1.FileContractID(0)
+	fce := explorer.ExtendedFileContract{
+		TransactionID:             txn1.ID(),
+		ConfirmationIndex:         n.tipState().Index,
+		ConfirmationTransactionID: txn1.ID(),
+
+		ID:                 fcID,
+		Filesize:           fc.Filesize,
+		FileMerkleRoot:     fc.FileMerkleRoot,
+		WindowStart:        fc.WindowStart,
+		WindowEnd:          fc.WindowEnd,
+		Payout:             fc.Payout,
+		ValidProofOutputs:  contractOutputs(fcID, fc, true),
+		MissedProofOutputs: contractOutputs(fcID, fc, false),
+		UnlockHash:         fc.UnlockHash,
+		RevisionNumber:     fc.RevisionNumber,
+	}
+	n.assertFCE(t, fcID, fce)
+	n.assertTransactionContracts(t, txn1.ID(), false, fce)
+
+	sp := types.StorageProof{
+		ParentID: txn1.FileContractID(0),
+	}
+	txn2 := types.Transaction{
+		StorageProofs: []types.StorageProof{sp},
+	}
+	n.mineTransactions(t, txn2)
+
+	tip := n.tipState().Index
+	txnID := txn2.ID()
+
+	// should be resovled
+	fceResolved := fce
+	fceResolved.Resolved = true
+	fceResolved.Valid = true
+	fceResolved.ProofIndex = &tip
+	fceResolved.ProofTransactionID = &txnID
+
+	n.assertFCE(t, fcID, fceResolved)
+	n.assertTransactionContracts(t, txn1.ID(), false, fceResolved)
+
+	n.revertBlock(t)
+
+	// should have old FCE back
+	n.assertFCE(t, fcID, fce)
+	n.assertTransactionContracts(t, txn1.ID(), false, fce)
+
+	// FCE should not exist
+	n.revertBlock(t)
+
+	{
+		fces, err := n.db.Contracts([]types.FileContractID{fcID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(fces)", 0, len(fces))
+	}
+}
+
+func TestFileContractMissed(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+
+	fc := prepareContract(addr1, n.tipState().Index.Height+1)
+	txn1 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         n.genesis().Transactions[0].SiacoinOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   val.Sub(fc.Payout),
+		}},
+		FileContracts: []types.FileContract{fc},
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+
+	n.mineTransactions(t, txn1)
+
+	fcID := txn1.FileContractID(0)
+	fce := explorer.ExtendedFileContract{
+		TransactionID:             txn1.ID(),
+		ConfirmationIndex:         n.tipState().Index,
+		ConfirmationTransactionID: txn1.ID(),
+
+		ID:                 fcID,
+		Filesize:           fc.Filesize,
+		FileMerkleRoot:     fc.FileMerkleRoot,
+		WindowStart:        fc.WindowStart,
+		WindowEnd:          fc.WindowEnd,
+		Payout:             fc.Payout,
+		ValidProofOutputs:  contractOutputs(fcID, fc, true),
+		MissedProofOutputs: contractOutputs(fcID, fc, false),
+		UnlockHash:         fc.UnlockHash,
+		RevisionNumber:     fc.RevisionNumber,
+	}
+	n.assertFCE(t, fcID, fce)
+
+	for i := n.tipState().Index.Height; i < fc.WindowEnd; i++ {
+		n.mineTransactions(t)
+	}
+
+	fceResolved := fce
+	fceResolved.Resolved = true
+	fceResolved.Valid = false
+
+	n.assertFCE(t, fcID, fceResolved)
+	n.assertTransactionContracts(t, txn1.ID(), false, fceResolved)
+
+	n.revertBlock(t)
+
+	// should have old FCE back
+	n.assertFCE(t, fcID, fce)
+	n.assertTransactionContracts(t, txn1.ID(), false, fce)
+
+	// FCE should not exist
+	n.revertBlock(t)
+
+	{
+		fces, err := n.db.Contracts([]types.FileContractID{fcID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(fces)", 0, len(fces))
+	}
 }
