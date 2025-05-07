@@ -1505,12 +1505,7 @@ func TestFileContractValid(t *testing.T) {
 		testutil.Equal(t, "len(fces)", 0, len(fces))
 	}
 
-	{
-		_, err := n.db.ContractRevisions(fce.ID)
-		if !errors.Is(err, explorer.ErrContractNotFound) {
-			t.Fatal("should have got contract not found error for reverted contract:", err)
-		}
-	}
+	n.assertContractRevisions(t, fce.ID)
 }
 
 func TestFileContractMissed(t *testing.T) {
@@ -1573,12 +1568,7 @@ func TestFileContractMissed(t *testing.T) {
 		testutil.Equal(t, "len(fces)", 0, len(fces))
 	}
 
-	{
-		_, err := n.db.ContractRevisions(fce.ID)
-		if !errors.Is(err, explorer.ErrContractNotFound) {
-			t.Fatal("should have got contract not found error for reverted contract:", err)
-		}
-	}
+	n.assertContractRevisions(t, fce.ID)
 }
 
 func signRevisions(cs consensus.State, pk types.PrivateKey, txn *types.Transaction) {
@@ -1653,6 +1643,32 @@ func TestFileContractRevision(t *testing.T) {
 	n.assertTransactionContracts(t, txn1.ID(), false, fce)
 	n.assertTransactionContracts(t, txn2.ID(), true, fceRevision1)
 
+	// resolve contract unsuccessful
+	for i := n.tipState().Index.Height; i < fc.WindowEnd; i++ {
+		n.mineTransactions(t)
+	}
+
+	fce.Resolved = true
+	fceRevision1.Resolved = true
+	n.assertFCE(t, fce.ID, fceRevision1)
+	n.assertContractRevisions(t, fce.ID, fce, fceRevision1)
+	n.assertTransactionContracts(t, txn1.ID(), false, fce)
+	n.assertTransactionContracts(t, txn2.ID(), true, fceRevision1)
+
+	// revert resolution of contract
+	for i := n.tipState().Index.Height; i >= fc.WindowEnd; i-- {
+		n.revertBlock(t)
+	}
+	n.revertBlock(t)
+
+	fce.Resolved = false
+	fceRevision1.Resolved = false
+	n.assertFCE(t, fce.ID, fceRevision1)
+	n.assertContractRevisions(t, fce.ID, fce, fceRevision1)
+	n.assertTransactionContracts(t, txn1.ID(), false, fce)
+	n.assertTransactionContracts(t, txn2.ID(), true, fceRevision1)
+
+	// revert revision of contract
 	n.revertBlock(t)
 
 	n.assertFCE(t, fce.ID, fce)
@@ -1747,6 +1763,36 @@ func TestFileContractMultipleRevisions(t *testing.T) {
 	n.assertTransactionContracts(t, txn2.ID(), true, fceRevision1)
 	n.assertTransactionContracts(t, txn3.ID(), true, fceRevision2)
 
+	// resolve contract unsuccessful
+	for i := n.tipState().Index.Height; i < fc.WindowEnd; i++ {
+		n.mineTransactions(t)
+	}
+
+	fce.Resolved = true
+	fceRevision1.Resolved = true
+	fceRevision2.Resolved = true
+	n.assertFCE(t, fce.ID, fceRevision2)
+	n.assertContractRevisions(t, fce.ID, fce, fceRevision1, fceRevision2)
+	n.assertTransactionContracts(t, txn1.ID(), false, fce)
+	n.assertTransactionContracts(t, txn2.ID(), true, fceRevision1)
+	n.assertTransactionContracts(t, txn3.ID(), true, fceRevision2)
+
+	// revert resolution of contract
+	for i := n.tipState().Index.Height; i >= fc.WindowEnd; i-- {
+		n.revertBlock(t)
+	}
+	n.revertBlock(t)
+
+	fce.Resolved = false
+	fceRevision1.Resolved = false
+	fceRevision2.Resolved = false
+	n.assertFCE(t, fce.ID, fceRevision2)
+	n.assertContractRevisions(t, fce.ID, fce, fceRevision1, fceRevision2)
+	n.assertTransactionContracts(t, txn1.ID(), false, fce)
+	n.assertTransactionContracts(t, txn2.ID(), true, fceRevision1)
+	n.assertTransactionContracts(t, txn3.ID(), true, fceRevision2)
+
+	// revert revisions block
 	n.revertBlock(t)
 
 	n.assertFCE(t, fce.ID, fce)
