@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"sync"
 	"time"
 
 	crhpv2 "go.sia.tech/core/rhp/v2"
@@ -21,7 +22,7 @@ func isSynced(b Block) bool {
 	return time.Since(b.Timestamp) <= 3*time.Hour
 }
 
-func (e *Explorer) waitForSync() error {
+func (e *Explorer) waitForSync(ctx context.Context) error {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
@@ -39,8 +40,8 @@ func (e *Explorer) waitForSync() error {
 		}
 
 		select {
-		case <-e.ctx.Done():
-			return e.ctx.Err()
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-ticker.C:
 			continue
 		}
@@ -107,10 +108,7 @@ func rhpv3PriceTable(ctx context.Context, publicKey types.PublicKey, netAddress 
 	return table, nil
 }
 
-func (e *Explorer) scanV1Host(host UnscannedHost) (HostScan, error) {
-	ctx, cancel := context.WithTimeout(e.ctx, e.scanCfg.ScanTimeout)
-	defer cancel()
-
+func (e *Explorer) scanV1Host(ctx context.Context, host UnscannedHost) (HostScan, error) {
 	settings, err := rhpv2Settings(ctx, host.PublicKey, host.NetAddress)
 	if err != nil {
 		return HostScan{}, fmt.Errorf("scanV1Host: failed to get host settings: %w", err)
@@ -147,10 +145,7 @@ func (e *Explorer) scanV1Host(host UnscannedHost) (HostScan, error) {
 	}, nil
 }
 
-func (e *Explorer) scanV2Host(host UnscannedHost) (HostScan, error) {
-	ctx, cancel := context.WithTimeout(e.ctx, e.scanCfg.ScanTimeout)
-	defer cancel()
-
+func (e *Explorer) scanV2Host(ctx context.Context, host UnscannedHost) (HostScan, error) {
 	addr, ok := host.V2SiamuxAddr()
 	if !ok {
 		return HostScan{}, fmt.Errorf("host has no v2 siamux address")
@@ -192,25 +187,29 @@ func (e *Explorer) scanV2Host(host UnscannedHost) (HostScan, error) {
 	}, nil
 }
 
-func (e *Explorer) isClosed() bool {
-	select {
-	case <-e.ctx.Done():
-		return true
-	default:
-		return false
-	}
-}
-
 func (e *Explorer) scanLoop() {
+	ctx, cancel, err := e.tg.AddContext(context.Background())
+	if err != nil {
+		return
+	}
+	defer cancel()
+
 	e.log.Info("Waiting for syncing to complete before scanning hosts")
 	// don't scan hosts till we're at least nearly done with syncing
-	if err := e.waitForSync(); err != nil {
+	if err := e.waitForSync(ctx); err != nil {
 		e.log.Info("Interrupted before scanning started:", zap.Error(err))
 		return
 	}
 	e.log.Info("Syncing complete, will begin scanning hosts")
 
-	for !e.isClosed() {
+	var wg sync.WaitGroup
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
 		now := types.CurrentTimestamp()
 		lastAnnouncementCutoff := now.Add(-e.scanCfg.MinLastAnnouncement)
 
@@ -220,8 +219,8 @@ func (e *Explorer) scanLoop() {
 			return
 		} else if len(batch) == 0 {
 			select {
-			case <-e.ctx.Done():
-				e.log.Debug("shutdown:", zap.Error(e.ctx.Err()))
+			case <-ctx.Done():
+				e.log.Debug("shutdown:", zap.Error(ctx.Err()))
 				return
 			// wait until we call HostsForScanning again
 			case <-time.After(e.scanCfg.ScanFrequency):
@@ -231,15 +230,18 @@ func (e *Explorer) scanLoop() {
 
 		results := make([]HostScan, len(batch))
 		for i, host := range batch {
-			e.wg.Add(1)
+			wg.Add(1)
 			go func(i int, host UnscannedHost) {
-				defer e.wg.Done()
+				defer wg.Done()
+
+				ctx, cancel := context.WithTimeout(ctx, e.scanCfg.ScanTimeout)
+				defer cancel()
 
 				var err error
 				if host.IsV2() {
-					results[i], err = e.scanV2Host(host)
+					results[i], err = e.scanV2Host(ctx, host)
 				} else {
-					results[i], err = e.scanV1Host(host)
+					results[i], err = e.scanV1Host(ctx, host)
 				}
 				now := types.CurrentTimestamp()
 				if err != nil {
@@ -260,7 +262,7 @@ func (e *Explorer) scanLoop() {
 				}
 			}(i, host)
 		}
-		e.wg.Wait()
+		wg.Wait()
 
 		if err := e.s.AddHostScans(results...); err != nil {
 			e.log.Info("failed to add host scans to DB:", zap.Error(err))
