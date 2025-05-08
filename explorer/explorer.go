@@ -212,7 +212,7 @@ func NewExplorer(cm ChainManager, store Store, indexCfg config.Index, scanCfg co
 
 // Shutdown tries to close the scanning goroutines in the explorer.
 func (e *Explorer) Shutdown(ctx context.Context) error {
-	done := make(chan struct{}, 1)
+	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		e.tg.Stop()
