@@ -56,7 +56,7 @@ var (
 	// had a block change within the last 3 hours.
 	ErrNotSyncing = errors.New("not syncing")
 	// ErrNotScanning is returned when the explorer has not
-	// had a successful host scan within the last 3 hours.
+	// had a successful host scan within 2x the scan interval.
 	ErrNotScanning = errors.New("not scanning")
 )
 
@@ -265,11 +265,11 @@ func delta[T constraints.Integer | constraints.Float](a, b T) T {
 	return b - a
 }
 
-// Healthz checks if the explorer is healthy. It ensures that hosts are
+// Health checks if the explorer is healthy. It ensures that hosts are
 // being scanned and that the explorer has recently added blocks. If
 // the explorer is synced, it will also check that there was a recent
 // successful scan.
-func (e *Explorer) Healthz() error {
+func (e *Explorer) Health() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 

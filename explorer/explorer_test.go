@@ -127,7 +127,7 @@ func TestHealthz(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	if err := e.Healthz(); !errors.Is(err, explorer.ErrNotSyncing) {
+	if err := e.Health(); !errors.Is(err, explorer.ErrNotSyncing) {
 		t.Fatalf("expected error %q, got %q", explorer.ErrNotSyncing, err)
 	}
 
@@ -135,7 +135,7 @@ func TestHealthz(t *testing.T) {
 	ctestutil.MineBlocks(t, cm, types.VoidAddress, 1)
 	waitForSync(t, cm, e)
 
-	if err := e.Healthz(); !errors.Is(err, explorer.ErrNotScanning) {
+	if err := e.Health(); !errors.Is(err, explorer.ErrNotScanning) {
 		t.Fatalf("expected %q, got %v", explorer.ErrNotScanning, err)
 	}
 
@@ -144,7 +144,7 @@ func TestHealthz(t *testing.T) {
 	waitForSync(t, cm, e)
 
 	time.Sleep(time.Second)
-	if err := e.Healthz(); err != nil {
+	if err := e.Health(); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 }

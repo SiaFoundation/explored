@@ -47,7 +47,7 @@ type (
 
 	// Explorer implements a Sia explorer.
 	Explorer interface {
-		Healthz() error
+		Health() error
 
 		Tip() (types.ChainIndex, error)
 		Block(id types.BlockID) (explorer.Block, error)
@@ -810,9 +810,8 @@ func (s *server) exchangeRateHandler(jc jape.Context) {
 	jc.Encode(price)
 }
 
-func (s *server) healthzHandler(jc jape.Context) {
-	if err := s.e.Healthz(); err != nil {
-		jc.Error(err, http.StatusInternalServerError)
+func (s *server) healthHandler(jc jape.Context) {
+	if err := s.e.Health(); err != nil {
 		return
 	}
 	jc.Encode(nil)
@@ -830,7 +829,7 @@ func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.Source, a
 	}
 
 	return jape.Mux(map[string]jape.Handler{
-		"GET /healthz":                   srv.healthzHandler,
+		"GET 	/health":                   srv.healthHandler,
 		"GET    /state":                  srv.stateHandler,
 		"GET    /syncer/peers":           srv.syncerPeersHandler,
 		"POST   /syncer/connect":         srv.syncerConnectHandler,

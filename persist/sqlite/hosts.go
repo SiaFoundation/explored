@@ -1,6 +1,8 @@
 package sqlite
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -14,9 +16,11 @@ import (
 // If no successful scan has been performed, it returns the zero time.
 func (s *Store) LastSuccessScan() (lastScan time.Time, err error) {
 	err = s.transaction(func(tx *txn) error {
-		return tx.QueryRow(`SELECT COALESCE(MAX(last_scan), 0) FROM host_info`).Scan(decode(&lastScan))
+		return tx.QueryRow(`SELECT MAX(last_scan) FROM host_info WHERE last_scan_successful = true`).Scan(decode(&lastScan))
 	})
-	if err != nil {
+	if errors.Is(err, sql.ErrNoRows) {
+		return time.Time{}, nil
+	} else if err != nil {
 		return time.Time{}, err
 	}
 	return

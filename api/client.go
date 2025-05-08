@@ -303,7 +303,7 @@ func (c *Client) ExchangeRate(currency string) (resp float64, err error) {
 	return
 }
 
-// Healthz checks the health of the explored daemon.
-func (c *Client) Healthz() error {
-	return c.c.GET(context.Background(), "/healthz", nil)
+// Health checks the health of the explored daemon.
+func (c *Client) Health() error {
+	return c.c.GET(context.Background(), "/health", nil)
 }
