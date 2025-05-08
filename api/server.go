@@ -811,7 +811,7 @@ func (s *server) exchangeRateHandler(jc jape.Context) {
 }
 
 func (s *server) healthHandler(jc jape.Context) {
-	if err := s.e.Health(); err != nil {
+	if jc.Check("failed to check health", s.e.Health()) != nil {
 		return
 	}
 	jc.Encode(nil)
