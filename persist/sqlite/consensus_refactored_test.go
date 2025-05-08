@@ -255,6 +255,9 @@ func (n *testChain) assertFCE(t *testing.T, fcID types.FileContractID, expected 
 	testutil.Equal(t, "ExtendedFileContract", expected, fce)
 }
 
+// assertTransactionContracts asserts that the enhanced FileContracts
+// (revisions = false) or FileContractRevisions (revisions = true) in a
+// transaction retrieved from the explorer match the expected contracts.
 func (n *testChain) assertTransactionContracts(t *testing.T, txnID types.TransactionID, revisions bool, expected ...explorer.ExtendedFileContract) {
 	txns, err := n.db.Transactions([]types.TransactionID{txnID})
 	if err != nil {
