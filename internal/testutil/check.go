@@ -143,6 +143,8 @@ func CheckTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer
 func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn explorer.V2Transaction) {
 	t.Helper()
 
+	txnID := expectTxn.ID()
+	Equal(t, "id", txnID, gotTxn.ID)
 	Equal(t, "new foundation address", expectTxn.NewFoundationAddress, gotTxn.NewFoundationAddress)
 	Equal(t, "miner fee", expectTxn.MinerFee, gotTxn.MinerFee)
 
@@ -155,7 +157,9 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 		Equal(t, "value", expected.Parent.SiacoinOutput.Value, got.Parent.SiacoinOutput.Value)
 		Equal(t, "maturity height", expected.Parent.MaturityHeight, got.Parent.MaturityHeight)
 		Equal(t, "id", expected.Parent.ID, got.Parent.ID)
-		Equal(t, "leaf index", expected.Parent.StateElement.LeafIndex, got.Parent.StateElement.LeafIndex)
+		if expected.Parent.StateElement.LeafIndex != types.UnassignedLeafIndex {
+			Equal(t, "leaf index", expected.Parent.StateElement.LeafIndex, got.Parent.StateElement.LeafIndex)
+		}
 		if len(got.SatisfiedPolicy.Preimages) == 0 {
 			got.SatisfiedPolicy.Preimages = nil
 		}
@@ -165,11 +169,12 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 	Equal(t, "siacoin outputs", len(expectTxn.SiacoinOutputs), len(gotTxn.SiacoinOutputs))
 	for i := range expectTxn.SiacoinOutputs {
 		expected := expectTxn.SiacoinOutputs[i]
-		got := gotTxn.SiacoinOutputs[i].SiacoinOutput
+		got := gotTxn.SiacoinOutputs[i]
 
-		Equal(t, "address", expected.Address, got.Address)
-		Equal(t, "value", expected.Value, got.Value)
-		Equal(t, "source", explorer.SourceTransaction, gotTxn.SiacoinOutputs[i].Source)
+		Equal(t, "address", expected.Address, got.SiacoinOutput.Address)
+		Equal(t, "value", expected.Value, got.SiacoinOutput.Value)
+		Equal(t, "source", explorer.SourceTransaction, got.Source)
+		Equal(t, "ID", expectTxn.SiacoinOutputID(txnID, i), got.ID)
 	}
 
 	Equal(t, "siafund inputs", len(expectTxn.SiafundInputs), len(gotTxn.SiafundInputs))
@@ -181,7 +186,9 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 		Equal(t, "value", expected.Parent.SiafundOutput.Value, got.Parent.SiafundOutput.Value)
 		Equal(t, "claim address", expected.ClaimAddress, got.ClaimAddress)
 		Equal(t, "id", expected.Parent.ID, got.Parent.ID)
-		Equal(t, "leaf index", expected.Parent.StateElement.LeafIndex, got.Parent.StateElement.LeafIndex)
+		if expected.Parent.StateElement.LeafIndex != types.UnassignedLeafIndex {
+			Equal(t, "leaf index", expected.Parent.StateElement.LeafIndex, got.Parent.StateElement.LeafIndex)
+		}
 		if len(got.SatisfiedPolicy.Preimages) == 0 {
 			got.SatisfiedPolicy.Preimages = nil
 		}
@@ -191,10 +198,11 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 	Equal(t, "siafund outputs", len(expectTxn.SiafundOutputs), len(gotTxn.SiafundOutputs))
 	for i := range expectTxn.SiafundOutputs {
 		expected := expectTxn.SiafundOutputs[i]
-		got := gotTxn.SiafundOutputs[i].SiafundOutput
+		got := gotTxn.SiafundOutputs[i]
 
-		Equal(t, "address", expected.Address, got.Address)
-		Equal(t, "value", expected.Value, got.Value)
+		Equal(t, "address", expected.Address, got.SiafundOutput.Address)
+		Equal(t, "value", expected.Value, got.SiafundOutput.Value)
+		Equal(t, "id", expectTxn.SiafundOutputID(txnID, i), got.ID)
 	}
 
 	Equal(t, "file contracts", len(expectTxn.FileContracts), len(gotTxn.FileContracts))
@@ -202,8 +210,8 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 		expected := expectTxn.FileContracts[i]
 		got := gotTxn.FileContracts[i]
 
-		Equal(t, "id", expectTxn.V2FileContractID(expectTxn.ID(), i), types.FileContractID(got.ID))
 		CheckV2FC(t, expected, got)
+		Equal(t, "id", expectTxn.V2FileContractID(txnID, i), got.ID)
 	}
 
 	Equal(t, "file contract revision", len(expectTxn.FileContractRevisions), len(gotTxn.FileContractRevisions))
