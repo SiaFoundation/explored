@@ -102,7 +102,7 @@ func testV2Host(tb testing.TB, cm *chain.Manager) rhp4.TransportClient {
 	return transport
 }
 
-func TestHealthz(t *testing.T) {
+func TestHealth(t *testing.T) {
 	log := zaptest.NewLogger(t)
 	dir := t.TempDir()
 
