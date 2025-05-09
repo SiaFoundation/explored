@@ -342,6 +342,8 @@ func TestSiacoinOutput(t *testing.T) {
 
 	n.mineTransactions(t, txn1)
 
+	n.assertTransactions(t, txn1)
+
 	// genesis output should be spent
 	tip := n.tipState().Index
 	n.assertSCE(t, scID, &tip, n.genesis().Transactions[0].SiacoinOutputs[0])
@@ -410,6 +412,8 @@ func TestEphemeralSiacoinOutput(t *testing.T) {
 
 	n.mineTransactions(t, txn1, txn2)
 
+	n.assertTransactions(t, txn1, txn2)
+
 	tip := n.tipState().Index
 	// genesis output should be spent
 	n.assertSCE(t, scID, &tip, n.genesis().Transactions[0].SiacoinOutputs[0])
@@ -465,6 +469,8 @@ func TestSiafundOutput(t *testing.T) {
 	testutil.SignTransaction(n.tipState(), pk1, &txn1)
 
 	n.mineTransactions(t, txn1)
+
+	n.assertTransactions(t, txn1)
 
 	// genesis output should be spent
 	tip := n.tipState().Index
@@ -533,6 +539,8 @@ func TestEphemeralSiafundOutput(t *testing.T) {
 	testutil.SignTransaction(n.tipState(), pk2, &txn2)
 
 	n.mineTransactions(t, txn1, txn2)
+
+	n.assertTransactions(t, txn1, txn2)
 
 	tip := n.tipState().Index
 	// genesis output should be spent
