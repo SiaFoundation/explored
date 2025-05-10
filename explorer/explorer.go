@@ -157,11 +157,11 @@ func (e *Explorer) syncStore(index types.ChainIndex, batchSize int) error {
 			if len(caus) > 0 {
 				index = caus[len(caus)-1].State.Index
 			}
-		}
 
-		e.mu.Lock()
-		e.lastReorg = time.Now()
-		e.mu.Unlock()
+			e.mu.Lock()
+			e.lastReorg = time.Now()
+			e.mu.Unlock()
+		}
 	}
 	return nil
 }
