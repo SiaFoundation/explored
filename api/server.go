@@ -47,6 +47,8 @@ type (
 
 	// Explorer implements a Sia explorer.
 	Explorer interface {
+		Health() error
+
 		Tip() (types.ChainIndex, error)
 		Block(id types.BlockID) (explorer.Block, error)
 		BestTip(height uint64) (types.ChainIndex, error)
@@ -808,6 +810,13 @@ func (s *server) exchangeRateHandler(jc jape.Context) {
 	jc.Encode(price)
 }
 
+func (s *server) healthHandler(jc jape.Context) {
+	if jc.Check("failed to check health", s.e.Health()) != nil {
+		return
+	}
+	jc.Encode(nil)
+}
+
 // NewServer returns an HTTP handler that serves the explored API.
 func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.Source, apiPassword string) http.Handler {
 	srv := server{
@@ -820,6 +829,7 @@ func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.Source, a
 	}
 
 	return jape.Mux(map[string]jape.Handler{
+		"GET 	/health":                   srv.healthHandler,
 		"GET    /state":                  srv.stateHandler,
 		"GET    /syncer/peers":           srv.syncerPeersHandler,
 		"POST   /syncer/connect":         srv.syncerConnectHandler,

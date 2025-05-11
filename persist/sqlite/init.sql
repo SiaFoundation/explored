@@ -577,6 +577,7 @@ CREATE TABLE host_info (
     v2_prices_signature BLOB NOT NULL
 );
 CREATE INDEX host_info_net_address ON host_info(net_address);
+CREATE INDEX host_info_last_scan_last_successful_scan ON host_info(last_scan) WHERE last_scan_successful = true;
 
 CREATE TABLE host_info_v2_netaddresses(
     public_key BLOB REFERENCES host_info(public_key) ON DELETE CASCADE NOT NULL,

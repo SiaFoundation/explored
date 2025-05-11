@@ -12,6 +12,7 @@ require (
 	go.sia.tech/coreutils v0.13.2
 	go.sia.tech/jape v0.14.0
 	go.uber.org/zap v1.27.0
+	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842
 	gopkg.in/yaml.v3 v3.0.1
 	lukechampine.com/frand v1.5.1
 	lukechampine.com/upnp v0.3.0
