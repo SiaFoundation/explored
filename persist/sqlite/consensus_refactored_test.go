@@ -323,10 +323,11 @@ func TestSiacoinOutput(t *testing.T) {
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
 	scID := n.genesis().Transactions[0].SiacoinOutputID(0)
+	genesisOutput := n.genesis().Transactions[0].SiacoinOutputs[0]
 
 	// genesis output should be unspent
 	// so spentIndex = nil
-	n.assertSCE(t, scID, nil, n.genesis().Transactions[0].SiacoinOutputs[0])
+	n.assertSCE(t, scID, nil, genesisOutput)
 
 	txn1 := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
@@ -335,7 +336,7 @@ func TestSiacoinOutput(t *testing.T) {
 		}},
 		SiacoinOutputs: []types.SiacoinOutput{{
 			Address: addr2,
-			Value:   n.genesis().Transactions[0].SiacoinOutputs[0].Value,
+			Value:   genesisOutput.Value,
 		}},
 	}
 	testutil.SignTransaction(n.tipState(), pk1, &txn1)
@@ -346,7 +347,7 @@ func TestSiacoinOutput(t *testing.T) {
 
 	// genesis output should be spent
 	tip := n.tipState().Index
-	n.assertSCE(t, scID, &tip, n.genesis().Transactions[0].SiacoinOutputs[0])
+	n.assertSCE(t, scID, &tip, genesisOutput)
 
 	// the output from txn1 should exist now that the block with txn1 was
 	// mined
@@ -356,7 +357,7 @@ func TestSiacoinOutput(t *testing.T) {
 
 	// the genesis output should be unspent now because we reverted the block
 	// containing txn1 which spent it
-	n.assertSCE(t, scID, nil, n.genesis().Transactions[0].SiacoinOutputs[0])
+	n.assertSCE(t, scID, nil, genesisOutput)
 
 	// the output from txn1 should not exist after txn1 reverted
 	{
@@ -381,10 +382,11 @@ func TestEphemeralSiacoinOutput(t *testing.T) {
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
 	scID := n.genesis().Transactions[0].SiacoinOutputID(0)
+	genesisOutput := n.genesis().Transactions[0].SiacoinOutputs[0]
 
 	// genesis output should be unspent
 	// so spentIndex = nil
-	n.assertSCE(t, scID, nil, n.genesis().Transactions[0].SiacoinOutputs[0])
+	n.assertSCE(t, scID, nil, genesisOutput)
 
 	txn1 := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
@@ -393,7 +395,7 @@ func TestEphemeralSiacoinOutput(t *testing.T) {
 		}},
 		SiacoinOutputs: []types.SiacoinOutput{{
 			Address: addr2,
-			Value:   n.genesis().Transactions[0].SiacoinOutputs[0].Value,
+			Value:   genesisOutput.Value,
 		}},
 	}
 	testutil.SignTransaction(n.tipState(), pk1, &txn1)
@@ -416,7 +418,7 @@ func TestEphemeralSiacoinOutput(t *testing.T) {
 
 	tip := n.tipState().Index
 	// genesis output should be spent
-	n.assertSCE(t, scID, &tip, n.genesis().Transactions[0].SiacoinOutputs[0])
+	n.assertSCE(t, scID, &tip, genesisOutput)
 
 	// now that txn1 and txn2 are mined the outputs from them should exist
 	n.assertSCE(t, txn1.SiacoinOutputID(0), &tip, txn1.SiacoinOutputs[0])
@@ -425,7 +427,7 @@ func TestEphemeralSiacoinOutput(t *testing.T) {
 	n.revertBlock(t)
 
 	// genesis output should be unspent now that we reverted
-	n.assertSCE(t, scID, nil, n.genesis().Transactions[0].SiacoinOutputs[0])
+	n.assertSCE(t, scID, nil, genesisOutput)
 
 	// outputs from txn1 and txn2 should not exist because those transactions
 	// were reverted
@@ -948,8 +950,8 @@ func TestUnspentSiacoinOutputs(t *testing.T) {
 	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
+	scID := n.genesis().Transactions[0].SiacoinOutputID(0)
 	genesisOutput := n.genesis().Transactions[0].SiacoinOutputs[0]
-	genesisOutputID := n.genesis().Transactions[0].SiacoinOutputID(0)
 
 	checkSiacoinOutputs := func(addr types.Address, expected ...explorer.SiacoinOutput) {
 		t.Helper()
@@ -971,7 +973,7 @@ func TestUnspentSiacoinOutputs(t *testing.T) {
 	checkSiacoinOutputs(addr1, explorer.SiacoinOutput{
 		Source: explorer.SourceTransaction,
 		SiacoinElement: types.SiacoinElement{
-			ID:            genesisOutputID,
+			ID:            scID,
 			SiacoinOutput: genesisOutput,
 		},
 	})
@@ -980,7 +982,7 @@ func TestUnspentSiacoinOutputs(t *testing.T) {
 
 	txn1 := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
-			ParentID:         genesisOutputID,
+			ParentID:         scID,
 			UnlockConditions: uc1,
 		}},
 		SiacoinOutputs: []types.SiacoinOutput{{
@@ -1023,7 +1025,7 @@ func TestUnspentSiacoinOutputs(t *testing.T) {
 	checkSiacoinOutputs(addr1, explorer.SiacoinOutput{
 		Source: explorer.SourceTransaction,
 		SiacoinElement: types.SiacoinElement{
-			ID:            genesisOutputID,
+			ID:            scID,
 			SiacoinOutput: genesisOutput,
 		},
 	})
@@ -1048,7 +1050,7 @@ func TestUnspentSiafundOutputs(t *testing.T) {
 		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
 	})
 	genesisOutput := n.genesis().Transactions[0].SiafundOutputs[0]
-	genesisOutputID := n.genesis().Transactions[0].SiafundOutputID(0)
+	sfID := n.genesis().Transactions[0].SiafundOutputID(0)
 
 	checkSiafundOutputs := func(addr types.Address, expected ...explorer.SiafundOutput) {
 		t.Helper()
@@ -1068,7 +1070,7 @@ func TestUnspentSiafundOutputs(t *testing.T) {
 	// only addr1 should have SF from genesis block
 	checkSiafundOutputs(addr1, explorer.SiafundOutput{
 		SiafundElement: types.SiafundElement{
-			ID:            genesisOutputID,
+			ID:            sfID,
 			SiafundOutput: genesisOutput,
 		},
 	})
@@ -1077,7 +1079,7 @@ func TestUnspentSiafundOutputs(t *testing.T) {
 
 	txn1 := types.Transaction{
 		SiafundInputs: []types.SiafundInput{{
-			ParentID:         genesisOutputID,
+			ParentID:         sfID,
 			UnlockConditions: uc1,
 		}},
 		SiafundOutputs: []types.SiafundOutput{{
@@ -1118,7 +1120,7 @@ func TestUnspentSiafundOutputs(t *testing.T) {
 	// have nothing
 	checkSiafundOutputs(addr1, explorer.SiafundOutput{
 		SiafundElement: types.SiafundElement{
-			ID:            genesisOutputID,
+			ID:            sfID,
 			SiafundOutput: genesisOutput,
 		},
 	})
