@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"go.sia.tech/coreutils/rhp/v4/siamux"
+	"lukechampine.com/frand"
 
 	rhpv2 "go.sia.tech/core/rhp/v2"
 	rhpv4 "go.sia.tech/core/rhp/v4"
@@ -16,6 +17,79 @@ import (
 	"go.sia.tech/explored/geoip"
 	"go.uber.org/zap/zaptest"
 )
+
+func TestLastSuccessScan(t *testing.T) {
+	db, err := OpenDatabase(filepath.Join(t.TempDir(), "explored.sqlite3"), zaptest.NewLogger(t).Named("sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ts, err := db.LastSuccessScan()
+	if err != nil {
+		t.Fatal(err)
+	} else if !ts.IsZero() {
+		t.Fatal("expected zero time")
+	}
+
+	// Add hosts to database
+	hosts := []explorer.Host{
+		{
+			PublicKey:  frand.Entropy256(),
+			V2:         false,
+			NetAddress: "foo.bar:9982",
+			Location: geoip.Location{
+				CountryCode: "US",
+				Latitude:    0.01,
+				Longitude:   -0.02,
+			},
+			KnownSince:             time.Now().Add(-4 * time.Hour),
+			LastScan:               time.Now(),
+			LastScanSuccessful:     false,
+			SuccessfulInteractions: 75,
+			TotalScans:             100,
+			Settings: rhpv2.HostSettings{
+				AcceptingContracts:     true,
+				MaxDuration:            1000,
+				StoragePrice:           types.Siacoins(1),
+				ContractPrice:          types.Siacoins(2),
+				DownloadBandwidthPrice: types.Siacoins(3),
+				UploadBandwidthPrice:   types.Siacoins(4),
+				BaseRPCPrice:           types.Siacoins(5),
+				SectorAccessPrice:      types.Siacoins(6),
+				TotalStorage:           2000,
+				RemainingStorage:       1000,
+			},
+		},
+	}
+	if err := db.transaction(func(tx *txn) error {
+		return addHosts(tx, hosts)
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if ts, err = db.LastSuccessScan(); err != nil {
+		t.Fatal(err)
+	} else if !ts.IsZero() {
+		t.Fatal("expected zero time")
+	}
+
+	expectedTimestamp := time.Now().Add(-time.Minute).Round(time.Second)
+	err = db.AddHostScans(explorer.HostScan{
+		PublicKey: hosts[0].PublicKey,
+		Success:   true,
+		Timestamp: expectedTimestamp,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts, err = db.LastSuccessScan()
+	if err != nil {
+		t.Fatal(err)
+	} else if !ts.Equal(expectedTimestamp) {
+		t.Fatalf("expected %v, got %v", expectedTimestamp, ts)
+	}
+}
 
 func TestQueryHosts(t *testing.T) {
 	log := zaptest.NewLogger(t)

@@ -23,7 +23,7 @@ func isSynced(b Block) bool {
 }
 
 func (e *Explorer) waitForSync(ctx context.Context) error {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -258,6 +258,9 @@ func (e *Explorer) scanLoop() {
 					}
 					return
 				} else {
+					e.mu.Lock()
+					e.lastSuccessScan = time.Now()
+					e.mu.Unlock()
 					results[i].NextScan = now.Add(e.scanCfg.ScanInterval)
 				}
 			}(i, host)
