@@ -143,11 +143,6 @@ func (n *testChain) mineTransactions(t *testing.T, txns ...types.Transaction) {
 	n.applyBlock(t, b)
 }
 
-func (n *testChain) mineV2Transactions(t *testing.T, txns ...types.V2Transaction) {
-	b := testutil.MineV2Block(n.tipState(), txns, types.VoidAddress)
-	n.applyBlock(t, b)
-}
-
 func (n *testChain) assertTransactions(t *testing.T, expected ...types.Transaction) {
 	t.Helper()
 
@@ -162,39 +157,10 @@ func (n *testChain) assertTransactions(t *testing.T, expected ...types.Transacti
 	}
 }
 
-func (n *testChain) assertV2Transactions(t *testing.T, expected ...types.V2Transaction) {
-	t.Helper()
-
-	for _, txn := range expected {
-		txns, err := n.db.V2Transactions([]types.TransactionID{txn.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "len(txns)", 1, len(txns))
-
-		testutil.CheckV2Transaction(t, txn, txns[0])
-	}
-}
-
 func (n *testChain) assertChainIndices(t *testing.T, txnID types.TransactionID, expected ...types.ChainIndex) {
 	t.Helper()
 
 	indices, err := n.db.TransactionChainIndices(txnID, 0, math.MaxInt64)
-	if err != nil {
-		t.Fatal(err)
-	} else if len(indices) != len(expected) {
-		t.Fatalf("expected %d indices, got %d", len(expected), len(indices))
-	}
-
-	for i := range indices {
-		testutil.Equal(t, "index", expected[i], indices[i])
-	}
-}
-
-func (n *testChain) assertV2ChainIndices(t *testing.T, txnID types.TransactionID, expected ...types.ChainIndex) {
-	t.Helper()
-
-	indices, err := n.db.V2TransactionChainIndices(txnID, 0, math.MaxInt64)
 	if err != nil {
 		t.Fatal(err)
 	} else if len(indices) != len(expected) {
@@ -276,6 +242,23 @@ func (n *testChain) assertTransactionContracts(t *testing.T, txnID types.Transac
 		for i := range expected {
 			testutil.Equal(t, "ExtendedFileContract", expected[i], txn.FileContractRevisions[i].ExtendedFileContract)
 		}
+	}
+}
+
+func (n *testChain) assertContractRevisions(t *testing.T, fcID types.FileContractID, expected ...explorer.ExtendedFileContract) {
+	fces, err := n.db.ContractRevisions(fcID)
+	if len(expected) == 0 {
+		if !errors.Is(err, explorer.ErrContractNotFound) {
+			t.Fatal("should have got contract not found error")
+		}
+		return
+	} else if err != nil {
+		t.Fatal(err)
+	}
+	testutil.Equal(t, "len(fces)", len(expected), len(fces))
+
+	for i := range expected {
+		testutil.Equal(t, "ExtendedFileContract", expected[i], fces[i])
 	}
 }
 
@@ -622,55 +605,6 @@ func TestTransactionChainIndices(t *testing.T) {
 	}
 	n.assertChainIndices(t, txn1.ID())
 	n.assertChainIndices(t, txn2.ID())
-}
-
-func TestV2TransactionChainIndices(t *testing.T) {
-	n := newTestChain(t, true, nil)
-
-	txn1 := types.V2Transaction{
-		ArbitraryData: []byte{0},
-	}
-	txn2 := types.V2Transaction{
-		ArbitraryData: []byte{0, 1},
-	}
-
-	// mine block with txn1 twice and txn2
-	n.mineV2Transactions(t, txn1, txn1, txn2)
-	cs1 := n.tipState()
-
-	n.assertV2Transactions(t, txn1, txn2)
-	// both transactions should only be in the first block
-	n.assertV2ChainIndices(t, txn1.ID(), cs1.Index)
-	n.assertV2ChainIndices(t, txn2.ID(), cs1.Index)
-
-	// mine same block again
-	n.mineV2Transactions(t, txn1, txn1, txn2)
-	cs2 := n.tipState()
-
-	// both transactions should be in the blocks
-	n.assertV2Transactions(t, txn1, txn2)
-	n.assertV2ChainIndices(t, txn1.ID(), cs2.Index, cs1.Index)
-	n.assertV2ChainIndices(t, txn2.ID(), cs2.Index, cs1.Index)
-
-	n.revertBlock(t)
-
-	// after revert both transactions should only be in the first block
-	n.assertV2Transactions(t, txn1, txn2)
-	n.assertV2ChainIndices(t, txn1.ID(), cs1.Index)
-	n.assertV2ChainIndices(t, txn2.ID(), cs1.Index)
-
-	n.revertBlock(t)
-
-	// after reverting the first block there should be no transactions
-	{
-		txns, err := n.db.V2Transactions([]types.TransactionID{txn1.ID(), txn2.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "len(txns)", 0, len(txns))
-	}
-	n.assertV2ChainIndices(t, txn1.ID())
-	n.assertV2ChainIndices(t, txn2.ID())
 }
 
 func TestSiacoinBalance(t *testing.T) {
@@ -1360,31 +1294,6 @@ func TestBlock(t *testing.T) {
 	checkBlocks(1)
 }
 
-func TestV2Block(t *testing.T) {
-	n := newTestChain(t, true, nil)
-
-	checkBlocks := func(count int) {
-		t.Helper()
-
-		testutil.Equal(t, "blocks", count, len(n.blocks))
-		for i := range n.blocks {
-			testutil.Equal(t, "block height", uint64(i), n.states[i].Index.Height)
-			testutil.Equal(t, "block ID", n.blocks[i].ID(), n.states[i].Index.ID)
-			n.assertBlock(t, n.states[i], n.blocks[i])
-		}
-	}
-
-	checkBlocks(1)
-
-	n.mineV2Transactions(t, types.V2Transaction{ArbitraryData: []byte{0}})
-
-	checkBlocks(2)
-
-	n.revertBlock(t)
-
-	checkBlocks(1)
-}
-
 func coreToExplorerFC(fcID types.FileContractID, fc types.FileContract) explorer.ExtendedFileContract {
 	var valid []explorer.ContractSiacoinOutput
 	for i, sco := range fc.ValidProofOutputs {
@@ -1488,12 +1397,7 @@ func TestFileContractValid(t *testing.T) {
 		testutil.Equal(t, "len(fces)", 0, len(fces))
 	}
 
-	{
-		_, err := n.db.ContractRevisions(fce.ID)
-		if !errors.Is(err, explorer.ErrContractNotFound) {
-			t.Fatal("should have got contract not found error for reverted contract:", err)
-		}
-	}
+	n.assertContractRevisions(t, fce.ID)
 }
 
 func TestFileContractMissed(t *testing.T) {
@@ -1556,10 +1460,246 @@ func TestFileContractMissed(t *testing.T) {
 		testutil.Equal(t, "len(fces)", 0, len(fces))
 	}
 
-	{
-		_, err := n.db.ContractRevisions(fce.ID)
-		if !errors.Is(err, explorer.ErrContractNotFound) {
-			t.Fatal("should have got contract not found error for reverted contract:", err)
-		}
+	n.assertContractRevisions(t, fce.ID)
+}
+
+func signRevisions(cs consensus.State, pk types.PrivateKey, txn *types.Transaction) {
+	appendSig := func(key types.PrivateKey, pubkeyIndex uint64, parentID types.Hash256) {
+		sig := key.SignHash(cs.WholeSigHash(*txn, parentID, pubkeyIndex, 0, nil))
+		txn.Signatures = append(txn.Signatures, types.TransactionSignature{
+			ParentID:       parentID,
+			CoveredFields:  types.CoveredFields{WholeTransaction: true},
+			PublicKeyIndex: pubkeyIndex,
+			Signature:      sig[:],
+		})
 	}
+	for i := range txn.FileContractRevisions {
+		appendSig(pk, 0, types.Hash256(txn.FileContractRevisions[i].ParentID))
+	}
+}
+
+func TestFileContractRevision(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+
+	fc := prepareContract(addr1, n.tipState().Index.Height+3)
+	txn1 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         n.genesis().Transactions[0].SiacoinOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   val.Sub(fc.Payout),
+		}},
+		FileContracts: []types.FileContract{fc},
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+
+	n.mineTransactions(t, txn1)
+
+	fce := coreToExplorerFC(txn1.FileContractID(0), fc)
+	fce.TransactionID = txn1.ID()
+	fce.ConfirmationIndex = n.tipState().Index
+	fce.ConfirmationTransactionID = txn1.ID()
+
+	n.assertFCE(t, fce.ID, fce)
+	n.assertContractRevisions(t, fce.ID, fce)
+	n.assertTransactionContracts(t, txn1.ID(), false, fce)
+
+	fcRevision1 := fc
+	fcRevision1.RevisionNumber++
+	txn2 := types.Transaction{
+		FileContractRevisions: []types.FileContractRevision{{
+			ParentID:         fce.ID,
+			UnlockConditions: uc1,
+			FileContract:     fcRevision1,
+		}},
+	}
+	signRevisions(n.tipState(), pk1, &txn2)
+
+	n.mineTransactions(t, txn2)
+
+	fceRevision1 := fce
+	fceRevision1.RevisionNumber = fcRevision1.RevisionNumber
+	fceRevision1.TransactionID = txn2.ID()
+
+	n.assertFCE(t, fce.ID, fceRevision1)
+	n.assertContractRevisions(t, fce.ID, fce, fceRevision1)
+	n.assertTransactionContracts(t, txn1.ID(), false, fce)
+	n.assertTransactionContracts(t, txn2.ID(), true, fceRevision1)
+
+	// resolve contract unsuccessful
+	for i := n.tipState().Index.Height; i < fc.WindowEnd; i++ {
+		n.mineTransactions(t)
+	}
+
+	fce.Resolved = true
+	fceRevision1.Resolved = true
+	n.assertFCE(t, fce.ID, fceRevision1)
+	n.assertContractRevisions(t, fce.ID, fce, fceRevision1)
+	n.assertTransactionContracts(t, txn1.ID(), false, fce)
+	n.assertTransactionContracts(t, txn2.ID(), true, fceRevision1)
+
+	// revert resolution of contract
+	for i := n.tipState().Index.Height; i >= fc.WindowEnd; i-- {
+		n.revertBlock(t)
+	}
+	n.revertBlock(t)
+
+	fce.Resolved = false
+	fceRevision1.Resolved = false
+	n.assertFCE(t, fce.ID, fceRevision1)
+	n.assertContractRevisions(t, fce.ID, fce, fceRevision1)
+	n.assertTransactionContracts(t, txn1.ID(), false, fce)
+	n.assertTransactionContracts(t, txn2.ID(), true, fceRevision1)
+
+	// revert revision of contract
+	n.revertBlock(t)
+
+	n.assertFCE(t, fce.ID, fce)
+	n.assertContractRevisions(t, fce.ID, fce)
+	n.assertTransactionContracts(t, txn1.ID(), false, fce)
+
+	n.revertBlock(t)
+
+	{
+		fces, err := n.db.Contracts([]types.FileContractID{fce.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(fces)", 0, len(fces))
+	}
+
+	n.assertContractRevisions(t, fce.ID)
+}
+
+func TestFileContractMultipleRevisions(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+
+	fc := prepareContract(addr1, n.tipState().Index.Height+3)
+	txn1 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         n.genesis().Transactions[0].SiacoinOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   val.Sub(fc.Payout),
+		}},
+		FileContracts: []types.FileContract{fc},
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+
+	n.mineTransactions(t, txn1)
+
+	fce := coreToExplorerFC(txn1.FileContractID(0), fc)
+	fce.TransactionID = txn1.ID()
+	fce.ConfirmationIndex = n.tipState().Index
+	fce.ConfirmationTransactionID = txn1.ID()
+
+	n.assertFCE(t, fce.ID, fce)
+	n.assertContractRevisions(t, fce.ID, fce)
+	n.assertTransactionContracts(t, txn1.ID(), false, fce)
+
+	fcRevision1 := fc
+	fcRevision1.RevisionNumber++
+
+	fcRevision2 := fcRevision1
+	fcRevision2.RevisionNumber++
+
+	txn2 := types.Transaction{
+		FileContractRevisions: []types.FileContractRevision{{
+			ParentID:         fce.ID,
+			UnlockConditions: uc1,
+			FileContract:     fcRevision1,
+		}},
+	}
+	signRevisions(n.tipState(), pk1, &txn2)
+
+	txn3 := types.Transaction{
+		FileContractRevisions: []types.FileContractRevision{{
+			ParentID:         fce.ID,
+			UnlockConditions: uc1,
+			FileContract:     fcRevision2,
+		}},
+	}
+	signRevisions(n.tipState(), pk1, &txn3)
+
+	n.mineTransactions(t, txn2, txn3)
+
+	fceRevision1 := fce
+	fceRevision1.RevisionNumber = fcRevision1.RevisionNumber
+	fceRevision1.TransactionID = txn2.ID()
+
+	fceRevision2 := fce
+	fceRevision2.RevisionNumber = fcRevision2.RevisionNumber
+	fceRevision2.TransactionID = txn3.ID()
+
+	n.assertFCE(t, fce.ID, fceRevision2)
+	n.assertContractRevisions(t, fce.ID, fce, fceRevision1, fceRevision2)
+	n.assertTransactionContracts(t, txn1.ID(), false, fce)
+	n.assertTransactionContracts(t, txn2.ID(), true, fceRevision1)
+	n.assertTransactionContracts(t, txn3.ID(), true, fceRevision2)
+
+	// resolve contract unsuccessful
+	for i := n.tipState().Index.Height; i < fc.WindowEnd; i++ {
+		n.mineTransactions(t)
+	}
+
+	fce.Resolved = true
+	fceRevision1.Resolved = true
+	fceRevision2.Resolved = true
+	n.assertFCE(t, fce.ID, fceRevision2)
+	n.assertContractRevisions(t, fce.ID, fce, fceRevision1, fceRevision2)
+	n.assertTransactionContracts(t, txn1.ID(), false, fce)
+	n.assertTransactionContracts(t, txn2.ID(), true, fceRevision1)
+	n.assertTransactionContracts(t, txn3.ID(), true, fceRevision2)
+
+	// revert resolution of contract
+	for i := n.tipState().Index.Height; i >= fc.WindowEnd; i-- {
+		n.revertBlock(t)
+	}
+	n.revertBlock(t)
+
+	fce.Resolved = false
+	fceRevision1.Resolved = false
+	fceRevision2.Resolved = false
+	n.assertFCE(t, fce.ID, fceRevision2)
+	n.assertContractRevisions(t, fce.ID, fce, fceRevision1, fceRevision2)
+	n.assertTransactionContracts(t, txn1.ID(), false, fce)
+	n.assertTransactionContracts(t, txn2.ID(), true, fceRevision1)
+	n.assertTransactionContracts(t, txn3.ID(), true, fceRevision2)
+
+	// revert revisions block
+	n.revertBlock(t)
+
+	n.assertFCE(t, fce.ID, fce)
+	n.assertContractRevisions(t, fce.ID, fce)
+	n.assertTransactionContracts(t, txn1.ID(), false, fce)
+
+	n.revertBlock(t)
+
+	{
+		fces, err := n.db.Contracts([]types.FileContractID{fce.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(fces)", 0, len(fces))
+	}
+
+	n.assertContractRevisions(t, fce.ID)
 }
