@@ -90,6 +90,8 @@ func (n *testChain) tipState() consensus.State {
 }
 
 func (n *testChain) applyBlock(t *testing.T, b types.Block) {
+	t.Helper()
+
 	cs := n.tipState()
 	bs := n.store.SupplementTipBlock(b)
 	if cs.Index.Height != math.MaxUint64 {
@@ -139,6 +141,8 @@ func (n *testChain) revertBlock(t *testing.T) {
 }
 
 func (n *testChain) mineTransactions(t *testing.T, txns ...types.Transaction) {
+	t.Helper()
+
 	b := testutil.MineBlock(n.tipState(), txns, types.VoidAddress)
 	n.applyBlock(t, b)
 }
@@ -225,6 +229,8 @@ func (n *testChain) assertFCE(t *testing.T, fcID types.FileContractID, expected 
 // (revisions = false) or FileContractRevisions (revisions = true) in a
 // transaction retrieved from the explorer match the expected contracts.
 func (n *testChain) assertTransactionContracts(t *testing.T, txnID types.TransactionID, revisions bool, expected ...explorer.ExtendedFileContract) {
+	t.Helper()
+
 	txns, err := n.db.Transactions([]types.TransactionID{txnID})
 	if err != nil {
 		t.Fatal(err)
@@ -246,6 +252,8 @@ func (n *testChain) assertTransactionContracts(t *testing.T, txnID types.Transac
 }
 
 func (n *testChain) assertContractRevisions(t *testing.T, fcID types.FileContractID, expected ...explorer.ExtendedFileContract) {
+	t.Helper()
+
 	fces, err := n.db.ContractRevisions(fcID)
 	if len(expected) == 0 {
 		if !errors.Is(err, explorer.ErrContractNotFound) {
@@ -253,6 +261,20 @@ func (n *testChain) assertContractRevisions(t *testing.T, fcID types.FileContrac
 		}
 		return
 	} else if err != nil {
+		t.Fatal(err)
+	}
+	testutil.Equal(t, "len(fces)", len(expected), len(fces))
+
+	for i := range expected {
+		testutil.Equal(t, "ExtendedFileContract", expected[i], fces[i])
+	}
+}
+
+func (n *testChain) assertContractsKey(t *testing.T, pk types.PublicKey, expected ...explorer.ExtendedFileContract) {
+	t.Helper()
+
+	fces, err := n.db.ContractsKey(pk)
+	if err != nil {
 		t.Fatal(err)
 	}
 	testutil.Equal(t, "len(fces)", len(expected), len(fces))
@@ -1188,26 +1210,12 @@ func TestTransactionStorageProof(t *testing.T) {
 	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
 	addr1 := uc1.UnlockHash()
 
-	prepareContract := func(endHeight uint64) types.FileContract {
-		rk := types.GeneratePrivateKey().PublicKey()
-		rAddr := types.StandardUnlockHash(rk)
-		hk := types.GeneratePrivateKey().PublicKey()
-		hs := proto2.HostSettings{
-			WindowSize: 1,
-			Address:    types.StandardUnlockHash(hk),
-		}
-		sc := types.Siacoins(1)
-		fc := proto2.PrepareContractFormation(rk, hk, sc.Mul64(5), sc.Mul64(5), endHeight, hs, rAddr)
-		fc.UnlockHash = addr1
-		return fc
-	}
-
 	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
 	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
 
-	fc := prepareContract(n.tipState().Index.Height + 1)
+	fc := prepareContract(addr1, n.tipState().Index.Height+1)
 	txn1 := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
 			ParentID:         n.genesis().Transactions[0].SiacoinOutputID(0),
@@ -1463,7 +1471,7 @@ func TestFileContractMissed(t *testing.T) {
 	n.assertContractRevisions(t, fce.ID)
 }
 
-func signRevisions(cs consensus.State, pk types.PrivateKey, txn *types.Transaction) {
+func signRevisions(cs consensus.State, txn *types.Transaction, pks ...types.PrivateKey) {
 	appendSig := func(key types.PrivateKey, pubkeyIndex uint64, parentID types.Hash256) {
 		sig := key.SignHash(cs.WholeSigHash(*txn, parentID, pubkeyIndex, 0, nil))
 		txn.Signatures = append(txn.Signatures, types.TransactionSignature{
@@ -1474,7 +1482,9 @@ func signRevisions(cs consensus.State, pk types.PrivateKey, txn *types.Transacti
 		})
 	}
 	for i := range txn.FileContractRevisions {
-		appendSig(pk, 0, types.Hash256(txn.FileContractRevisions[i].ParentID))
+		for j := range pks {
+			appendSig(pks[j], uint64(j), types.Hash256(txn.FileContractRevisions[i].ParentID))
+		}
 	}
 }
 
@@ -1522,7 +1532,7 @@ func TestFileContractRevision(t *testing.T) {
 			FileContract:     fcRevision1,
 		}},
 	}
-	signRevisions(n.tipState(), pk1, &txn2)
+	signRevisions(n.tipState(), &txn2, pk1)
 
 	n.mineTransactions(t, txn2)
 
@@ -1628,7 +1638,7 @@ func TestFileContractMultipleRevisions(t *testing.T) {
 			FileContract:     fcRevision1,
 		}},
 	}
-	signRevisions(n.tipState(), pk1, &txn2)
+	signRevisions(n.tipState(), &txn2, pk1)
 
 	txn3 := types.Transaction{
 		FileContractRevisions: []types.FileContractRevision{{
@@ -1637,7 +1647,7 @@ func TestFileContractMultipleRevisions(t *testing.T) {
 			FileContract:     fcRevision2,
 		}},
 	}
-	signRevisions(n.tipState(), pk1, &txn3)
+	signRevisions(n.tipState(), &txn3, pk1)
 
 	n.mineTransactions(t, txn2, txn3)
 
@@ -1702,4 +1712,88 @@ func TestFileContractMultipleRevisions(t *testing.T) {
 	}
 
 	n.assertContractRevisions(t, fce.ID)
+}
+
+func TestFileContractKey(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	pk2 := types.GeneratePrivateKey()
+
+	unlockKey := func(pubkey types.PublicKey) types.UnlockKey {
+		key := pubkey[:]
+		return types.UnlockKey{
+			Algorithm: types.SpecifierEd25519,
+			Key:       key,
+		}
+	}
+	ucContract1 := types.UnlockConditions{
+		PublicKeys:         []types.UnlockKey{unlockKey(pk1.PublicKey()), unlockKey(pk2.PublicKey())},
+		SignaturesRequired: 2,
+	}
+
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+
+	fc := prepareContract(addr1, n.tipState().Index.Height+3)
+	fc.UnlockHash = ucContract1.UnlockHash()
+
+	txn1 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         n.genesis().Transactions[0].SiacoinOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   val.Sub(fc.Payout),
+		}},
+		FileContracts: []types.FileContract{fc},
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+
+	n.mineTransactions(t, txn1)
+
+	fce := coreToExplorerFC(txn1.FileContractID(0), fc)
+	fce.TransactionID = txn1.ID()
+	fce.ConfirmationIndex = n.tipState().Index
+	fce.ConfirmationTransactionID = txn1.ID()
+
+	// we don't have the UnlockConditions and thus the public keys of the
+	// renter and host until we have a revision, so we should not have
+	// anything at this point
+	n.assertContractsKey(t, pk1.PublicKey())
+
+	fcRevision1 := fc
+	fcRevision1.RevisionNumber++
+	txn2 := types.Transaction{
+		FileContractRevisions: []types.FileContractRevision{{
+			ParentID:         fce.ID,
+			UnlockConditions: ucContract1,
+			FileContract:     fcRevision1,
+		}},
+	}
+	signRevisions(n.tipState(), &txn2, pk1, pk2)
+
+	// after a revision is mined, then we should know the keys associated with
+	// the contract
+	n.mineTransactions(t, txn2)
+
+	fceRevision1 := fce
+	fceRevision1.RevisionNumber = fcRevision1.RevisionNumber
+	fceRevision1.TransactionID = txn2.ID()
+
+	// either key should be associated with the contract
+	n.assertContractsKey(t, pk1.PublicKey(), fceRevision1)
+	n.assertContractsKey(t, pk2.PublicKey(), fceRevision1)
+
+	n.revertBlock(t)
+
+	// if we revert we should keep the keys.  only reason to change them is if
+	// we change the UnlockHash and can get the keys from the UnlockConditions
+	// in a future revision
+	n.assertContractsKey(t, pk1.PublicKey(), fce)
+	n.assertContractsKey(t, pk2.PublicKey(), fce)
 }

@@ -9,6 +9,8 @@ import (
 )
 
 func (n *testChain) mineV2Transactions(t *testing.T, txns ...types.V2Transaction) {
+	t.Helper()
+
 	b := testutil.MineV2Block(n.tipState(), txns, types.VoidAddress)
 	n.applyBlock(t, b)
 }
