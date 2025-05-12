@@ -1796,4 +1796,164 @@ func TestFileContractKey(t *testing.T) {
 	// in a future revision
 	n.assertContractsKey(t, pk1.PublicKey(), fce)
 	n.assertContractsKey(t, pk2.PublicKey(), fce)
+
+	n.revertBlock(t)
+
+	n.assertContractsKey(t, pk1.PublicKey())
+	n.assertContractsKey(t, pk2.PublicKey())
+}
+
+func TestMetrics(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+
+	assertMetrics := func(expected explorer.Metrics) {
+		t.Helper()
+
+		got, err := n.db.Metrics(n.tipState().Index.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cs := n.tipState()
+		testutil.Equal(t, "Index", cs.Index, got.Index)
+		testutil.Equal(t, "Difficulty", cs.Difficulty, got.Difficulty)
+		testutil.Equal(t, "SiafundTaxRevenue", cs.SiafundTaxRevenue, got.SiafundTaxRevenue)
+		testutil.Equal(t, "NumLeaves", cs.Elements.NumLeaves, got.NumLeaves)
+		testutil.Equal(t, "ActiveContracts", expected.ActiveContracts, got.ActiveContracts)
+		testutil.Equal(t, "FailedContracts", expected.FailedContracts, got.FailedContracts)
+		testutil.Equal(t, "SuccessfulContracts", expected.SuccessfulContracts, got.SuccessfulContracts)
+		testutil.Equal(t, "StorageUtilization", expected.StorageUtilization, got.StorageUtilization)
+		testutil.Equal(t, "CirculatingSupply", expected.CirculatingSupply, got.CirculatingSupply)
+		testutil.Equal(t, "ContractRevenue", expected.ContractRevenue, got.ContractRevenue)
+	}
+
+	var circulatingSupply types.Currency
+	for _, txn := range n.genesis().Transactions {
+		for _, sco := range txn.SiacoinOutputs {
+			circulatingSupply = circulatingSupply.Add(sco.Value)
+		}
+	}
+	metricsGenesis := explorer.Metrics{
+		CirculatingSupply: circulatingSupply,
+	}
+	assertMetrics(metricsGenesis)
+
+	// form two contracts
+	fc := prepareContract(addr1, n.tipState().Index.Height+3)
+	txn1 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         n.genesis().Transactions[0].SiacoinOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   val.Sub(fc.Payout.Mul64(2)),
+		}},
+		FileContracts: []types.FileContract{fc, fc},
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+
+	if subsidy, ok := n.tipState().FoundationSubsidy(); ok {
+		circulatingSupply = circulatingSupply.Add(subsidy.Value)
+	}
+
+	n.mineTransactions(t, txn1)
+
+	// funds now locked in contract so circulating supply goes down
+	circulatingSupply = circulatingSupply.Sub(fc.Payout.Mul64(2))
+	metrics1 := explorer.Metrics{
+		ActiveContracts:   2,
+		CirculatingSupply: circulatingSupply,
+	}
+	assertMetrics(metrics1)
+
+	// revise first contract
+	fcID := txn1.FileContractID(0)
+	fcRevision1 := fc
+	fcRevision1.Filesize = proto2.SectorSize
+	fcRevision1.RevisionNumber++
+	txn2 := types.Transaction{
+		FileContractRevisions: []types.FileContractRevision{{
+			ParentID:         fcID,
+			UnlockConditions: uc1,
+			FileContract:     fcRevision1,
+		}},
+	}
+	signRevisions(n.tipState(), &txn2, pk1)
+
+	n.mineTransactions(t, txn2)
+
+	metrics2 := explorer.Metrics{
+		ActiveContracts:    2,
+		StorageUtilization: fcRevision1.Filesize,
+		CirculatingSupply:  circulatingSupply,
+	}
+	assertMetrics(metrics2)
+
+	// resolve second contract successfully
+	txn3 := types.Transaction{
+		StorageProofs: []types.StorageProof{{
+			ParentID: txn1.FileContractID(1),
+		}},
+	}
+	n.mineTransactions(t, txn3)
+
+	// valid proof outputs created after proof successful
+	var contractRevenue types.Currency
+	for _, sco := range fc.ValidProofOutputs {
+		circulatingSupply = circulatingSupply.Add(sco.Value)
+		contractRevenue = contractRevenue.Add(sco.Value)
+	}
+	metrics3 := explorer.Metrics{
+		ActiveContracts:     1,
+		SuccessfulContracts: 1,
+		StorageUtilization:  fcRevision1.Filesize,
+		CirculatingSupply:   circulatingSupply,
+		ContractRevenue:     contractRevenue,
+	}
+	assertMetrics(metrics3)
+
+	// resolve first contract unsuccessfully
+	for i := n.tipState().Index.Height; i <= fc.WindowEnd; i++ {
+		n.mineTransactions(t)
+	}
+
+	// missed proof outputs created after failed resolution
+	for _, sco := range fc.MissedProofOutputs {
+		circulatingSupply = circulatingSupply.Add(sco.Value)
+	}
+	metrics4 := explorer.Metrics{
+		ActiveContracts:     0,
+		SuccessfulContracts: 1,
+		FailedContracts:     1,
+		CirculatingSupply:   circulatingSupply,
+		ContractRevenue:     contractRevenue,
+	}
+	assertMetrics(metrics4)
+
+	// go back to before failed resolution
+	for i := n.tipState().Index.Height; i >= fc.WindowEnd; i-- {
+		n.revertBlock(t)
+	}
+
+	assertMetrics(metrics3)
+
+	n.revertBlock(t)
+
+	assertMetrics(metrics2)
+
+	n.revertBlock(t)
+
+	assertMetrics(metrics1)
+
+	n.revertBlock(t)
+
+	assertMetrics(metricsGenesis)
 }
