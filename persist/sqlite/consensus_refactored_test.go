@@ -1714,7 +1714,7 @@ func TestFileContractMultipleRevisions(t *testing.T) {
 	n.assertContractRevisions(t, fce.ID)
 }
 
-func TestFileContractKey(t *testing.T) {
+func TestFileContractsKey(t *testing.T) {
 	pk1 := types.GeneratePrivateKey()
 	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
 	addr1 := uc1.UnlockHash()
@@ -1940,6 +1940,7 @@ func TestMetrics(t *testing.T) {
 
 	// go back to before failed resolution
 	for i := n.tipState().Index.Height; i >= fc.WindowEnd; i-- {
+		assertMetrics(metrics4)
 		n.revertBlock(t)
 	}
 
