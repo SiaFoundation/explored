@@ -270,20 +270,6 @@ func (n *testChain) assertContractRevisions(t *testing.T, fcID types.FileContrac
 	}
 }
 
-func (n *testChain) assertContractsKey(t *testing.T, pk types.PublicKey, expected ...explorer.ExtendedFileContract) {
-	t.Helper()
-
-	fces, err := n.db.ContractsKey(pk)
-	if err != nil {
-		t.Fatal(err)
-	}
-	testutil.Equal(t, "len(fces)", len(expected), len(fces))
-
-	for i := range expected {
-		testutil.Equal(t, "ExtendedFileContract", expected[i], fces[i])
-	}
-}
-
 func prepareContract(addr types.Address, endHeight uint64) types.FileContract {
 	rk := types.GeneratePrivateKey().PublicKey()
 	rAddr := types.StandardUnlockHash(rk)
@@ -1731,6 +1717,24 @@ func TestFileContractsKey(t *testing.T) {
 
 	pk2 := types.GeneratePrivateKey()
 
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+
+	assertContractsKey := func(pk types.PublicKey, expected ...explorer.ExtendedFileContract) {
+		t.Helper()
+
+		fces, err := n.db.ContractsKey(pk)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(fces)", len(expected), len(fces))
+
+		for i := range expected {
+			testutil.Equal(t, "ExtendedFileContract", expected[i], fces[i])
+		}
+	}
 	unlockKey := func(pubkey types.PublicKey) types.UnlockKey {
 		key := pubkey[:]
 		return types.UnlockKey{
@@ -1742,11 +1746,6 @@ func TestFileContractsKey(t *testing.T) {
 		PublicKeys:         []types.UnlockKey{unlockKey(pk1.PublicKey()), unlockKey(pk2.PublicKey())},
 		SignaturesRequired: 2,
 	}
-
-	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
-		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
-	})
-	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
 
 	fc := prepareContract(addr1, n.tipState().Index.Height+3)
 	fc.UnlockHash = ucContract1.UnlockHash()
@@ -1774,7 +1773,9 @@ func TestFileContractsKey(t *testing.T) {
 	// we don't have the UnlockConditions and thus the public keys of the
 	// renter and host until we have a revision, so we should not have
 	// anything at this point
-	n.assertContractsKey(t, pk1.PublicKey())
+	n.assertFCE(t, fce.ID, fce)
+	n.assertContractRevisions(t, fce.ID, fce)
+	assertContractsKey(pk1.PublicKey())
 
 	fcRevision1 := fc
 	fcRevision1.RevisionNumber++
@@ -1796,21 +1797,26 @@ func TestFileContractsKey(t *testing.T) {
 	fceRevision1.TransactionID = txn2.ID()
 
 	// either key should be associated with the contract
-	n.assertContractsKey(t, pk1.PublicKey(), fceRevision1)
-	n.assertContractsKey(t, pk2.PublicKey(), fceRevision1)
+	n.assertFCE(t, fce.ID, fceRevision1)
+	n.assertContractRevisions(t, fce.ID, fce, fceRevision1)
+	assertContractsKey(pk1.PublicKey(), fceRevision1)
+	assertContractsKey(pk2.PublicKey(), fceRevision1)
 
 	n.revertBlock(t)
 
 	// if we revert we should keep the keys.  only reason to change them is if
 	// we change the UnlockHash and can get the keys from the UnlockConditions
 	// in a future revision
-	n.assertContractsKey(t, pk1.PublicKey(), fce)
-	n.assertContractsKey(t, pk2.PublicKey(), fce)
+	n.assertFCE(t, fce.ID, fce)
+	n.assertContractRevisions(t, fce.ID, fce)
+	assertContractsKey(pk1.PublicKey(), fce)
+	assertContractsKey(pk2.PublicKey(), fce)
 
 	n.revertBlock(t)
 
-	n.assertContractsKey(t, pk1.PublicKey())
-	n.assertContractsKey(t, pk2.PublicKey())
+	n.assertContractRevisions(t, fce.ID)
+	assertContractsKey(pk1.PublicKey())
+	assertContractsKey(pk2.PublicKey())
 }
 
 func TestMetrics(t *testing.T) {
@@ -1855,6 +1861,17 @@ func TestMetrics(t *testing.T) {
 	}
 	assertMetrics(metricsGenesis)
 
+	if subsidy, ok := n.tipState().FoundationSubsidy(); ok {
+		circulatingSupply = circulatingSupply.Add(subsidy.Value)
+	}
+	metrics1 := explorer.Metrics{
+		CirculatingSupply: circulatingSupply,
+	}
+
+	n.mineTransactions(t)
+
+	assertMetrics(metrics1)
+
 	// form two contracts
 	fc := prepareContract(addr1, n.tipState().Index.Height+3)
 	txn1 := types.Transaction{
@@ -1870,19 +1887,15 @@ func TestMetrics(t *testing.T) {
 	}
 	testutil.SignTransaction(n.tipState(), pk1, &txn1)
 
-	if subsidy, ok := n.tipState().FoundationSubsidy(); ok {
-		circulatingSupply = circulatingSupply.Add(subsidy.Value)
-	}
-
 	n.mineTransactions(t, txn1)
 
 	// funds now locked in contract so circulating supply goes down
 	circulatingSupply = circulatingSupply.Sub(fc.Payout.Mul64(2))
-	metrics1 := explorer.Metrics{
+	metrics2 := explorer.Metrics{
 		ActiveContracts:   2,
 		CirculatingSupply: circulatingSupply,
 	}
-	assertMetrics(metrics1)
+	assertMetrics(metrics2)
 
 	// revise first contract
 	fcID := txn1.FileContractID(0)
@@ -1900,12 +1913,12 @@ func TestMetrics(t *testing.T) {
 
 	n.mineTransactions(t, txn2)
 
-	metrics2 := explorer.Metrics{
+	metrics3 := explorer.Metrics{
 		ActiveContracts:    2,
 		StorageUtilization: fcRevision1.Filesize,
 		CirculatingSupply:  circulatingSupply,
 	}
-	assertMetrics(metrics2)
+	assertMetrics(metrics3)
 
 	// resolve second contract successfully
 	txn3 := types.Transaction{
@@ -1921,14 +1934,14 @@ func TestMetrics(t *testing.T) {
 		circulatingSupply = circulatingSupply.Add(sco.Value)
 		contractRevenue = contractRevenue.Add(sco.Value)
 	}
-	metrics3 := explorer.Metrics{
+	metrics4 := explorer.Metrics{
 		ActiveContracts:     1,
 		SuccessfulContracts: 1,
 		StorageUtilization:  fcRevision1.Filesize,
 		CirculatingSupply:   circulatingSupply,
 		ContractRevenue:     contractRevenue,
 	}
-	assertMetrics(metrics3)
+	assertMetrics(metrics4)
 
 	// resolve first contract unsuccessfully
 	for i := n.tipState().Index.Height; i <= fc.WindowEnd; i++ {
@@ -1939,20 +1952,24 @@ func TestMetrics(t *testing.T) {
 	for _, sco := range fc.MissedProofOutputs {
 		circulatingSupply = circulatingSupply.Add(sco.Value)
 	}
-	metrics4 := explorer.Metrics{
+	metrics5 := explorer.Metrics{
 		ActiveContracts:     0,
 		SuccessfulContracts: 1,
 		FailedContracts:     1,
 		CirculatingSupply:   circulatingSupply,
 		ContractRevenue:     contractRevenue,
 	}
-	assertMetrics(metrics4)
+	assertMetrics(metrics5)
 
 	// go back to before failed resolution
 	for i := n.tipState().Index.Height; i >= fc.WindowEnd; i-- {
-		assertMetrics(metrics4)
+		assertMetrics(metrics5)
 		n.revertBlock(t)
 	}
+
+	assertMetrics(metrics4)
+
+	n.revertBlock(t)
 
 	assertMetrics(metrics3)
 
