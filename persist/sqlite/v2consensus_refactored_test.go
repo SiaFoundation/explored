@@ -1504,3 +1504,66 @@ func TestV2FileContractMultipleRevisions(t *testing.T) {
 	n.assertNoV2FCE(t, fce.ID)
 	n.assertV2ContractRevisions(t, fce.ID)
 }
+
+func TestV2FileContractsKey(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(uc1)}
+
+	renterPK := types.GeneratePrivateKey()
+	hostPK := types.GeneratePrivateKey()
+
+	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+
+	assertContractsKey := func(pk types.PublicKey, expected ...explorer.V2FileContract) {
+		t.Helper()
+
+		fces, err := n.db.V2ContractsKey(pk)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(fces)", len(expected), len(fces))
+
+		for i := range expected {
+			checkV2Contract(t, expected[i], fces[i])
+		}
+	}
+
+	fc, payout := prepareV2Contract(renterPK, hostPK, n.tipState().Index.Height+2)
+	txn1 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, n.db, n.genesis().Transactions[0].SiacoinOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   val.Sub(payout),
+		}},
+		FileContracts: []types.V2FileContract{fc},
+	}
+	testutil.SignV2TransactionWithContracts(n.tipState(), pk1, renterPK, hostPK, &txn1)
+
+	n.mineV2Transactions(t, txn1)
+
+	fce := coreToV2ExplorerFC(txn1.V2FileContractID(txn1.ID(), 0), txn1.FileContracts[0])
+	fce.TransactionID = txn1.ID()
+	fce.ConfirmationIndex = n.tipState().Index
+	fce.ConfirmationTransactionID = txn1.ID()
+
+	n.assertV2FCE(t, fce.ID, fce)
+	n.assertV2ContractRevisions(t, fce.ID, fce)
+	assertContractsKey(pk1.PublicKey())
+	assertContractsKey(renterPK.PublicKey(), fce)
+	assertContractsKey(hostPK.PublicKey(), fce)
+
+	n.revertBlock(t)
+
+	n.assertContractRevisions(t, fce.ID)
+	assertContractsKey(pk1.PublicKey())
+	assertContractsKey(renterPK.PublicKey())
+	assertContractsKey(hostPK.PublicKey())
+}
