@@ -1560,8 +1560,47 @@ func TestV2FileContractsKey(t *testing.T) {
 	assertContractsKey(renterPK.PublicKey(), fce)
 	assertContractsKey(hostPK.PublicKey(), fce)
 
+	// change renter public key to pk1
+	fcRevision1 := fc
+	fcRevision1.RevisionNumber++
+	fcRevision1.RenterPublicKey = pk1.PublicKey()
+
+	txn2 := types.V2Transaction{
+		FileContractRevisions: []types.V2FileContractRevision{{
+			Parent:   getFCE(t, n.db, fce.ID),
+			Revision: fcRevision1,
+		}},
+	}
+	testutil.SignV2TransactionWithContracts(n.tipState(), pk1, renterPK, hostPK, &txn2)
+
+	n.mineV2Transactions(t, txn2)
+
+	fceRevision1 := coreToV2ExplorerFC(fce.ID, txn2.FileContractRevisions[0].Revision)
+	fceRevision1.TransactionID = txn2.ID()
+	fceRevision1.ConfirmationIndex = fce.ConfirmationIndex
+	fceRevision1.ConfirmationTransactionID = fce.ConfirmationTransactionID
+
+	// renter public key changed from renterPK to pk1 so we should not have
+	// any contracts with renterPK
+	n.assertV2FCE(t, fce.ID, fceRevision1)
+	n.assertV2ContractRevisions(t, fce.ID, fce, fceRevision1)
+	assertContractsKey(pk1.PublicKey(), fceRevision1)
+	assertContractsKey(renterPK.PublicKey())
+	assertContractsKey(hostPK.PublicKey(), fceRevision1)
+
 	n.revertBlock(t)
 
+	// revert revision so renterPK should have contract now and pk1 should not
+	n.assertV2FCE(t, fce.ID, fce)
+	n.assertV2ContractRevisions(t, fce.ID, fce)
+	assertContractsKey(pk1.PublicKey())
+	assertContractsKey(renterPK.PublicKey(), fce)
+	assertContractsKey(hostPK.PublicKey(), fce)
+
+	n.revertBlock(t)
+
+	// revert formation of contract
+	n.assertNoV2FCE(t, fce.ID)
 	n.assertContractRevisions(t, fce.ID)
 	assertContractsKey(pk1.PublicKey())
 	assertContractsKey(renterPK.PublicKey())
