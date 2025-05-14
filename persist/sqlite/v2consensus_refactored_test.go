@@ -1174,8 +1174,8 @@ func TestV2FileContractRenewal(t *testing.T) {
 	finalRevision := fc
 	finalRevision.RevisionNumber = types.MaxRevisionNumber
 	newContract := fc
-	newContract.ProofHeight += 1
-	newContract.ExpirationHeight += 1
+	newContract.ProofHeight++
+	newContract.ExpirationHeight++
 	renewal := &types.V2FileContractRenewal{
 		NewContract:       newContract,
 		FinalRenterOutput: finalRevision.RenterOutput,
