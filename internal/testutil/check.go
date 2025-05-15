@@ -47,8 +47,8 @@ func CheckTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer
 		if got.Value == types.ZeroCurrency {
 			t.Fatal("invalid value")
 		}
-		Equal(t, "parent ID", expected.ParentID, got.ParentID)
-		Equal(t, "unlock conditions", expected.UnlockConditions, got.UnlockConditions)
+		Equal(t, "parent ID", expected.ParentID, got.SiacoinInput.ParentID)
+		Equal(t, "unlock conditions", expected.UnlockConditions, got.SiacoinInput.UnlockConditions)
 		Equal(t, "address", expected.UnlockConditions.UnlockHash(), got.Address)
 	}
 
@@ -70,9 +70,9 @@ func CheckTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer
 		if got.Value == 0 {
 			t.Fatal("invalid value")
 		}
-		Equal(t, "parent ID", expected.ParentID, got.ParentID)
-		Equal(t, "claim address", expected.ClaimAddress, got.ClaimAddress)
-		Equal(t, "unlock conditions", expected.UnlockConditions, got.UnlockConditions)
+		Equal(t, "parent ID", expected.ParentID, got.SiafundInput.ParentID)
+		Equal(t, "claim address", expected.ClaimAddress, got.SiafundInput.ClaimAddress)
+		Equal(t, "unlock conditions", expected.UnlockConditions, got.SiafundInput.UnlockConditions)
 		Equal(t, "address", expected.UnlockConditions.UnlockHash(), got.Address)
 	}
 

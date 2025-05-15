@@ -219,7 +219,7 @@ func (s *Store) UnconfirmedEvents(index types.ChainIndex, timestamp time.Time, v
 		evTxn := explorer.CoreToExplorerV1Transaction(txn)
 		for i := range evTxn.SiacoinInputs {
 			sci := &evTxn.SiacoinInputs[i]
-			sce, ok := sceCache[sci.ParentID]
+			sce, ok := sceCache[sci.SiacoinInput.ParentID]
 			if !ok {
 				// We could have an ephemeral output, which SiacoinElements
 				// won't return because it hasn't been in a block yet.  In
@@ -232,7 +232,7 @@ func (s *Store) UnconfirmedEvents(index types.ChainIndex, timestamp time.Time, v
 		}
 		for i := range evTxn.SiafundInputs {
 			sfi := &evTxn.SiafundInputs[i]
-			sfe, ok := sfeCache[sfi.ParentID]
+			sfe, ok := sfeCache[sfi.SiafundInput.ParentID]
 			if !ok {
 				// We could have an ephemeral output, which SiacoinElements
 				// won't return because it hasn't been in a block yet.  In

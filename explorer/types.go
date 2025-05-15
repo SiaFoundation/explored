@@ -177,17 +177,17 @@ func V2ResolutionType(res types.V2FileContractResolutionType) (result V2Resoluti
 // A SiacoinInput is a types.SiacoinInput with information about the parent
 // value.
 type SiacoinInput struct {
-	Address types.Address  `json:"address"`
-	Value   types.Currency `json:"value"`
-	types.SiacoinInput
+	Address      types.Address      `json:"address"`
+	Value        types.Currency     `json:"value"`
+	SiacoinInput types.SiacoinInput `json:",inline"`
 }
 
 // A SiafundInput is a types.SiafundInput with information about the parent
 // value.
 type SiafundInput struct {
-	Address types.Address `json:"address"`
-	Value   uint64        `json:"value"`
-	types.SiafundInput
+	Address      types.Address      `json:"address"`
+	Value        uint64             `json:"value"`
+	SiafundInput types.SiafundInput `json:",inline"`
 }
 
 // A SiacoinOutput is a types.SiacoinElement with added fields for the source

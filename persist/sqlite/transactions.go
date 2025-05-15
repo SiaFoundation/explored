@@ -205,10 +205,10 @@ ORDER BY ts.transaction_order ASC`)
 
 			for rows.Next() {
 				var sci explorer.SiacoinInput
-				if err := rows.Scan(decode(&sci.ParentID), decode(&sci.UnlockConditions), decode(&sci.Value)); err != nil {
+				if err := rows.Scan(decode(&sci.SiacoinInput.ParentID), decode(&sci.SiacoinInput.UnlockConditions), decode(&sci.Value)); err != nil {
 					return fmt.Errorf("failed to scan: %w", err)
 				}
-				sci.Address = sci.UnlockConditions.UnlockHash()
+				sci.Address = sci.SiacoinInput.UnlockConditions.UnlockHash()
 				txns[i].SiacoinInputs = append(txns[i].SiacoinInputs, sci)
 			}
 			return rows.Err()
@@ -242,10 +242,10 @@ ORDER BY ts.transaction_order ASC`)
 
 			for rows.Next() {
 				var sfi explorer.SiafundInput
-				if err := rows.Scan(decode(&sfi.ParentID), decode(&sfi.UnlockConditions), decode(&sfi.ClaimAddress), decode(&sfi.Value)); err != nil {
+				if err := rows.Scan(decode(&sfi.SiafundInput.ParentID), decode(&sfi.SiafundInput.UnlockConditions), decode(&sfi.SiafundInput.ClaimAddress), decode(&sfi.Value)); err != nil {
 					return fmt.Errorf("failed to scan: %w", err)
 				}
-				sfi.Address = sfi.UnlockConditions.UnlockHash()
+				sfi.Address = sfi.SiafundInput.UnlockConditions.UnlockHash()
 				txns[i].SiafundInputs = append(txns[i].SiafundInputs, sfi)
 			}
 			return rows.Err()
