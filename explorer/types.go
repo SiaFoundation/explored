@@ -596,3 +596,35 @@ type HostQuery struct {
 	AcceptContracts      *bool             `json:"acceptContracts,omitempty"`
 	Online               *bool             `json:"online,omitempty"`
 }
+
+// MarshalJSON implements json.Marshaler.  The embedded types.SiacoinInput
+// in our SiacoinInput has its own marshaler that will override default
+// marshaling and result in fields we expect being missing.
+func (e SiacoinInput) MarshalJSON() ([]byte, error) {
+	type siacoinInputNoMarshal types.SiacoinInput
+	return json.Marshal(struct {
+		siacoinInputNoMarshal                // inlined fields from SiacoinInput
+		Address               types.Address  `json:"address"`
+		Value                 types.Currency `json:"value"`
+	}{
+		siacoinInputNoMarshal: siacoinInputNoMarshal(e.SiacoinInput),
+		Address:               e.Address,
+		Value:                 e.Value,
+	})
+}
+
+// MarshalJSON implements json.Marshaler.  The embedded types.SiafundInput
+// in our SiafundInput has its own marshaler that will override default
+// marshaling and result in fields we expect being missing.
+func (e SiafundInput) MarshalJSON() ([]byte, error) {
+	type siafundInputNoMarshal types.SiafundInput
+	return json.Marshal(struct {
+		siafundInputNoMarshal
+		Address types.Address `json:"address"`
+		Value   uint64        `json:"value"`
+	}{
+		siafundInputNoMarshal: siafundInputNoMarshal(e.SiafundInput),
+		Address:               e.Address,
+		Value:                 e.Value,
+	})
+}
