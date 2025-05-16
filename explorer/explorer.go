@@ -270,8 +270,8 @@ func (e *Explorer) Health() error {
 
 	cs := e.cm.TipState()
 	lastBlockTimestamp := cs.PrevTimestamps[0]
-	if time.Since(lastBlockTimestamp) > maxReorgPeriod {
-		return fmt.Errorf("last block timestamp %s is too old: %w", lastBlockTimestamp, ErrNotSyncing)
+	if n := time.Since(lastBlockTimestamp); n > maxReorgPeriod {
+		return fmt.Errorf("%s since last block: %w", n, ErrNotSyncing)
 	}
 
 	maxIndexedDelta := uint64(maxReorgPeriod / cs.Network.BlockInterval)
