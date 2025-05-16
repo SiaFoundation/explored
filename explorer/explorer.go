@@ -127,7 +127,6 @@ type Explorer struct {
 	unsubscribe func()
 
 	mu              sync.Mutex // protects the fields below
-	lastReorg       time.Time
 	lastSuccessScan time.Time
 }
 
@@ -157,10 +156,6 @@ func (e *Explorer) syncStore(index types.ChainIndex, batchSize int) error {
 			if len(caus) > 0 {
 				index = caus[len(caus)-1].State.Index
 			}
-
-			e.mu.Lock()
-			e.lastReorg = time.Now()
-			e.mu.Unlock()
 		}
 	}
 	return nil
@@ -273,21 +268,21 @@ func (e *Explorer) Health() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if n := time.Since(e.lastReorg); n > maxReorgPeriod {
-		return fmt.Errorf("last reorg was %s ago: %w", n, ErrNotSyncing)
+	cs := e.cm.TipState()
+	lastBlockTimestamp := cs.PrevTimestamps[0]
+	if time.Since(lastBlockTimestamp) > maxReorgPeriod {
+		return fmt.Errorf("last block timestamp %s is too old: %w", lastBlockTimestamp, ErrNotSyncing)
 	}
 
-	cs := e.cm.TipState()
-	syncedTip, err := e.s.Tip()
+	maxIndexedDelta := uint64(maxReorgPeriod / cs.Network.BlockInterval)
+	indexedTip, err := e.s.Tip()
 	if err != nil {
 		return fmt.Errorf("failed to get tip: %w", err)
+	} else if n := delta(cs.Index.Height, indexedTip.Height); n > maxIndexedDelta {
+		return fmt.Errorf("last indexed block %q is too far behind tip %q: %w", indexedTip, cs.Index, ErrNotSyncing)
 	}
 
-	maxSyncedDelta := uint64(maxReorgPeriod / cs.Network.BlockInterval)
-	if delta(cs.Index.Height, syncedTip.Height) > maxSyncedDelta {
-		// skip scan check if not synced
-		return nil
-	} else if n := time.Since(e.lastSuccessScan); n > 2*e.scanCfg.ScanInterval {
+	if n := time.Since(e.lastSuccessScan); n > 2*e.scanCfg.ScanInterval {
 		// 2x the scan interval to allow some leeway
 		// before we consider the explorer to be unhealthy
 		return fmt.Errorf("last successful scan was %s ago: %w", n, ErrNotScanning)
