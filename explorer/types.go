@@ -179,7 +179,11 @@ func V2ResolutionType(res types.V2FileContractResolutionType) (result V2Resoluti
 type SiacoinInput struct {
 	Address types.Address  `json:"address"`
 	Value   types.Currency `json:"value"`
-	types.SiacoinInput
+
+	// Copied from types.SiacoinInput
+	// Avoid embedding because it overrides MarshalJSON
+	ParentID         types.SiacoinOutputID  `json:"parentID"`
+	UnlockConditions types.UnlockConditions `json:"unlockConditions"`
 }
 
 // A SiafundInput is a types.SiafundInput with information about the parent
@@ -187,7 +191,12 @@ type SiacoinInput struct {
 type SiafundInput struct {
 	Address types.Address `json:"address"`
 	Value   uint64        `json:"value"`
-	types.SiafundInput
+
+	// Copied from types.SiafundInput
+	// Avoid embedding because it overrides MarshalJSON
+	ParentID         types.SiafundOutputID  `json:"parentID"`
+	UnlockConditions types.UnlockConditions `json:"unlockConditions"`
+	ClaimAddress     types.Address          `json:"claimAddress"`
 }
 
 // A SiacoinOutput is a types.SiacoinElement with added fields for the source
@@ -595,36 +604,4 @@ type HostQuery struct {
 	MaxSectorAccessPrice *types.Currency   `json:"maxSectorAccessPrice,omitempty"`
 	AcceptContracts      *bool             `json:"acceptContracts,omitempty"`
 	Online               *bool             `json:"online,omitempty"`
-}
-
-// MarshalJSON implements json.Marshaler.  The embedded types.SiacoinInput
-// in our SiacoinInput has its own marshaler that will override default
-// marshaling and result in fields we expect being missing.
-func (e SiacoinInput) MarshalJSON() ([]byte, error) {
-	type siacoinInputNoMarshal types.SiacoinInput
-	return json.Marshal(struct {
-		siacoinInputNoMarshal                // inlined fields from SiacoinInput
-		Address               types.Address  `json:"address"`
-		Value                 types.Currency `json:"value"`
-	}{
-		siacoinInputNoMarshal: siacoinInputNoMarshal(e.SiacoinInput),
-		Address:               e.Address,
-		Value:                 e.Value,
-	})
-}
-
-// MarshalJSON implements json.Marshaler.  The embedded types.SiafundInput
-// in our SiafundInput has its own marshaler that will override default
-// marshaling and result in fields we expect being missing.
-func (e SiafundInput) MarshalJSON() ([]byte, error) {
-	type siafundInputNoMarshal types.SiafundInput
-	return json.Marshal(struct {
-		siafundInputNoMarshal
-		Address types.Address `json:"address"`
-		Value   uint64        `json:"value"`
-	}{
-		siafundInputNoMarshal: siafundInputNoMarshal(e.SiafundInput),
-		Address:               e.Address,
-		Value:                 e.Value,
-	})
 }
