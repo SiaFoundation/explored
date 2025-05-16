@@ -1,10 +1,12 @@
 package sqlite_test
 
 import (
+	"errors"
 	"math"
 	"testing"
 
 	"go.sia.tech/core/consensus"
+	proto4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/testutil"
@@ -43,6 +45,91 @@ func (n *testChain) assertV2ChainIndices(t *testing.T, txnID types.TransactionID
 
 	for i := range indices {
 		testutil.Equal(t, "index", expected[i], indices[i])
+	}
+}
+
+func checkV2Contract(t *testing.T, expected explorer.V2FileContract, got explorer.V2FileContract) {
+	t.Helper()
+
+	testutil.Equal(t, "V2FileContract", expected.V2FileContractElement.V2FileContract, got.V2FileContractElement.V2FileContract)
+	testutil.Equal(t, "TransactionID", expected.TransactionID, got.TransactionID)
+	testutil.Equal(t, "RenewedFrom", expected.RenewedFrom, got.RenewedFrom)
+	testutil.Equal(t, "RenewedTo", expected.RenewedTo, got.RenewedTo)
+	testutil.Equal(t, "ConfirmationIndex", expected.ConfirmationIndex, got.ConfirmationIndex)
+	testutil.Equal(t, "ConfirmationTransactionID", expected.ConfirmationTransactionID, got.ConfirmationTransactionID)
+	testutil.Equal(t, "ResolutionType", expected.ResolutionType, got.ResolutionType)
+	testutil.Equal(t, "ResolutionIndex", expected.ResolutionIndex, got.ResolutionIndex)
+	testutil.Equal(t, "ResolutionTransactionID", expected.ResolutionTransactionID, got.ResolutionTransactionID)
+}
+
+// assertV2FCE asserts the contract element in the db has the right state and
+// block/transaction indices
+func (n *testChain) assertV2FCE(t *testing.T, fcID types.FileContractID, expected explorer.V2FileContract) {
+	t.Helper()
+
+	fces, err := n.db.V2Contracts([]types.FileContractID{fcID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	testutil.Equal(t, "len(fces)", 1, len(fces))
+
+	checkV2Contract(t, expected, fces[0])
+}
+
+// assertNoV2FCE asserts the contract element in the db has the right state and
+// block/transaction indices
+func (n *testChain) assertNoV2FCE(t *testing.T, fcIDs ...types.FileContractID) {
+	t.Helper()
+
+	fces, err := n.db.V2Contracts(fcIDs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testutil.Equal(t, "len(fces)", 0, len(fces))
+}
+
+// assertV2TransactionContracts asserts that the enhanced FileContracts
+// in a v2 transaction retrieved from the explorer match the expected
+// contracts.
+func (n *testChain) assertV2TransactionContracts(t *testing.T, txnID types.TransactionID, revisions bool, expected ...explorer.V2FileContract) {
+	t.Helper()
+
+	txns, err := n.db.V2Transactions([]types.TransactionID{txnID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	testutil.Equal(t, "len(txns)", 1, len(txns))
+
+	txn := txns[0]
+	if !revisions {
+		testutil.Equal(t, "len(txn.FileContracts)", len(expected), len(txn.FileContracts))
+		for i := range expected {
+			checkV2Contract(t, expected[i], txn.FileContracts[i])
+		}
+	} else {
+		testutil.Equal(t, "len(txn.FileContractRevisions)", len(expected), len(txn.FileContractRevisions))
+		for i := range expected {
+			checkV2Contract(t, expected[i], txn.FileContractRevisions[i].Revision)
+		}
+	}
+}
+
+func (n *testChain) assertV2ContractRevisions(t *testing.T, fcID types.FileContractID, expected ...explorer.V2FileContract) {
+	t.Helper()
+
+	fces, err := n.db.V2ContractRevisions(fcID)
+	if len(expected) == 0 {
+		if !errors.Is(err, explorer.ErrContractNotFound) {
+			t.Fatal("should have got contract not found error")
+		}
+		return
+	} else if err != nil {
+		t.Fatal(err)
+	}
+	testutil.Equal(t, "len(fces)", len(expected), len(fces))
+
+	for i := range expected {
+		checkV2Contract(t, expected[i], fces[i])
 	}
 }
 
@@ -863,4 +950,659 @@ func TestV2UnspentSiafundOutputs(t *testing.T) {
 	})
 	checkSiafundOutputs(addr2)
 	checkSiafundOutputs(addr3)
+}
+
+func prepareV2Contract(renterPK, hostPK types.PrivateKey, proofHeight uint64) (types.V2FileContract, types.Currency) {
+	fc, _ := proto4.NewContract(proto4.HostPrices{}, proto4.RPCFormContractParams{
+		ProofHeight:     proofHeight,
+		Allowance:       types.Siacoins(5),
+		RenterAddress:   types.StandardUnlockConditions(renterPK.PublicKey()).UnlockHash(),
+		Collateral:      types.Siacoins(5),
+		RenterPublicKey: renterPK.PublicKey(),
+	}, hostPK.PublicKey(), types.StandardUnlockConditions(hostPK.PublicKey()).UnlockHash())
+	fc.ExpirationHeight = fc.ProofHeight + 1
+
+	payout := fc.RenterOutput.Value.Add(fc.HostOutput.Value).Add(consensus.State{}.V2FileContractTax(fc))
+	return fc, payout
+}
+
+func coreToV2ExplorerFC(fcID types.FileContractID, fc types.V2FileContract) explorer.V2FileContract {
+	return explorer.V2FileContract{
+		V2FileContractElement: types.V2FileContractElement{
+			ID:             fcID,
+			V2FileContract: fc,
+		},
+	}
+}
+
+func TestV2FileContractProof(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(uc1)}
+
+	renterPK := types.GeneratePrivateKey()
+	hostPK := types.GeneratePrivateKey()
+
+	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+
+	fc, payout := prepareV2Contract(renterPK, hostPK, n.tipState().Index.Height+1)
+	txn1 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, n.db, n.genesis().Transactions[0].SiacoinOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   val.Sub(payout),
+		}},
+		FileContracts: []types.V2FileContract{fc},
+	}
+	testutil.SignV2TransactionWithContracts(n.tipState(), pk1, renterPK, hostPK, &txn1)
+
+	n.mineV2Transactions(t, txn1)
+
+	fce := coreToV2ExplorerFC(txn1.V2FileContractID(txn1.ID(), 0), txn1.FileContracts[0])
+	fce.TransactionID = txn1.ID()
+	fce.ConfirmationIndex = n.tipState().Index
+	fce.ConfirmationTransactionID = txn1.ID()
+
+	n.assertV2FCE(t, fce.ID, fce)
+	n.assertV2TransactionContracts(t, txn1.ID(), false, fce)
+
+	sp := &types.V2StorageProof{
+		ProofIndex: getCIE(t, n.db, n.tipState().Index.ID),
+	}
+	txn2 := types.V2Transaction{
+		FileContractResolutions: []types.V2FileContractResolution{{
+			Parent:     getFCE(t, n.db, fce.ID),
+			Resolution: sp,
+		}},
+	}
+	n.mineV2Transactions(t, txn2)
+
+	tip := n.tipState().Index
+	txnID := txn2.ID()
+	resolutionType := explorer.V2ResolutionStorageProof
+
+	// should be resolved
+	fceResolved := fce
+	fceResolved.ResolutionType = &resolutionType
+	fceResolved.ResolutionIndex = &tip
+	fceResolved.ResolutionTransactionID = &txnID
+
+	n.assertV2FCE(t, fce.ID, fceResolved)
+	n.assertV2TransactionContracts(t, txn1.ID(), false, fceResolved)
+
+	n.revertBlock(t)
+
+	// should have old FCE back
+	n.assertV2FCE(t, fce.ID, fce)
+	n.assertV2TransactionContracts(t, txn1.ID(), false, fce)
+
+	n.revertBlock(t)
+
+	// FCE should not exist after creation reverted
+	n.assertNoV2FCE(t, fce.ID)
+	n.assertV2ContractRevisions(t, fce.ID)
+}
+
+func TestV2FileContractMissed(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(uc1)}
+
+	renterPK := types.GeneratePrivateKey()
+	hostPK := types.GeneratePrivateKey()
+
+	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+
+	fc, payout := prepareV2Contract(renterPK, hostPK, n.tipState().Index.Height+1)
+	txn1 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, n.db, n.genesis().Transactions[0].SiacoinOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   val.Sub(payout),
+		}},
+		FileContracts: []types.V2FileContract{fc},
+	}
+	testutil.SignV2TransactionWithContracts(n.tipState(), pk1, renterPK, hostPK, &txn1)
+
+	n.mineV2Transactions(t, txn1)
+
+	fce := coreToV2ExplorerFC(txn1.V2FileContractID(txn1.ID(), 0), txn1.FileContracts[0])
+	fce.TransactionID = txn1.ID()
+	fce.ConfirmationIndex = n.tipState().Index
+	fce.ConfirmationTransactionID = txn1.ID()
+
+	n.assertV2FCE(t, fce.ID, fce)
+	n.assertV2TransactionContracts(t, txn1.ID(), false, fce)
+
+	n.mineV2Transactions(t)
+
+	n.assertV2FCE(t, fce.ID, fce)
+	n.assertV2TransactionContracts(t, txn1.ID(), false, fce)
+
+	txn2 := types.V2Transaction{
+		FileContractResolutions: []types.V2FileContractResolution{{
+			Parent:     getFCE(t, n.db, fce.ID),
+			Resolution: &types.V2FileContractExpiration{},
+		}},
+	}
+	n.mineV2Transactions(t, txn2)
+
+	tip := n.tipState().Index
+	txnID := txn2.ID()
+	resolutionType := explorer.V2ResolutionExpiration
+
+	// should be resolved
+	fceResolved := fce
+	fceResolved.ResolutionType = &resolutionType
+	fceResolved.ResolutionIndex = &tip
+	fceResolved.ResolutionTransactionID = &txnID
+
+	n.assertV2FCE(t, fce.ID, fceResolved)
+	n.assertV2TransactionContracts(t, txn1.ID(), false, fceResolved)
+
+	n.revertBlock(t)
+
+	// revert resolution
+	// should have old FCE back
+	n.assertV2FCE(t, fce.ID, fce)
+	n.assertV2TransactionContracts(t, txn1.ID(), false, fce)
+
+	n.revertBlock(t)
+
+	n.assertV2FCE(t, fce.ID, fce)
+	n.assertV2TransactionContracts(t, txn1.ID(), false, fce)
+
+	n.revertBlock(t)
+
+	// FCE should not exist after creation reverted
+	n.assertNoV2FCE(t, fce.ID)
+	n.assertV2ContractRevisions(t, fce.ID)
+}
+
+func TestV2FileContractRenewal(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(uc1)}
+
+	renterPK := types.GeneratePrivateKey()
+	hostPK := types.GeneratePrivateKey()
+
+	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+
+	fc, payout := prepareV2Contract(renterPK, hostPK, n.tipState().Index.Height+1)
+	txn1 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, n.db, n.genesis().Transactions[0].SiacoinOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   val.Sub(payout),
+		}},
+		FileContracts: []types.V2FileContract{fc},
+	}
+	testutil.SignV2TransactionWithContracts(n.tipState(), pk1, renterPK, hostPK, &txn1)
+
+	n.mineV2Transactions(t, txn1)
+
+	fce := coreToV2ExplorerFC(txn1.V2FileContractID(txn1.ID(), 0), txn1.FileContracts[0])
+	fce.TransactionID = txn1.ID()
+	fce.ConfirmationIndex = n.tipState().Index
+	fce.ConfirmationTransactionID = txn1.ID()
+
+	n.assertV2FCE(t, fce.ID, fce)
+	n.assertV2TransactionContracts(t, txn1.ID(), false, fce)
+
+	finalRevision := fc
+	finalRevision.RevisionNumber = types.MaxRevisionNumber
+	newContract := fc
+	newContract.ProofHeight++
+	newContract.ExpirationHeight++
+	renewal := &types.V2FileContractRenewal{
+		NewContract:       newContract,
+		FinalRenterOutput: finalRevision.RenterOutput,
+		FinalHostOutput:   finalRevision.HostOutput,
+		RenterRollover:    types.ZeroCurrency,
+		HostRollover:      types.ZeroCurrency,
+	}
+	txn2 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, n.db, txn1.SiacoinOutputID(txn1.ID(), 0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   txn1.SiacoinOutputs[0].Value.Sub(payout),
+		}},
+		FileContractResolutions: []types.V2FileContractResolution{{
+			Parent:     getFCE(t, n.db, fce.ID),
+			Resolution: renewal,
+		}},
+	}
+	testutil.SignV2TransactionWithContracts(n.tipState(), pk1, renterPK, hostPK, &txn2)
+
+	n.mineV2Transactions(t, txn2)
+
+	tip := n.tipState().Index
+	txnID := txn2.ID()
+	renewalID := fce.ID.V2RenewalID()
+	resolutionType := explorer.V2ResolutionRenewal
+
+	// should be resolved
+	fceResolved := fce
+	fceResolved.ResolutionType = &resolutionType
+	fceResolved.ResolutionIndex = &tip
+	fceResolved.ResolutionTransactionID = &txnID
+	fceResolved.RenewedTo = &renewalID
+
+	fceRenewal := coreToV2ExplorerFC(renewalID, renewal.NewContract)
+	fceRenewal.TransactionID = txn2.ID()
+	fceRenewal.ConfirmationIndex = n.tipState().Index
+	fceRenewal.ConfirmationTransactionID = txn2.ID()
+	fceRenewal.RenewedFrom = &fce.ID
+
+	n.assertV2FCE(t, fce.ID, fceResolved)
+	n.assertV2TransactionContracts(t, txn1.ID(), false, fceResolved)
+
+	n.assertV2FCE(t, renewalID, fceRenewal)
+
+	n.revertBlock(t)
+
+	// revert resolution
+	// should have old FCE back
+	n.assertV2FCE(t, fce.ID, fce)
+	n.assertV2TransactionContracts(t, txn1.ID(), false, fce)
+
+	// Renewal FCE should not exist after resolution reverted
+	n.assertNoV2FCE(t, renewalID)
+
+	n.revertBlock(t)
+
+	// FCE should not exist
+	n.assertNoV2FCE(t, fce.ID, renewalID)
+	n.assertV2ContractRevisions(t, fce.ID)
+}
+
+func TestV2FileContractRevision(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(uc1)}
+
+	renterPK := types.GeneratePrivateKey()
+	hostPK := types.GeneratePrivateKey()
+
+	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+
+	fc, payout := prepareV2Contract(renterPK, hostPK, n.tipState().Index.Height+2)
+	txn1 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, n.db, n.genesis().Transactions[0].SiacoinOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   val.Sub(payout),
+		}},
+		FileContracts: []types.V2FileContract{fc},
+	}
+	testutil.SignV2TransactionWithContracts(n.tipState(), pk1, renterPK, hostPK, &txn1)
+
+	n.mineV2Transactions(t, txn1)
+
+	fce := coreToV2ExplorerFC(txn1.V2FileContractID(txn1.ID(), 0), txn1.FileContracts[0])
+	fce.TransactionID = txn1.ID()
+	fce.ConfirmationIndex = n.tipState().Index
+	fce.ConfirmationTransactionID = txn1.ID()
+
+	n.assertV2FCE(t, fce.ID, fce)
+	n.assertV2ContractRevisions(t, fce.ID, fce)
+	n.assertV2TransactionContracts(t, txn1.ID(), false, fce)
+
+	fcRevision1 := fc
+	fcRevision1.RevisionNumber++
+	txn2 := types.V2Transaction{
+		FileContractRevisions: []types.V2FileContractRevision{{
+			Parent:   getFCE(t, n.db, fce.ID),
+			Revision: fcRevision1,
+		}},
+	}
+	testutil.SignV2TransactionWithContracts(n.tipState(), pk1, renterPK, hostPK, &txn2)
+
+	n.mineV2Transactions(t, txn2)
+
+	fceRevision1 := coreToV2ExplorerFC(fce.ID, txn2.FileContractRevisions[0].Revision)
+	fceRevision1.TransactionID = txn2.ID()
+	fceRevision1.ConfirmationIndex = fce.ConfirmationIndex
+	fceRevision1.ConfirmationTransactionID = fce.ConfirmationTransactionID
+
+	n.assertV2FCE(t, fce.ID, fceRevision1)
+	n.assertV2ContractRevisions(t, fce.ID, fce, fceRevision1)
+	n.assertV2TransactionContracts(t, txn1.ID(), false, fce)
+	n.assertV2TransactionContracts(t, txn2.ID(), true, fceRevision1)
+
+	n.mineV2Transactions(t)
+
+	// resolve contract unsuccessful
+	txn4 := types.V2Transaction{
+		FileContractResolutions: []types.V2FileContractResolution{{
+			Parent:     getFCE(t, n.db, fce.ID),
+			Resolution: &types.V2FileContractExpiration{},
+		}},
+	}
+	n.mineV2Transactions(t, txn4)
+
+	tip := n.tipState().Index
+	txnID := txn4.ID()
+	resolutionType := explorer.V2ResolutionExpiration
+
+	// should be resolved
+	fce.ResolutionType = &resolutionType
+	fce.ResolutionIndex = &tip
+	fce.ResolutionTransactionID = &txnID
+	fceRevision1.ResolutionType = &resolutionType
+	fceRevision1.ResolutionIndex = &tip
+	fceRevision1.ResolutionTransactionID = &txnID
+
+	n.assertV2FCE(t, fce.ID, fceRevision1)
+	n.assertV2ContractRevisions(t, fce.ID, fce, fceRevision1)
+	n.assertV2TransactionContracts(t, txn1.ID(), false, fce)
+	n.assertV2TransactionContracts(t, txn2.ID(), true, fceRevision1)
+
+	// revert resolution of contract
+	for i := n.tipState().Index.Height; i >= fc.ExpirationHeight; i-- {
+		n.revertBlock(t)
+	}
+
+	fce.ResolutionType = nil
+	fce.ResolutionIndex = nil
+	fce.ResolutionTransactionID = nil
+	fceRevision1.ResolutionType = nil
+	fceRevision1.ResolutionIndex = nil
+	fceRevision1.ResolutionTransactionID = nil
+
+	n.assertV2FCE(t, fce.ID, fceRevision1)
+	n.assertV2ContractRevisions(t, fce.ID, fce, fceRevision1)
+	n.assertV2TransactionContracts(t, txn1.ID(), false, fce)
+	n.assertV2TransactionContracts(t, txn2.ID(), true, fceRevision1)
+
+	// revert revision of contract
+	n.revertBlock(t)
+
+	n.assertV2FCE(t, fce.ID, fce)
+	n.assertV2ContractRevisions(t, fce.ID, fce)
+	n.assertV2TransactionContracts(t, txn1.ID(), false, fce)
+
+	n.revertBlock(t)
+
+	n.assertNoV2FCE(t, fce.ID)
+	n.assertContractRevisions(t, fce.ID)
+}
+
+func TestV2FileContractMultipleRevisions(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(uc1)}
+
+	renterPK := types.GeneratePrivateKey()
+	hostPK := types.GeneratePrivateKey()
+
+	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+
+	fc, payout := prepareV2Contract(renterPK, hostPK, n.tipState().Index.Height+2)
+	txn1 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, n.db, n.genesis().Transactions[0].SiacoinOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   val.Sub(payout),
+		}},
+		FileContracts: []types.V2FileContract{fc},
+	}
+	testutil.SignV2TransactionWithContracts(n.tipState(), pk1, renterPK, hostPK, &txn1)
+
+	n.mineV2Transactions(t, txn1)
+
+	fce := coreToV2ExplorerFC(txn1.V2FileContractID(txn1.ID(), 0), txn1.FileContracts[0])
+	fce.TransactionID = txn1.ID()
+	fce.ConfirmationIndex = n.tipState().Index
+	fce.ConfirmationTransactionID = txn1.ID()
+
+	n.assertV2FCE(t, fce.ID, fce)
+	n.assertV2ContractRevisions(t, fce.ID, fce)
+	n.assertV2TransactionContracts(t, txn1.ID(), false, fce)
+
+	fcRevision1 := fc
+	fcRevision1.RevisionNumber++
+
+	fcRevision2 := fcRevision1
+	fcRevision2.RevisionNumber++
+
+	txn2 := types.V2Transaction{
+		FileContractRevisions: []types.V2FileContractRevision{{
+			Parent:   getFCE(t, n.db, fce.ID),
+			Revision: fcRevision1,
+		}},
+	}
+	testutil.SignV2TransactionWithContracts(n.tipState(), pk1, renterPK, hostPK, &txn2)
+
+	txn3 := types.V2Transaction{
+		FileContractRevisions: []types.V2FileContractRevision{{
+			Parent:   getFCE(t, n.db, fce.ID),
+			Revision: fcRevision2,
+		}},
+	}
+	testutil.SignV2TransactionWithContracts(n.tipState(), pk1, renterPK, hostPK, &txn3)
+
+	n.mineV2Transactions(t, txn2, txn3)
+
+	fceRevision1 := coreToV2ExplorerFC(fce.ID, txn2.FileContractRevisions[0].Revision)
+	fceRevision1.TransactionID = txn2.ID()
+	fceRevision1.ConfirmationIndex = fce.ConfirmationIndex
+	fceRevision1.ConfirmationTransactionID = fce.ConfirmationTransactionID
+
+	fceRevision2 := coreToV2ExplorerFC(fce.ID, txn3.FileContractRevisions[0].Revision)
+	fceRevision2.TransactionID = txn3.ID()
+	fceRevision2.ConfirmationIndex = fce.ConfirmationIndex
+	fceRevision2.ConfirmationTransactionID = fce.ConfirmationTransactionID
+
+	n.assertV2FCE(t, fce.ID, fceRevision2)
+	n.assertV2ContractRevisions(t, fce.ID, fce, fceRevision1, fceRevision2)
+	n.assertV2TransactionContracts(t, txn1.ID(), false, fce)
+	n.assertV2TransactionContracts(t, txn2.ID(), true, fceRevision1)
+	n.assertV2TransactionContracts(t, txn3.ID(), true, fceRevision2)
+
+	n.mineV2Transactions(t)
+
+	// resolve contract unsuccessful
+	txn4 := types.V2Transaction{
+		FileContractResolutions: []types.V2FileContractResolution{{
+			Parent:     getFCE(t, n.db, fce.ID),
+			Resolution: &types.V2FileContractExpiration{},
+		}},
+	}
+	n.mineV2Transactions(t, txn4)
+
+	tip := n.tipState().Index
+	txnID := txn4.ID()
+	resolutionType := explorer.V2ResolutionExpiration
+
+	// should be resolved
+	fce.ResolutionType = &resolutionType
+	fce.ResolutionIndex = &tip
+	fce.ResolutionTransactionID = &txnID
+	fceRevision1.ResolutionType = &resolutionType
+	fceRevision1.ResolutionIndex = &tip
+	fceRevision1.ResolutionTransactionID = &txnID
+	fceRevision2.ResolutionType = &resolutionType
+	fceRevision2.ResolutionIndex = &tip
+	fceRevision2.ResolutionTransactionID = &txnID
+
+	n.assertV2FCE(t, fce.ID, fceRevision2)
+	n.assertV2ContractRevisions(t, fce.ID, fce, fceRevision1, fceRevision2)
+	n.assertV2TransactionContracts(t, txn1.ID(), false, fce)
+	n.assertV2TransactionContracts(t, txn2.ID(), true, fceRevision1)
+	n.assertV2TransactionContracts(t, txn3.ID(), true, fceRevision2)
+
+	// revert resolution of contract
+	for i := n.tipState().Index.Height; i >= fc.ExpirationHeight; i-- {
+		n.revertBlock(t)
+	}
+
+	fce.ResolutionType = nil
+	fce.ResolutionIndex = nil
+	fce.ResolutionTransactionID = nil
+	fceRevision1.ResolutionType = nil
+	fceRevision1.ResolutionIndex = nil
+	fceRevision1.ResolutionTransactionID = nil
+	fceRevision2.ResolutionType = nil
+	fceRevision2.ResolutionIndex = nil
+	fceRevision2.ResolutionTransactionID = nil
+
+	n.assertV2FCE(t, fce.ID, fceRevision2)
+	n.assertV2ContractRevisions(t, fce.ID, fce, fceRevision1, fceRevision2)
+	n.assertV2TransactionContracts(t, txn1.ID(), false, fce)
+	n.assertV2TransactionContracts(t, txn2.ID(), true, fceRevision1)
+	n.assertV2TransactionContracts(t, txn3.ID(), true, fceRevision2)
+
+	// revert revisions block
+	n.revertBlock(t)
+
+	n.assertV2FCE(t, fce.ID, fce)
+	n.assertV2ContractRevisions(t, fce.ID, fce)
+	n.assertV2TransactionContracts(t, txn1.ID(), false, fce)
+
+	n.revertBlock(t)
+
+	n.assertNoV2FCE(t, fce.ID)
+	n.assertV2ContractRevisions(t, fce.ID)
+}
+
+func TestV2FileContractsKey(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(uc1)}
+
+	renterPK := types.GeneratePrivateKey()
+	hostPK := types.GeneratePrivateKey()
+
+	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+
+	assertContractsKey := func(pk types.PublicKey, expected ...explorer.V2FileContract) {
+		t.Helper()
+
+		fces, err := n.db.V2ContractsKey(pk)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(fces)", len(expected), len(fces))
+
+		for i := range expected {
+			checkV2Contract(t, expected[i], fces[i])
+		}
+	}
+
+	fc, payout := prepareV2Contract(renterPK, hostPK, n.tipState().Index.Height+2)
+	txn1 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, n.db, n.genesis().Transactions[0].SiacoinOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   val.Sub(payout),
+		}},
+		FileContracts: []types.V2FileContract{fc},
+	}
+	testutil.SignV2TransactionWithContracts(n.tipState(), pk1, renterPK, hostPK, &txn1)
+
+	n.mineV2Transactions(t, txn1)
+
+	fce := coreToV2ExplorerFC(txn1.V2FileContractID(txn1.ID(), 0), txn1.FileContracts[0])
+	fce.TransactionID = txn1.ID()
+	fce.ConfirmationIndex = n.tipState().Index
+	fce.ConfirmationTransactionID = txn1.ID()
+
+	n.assertV2FCE(t, fce.ID, fce)
+	n.assertV2ContractRevisions(t, fce.ID, fce)
+	assertContractsKey(pk1.PublicKey())
+	assertContractsKey(renterPK.PublicKey(), fce)
+	assertContractsKey(hostPK.PublicKey(), fce)
+
+	// change renter public key to pk1
+	fcRevision1 := fc
+	fcRevision1.RevisionNumber++
+	fcRevision1.RenterPublicKey = pk1.PublicKey()
+
+	txn2 := types.V2Transaction{
+		FileContractRevisions: []types.V2FileContractRevision{{
+			Parent:   getFCE(t, n.db, fce.ID),
+			Revision: fcRevision1,
+		}},
+	}
+	testutil.SignV2TransactionWithContracts(n.tipState(), pk1, renterPK, hostPK, &txn2)
+
+	n.mineV2Transactions(t, txn2)
+
+	fceRevision1 := coreToV2ExplorerFC(fce.ID, txn2.FileContractRevisions[0].Revision)
+	fceRevision1.TransactionID = txn2.ID()
+	fceRevision1.ConfirmationIndex = fce.ConfirmationIndex
+	fceRevision1.ConfirmationTransactionID = fce.ConfirmationTransactionID
+
+	// renter public key changed from renterPK to pk1 so we should not have
+	// any contracts with renterPK
+	n.assertV2FCE(t, fce.ID, fceRevision1)
+	n.assertV2ContractRevisions(t, fce.ID, fce, fceRevision1)
+	assertContractsKey(pk1.PublicKey(), fceRevision1)
+	assertContractsKey(renterPK.PublicKey())
+	assertContractsKey(hostPK.PublicKey(), fceRevision1)
+
+	n.revertBlock(t)
+
+	// revert revision so renterPK should have contract now and pk1 should not
+	n.assertV2FCE(t, fce.ID, fce)
+	n.assertV2ContractRevisions(t, fce.ID, fce)
+	assertContractsKey(pk1.PublicKey())
+	assertContractsKey(renterPK.PublicKey(), fce)
+	assertContractsKey(hostPK.PublicKey(), fce)
+
+	n.revertBlock(t)
+
+	// revert formation of contract
+	n.assertNoV2FCE(t, fce.ID)
+	n.assertContractRevisions(t, fce.ID)
+	assertContractsKey(pk1.PublicKey())
+	assertContractsKey(renterPK.PublicKey())
+	assertContractsKey(hostPK.PublicKey())
 }
