@@ -12,6 +12,7 @@ import (
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	ctestutil "go.sia.tech/coreutils/testutil"
+	"go.sia.tech/coreutils/wallet"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/testutil"
 	"go.sia.tech/explored/persist/sqlite"
@@ -267,6 +268,18 @@ func (n *testChain) assertContractRevisions(t *testing.T, fcID types.FileContrac
 
 	for i := range expected {
 		testutil.Equal(t, "ExtendedFileContract", expected[i], fces[i])
+	}
+}
+
+func (n *testChain) assertEvents(t *testing.T, addr types.Address, expected ...explorer.Event) {
+	events, err := n.db.AddressEvents(addr, 0, math.MaxInt64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testutil.Equal(t, "len(events)", len(expected), len(events))
+
+	for i := range expected {
+		testutil.Equal(t, "Event", expected[i], events[i])
 	}
 }
 
@@ -1247,30 +1260,36 @@ func TestEventPayout(t *testing.T) {
 
 	n := newTestChain(t, false, nil)
 
+	getSCE := func(scid types.SiacoinOutputID) explorer.SiacoinOutput {
+		t.Helper()
+
+		sces, err := n.db.SiacoinElements([]types.SiacoinOutputID{scid})
+		if err != nil {
+			t.Fatal(err)
+		} else if len(sces) == 0 {
+			t.Fatal("can't find sce")
+		}
+		return sces[0]
+	}
 	b := testutil.MineBlock(n.tipState(), nil, addr1)
 	n.applyBlock(t, b)
 
-	{
-		events, err := n.db.AddressEvents(addr1, 0, math.MaxInt64)
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "events", 1, len(events))
-
-		ev0 := events[0].Data.(explorer.EventPayout)
-		testutil.Equal(t, "event 0 output ID", n.tipState().Index.ID.MinerOutputID(0), ev0.SiacoinElement.ID)
-		testutil.Equal(t, "event 0 output source", explorer.SourceMinerPayout, ev0.SiacoinElement.Source)
+	scID := b.ID().MinerOutputID(0)
+	ev1 := explorer.Event{
+		ID:             types.Hash256(scID),
+		Index:          n.tipState().Index,
+		Confirmations:  0,
+		Type:           wallet.EventTypeMinerPayout,
+		Data:           explorer.EventPayout{getSCE(scID)},
+		MaturityHeight: n.tipState().MaturityHeight() - 1,
+		Timestamp:      b.Timestamp,
+		Relevant:       []types.Address{addr1},
 	}
+	n.assertEvents(t, addr1, ev1)
 
 	n.revertBlock(t)
 
-	{
-		events, err := n.db.AddressEvents(addr1, 0, math.MaxInt64)
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "events", 0, len(events))
-	}
+	n.assertEvents(t, addr1)
 }
 
 func TestBlock(t *testing.T) {

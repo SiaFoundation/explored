@@ -4,24 +4,26 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/go-test/deep"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
-	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
 )
 
+func IgnoreUnexported() cmp.Option {
+	// the exporter opt allows all unexported fields: https://github.com/google/go-cmp/pull/176
+	return cmp.Exporter(func(reflect.Type) bool { return true })
+}
+
 // Equal checks if two values of the same type are equal and fails otherwise.
-func Equal[T any](t *testing.T, desc string, expect, got T) {
+func Equal[T any](t *testing.T, desc string, expected, got T) {
 	t.Helper()
 
-	if !cmp.Equal(expect, got,
-		cmpopts.EquateEmpty(),
-		cmp.AllowUnexported(consensus.Work{}),
-		cmpopts.IgnoreUnexported(types.StateElement{}),
-	) {
-		t.Fatalf("%s expected != got, diff: %s", desc, cmp.Diff(expect, got))
+	deep.NilSlicesAreEmpty = true
+	deep.NilMapsAreEmpty = true
+	if diff := deep.Equal(expected, got); diff != nil {
+		t.Errorf("%s expected != got, diff: %v", desc, diff)
 	}
 }
 
