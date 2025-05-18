@@ -5,16 +5,10 @@ import (
 	"testing"
 
 	"github.com/go-test/deep"
-	"github.com/google/go-cmp/cmp"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
 )
-
-func IgnoreUnexported() cmp.Option {
-	// the exporter opt allows all unexported fields: https://github.com/google/go-cmp/pull/176
-	return cmp.Exporter(func(reflect.Type) bool { return true })
-}
 
 // Equal checks if two values of the same type are equal and fails otherwise.
 func Equal[T any](t *testing.T, desc string, expected, got T) {
