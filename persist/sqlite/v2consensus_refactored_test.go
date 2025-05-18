@@ -8,6 +8,7 @@ import (
 	"go.sia.tech/core/consensus"
 	proto4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/wallet"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/testutil"
 )
@@ -1605,4 +1606,126 @@ func TestV2FileContractsKey(t *testing.T) {
 	assertContractsKey(pk1.PublicKey())
 	assertContractsKey(renterPK.PublicKey())
 	assertContractsKey(hostPK.PublicKey())
+}
+
+func TestEventV2Transaction(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(uc1)}
+
+	pk2 := types.GeneratePrivateKey()
+	uc2 := types.StandardUnlockConditions(pk2.PublicKey())
+	addr2 := uc2.UnlockHash()
+
+	pk3 := types.GeneratePrivateKey()
+	uc3 := types.StandardUnlockConditions(pk3.PublicKey())
+	addr3 := uc3.UnlockHash()
+
+	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	})
+	genesisTxn := n.genesis().Transactions[0]
+
+	getTxn := func(txnID types.TransactionID) explorer.Transaction {
+		t.Helper()
+
+		txns, err := n.db.Transactions([]types.TransactionID{txnID})
+		if err != nil {
+			t.Fatal(err)
+		} else if len(txns) == 0 {
+			t.Fatal("can't find txn")
+		}
+		return txns[0]
+	}
+	getV2Txn := func(txnID types.TransactionID) explorer.V2Transaction {
+		t.Helper()
+
+		txns, err := n.db.V2Transactions([]types.TransactionID{txnID})
+		if err != nil {
+			t.Fatal(err)
+		} else if len(txns) == 0 {
+			t.Fatal("can't find txn")
+		}
+		return txns[0]
+	}
+
+	// event for transaction in genesis block
+	ev0 := explorer.Event{
+		ID:             types.Hash256(genesisTxn.ID()),
+		Index:          n.tipState().Index,
+		Confirmations:  0,
+		Type:           wallet.EventTypeV1Transaction,
+		MaturityHeight: n.tipState().Index.Height,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+
+	// txn1 - should be relevant to addr1 (due to input) and addr2 due to
+	// sc output
+	txn1 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, n.db, genesisTxn.SiacoinOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr2,
+			Value:   genesisTxn.SiacoinOutputs[0].Value,
+		}},
+	}
+	testutil.SignV2Transaction(n.tipState(), pk1, &txn1)
+
+	// txn2 - should be relevant to addr1 (due to input) and addr3 due to
+	// sf output
+	txn2 := types.V2Transaction{
+		SiafundInputs: []types.V2SiafundInput{{
+			Parent:          getSFE(t, n.db, genesisTxn.SiafundOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		SiafundOutputs: []types.SiafundOutput{{
+			Address: addr3,
+			Value:   genesisTxn.SiafundOutputs[0].Value,
+		}},
+	}
+	testutil.SignV2Transaction(n.tipState(), pk1, &txn2)
+
+	n.mineV2Transactions(t, txn1, txn2)
+
+	ev0.Confirmations++
+	ev0.Data = explorer.EventV1Transaction{Transaction: getTxn(genesisTxn.ID())}
+	// event for txn1
+	ev1 := explorer.Event{
+		ID:             types.Hash256(txn1.ID()),
+		Index:          n.tipState().Index,
+		Confirmations:  0,
+		Type:           wallet.EventTypeV2Transaction,
+		Data:           explorer.EventV2Transaction(getV2Txn(txn1.ID())),
+		MaturityHeight: n.tipState().Index.Height,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+	// event for txn2
+	ev2 := explorer.Event{
+		ID:             types.Hash256(txn2.ID()),
+		Index:          n.tipState().Index,
+		Confirmations:  0,
+		Type:           wallet.EventTypeV2Transaction,
+		Data:           explorer.EventV2Transaction(getV2Txn(txn2.ID())),
+		MaturityHeight: n.tipState().Index.Height,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+
+	// addr1 should be relevant to all transactions
+	n.assertEvents(t, addr1, ev2, ev1, ev0)
+	n.assertEvents(t, addr2, ev1)
+	n.assertEvents(t, addr3, ev2)
+
+	n.revertBlock(t)
+
+	ev0.Confirmations--
+	ev0.Data = explorer.EventV1Transaction{Transaction: getTxn(genesisTxn.ID())}
+
+	// genesis transaction still present but txn1 and txn2 reverted
+	n.assertEvents(t, addr1, ev0)
+	n.assertEvents(t, addr2)
+	n.assertEvents(t, addr3)
 }
