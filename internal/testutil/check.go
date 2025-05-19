@@ -4,7 +4,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/go-test/deep"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
@@ -14,10 +16,15 @@ import (
 func Equal[T any](t *testing.T, desc string, expected, got T) {
 	t.Helper()
 
-	deep.NilSlicesAreEmpty = true
-	deep.NilMapsAreEmpty = true
-	if diff := deep.Equal(expected, got); diff != nil {
-		t.Errorf("%s expected != got, diff: %v", desc, diff)
+	options := cmp.Options([]cmp.Option{
+		cmpopts.EquateEmpty(),
+		cmp.AllowUnexported(consensus.Work{}),
+		cmp.Comparer(func(x, y types.StateElement) bool {
+			return x.LeafIndex == y.LeafIndex && reflect.DeepEqual(x.MerkleProof, y.MerkleProof)
+		}),
+	})
+	if !cmp.Equal(expected, got, options) {
+		t.Fatalf("%s expected != got, diff: %s", desc, cmp.Diff(expected, got, options))
 	}
 }
 
