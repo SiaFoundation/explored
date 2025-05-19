@@ -1655,7 +1655,6 @@ func TestEventV2Transaction(t *testing.T) {
 	ev0 := explorer.Event{
 		ID:             types.Hash256(genesisTxn.ID()),
 		Index:          n.tipState().Index,
-		Confirmations:  0,
 		Type:           wallet.EventTypeV1Transaction,
 		MaturityHeight: n.tipState().Index.Height,
 		Timestamp:      n.tipBlock().Timestamp,
@@ -1691,13 +1690,11 @@ func TestEventV2Transaction(t *testing.T) {
 
 	n.mineV2Transactions(t, txn1, txn2)
 
-	ev0.Confirmations++
 	ev0.Data = explorer.EventV1Transaction{Transaction: getTxn(genesisTxn.ID())}
 	// event for txn1
 	ev1 := explorer.Event{
 		ID:             types.Hash256(txn1.ID()),
 		Index:          n.tipState().Index,
-		Confirmations:  0,
 		Type:           wallet.EventTypeV2Transaction,
 		Data:           explorer.EventV2Transaction(getV2Txn(txn1.ID())),
 		MaturityHeight: n.tipState().Index.Height,
@@ -1707,7 +1704,6 @@ func TestEventV2Transaction(t *testing.T) {
 	ev2 := explorer.Event{
 		ID:             types.Hash256(txn2.ID()),
 		Index:          n.tipState().Index,
-		Confirmations:  0,
 		Type:           wallet.EventTypeV2Transaction,
 		Data:           explorer.EventV2Transaction(getV2Txn(txn2.ID())),
 		MaturityHeight: n.tipState().Index.Height,
@@ -1721,7 +1717,6 @@ func TestEventV2Transaction(t *testing.T) {
 
 	n.revertBlock(t)
 
-	ev0.Confirmations--
 	ev0.Data = explorer.EventV1Transaction{Transaction: getTxn(genesisTxn.ID())}
 
 	// genesis transaction still present but txn1 and txn2 reverted

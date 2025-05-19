@@ -286,6 +286,7 @@ func (n *testChain) assertEvents(t *testing.T, addr types.Address, expected ...e
 
 	for i := range expected {
 		expected[i].Relevant = []types.Address{addr}
+		expected[i].Confirmations = n.tipState().Index.Height - expected[i].Index.Height
 		testutil.Equal(t, "Event", expected[i], events[i])
 	}
 }
@@ -1285,26 +1286,22 @@ func TestEventPayout(t *testing.T) {
 	ev1 := explorer.Event{
 		ID:             types.Hash256(scID),
 		Index:          n.tipState().Index,
-		Confirmations:  0,
 		Type:           wallet.EventTypeMinerPayout,
 		Data:           explorer.EventPayout{SiacoinElement: getSCE(scID)},
 		MaturityHeight: n.tipState().MaturityHeight() - 1,
 		Timestamp:      b.Timestamp,
-		Relevant:       []types.Address{addr1},
 	}
 	n.assertEvents(t, addr1, ev1)
 
 	// see if confirmations number goes up when we mine another block
 	n.mineTransactions(t)
 
-	ev1.Confirmations++
 	// MerkleProof changes
 	ev1.Data = explorer.EventPayout{SiacoinElement: getSCE(scID)}
 	n.assertEvents(t, addr1, ev1)
 
 	n.revertBlock(t)
 
-	ev1.Confirmations--
 	// MerkleProof changes
 	ev1.Data = explorer.EventPayout{SiacoinElement: getSCE(scID)}
 	n.assertEvents(t, addr1, ev1)
@@ -1349,7 +1346,6 @@ func TestEventTransaction(t *testing.T) {
 	ev0 := explorer.Event{
 		ID:             types.Hash256(genesisTxn.ID()),
 		Index:          n.tipState().Index,
-		Confirmations:  0,
 		Type:           wallet.EventTypeV1Transaction,
 		MaturityHeight: n.tipState().Index.Height,
 		Timestamp:      n.tipBlock().Timestamp,
@@ -1385,13 +1381,11 @@ func TestEventTransaction(t *testing.T) {
 
 	n.mineTransactions(t, txn1, txn2)
 
-	ev0.Confirmations++
 	ev0.Data = explorer.EventV1Transaction{Transaction: getTxn(genesisTxn.ID())}
 	// event for txn1
 	ev1 := explorer.Event{
 		ID:             types.Hash256(txn1.ID()),
 		Index:          n.tipState().Index,
-		Confirmations:  0,
 		Type:           wallet.EventTypeV1Transaction,
 		Data:           explorer.EventV1Transaction{Transaction: getTxn(txn1.ID())},
 		MaturityHeight: n.tipState().Index.Height,
@@ -1401,7 +1395,6 @@ func TestEventTransaction(t *testing.T) {
 	ev2 := explorer.Event{
 		ID:             types.Hash256(txn2.ID()),
 		Index:          n.tipState().Index,
-		Confirmations:  0,
 		Type:           wallet.EventTypeV1Transaction,
 		Data:           explorer.EventV1Transaction{Transaction: getTxn(txn2.ID())},
 		MaturityHeight: n.tipState().Index.Height,
@@ -1415,7 +1408,6 @@ func TestEventTransaction(t *testing.T) {
 
 	n.revertBlock(t)
 
-	ev0.Confirmations--
 	ev0.Data = explorer.EventV1Transaction{Transaction: getTxn(genesisTxn.ID())}
 
 	// genesis transaction still present but txn1 and txn2 reverted
