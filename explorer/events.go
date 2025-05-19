@@ -243,7 +243,10 @@ func CoreToExplorerV1Transaction(txn types.Transaction) (result Transaction) {
 
 	for _, sci := range txn.SiacoinInputs {
 		result.SiacoinInputs = append(result.SiacoinInputs, SiacoinInput{
-			SiacoinInput: sci,
+			Address: sci.UnlockConditions.UnlockHash(),
+
+			ParentID:         sci.ParentID,
+			UnlockConditions: sci.UnlockConditions,
 		})
 	}
 	for i, sco := range txn.SiacoinOutputs {
@@ -257,7 +260,11 @@ func CoreToExplorerV1Transaction(txn types.Transaction) (result Transaction) {
 	}
 	for _, sfi := range txn.SiafundInputs {
 		result.SiafundInputs = append(result.SiafundInputs, SiafundInput{
-			SiafundInput: sfi,
+			Address: sfi.UnlockConditions.UnlockHash(),
+
+			ParentID:         sfi.ParentID,
+			UnlockConditions: sfi.UnlockConditions,
+			ClaimAddress:     sfi.ClaimAddress,
 		})
 	}
 	for i, sfo := range txn.SiafundOutputs {
