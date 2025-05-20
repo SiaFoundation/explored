@@ -291,6 +291,42 @@ func (n *testChain) assertEvents(t *testing.T, addr types.Address, expected ...e
 	}
 }
 
+func (n *testChain) getSCE(t *testing.T, scID types.SiacoinOutputID) explorer.SiacoinOutput {
+	t.Helper()
+
+	sces, err := n.db.SiacoinElements([]types.SiacoinOutputID{scID})
+	if err != nil {
+		t.Fatal(err)
+	} else if len(sces) == 0 {
+		t.Fatal("can't find sce")
+	}
+	return sces[0]
+}
+
+func (n *testChain) getFCE(t *testing.T, fcID types.FileContractID) explorer.ExtendedFileContract {
+	t.Helper()
+
+	fces, err := n.db.Contracts([]types.FileContractID{fcID})
+	if err != nil {
+		t.Fatal(err)
+	} else if len(fces) == 0 {
+		t.Fatal("can't find fce")
+	}
+	return fces[0]
+}
+
+func (n *testChain) getTxn(t *testing.T, txnID types.TransactionID) explorer.Transaction {
+	t.Helper()
+
+	txns, err := n.db.Transactions([]types.TransactionID{txnID})
+	if err != nil {
+		t.Fatal(err)
+	} else if len(txns) == 0 {
+		t.Fatal("can't find txn")
+	}
+	return txns[0]
+}
+
 func prepareContract(addr types.Address, endHeight uint64) types.FileContract {
 	rk := types.GeneratePrivateKey().PublicKey()
 	rAddr := types.StandardUnlockHash(rk)
@@ -1268,17 +1304,6 @@ func TestEventPayout(t *testing.T) {
 
 	n := newTestChain(t, false, nil)
 
-	getSCE := func(scID types.SiacoinOutputID) explorer.SiacoinOutput {
-		t.Helper()
-
-		sces, err := n.db.SiacoinElements([]types.SiacoinOutputID{scID})
-		if err != nil {
-			t.Fatal(err)
-		} else if len(sces) == 0 {
-			t.Fatal("can't find sce")
-		}
-		return sces[0]
-	}
 	b := testutil.MineBlock(n.tipState(), nil, addr1)
 	n.applyBlock(t, b)
 
@@ -1287,7 +1312,7 @@ func TestEventPayout(t *testing.T) {
 		ID:             types.Hash256(scID),
 		Index:          n.tipState().Index,
 		Type:           wallet.EventTypeMinerPayout,
-		Data:           explorer.EventPayout{SiacoinElement: getSCE(scID)},
+		Data:           explorer.EventPayout{SiacoinElement: n.getSCE(t, scID)},
 		MaturityHeight: n.tipState().MaturityHeight() - 1,
 		Timestamp:      b.Timestamp,
 	}
@@ -1297,13 +1322,13 @@ func TestEventPayout(t *testing.T) {
 	n.mineTransactions(t)
 
 	// MerkleProof changes
-	ev1.Data = explorer.EventPayout{SiacoinElement: getSCE(scID)}
+	ev1.Data = explorer.EventPayout{SiacoinElement: n.getSCE(t, scID)}
 	n.assertEvents(t, addr1, ev1)
 
 	n.revertBlock(t)
 
 	// MerkleProof changes
-	ev1.Data = explorer.EventPayout{SiacoinElement: getSCE(scID)}
+	ev1.Data = explorer.EventPayout{SiacoinElement: n.getSCE(t, scID)}
 	n.assertEvents(t, addr1, ev1)
 
 	n.revertBlock(t)
@@ -1329,18 +1354,6 @@ func TestEventTransaction(t *testing.T) {
 		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
 	})
 	genesisTxn := n.genesis().Transactions[0]
-
-	getTxn := func(txnID types.TransactionID) explorer.Transaction {
-		t.Helper()
-
-		txns, err := n.db.Transactions([]types.TransactionID{txnID})
-		if err != nil {
-			t.Fatal(err)
-		} else if len(txns) == 0 {
-			t.Fatal("can't find txn")
-		}
-		return txns[0]
-	}
 
 	// event for transaction in genesis block
 	ev0 := explorer.Event{
@@ -1381,13 +1394,13 @@ func TestEventTransaction(t *testing.T) {
 
 	n.mineTransactions(t, txn1, txn2)
 
-	ev0.Data = explorer.EventV1Transaction{Transaction: getTxn(genesisTxn.ID())}
+	ev0.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, genesisTxn.ID())}
 	// event for txn1
 	ev1 := explorer.Event{
 		ID:             types.Hash256(txn1.ID()),
 		Index:          n.tipState().Index,
 		Type:           wallet.EventTypeV1Transaction,
-		Data:           explorer.EventV1Transaction{Transaction: getTxn(txn1.ID())},
+		Data:           explorer.EventV1Transaction{Transaction: n.getTxn(t, txn1.ID())},
 		MaturityHeight: n.tipState().Index.Height,
 		Timestamp:      n.tipBlock().Timestamp,
 	}
@@ -1396,7 +1409,7 @@ func TestEventTransaction(t *testing.T) {
 		ID:             types.Hash256(txn2.ID()),
 		Index:          n.tipState().Index,
 		Type:           wallet.EventTypeV1Transaction,
-		Data:           explorer.EventV1Transaction{Transaction: getTxn(txn2.ID())},
+		Data:           explorer.EventV1Transaction{Transaction: n.getTxn(t, txn2.ID())},
 		MaturityHeight: n.tipState().Index.Height,
 		Timestamp:      n.tipBlock().Timestamp,
 	}
@@ -1408,12 +1421,234 @@ func TestEventTransaction(t *testing.T) {
 
 	n.revertBlock(t)
 
-	ev0.Data = explorer.EventV1Transaction{Transaction: getTxn(genesisTxn.ID())}
+	ev0.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, genesisTxn.ID())}
 
 	// genesis transaction still present but txn1 and txn2 reverted
 	n.assertEvents(t, addr1, ev0)
 	n.assertEvents(t, addr2)
 	n.assertEvents(t, addr3)
+}
+
+func TestEventFileContractValid(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	pk2 := types.GeneratePrivateKey()
+	uc2 := types.StandardUnlockConditions(pk2.PublicKey())
+	addr2 := uc2.UnlockHash()
+
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	genesisTxn := n.genesis().Transactions[0]
+
+	// event for transaction in genesis block
+	ev0 := explorer.Event{
+		ID:             types.Hash256(genesisTxn.ID()),
+		Index:          n.tipState().Index,
+		Type:           wallet.EventTypeV1Transaction,
+		MaturityHeight: n.tipState().Index.Height,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+
+	fc := prepareContract(addr1, n.tipState().Index.Height+1)
+	fc.ValidProofOutputs[0].Address = addr1
+	fc.ValidProofOutputs[1].Address = addr2
+
+	txn1 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         genesisTxn.SiacoinOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   genesisTxn.SiacoinOutputs[0].Value.Sub(fc.Payout),
+		}},
+		FileContracts: []types.FileContract{fc},
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+
+	n.mineTransactions(t, txn1)
+
+	fce := coreToExplorerFC(txn1.FileContractID(0), fc)
+	fce.TransactionID = txn1.ID()
+	fce.ConfirmationIndex = n.tipState().Index
+	fce.ConfirmationTransactionID = txn1.ID()
+
+	ev0.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, genesisTxn.ID())}
+	ev1 := explorer.Event{
+		ID:             types.Hash256(txn1.ID()),
+		Index:          n.tipState().Index,
+		Type:           wallet.EventTypeV1Transaction,
+		Data:           explorer.EventV1Transaction{Transaction: n.getTxn(t, txn1.ID())},
+		MaturityHeight: n.tipState().Index.Height,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+
+	n.assertEvents(t, addr1, ev1, ev0)
+	n.assertEvents(t, addr2, ev1)
+
+	fcID := txn1.FileContractID(0)
+	sp := types.StorageProof{
+		ParentID: fcID,
+	}
+	txn2 := types.Transaction{
+		StorageProofs: []types.StorageProof{sp},
+	}
+	n.mineTransactions(t, txn2)
+
+	ev1.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, txn1.ID())}
+	ev2 := explorer.Event{
+		ID:    types.Hash256(fcID.ValidOutputID(0)),
+		Index: n.tipState().Index,
+		Type:  wallet.EventTypeV1ContractResolution,
+		Data: explorer.EventV1ContractResolution{
+			Missed:         false,
+			Parent:         n.getFCE(t, fcID),
+			SiacoinElement: n.getSCE(t, fcID.ValidOutputID(0)),
+		},
+		MaturityHeight: n.tipState().MaturityHeight() - 1,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+	ev3 := explorer.Event{
+		ID:    types.Hash256(fcID.ValidOutputID(1)),
+		Index: n.tipState().Index,
+		Type:  wallet.EventTypeV1ContractResolution,
+		Data: explorer.EventV1ContractResolution{
+			Missed:         false,
+			Parent:         n.getFCE(t, fcID),
+			SiacoinElement: n.getSCE(t, fcID.ValidOutputID(1)),
+		},
+		MaturityHeight: n.tipState().MaturityHeight() - 1,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+
+	// check
+	n.assertEvents(t, addr1, ev2, ev1, ev0)
+	n.assertEvents(t, addr2, ev3, ev1)
+
+	n.revertBlock(t)
+
+	ev0.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, genesisTxn.ID())}
+	ev1.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, txn1.ID())}
+	n.assertEvents(t, addr1, ev1, ev0)
+	n.assertEvents(t, addr2, ev1)
+
+	n.revertBlock(t)
+
+	ev0.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, genesisTxn.ID())}
+	n.assertEvents(t, addr1, ev0)
+	n.assertEvents(t, addr2)
+}
+
+func TestEventFileContractMissed(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	pk2 := types.GeneratePrivateKey()
+	uc2 := types.StandardUnlockConditions(pk2.PublicKey())
+	addr2 := uc2.UnlockHash()
+
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	genesisTxn := n.genesis().Transactions[0]
+
+	// event for transaction in genesis block
+	ev0 := explorer.Event{
+		ID:             types.Hash256(genesisTxn.ID()),
+		Index:          n.tipState().Index,
+		Type:           wallet.EventTypeV1Transaction,
+		MaturityHeight: n.tipState().Index.Height,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+
+	fc := prepareContract(addr1, n.tipState().Index.Height+1)
+	fc.MissedProofOutputs[0].Address = addr1
+	fc.MissedProofOutputs[1].Address = addr2
+
+	txn1 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         genesisTxn.SiacoinOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   genesisTxn.SiacoinOutputs[0].Value.Sub(fc.Payout),
+		}},
+		FileContracts: []types.FileContract{fc},
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+
+	n.mineTransactions(t, txn1)
+
+	fce := coreToExplorerFC(txn1.FileContractID(0), fc)
+	fce.TransactionID = txn1.ID()
+	fce.ConfirmationIndex = n.tipState().Index
+	fce.ConfirmationTransactionID = txn1.ID()
+
+	ev0.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, genesisTxn.ID())}
+	ev1 := explorer.Event{
+		ID:             types.Hash256(txn1.ID()),
+		Index:          n.tipState().Index,
+		Type:           wallet.EventTypeV1Transaction,
+		Data:           explorer.EventV1Transaction{Transaction: n.getTxn(t, txn1.ID())},
+		MaturityHeight: n.tipState().Index.Height,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+
+	n.assertEvents(t, addr1, ev1, ev0)
+	n.assertEvents(t, addr2, ev1)
+
+	for i := n.tipState().Index.Height; i < fc.WindowEnd; i++ {
+		n.mineTransactions(t)
+	}
+
+	fcID := txn1.FileContractID(0)
+	ev1.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, txn1.ID())}
+	ev2 := explorer.Event{
+		ID:    types.Hash256(fcID.MissedOutputID(0)),
+		Index: n.tipState().Index,
+		Type:  wallet.EventTypeV1ContractResolution,
+		Data: explorer.EventV1ContractResolution{
+			Missed:         true,
+			Parent:         n.getFCE(t, fcID),
+			SiacoinElement: n.getSCE(t, fcID.MissedOutputID(0)),
+		},
+		MaturityHeight: n.tipState().MaturityHeight() - 1,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+	ev3 := explorer.Event{
+		ID:    types.Hash256(fcID.MissedOutputID(1)),
+		Index: n.tipState().Index,
+		Type:  wallet.EventTypeV1ContractResolution,
+		Data: explorer.EventV1ContractResolution{
+			Missed:         true,
+			Parent:         n.getFCE(t, fcID),
+			SiacoinElement: n.getSCE(t, fcID.MissedOutputID(1)),
+		},
+		MaturityHeight: n.tipState().MaturityHeight() - 1,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+
+	// check
+	n.assertEvents(t, addr1, ev2, ev1, ev0)
+	n.assertEvents(t, addr2, ev3, ev1)
+
+	n.revertBlock(t)
+
+	ev0.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, genesisTxn.ID())}
+	ev1.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, txn1.ID())}
+	n.assertEvents(t, addr1, ev1, ev0)
+	n.assertEvents(t, addr2, ev1)
+
+	n.revertBlock(t)
+
+	ev0.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, genesisTxn.ID())}
+	n.assertEvents(t, addr1, ev0)
+	n.assertEvents(t, addr2)
 }
 
 func TestBlock(t *testing.T) {
@@ -2087,7 +2322,7 @@ func TestMetrics(t *testing.T) {
 	assertMetrics(metrics4)
 
 	// resolve first contract unsuccessfully
-	for i := n.tipState().Index.Height; i <= fc.WindowEnd; i++ {
+	for i := n.tipState().Index.Height; i < fc.WindowEnd; i++ {
 		n.mineTransactions(t)
 	}
 

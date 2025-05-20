@@ -39,28 +39,32 @@ func scanFileContract(tx *txn, s scanner) (fc explorer.ExtendedFileContract, err
 	return
 }
 
-// Contracts implements explorer.Store.
-func (s *Store) Contracts(ids []types.FileContractID) (result []explorer.ExtendedFileContract, err error) {
-	err = s.transaction(func(tx *txn) error {
-		query := `SELECT fc1.id, fc1.contract_id, rev.resolved, rev.valid, fc1.transaction_id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.proof_height, rev.proof_block_id, rev.proof_transaction_id, fc1.filesize, fc1.file_merkle_root, fc1.window_start, fc1.window_end, fc1.payout, fc1.unlock_hash, fc1.revision_number
+func getContracts(tx *txn, ids []types.FileContractID) (result []explorer.ExtendedFileContract, err error) {
+	query := `SELECT fc1.id, fc1.contract_id, rev.resolved, rev.valid, fc1.transaction_id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.proof_height, rev.proof_block_id, rev.proof_transaction_id, fc1.filesize, fc1.file_merkle_root, fc1.window_start, fc1.window_end, fc1.payout, fc1.unlock_hash, fc1.revision_number
 			FROM file_contract_elements fc1
 			INNER JOIN last_contract_revision rev ON rev.contract_element_id = fc1.id
 			WHERE rev.contract_id IN (` + queryPlaceHolders(len(ids)) + `)`
-		rows, err := tx.Query(query, encodedIDs(ids)...)
+	rows, err := tx.Query(query, encodedIDs(ids)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		fc, err := scanFileContract(tx, rows)
 		if err != nil {
-			return err
+			return nil, fmt.Errorf("failed to scan file contract: %w", err)
 		}
-		defer rows.Close()
+		result = append(result, fc)
+	}
+	return
+}
 
-		for rows.Next() {
-			fc, err := scanFileContract(tx, rows)
-			if err != nil {
-				return fmt.Errorf("failed to scan file contract: %w", err)
-			}
-			result = append(result, fc)
-		}
-
-		return nil
+// Contracts implements explorer.Store.
+func (s *Store) Contracts(ids []types.FileContractID) (result []explorer.ExtendedFileContract, err error) {
+	err = s.transaction(func(tx *txn) error {
+		result, err = getContracts(tx, ids)
+		return err
 	})
 
 	return

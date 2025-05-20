@@ -87,21 +87,37 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 		}
 		ev.Data = explorer.EventV2Transaction(txns[0])
 	case wallet.EventTypeV1ContractResolution:
-		var resolution explorer.EventV1ContractResolution
-		var spentIndex types.ChainIndex
-		fce, sce := &resolution.Parent, &resolution.SiacoinElement
-		err := tx.QueryRow(`SELECT sce.output_id, sce.leaf_index, sce.source, sce.spent_index, sce.maturity_height, sce.address, sce.value, fce.contract_id, fce.filesize, fce.file_merkle_root, fce.window_start, fce.window_end, fce.payout, fce.unlock_hash, fce.revision_number, ev.missed
+		var missed bool
+		var scID types.SiacoinOutputID
+		var fcID types.FileContractID
+		err := tx.QueryRow(`SELECT ev.missed, sce.output_id, fc.contract_id
 			FROM v1_contract_resolution_events ev
 			JOIN siacoin_elements sce ON ev.output_id = sce.id
-			JOIN file_contract_elements fce ON ev.parent_id = fce.id
-			WHERE ev.event_id = ?`, eventID).Scan(decode(&sce.ID), decode(&sce.StateElement.LeafIndex), &sce.Source, decodeNull(&spentIndex), &sce.MaturityHeight, decode(&sce.SiacoinOutput.Address), decode(&sce.SiacoinOutput.Value), decode(&fce.ID), decode(&fce.Filesize), decode(&fce.FileMerkleRoot), decode(&fce.WindowStart), decode(&fce.WindowEnd), decode(&fce.Payout), decode(&fce.UnlockHash), decode(&fce.RevisionNumber), &resolution.Missed)
+			JOIN file_contract_elements fc
+			WHERE ev.event_id = ?`, eventID).Scan(&missed, decode(&scID), decode(&fcID))
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v1 resolution event: %w", err)
 		}
-		if spentIndex != (types.ChainIndex{}) {
-			sce.SpentIndex = &spentIndex
+
+		fces, err := getContracts(tx, []types.FileContractID{fcID})
+		if err != nil {
+			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v1 resolution file contract: %w", err)
+		} else if len(fces) == 0 {
+			return explorer.Event{}, 0, fmt.Errorf("no v1 resolution contract found")
 		}
-		ev.Data = resolution
+
+		sces, err := getSiacoinElements(tx, []types.SiacoinOutputID{scID})
+		if err != nil {
+			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v1 proof output: %w", err)
+		} else if len(sces) == 0 {
+			return explorer.Event{}, 0, fmt.Errorf("no v1 proof output found")
+		}
+
+		ev.Data = explorer.EventV1ContractResolution{
+			Missed:         missed,
+			Parent:         fces[0],
+			SiacoinElement: sces[0],
+		}
 	case wallet.EventTypeV2ContractResolution:
 		var resolution explorer.EventV2ContractResolution
 		var parentContractID types.FileContractID

@@ -154,33 +154,38 @@ func (s *Store) UnspentSiafundOutputs(address types.Address, offset, limit uint6
 	return
 }
 
+func getSiacoinElements(tx *txn, ids []types.SiacoinOutputID) (result []explorer.SiacoinOutput, err error) {
+	var encoded []any
+	for _, id := range ids {
+		encoded = append(encoded, encode(id))
+	}
+
+	rows, err := tx.Query(`SELECT output_id, leaf_index, source, spent_index, maturity_height, address, value FROM siacoin_elements WHERE output_id IN (`+queryPlaceHolders(len(encoded))+`)`, encoded...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query siacoin outputs: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		sco, err := scanSiacoinOutput(rows)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan siacoin output: %w", err)
+		}
+		sco.StateElement.MerkleProof, err = merkleProof(tx, sco.StateElement.LeafIndex)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get output merkle proof: %w", err)
+		}
+
+		result = append(result, sco)
+	}
+	return
+}
+
 // SiacoinElements implements explorer.Store.
 func (s *Store) SiacoinElements(ids []types.SiacoinOutputID) (result []explorer.SiacoinOutput, err error) {
 	err = s.transaction(func(tx *txn) error {
-		var encoded []any
-		for _, id := range ids {
-			encoded = append(encoded, encode(id))
-		}
-
-		rows, err := tx.Query(`SELECT output_id, leaf_index, source, spent_index, maturity_height, address, value FROM siacoin_elements WHERE output_id IN (`+queryPlaceHolders(len(encoded))+`)`, encoded...)
-		if err != nil {
-			return fmt.Errorf("failed to query siacoin outputs: %w", err)
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			sco, err := scanSiacoinOutput(rows)
-			if err != nil {
-				return fmt.Errorf("failed to scan siacoin output: %w", err)
-			}
-			sco.StateElement.MerkleProof, err = s.MerkleProof(sco.StateElement.LeafIndex)
-			if err != nil {
-				return fmt.Errorf("failed to get output merkle proof: %w", err)
-			}
-
-			result = append(result, sco)
-		}
-		return nil
+		result, err = getSiacoinElements(tx, ids)
+		return err
 	})
 	return
 }

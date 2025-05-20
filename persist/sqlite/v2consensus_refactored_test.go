@@ -134,6 +134,18 @@ func (n *testChain) assertV2ContractRevisions(t *testing.T, fcID types.FileContr
 	}
 }
 
+func (n *testChain) getV2Txn(t *testing.T, txnID types.TransactionID) explorer.V2Transaction {
+	t.Helper()
+
+	txns, err := n.db.V2Transactions([]types.TransactionID{txnID})
+	if err != nil {
+		t.Fatal(err)
+	} else if len(txns) == 0 {
+		t.Fatal("can't find txn")
+	}
+	return txns[0]
+}
+
 func TestV2TransactionChainIndices(t *testing.T) {
 	n := newTestChain(t, true, nil)
 
