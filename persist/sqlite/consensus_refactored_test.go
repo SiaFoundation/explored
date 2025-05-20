@@ -12,6 +12,7 @@ import (
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	ctestutil "go.sia.tech/coreutils/testutil"
+	"go.sia.tech/coreutils/wallet"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/testutil"
 	"go.sia.tech/explored/persist/sqlite"
@@ -83,6 +84,10 @@ func newTestChain(t *testing.T, v2 bool, modifyGenesis func(*consensus.Network, 
 
 func (n *testChain) genesis() types.Block {
 	return n.blocks[0]
+}
+
+func (n *testChain) tipBlock() types.Block {
+	return n.blocks[len(n.blocks)-1]
 }
 
 func (n *testChain) tipState() consensus.State {
@@ -267,6 +272,22 @@ func (n *testChain) assertContractRevisions(t *testing.T, fcID types.FileContrac
 
 	for i := range expected {
 		testutil.Equal(t, "ExtendedFileContract", expected[i], fces[i])
+	}
+}
+
+func (n *testChain) assertEvents(t *testing.T, addr types.Address, expected ...explorer.Event) {
+	t.Helper()
+
+	events, err := n.db.AddressEvents(addr, 0, math.MaxInt64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testutil.Equal(t, "len(events)", len(expected), len(events))
+
+	for i := range expected {
+		expected[i].Relevant = []types.Address{addr}
+		expected[i].Confirmations = n.tipState().Index.Height - expected[i].Index.Height
+		testutil.Equal(t, "Event", expected[i], events[i])
 	}
 }
 
@@ -1247,30 +1268,152 @@ func TestEventPayout(t *testing.T) {
 
 	n := newTestChain(t, false, nil)
 
+	getSCE := func(scID types.SiacoinOutputID) explorer.SiacoinOutput {
+		t.Helper()
+
+		sces, err := n.db.SiacoinElements([]types.SiacoinOutputID{scID})
+		if err != nil {
+			t.Fatal(err)
+		} else if len(sces) == 0 {
+			t.Fatal("can't find sce")
+		}
+		return sces[0]
+	}
 	b := testutil.MineBlock(n.tipState(), nil, addr1)
 	n.applyBlock(t, b)
 
-	{
-		events, err := n.db.AddressEvents(addr1, 0, math.MaxInt64)
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "events", 1, len(events))
-
-		ev0 := events[0].Data.(explorer.EventPayout)
-		testutil.Equal(t, "event 0 output ID", n.tipState().Index.ID.MinerOutputID(0), ev0.SiacoinElement.ID)
-		testutil.Equal(t, "event 0 output source", explorer.SourceMinerPayout, ev0.SiacoinElement.Source)
+	scID := b.ID().MinerOutputID(0)
+	ev1 := explorer.Event{
+		ID:             types.Hash256(scID),
+		Index:          n.tipState().Index,
+		Type:           wallet.EventTypeMinerPayout,
+		Data:           explorer.EventPayout{SiacoinElement: getSCE(scID)},
+		MaturityHeight: n.tipState().MaturityHeight() - 1,
+		Timestamp:      b.Timestamp,
 	}
+	n.assertEvents(t, addr1, ev1)
+
+	// see if confirmations number goes up when we mine another block
+	n.mineTransactions(t)
+
+	// MerkleProof changes
+	ev1.Data = explorer.EventPayout{SiacoinElement: getSCE(scID)}
+	n.assertEvents(t, addr1, ev1)
 
 	n.revertBlock(t)
 
-	{
-		events, err := n.db.AddressEvents(addr1, 0, math.MaxInt64)
+	// MerkleProof changes
+	ev1.Data = explorer.EventPayout{SiacoinElement: getSCE(scID)}
+	n.assertEvents(t, addr1, ev1)
+
+	n.revertBlock(t)
+
+	n.assertEvents(t, addr1)
+}
+
+func TestEventTransaction(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	pk2 := types.GeneratePrivateKey()
+	uc2 := types.StandardUnlockConditions(pk2.PublicKey())
+	addr2 := uc2.UnlockHash()
+
+	pk3 := types.GeneratePrivateKey()
+	uc3 := types.StandardUnlockConditions(pk3.PublicKey())
+	addr3 := uc3.UnlockHash()
+
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
+	})
+	genesisTxn := n.genesis().Transactions[0]
+
+	getTxn := func(txnID types.TransactionID) explorer.Transaction {
+		t.Helper()
+
+		txns, err := n.db.Transactions([]types.TransactionID{txnID})
 		if err != nil {
 			t.Fatal(err)
+		} else if len(txns) == 0 {
+			t.Fatal("can't find txn")
 		}
-		testutil.Equal(t, "events", 0, len(events))
+		return txns[0]
 	}
+
+	// event for transaction in genesis block
+	ev0 := explorer.Event{
+		ID:             types.Hash256(genesisTxn.ID()),
+		Index:          n.tipState().Index,
+		Type:           wallet.EventTypeV1Transaction,
+		MaturityHeight: n.tipState().Index.Height,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+
+	// txn1 - should be relevant to addr1 (due to input) and addr2 due to
+	// sc output
+	txn1 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         genesisTxn.SiacoinOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr2,
+			Value:   genesisTxn.SiacoinOutputs[0].Value,
+		}},
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+
+	// txn2 - should be relevant to addr1 (due to input) and addr3 due to
+	// sf output
+	txn2 := types.Transaction{
+		SiafundInputs: []types.SiafundInput{{
+			ParentID:         genesisTxn.SiafundOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiafundOutputs: []types.SiafundOutput{{
+			Address: addr3,
+			Value:   genesisTxn.SiafundOutputs[0].Value,
+		}},
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn2)
+
+	n.mineTransactions(t, txn1, txn2)
+
+	ev0.Data = explorer.EventV1Transaction{Transaction: getTxn(genesisTxn.ID())}
+	// event for txn1
+	ev1 := explorer.Event{
+		ID:             types.Hash256(txn1.ID()),
+		Index:          n.tipState().Index,
+		Type:           wallet.EventTypeV1Transaction,
+		Data:           explorer.EventV1Transaction{Transaction: getTxn(txn1.ID())},
+		MaturityHeight: n.tipState().Index.Height,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+	// event for txn2
+	ev2 := explorer.Event{
+		ID:             types.Hash256(txn2.ID()),
+		Index:          n.tipState().Index,
+		Type:           wallet.EventTypeV1Transaction,
+		Data:           explorer.EventV1Transaction{Transaction: getTxn(txn2.ID())},
+		MaturityHeight: n.tipState().Index.Height,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+
+	// addr1 should be relevant to all transactions
+	n.assertEvents(t, addr1, ev2, ev1, ev0)
+	n.assertEvents(t, addr2, ev1)
+	n.assertEvents(t, addr3, ev2)
+
+	n.revertBlock(t)
+
+	ev0.Data = explorer.EventV1Transaction{Transaction: getTxn(genesisTxn.ID())}
+
+	// genesis transaction still present but txn1 and txn2 reverted
+	n.assertEvents(t, addr1, ev0)
+	n.assertEvents(t, addr2)
+	n.assertEvents(t, addr3)
 }
 
 func TestBlock(t *testing.T) {

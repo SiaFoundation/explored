@@ -143,15 +143,15 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 
 		ev.Data = resolution
 	case wallet.EventTypeSiafundClaim, wallet.EventTypeMinerPayout, wallet.EventTypeFoundationSubsidy:
-		var payout explorer.EventPayout
-		payout.SiacoinElement, err = scanSiacoinOutput(tx.QueryRow(`SELECT sce.output_id, sce.leaf_index, sce.source, sce.spent_index, sce.maturity_height, sce.address, sce.value
+		sce, err := scanSiacoinOutput(tx.QueryRow(`SELECT sce.output_id, sce.leaf_index, sce.source, sce.spent_index, sce.maturity_height, sce.address, sce.value
 			FROM payout_events ev
 			JOIN siacoin_elements sce ON ev.output_id = sce.id
 			WHERE ev.event_id = ?`, eventID))
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve payout event: %w", err)
 		}
-		ev.Data = payout
+		sce.StateElement.MerkleProof, err = merkleProof(tx, sce.StateElement.LeafIndex)
+		ev.Data = explorer.EventPayout{SiacoinElement: sce}
 	default:
 		return explorer.Event{}, 0, fmt.Errorf("unknown event type: %q", ev.Type)
 	}

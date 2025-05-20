@@ -13,15 +13,18 @@ import (
 )
 
 // Equal checks if two values of the same type are equal and fails otherwise.
-func Equal[T any](t *testing.T, desc string, expect, got T) {
+func Equal[T any](t *testing.T, desc string, expected, got T) {
 	t.Helper()
 
-	if !cmp.Equal(expect, got,
+	options := cmp.Options([]cmp.Option{
 		cmpopts.EquateEmpty(),
 		cmp.AllowUnexported(consensus.Work{}),
-		cmpopts.IgnoreUnexported(types.StateElement{}),
-	) {
-		t.Fatalf("%s expected != got, diff: %s", desc, cmp.Diff(expect, got))
+		cmp.Comparer(func(x, y types.StateElement) bool {
+			return x.LeafIndex == y.LeafIndex && reflect.DeepEqual(x.MerkleProof, y.MerkleProof)
+		}),
+	})
+	if !cmp.Equal(expected, got, options) {
+		t.Fatalf("%s expected != got, diff: %s", desc, cmp.Diff(expected, got, options))
 	}
 }
 
