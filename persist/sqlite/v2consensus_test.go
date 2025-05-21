@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"go.sia.tech/core/consensus"
-	rhp2 "go.sia.tech/core/rhp/v2"
+	proto2 "go.sia.tech/core/rhp/v2"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
@@ -304,9 +304,9 @@ func TestV2FileContractResolution(t *testing.T) {
 	v1FC := testutil.PrepareContractFormation(renterPublicKey, hostPublicKey, types.Siacoins(1), types.Siacoins(1), 100, 105, addr2)
 	v1FC.Filesize = 65
 
-	data := make([]byte, 2*rhp2.LeafSize)
-	data[0], data[rhp2.LeafSize] = 1, 1
-	v1FC.FileMerkleRoot, _ = rhp2.ReaderRoot(bytes.NewReader(data))
+	data := make([]byte, 2*proto2.LeafSize)
+	data[0], data[proto2.LeafSize] = 1, 1
+	v1FC.FileMerkleRoot, _ = proto2.ReaderRoot(bytes.NewReader(data))
 
 	v2FC := types.V2FileContract{
 		Capacity:         v1FC.Filesize,
