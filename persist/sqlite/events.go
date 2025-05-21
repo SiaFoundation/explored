@@ -92,8 +92,8 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 		var fcID types.FileContractID
 		err := tx.QueryRow(`SELECT ev.missed, sce.output_id, fc.contract_id
 			FROM v1_contract_resolution_events ev
-			JOIN siacoin_elements sce ON ev.output_id = sce.id
-			JOIN file_contract_elements fc
+			INNER JOIN siacoin_elements sce ON ev.output_id = sce.id
+			INNER JOIN file_contract_elements fc ON ev.parent_id = fc.id
 			WHERE ev.event_id = ?`, eventID).Scan(&missed, decode(&scID), decode(&fcID))
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v1 resolution event: %w", err)
@@ -120,22 +120,26 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 		}
 	case wallet.EventTypeV2ContractResolution:
 		var resolution explorer.EventV2ContractResolution
-		var parentContractID types.FileContractID
+		var scID types.SiacoinOutputID
+		var fcID types.FileContractID
 		var resolutionTransactionID types.TransactionID
-		var spentIndex types.ChainIndex
-		sce := &resolution.SiacoinElement
-		err := tx.QueryRow(`SELECT sce.output_id, sce.leaf_index, sce.source, sce.spent_index, sce.maturity_height, sce.address, sce.value, rev.contract_id, rev.resolution_transaction_id, ev.missed
-			FROM v2_contract_resolution_events ev
-			JOIN siacoin_elements sce ON ev.output_id = sce.id
-			JOIN v2_file_contract_elements fce ON ev.parent_id = fce.id
- 			JOIN v2_last_contract_revision rev ON fce.contract_id = rev.contract_id
-			WHERE ev.event_id = ?`, eventID).Scan(decode(&sce.ID), decode(&sce.StateElement.LeafIndex), &sce.Source, decodeNull(&spentIndex), &sce.MaturityHeight, decode(&sce.SiacoinOutput.Address), decode(&sce.SiacoinOutput.Value), decode(&parentContractID), decode(&resolutionTransactionID), &resolution.Missed)
+		err := tx.QueryRow(`SELECT ev.missed, sce.output_id, fc.contract_id, rev.resolution_transaction_id
+            FROM v2_contract_resolution_events ev
+            INNER JOIN siacoin_elements sce ON ev.output_id = sce.id
+            INNER JOIN v2_file_contract_elements fc ON ev.parent_id = fc.id
+            INNER JOIN v2_last_contract_revision rev ON fc.contract_id = rev.contract_id
+            WHERE ev.event_id = ?`, eventID).Scan(&resolution.Missed, decode(&scID), decode(&fcID), decode(&resolutionTransactionID))
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v2 resolution event: %w", err)
 		}
-		if spentIndex != (types.ChainIndex{}) {
-			sce.SpentIndex = &spentIndex
+
+		sces, err := getSiacoinElements(tx, []types.SiacoinOutputID{scID})
+		if err != nil {
+			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v1 proof output: %w", err)
+		} else if len(sces) == 0 {
+			return explorer.Event{}, 0, fmt.Errorf("no v1 proof output found")
 		}
+		resolution.SiacoinElement = sces[0]
 
 		resolutionTxns, err := getV2Transactions(tx, []types.TransactionID{resolutionTransactionID})
 		if err != nil {
@@ -147,7 +151,12 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 
 		found := false
 		for _, fcr := range txn.FileContractResolutions {
-			if fcr.Parent.ID == parentContractID {
+			if fcr.Parent.ID == fcID {
+				fcr.Parent.StateElement.MerkleProof, err = merkleProof(tx, fcr.Parent.StateElement.LeafIndex)
+				if err != nil {
+					return explorer.Event{}, 0, fmt.Errorf("failed to get v2 resolution merkle proof: %w", err)
+				}
+
 				found = true
 				resolution.Resolution = fcr
 				break

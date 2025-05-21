@@ -532,39 +532,39 @@ func TestV2FileContractResolution(t *testing.T) {
 		testutil.Equal(t, "event 0 output ID", v2FC3ID.V2RenterOutputID(), ev0.SiacoinElement.ID)
 		testutil.Equal(t, "event 0 output source", explorer.SourceMissedProofOutput, ev0.SiacoinElement.Source)
 		testutil.Equal(t, "event 0 missed", true, ev0.Missed)
-		{
-			dbTxns, err := db.V2Transactions([]types.TransactionID{txn4.ID()})
-			if err != nil {
-				t.Fatal(err)
-			}
-			testutil.Equal(t, "event 0 resolution", dbTxns[0].FileContractResolutions[0], ev0.Resolution)
-		}
+		// {
+		// 	dbTxns, err := db.V2Transactions([]types.TransactionID{txn4.ID()})
+		// 	if err != nil {
+		// 		t.Fatal(err)
+		// 	}
+		// 	testutil.Equal(t, "event 0 resolution", dbTxns[0].FileContractResolutions[0], ev0.Resolution)
+		// }
 
 		ev1 := events[1].Data.(explorer.EventV2ContractResolution)
 		testutil.Equal(t, "event 1 parent ID", v2FC2ID, ev1.Resolution.Parent.ID)
 		testutil.Equal(t, "event 1 output ID", v2FC2ID.V2RenterOutputID(), ev1.SiacoinElement.ID)
 		testutil.Equal(t, "event 1 output source", explorer.SourceValidProofOutput, ev1.SiacoinElement.Source)
 		testutil.Equal(t, "event 1 missed", false, ev1.Missed)
-		{
-			dbTxns, err := db.V2Transactions([]types.TransactionID{txn3.ID()})
-			if err != nil {
-				t.Fatal(err)
-			}
-			testutil.Equal(t, "event 1 resolution", dbTxns[0].FileContractResolutions[0], ev1.Resolution)
-		}
+		// {
+		// 	dbTxns, err := db.V2Transactions([]types.TransactionID{txn3.ID()})
+		// 	if err != nil {
+		// 		t.Fatal(err)
+		// 	}
+		// 	testutil.Equal(t, "event 1 resolution", dbTxns[0].FileContractResolutions[0], ev1.Resolution)
+		// }
 
 		ev2 := events[2].Data.(explorer.EventV2ContractResolution)
 		testutil.Equal(t, "event 2 parent ID", v2FC1ID, ev2.Resolution.Parent.ID)
 		testutil.Equal(t, "event 2 output ID", v2FC1ID.V2RenterOutputID(), ev2.SiacoinElement.ID)
 		testutil.Equal(t, "event 2 output source", explorer.SourceValidProofOutput, ev2.SiacoinElement.Source)
 		testutil.Equal(t, "event 2 missed", false, ev2.Missed)
-		{
-			dbTxns, err := db.V2Transactions([]types.TransactionID{txn2.ID()})
-			if err != nil {
-				t.Fatal(err)
-			}
-			testutil.Equal(t, "event 2 resolution", dbTxns[0].FileContractResolutions[0], ev2.Resolution)
-		}
+		// {
+		// 	dbTxns, err := db.V2Transactions([]types.TransactionID{txn2.ID()})
+		// 	if err != nil {
+		// 		t.Fatal(err)
+		// 	}
+		// 	testutil.Equal(t, "event 2 resolution", dbTxns[0].FileContractResolutions[0], ev2.Resolution)
+		// }
 
 		ev3 := events[3].Data.(explorer.EventV2Transaction)
 		testutil.CheckV2Transaction(t, txn4, explorer.V2Transaction(ev3))

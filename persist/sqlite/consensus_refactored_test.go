@@ -1456,6 +1456,7 @@ func TestEventFileContractValid(t *testing.T) {
 	fc.ValidProofOutputs[0].Address = addr1
 	fc.ValidProofOutputs[1].Address = addr2
 
+	// create file contract
 	txn1 := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
 			ParentID:         genesisTxn.SiacoinOutputID(0),
@@ -1477,6 +1478,7 @@ func TestEventFileContractValid(t *testing.T) {
 	fce.ConfirmationTransactionID = txn1.ID()
 
 	ev0.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, genesisTxn.ID())}
+	// event for fc creation txn
 	ev1 := explorer.Event{
 		ID:             types.Hash256(txn1.ID()),
 		Index:          n.tipState().Index,
@@ -1499,6 +1501,7 @@ func TestEventFileContractValid(t *testing.T) {
 	n.mineTransactions(t, txn2)
 
 	ev1.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, txn1.ID())}
+	// event for resolution first valid proof output
 	ev2 := explorer.Event{
 		ID:    types.Hash256(fcID.ValidOutputID(0)),
 		Index: n.tipState().Index,
@@ -1511,6 +1514,7 @@ func TestEventFileContractValid(t *testing.T) {
 		MaturityHeight: n.tipState().MaturityHeight() - 1,
 		Timestamp:      n.tipBlock().Timestamp,
 	}
+	// event for resolution second valid proof output
 	ev3 := explorer.Event{
 		ID:    types.Hash256(fcID.ValidOutputID(1)),
 		Index: n.tipState().Index,
@@ -1524,7 +1528,6 @@ func TestEventFileContractValid(t *testing.T) {
 		Timestamp:      n.tipBlock().Timestamp,
 	}
 
-	// check
 	n.assertEvents(t, addr1, ev2, ev1, ev0)
 	n.assertEvents(t, addr2, ev3, ev1)
 
@@ -1569,6 +1572,7 @@ func TestEventFileContractMissed(t *testing.T) {
 	fc.MissedProofOutputs[0].Address = addr1
 	fc.MissedProofOutputs[1].Address = addr2
 
+	// create file contract
 	txn1 := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
 			ParentID:         genesisTxn.SiacoinOutputID(0),
@@ -1590,6 +1594,7 @@ func TestEventFileContractMissed(t *testing.T) {
 	fce.ConfirmationTransactionID = txn1.ID()
 
 	ev0.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, genesisTxn.ID())}
+	// event for fc creation txn
 	ev1 := explorer.Event{
 		ID:             types.Hash256(txn1.ID()),
 		Index:          n.tipState().Index,
@@ -1608,6 +1613,7 @@ func TestEventFileContractMissed(t *testing.T) {
 
 	fcID := txn1.FileContractID(0)
 	ev1.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, txn1.ID())}
+	// event for resolution first missed proof output
 	ev2 := explorer.Event{
 		ID:    types.Hash256(fcID.MissedOutputID(0)),
 		Index: n.tipState().Index,
@@ -1620,6 +1626,7 @@ func TestEventFileContractMissed(t *testing.T) {
 		MaturityHeight: n.tipState().MaturityHeight() - 1,
 		Timestamp:      n.tipBlock().Timestamp,
 	}
+	// event for resolution second missed proof output
 	ev3 := explorer.Event{
 		ID:    types.Hash256(fcID.MissedOutputID(1)),
 		Index: n.tipState().Index,
@@ -1633,7 +1640,6 @@ func TestEventFileContractMissed(t *testing.T) {
 		Timestamp:      n.tipBlock().Timestamp,
 	}
 
-	// check
 	n.assertEvents(t, addr1, ev2, ev1, ev0)
 	n.assertEvents(t, addr2, ev3, ev1)
 
