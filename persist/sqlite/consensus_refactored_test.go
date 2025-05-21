@@ -289,6 +289,17 @@ func (n *testChain) assertEvents(t *testing.T, addr types.Address, expected ...e
 		expected[i].Confirmations = n.tipState().Index.Height - expected[i].Index.Height
 		testutil.Equal(t, "Event", expected[i], events[i])
 	}
+
+	for i := range expected {
+		events, err := n.db.Events([]types.Hash256{expected[i].ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(events)", 1, len(events))
+
+		expected[i].Relevant = nil
+		testutil.Equal(t, "Event", expected[i], events[0])
+	}
 }
 
 func (n *testChain) getSCE(t *testing.T, scID types.SiacoinOutputID) explorer.SiacoinOutput {
