@@ -311,6 +311,7 @@ func (n *testChain) getSCE(t *testing.T, scID types.SiacoinOutputID) explorer.Si
 	} else if len(sces) == 0 {
 		t.Fatal("can't find sce")
 	}
+	sces[0].StateElement.MerkleProof = nil
 	return sces[0]
 }
 

@@ -68,11 +68,6 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 
 	switch ev.Type {
 	case wallet.EventTypeV1Transaction:
-		var txnID int64
-		err = tx.QueryRow(`SELECT transaction_id FROM v1_transaction_events WHERE event_id = ?`, eventID).Scan(&txnID)
-		if err != nil {
-			return explorer.Event{}, 0, fmt.Errorf("failed to fetch v1 transaction ID: %w", err)
-		}
 		txns, err := getTransactions(tx, []types.TransactionID{types.TransactionID(ev.ID)})
 		if err != nil || len(txns) == 0 {
 			return explorer.Event{}, 0, fmt.Errorf("failed to fetch v1 transaction: %w", err)
@@ -88,13 +83,12 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 		ev.Data = explorer.EventV2Transaction(txns[0])
 	case wallet.EventTypeV1ContractResolution:
 		var missed bool
-		var scID types.SiacoinOutputID
+		scID := types.SiacoinOutputID(ev.ID)
 		var fcID types.FileContractID
-		err := tx.QueryRow(`SELECT ev.missed, sce.output_id, fc.contract_id
+		err := tx.QueryRow(`SELECT ev.missed, fc.contract_id
 			FROM v1_contract_resolution_events ev
-			INNER JOIN siacoin_elements sce ON ev.output_id = sce.id
 			INNER JOIN file_contract_elements fc ON ev.parent_id = fc.id
-			WHERE ev.event_id = ?`, eventID).Scan(&missed, decode(&scID), decode(&fcID))
+			WHERE ev.event_id = ?`, eventID).Scan(&missed, decode(&fcID))
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v1 resolution event: %w", err)
 		}
@@ -106,7 +100,7 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 			return explorer.Event{}, 0, fmt.Errorf("no v1 resolution contract found")
 		}
 
-		sces, err := getSiacoinElements(tx, []types.SiacoinOutputID{scID})
+		sces, err := getSiacoinElements(tx, false, []types.SiacoinOutputID{scID})
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v1 proof output: %w", err)
 		} else if len(sces) == 0 {
@@ -120,20 +114,19 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 		}
 	case wallet.EventTypeV2ContractResolution:
 		var resolution explorer.EventV2ContractResolution
-		var scID types.SiacoinOutputID
+		scID := types.SiacoinOutputID(ev.ID)
 		var fcID types.FileContractID
 		var resolutionTransactionID types.TransactionID
-		err := tx.QueryRow(`SELECT ev.missed, sce.output_id, fc.contract_id, rev.resolution_transaction_id
+		err := tx.QueryRow(`SELECT ev.missed, fc.contract_id, rev.resolution_transaction_id
             FROM v2_contract_resolution_events ev
-            INNER JOIN siacoin_elements sce ON ev.output_id = sce.id
             INNER JOIN v2_file_contract_elements fc ON ev.parent_id = fc.id
             INNER JOIN v2_last_contract_revision rev ON fc.contract_id = rev.contract_id
-            WHERE ev.event_id = ?`, eventID).Scan(&resolution.Missed, decode(&scID), decode(&fcID), decode(&resolutionTransactionID))
+            WHERE ev.event_id = ?`, eventID).Scan(&resolution.Missed, decode(&fcID), decode(&resolutionTransactionID))
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v2 resolution event: %w", err)
 		}
 
-		sces, err := getSiacoinElements(tx, []types.SiacoinOutputID{scID})
+		sces, err := getSiacoinElements(tx, false, []types.SiacoinOutputID{scID})
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v1 proof output: %w", err)
 		} else if len(sces) == 0 {
@@ -152,11 +145,6 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 		found := false
 		for _, fcr := range txn.FileContractResolutions {
 			if fcr.Parent.ID == fcID {
-				fcr.Parent.StateElement.MerkleProof, err = merkleProof(tx, fcr.Parent.StateElement.LeafIndex)
-				if err != nil {
-					return explorer.Event{}, 0, fmt.Errorf("failed to get v2 resolution merkle proof: %w", err)
-				}
-
 				found = true
 				resolution.Resolution = fcr
 				break
@@ -168,15 +156,14 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 
 		ev.Data = resolution
 	case wallet.EventTypeSiafundClaim, wallet.EventTypeMinerPayout, wallet.EventTypeFoundationSubsidy:
-		sce, err := scanSiacoinOutput(tx.QueryRow(`SELECT sce.output_id, sce.leaf_index, sce.source, sce.spent_index, sce.maturity_height, sce.address, sce.value
-			FROM payout_events ev
-			JOIN siacoin_elements sce ON ev.output_id = sce.id
-			WHERE ev.event_id = ?`, eventID))
+		scID := types.SiacoinOutputID(ev.ID)
+		sces, err := getSiacoinElements(tx, false, []types.SiacoinOutputID{scID})
 		if err != nil {
-			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve payout event: %w", err)
+			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v1 payout output: %w", err)
+		} else if len(sces) == 0 {
+			return explorer.Event{}, 0, fmt.Errorf("no payout event output found")
 		}
-		sce.StateElement.MerkleProof, err = merkleProof(tx, sce.StateElement.LeafIndex)
-		ev.Data = explorer.EventPayout{SiacoinElement: sce}
+		ev.Data = explorer.EventPayout{SiacoinElement: sces[0]}
 	default:
 		return explorer.Event{}, 0, fmt.Errorf("unknown event type: %q", ev.Type)
 	}

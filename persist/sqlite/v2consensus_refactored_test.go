@@ -177,6 +177,7 @@ func (n *testChain) getV2FCE(t *testing.T, fcID types.FileContractID) explorer.V
 	} else if len(fces) == 0 {
 		t.Fatal("can't find fce")
 	}
+	fces[0].V2FileContractElement.StateElement.MerkleProof = nil
 	return fces[0]
 }
 
@@ -1871,12 +1872,6 @@ func TestEventV2FileContract(t *testing.T) {
 	}
 
 	resolution := n.getV2Txn(t, txn2.ID()).FileContractResolutions[0]
-	merkleProof, err := n.db.MerkleProof(resolution.Parent.StateElement.LeafIndex)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resolution.Parent.StateElement.MerkleProof = merkleProof
-
 	// event for renter output
 	ev3 := explorer.Event{
 		ID:    types.Hash256(fcID.V2RenterOutputID()),
