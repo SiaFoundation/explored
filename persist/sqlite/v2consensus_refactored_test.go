@@ -14,6 +14,64 @@ import (
 	"go.sia.tech/explored/internal/testutil"
 )
 
+func getSCE(t *testing.T, db explorer.Store, scid types.SiacoinOutputID) types.SiacoinElement {
+	t.Helper()
+
+	sces, err := db.SiacoinElements([]types.SiacoinOutputID{scid})
+	if err != nil {
+		t.Fatal(err)
+	} else if len(sces) == 0 {
+		t.Fatal("can't find sce")
+	}
+	return sces[0].SiacoinElement
+}
+
+func getSFE(t *testing.T, db explorer.Store, sfid types.SiafundOutputID) types.SiafundElement {
+	t.Helper()
+
+	sfes, err := db.SiafundElements([]types.SiafundOutputID{sfid})
+	if err != nil {
+		t.Fatal(err)
+	} else if len(sfes) == 0 {
+		t.Fatal("can't find sfe")
+	}
+	return sfes[0].SiafundElement
+}
+
+func getFCE(t *testing.T, db explorer.Store, fcid types.FileContractID) types.V2FileContractElement {
+	t.Helper()
+
+	fces, err := db.V2Contracts([]types.FileContractID{fcid})
+	if err != nil {
+		t.Fatal(err)
+	} else if len(fces) == 0 {
+		t.Fatal("can't find fces")
+	}
+	return fces[0].V2FileContractElement
+}
+
+func getCIE(t *testing.T, db explorer.Store, bid types.BlockID) types.ChainIndexElement {
+	t.Helper()
+
+	b, err := db.Block(bid)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	merkleProof, err := db.MerkleProof(b.LeafIndex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return types.ChainIndexElement{
+		ID: bid,
+		StateElement: types.StateElement{
+			LeafIndex:   b.LeafIndex,
+			MerkleProof: merkleProof,
+		},
+		ChainIndex: types.ChainIndex{ID: bid, Height: b.Height},
+	}
+}
+
 func (n *testChain) mineV2Transactions(t *testing.T, txns ...types.V2Transaction) {
 	t.Helper()
 
@@ -1362,7 +1420,6 @@ func TestV2FileContractRenewal(t *testing.T) {
 	n.revertBlock(t)
 
 	// revert second renewal
-
 	fceRenewal1.ResolutionType = nil
 	fceRenewal1.ResolutionIndex = nil
 	fceRenewal1.ResolutionTransactionID = nil
