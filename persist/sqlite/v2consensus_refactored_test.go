@@ -120,7 +120,7 @@ func (n *testChain) assertV2TransactionContracts(t *testing.T, txnID types.Trans
 // FileContractResolutions in a v2 transaction retrieved from the explorer
 // match the expected resolutions.
 func (n *testChain) assertV2TransactionResolutions(t *testing.T, txnID types.TransactionID, expected ...explorer.V2FileContractResolution) {
-	// t.Helper()
+	t.Helper()
 
 	txns, err := n.db.V2Transactions([]types.TransactionID{txnID})
 	if err != nil {
@@ -1218,7 +1218,7 @@ func TestV2FileContractRenewal(t *testing.T) {
 	})
 	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
 
-	fc, payout := prepareV2Contract(renterPK, hostPK, n.tipState().Index.Height+1)
+	fc, payout := prepareV2Contract(renterPK, hostPK, n.tipState().Index.Height+2)
 	txn1 := types.V2Transaction{
 		SiacoinInputs: []types.V2SiacoinInput{{
 			Parent:          getSCE(t, n.db, n.genesis().Transactions[0].SiacoinOutputID(0)),
@@ -1272,55 +1272,122 @@ func TestV2FileContractRenewal(t *testing.T) {
 
 	n.mineV2Transactions(t, txn2)
 
-	tip := n.tipState().Index
-	txnID := txn2.ID()
-	renewalID := fce.ID.V2RenewalID()
+	renewalTip1 := n.tipState().Index
+	renewalTxnID1 := txn2.ID()
+	renewalID1 := fce.ID.V2RenewalID()
 	resolutionType := explorer.V2ResolutionRenewal
 
 	// should be resolved
 	fceResolved := fce
 	fceResolved.ResolutionType = &resolutionType
-	fceResolved.ResolutionIndex = &tip
-	fceResolved.ResolutionTransactionID = &txnID
-	fceResolved.RenewedTo = &renewalID
+	fceResolved.ResolutionIndex = &renewalTip1
+	fceResolved.ResolutionTransactionID = &renewalTxnID1
+	fceResolved.RenewedTo = &renewalID1
 
-	fceRenewal := coreToV2ExplorerFC(renewalID, renewal.NewContract)
-	fceRenewal.TransactionID = txn2.ID()
-	fceRenewal.ConfirmationIndex = n.tipState().Index
-	fceRenewal.ConfirmationTransactionID = txn2.ID()
-	fceRenewal.RenewedFrom = &fce.ID
+	fceRenewal1 := coreToV2ExplorerFC(renewalID1, renewal.NewContract)
+	fceRenewal1.TransactionID = renewalTxnID1
+	fceRenewal1.ConfirmationIndex = n.tipState().Index
+	fceRenewal1.ConfirmationTransactionID = renewalTxnID1
+	fceRenewal1.RenewedFrom = &fce.ID
 
 	n.assertV2FCE(t, fce.ID, fceResolved)
 	n.assertV2TransactionContracts(t, txn1.ID(), false, fceResolved)
-	n.assertV2FCE(t, renewalID, fceRenewal)
-	n.assertV2TransactionResolutions(t, txn2.ID(), explorer.V2FileContractResolution{
-		Parent: fceResolved,
-		Type:   resolutionType,
-		Resolution: &explorer.V2FileContractRenewal{
-			FinalRenterOutput: renewal.FinalRenterOutput,
-			FinalHostOutput:   renewal.FinalHostOutput,
-			RenterRollover:    renewal.RenterRollover,
-			HostRollover:      renewal.HostRollover,
-			NewContract:       fceRenewal,
-			RenterSignature:   renewal.RenterSignature,
-			HostSignature:     renewal.HostSignature,
-		},
-	})
+	n.assertV2FCE(t, renewalID1, fceRenewal1)
+
+	renewal1 := explorer.V2FileContractRenewal{
+		FinalRenterOutput: renewal.FinalRenterOutput,
+		FinalHostOutput:   renewal.FinalHostOutput,
+		RenterRollover:    renewal.RenterRollover,
+		HostRollover:      renewal.HostRollover,
+		NewContract:       fceRenewal1,
+		RenterSignature:   renewal.RenterSignature,
+		HostSignature:     renewal.HostSignature,
+	}
+	resolution1 := explorer.V2FileContractResolution{
+		Parent:     fceResolved,
+		Type:       resolutionType,
+		Resolution: &renewal1,
+	}
+	n.assertV2TransactionResolutions(t, txn2.ID(), resolution1)
+
+	// renew again
+	txn3 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, n.db, txn1.SiacoinOutputID(txn2.ID(), 0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   txn2.SiacoinOutputs[0].Value.Sub(payout),
+		}},
+		FileContractResolutions: []types.V2FileContractResolution{{
+			Parent:     getFCE(t, n.db, fceRenewal1.ID),
+			Resolution: renewal,
+		}},
+	}
+	testutil.SignV2TransactionWithContracts(n.tipState(), pk1, renterPK, hostPK, &txn3)
+
+	n.mineV2Transactions(t, txn3)
+
+	renewalTip2 := n.tipState().Index
+	renewalTxnID2 := txn3.ID()
+
+	renewalID2 := renewalID1.V2RenewalID()
+	fceRenewal1.ResolutionType = &resolutionType
+	fceRenewal1.ResolutionIndex = &renewalTip2
+	fceRenewal1.ResolutionTransactionID = &renewalTxnID2
+	fceRenewal1.RenewedTo = &renewalID2
+	renewal1.NewContract = fceRenewal1
+
+	fceRenewal2 := coreToV2ExplorerFC(renewalID2, renewal.NewContract)
+	fceRenewal2.ConfirmationIndex = renewalTip2
+	fceRenewal2.ConfirmationTransactionID = renewalTxnID2
+	fceRenewal2.TransactionID = renewalTxnID2
+	fceRenewal2.RenewedFrom = &renewalID1
+	fceRenewal2.RenewedTo = nil
+	renewal2 := renewal1
+	renewal2.NewContract = fceRenewal2
+	resolution2 := explorer.V2FileContractResolution{
+		Parent:     fceRenewal1,
+		Type:       resolutionType,
+		Resolution: &renewal2,
+	}
+
+	n.assertV2FCE(t, fce.ID, fceResolved)
+	n.assertV2FCE(t, renewalID1, fceRenewal1)
+	n.assertV2FCE(t, renewalID2, fceRenewal2)
+	n.assertV2TransactionResolutions(t, txn2.ID(), resolution1)
+	n.assertV2TransactionResolutions(t, txn3.ID(), resolution2)
 
 	n.revertBlock(t)
 
-	// revert resolution
+	// revert second renewal
+
+	fceRenewal1.ResolutionType = nil
+	fceRenewal1.ResolutionIndex = nil
+	fceRenewal1.ResolutionTransactionID = nil
+	fceRenewal1.RenewedTo = nil
+	renewal1.NewContract = fceRenewal1
+
+	n.assertV2FCE(t, fce.ID, fceResolved)
+	n.assertV2FCE(t, renewalID1, fceRenewal1)
+	n.assertNoV2FCE(t, renewalID2)
+	n.assertV2TransactionResolutions(t, txn2.ID(), resolution1)
+
+	n.revertBlock(t)
+
+	// reverted first renewal
 	// should have old FCE back
 	n.assertV2FCE(t, fce.ID, fce)
 	n.assertV2TransactionContracts(t, txn1.ID(), false, fce)
 
 	// Renewal FCE should not exist after resolution reverted
-	n.assertNoV2FCE(t, renewalID)
+	n.assertNoV2FCE(t, renewalID1, renewalID2)
 
 	n.revertBlock(t)
 
 	// FCE should not exist
-	n.assertNoV2FCE(t, fce.ID, renewalID)
+	n.assertNoV2FCE(t, fce.ID, renewalID1, renewalID2)
 	n.assertV2ContractRevisions(t, fce.ID)
 }
 
@@ -2037,7 +2104,7 @@ func TestV2FoundationAddress(t *testing.T) {
 	n.revertBlock(t)
 }
 
-func TestV2AttestationsA(t *testing.T) {
+func TestV2Attestations(t *testing.T) {
 	pk1 := types.GeneratePrivateKey()
 	pk2 := types.GeneratePrivateKey()
 
