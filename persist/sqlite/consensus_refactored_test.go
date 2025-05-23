@@ -2531,7 +2531,7 @@ func TestHostScan(t *testing.T) {
 	assertHost(hosts[0].PublicKey, host1)
 
 	now = types.CurrentTimestamp()
-	// unsucessful scan
+	// unsuccessful scan
 	scan2 := explorer.HostScan{
 		PublicKey: hosts[0].PublicKey,
 		Success:   false,
@@ -2551,8 +2551,8 @@ func TestHostScan(t *testing.T) {
 	host1.NextScan = scan2.NextScan
 	host1.LastScanError = scan2.Error
 	host1.LastScanSuccessful = false
-	host1.TotalScans += 1
-	host1.FailedInteractions += 1
+	host1.TotalScans++
+	host1.FailedInteractions++
 
 	assertHost(hosts[0].PublicKey, host1)
 }
