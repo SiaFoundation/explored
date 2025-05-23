@@ -9,6 +9,7 @@ import (
 
 	"go.sia.tech/core/consensus"
 	proto2 "go.sia.tech/core/rhp/v2"
+	proto3 "go.sia.tech/core/rhp/v3"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	ctestutil "go.sia.tech/coreutils/testutil"
@@ -2244,6 +2245,7 @@ func TestMetrics(t *testing.T) {
 		testutil.Equal(t, "StorageUtilization", expected.StorageUtilization, got.StorageUtilization)
 		testutil.Equal(t, "CirculatingSupply", expected.CirculatingSupply, got.CirculatingSupply)
 		testutil.Equal(t, "ContractRevenue", expected.ContractRevenue, got.ContractRevenue)
+		testutil.Equal(t, "TotalHosts", 0, got.TotalHosts)
 	}
 
 	var circulatingSupply types.Currency
@@ -2380,4 +2382,174 @@ func TestMetrics(t *testing.T) {
 	n.revertBlock(t)
 
 	assertMetrics(metricsGenesis)
+}
+
+func TestMetricsTotalHosts(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	pk2 := types.GeneratePrivateKey()
+	pk3 := types.GeneratePrivateKey()
+
+	n := newTestChain(t, false, nil)
+
+	assertMetrics := func(expectedHosts uint64) {
+		t.Helper()
+
+		got, err := n.db.Metrics(n.tipState().Index.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "TotalHosts", expectedHosts, got.TotalHosts)
+	}
+
+	// no hosts announced yet
+	assertMetrics(0)
+
+	txn1 := types.Transaction{
+		ArbitraryData: [][]byte{
+			testutil.CreateAnnouncement(pk1, "127.0.0.1:1234"),
+		},
+	}
+
+	n.mineTransactions(t, txn1)
+
+	n.assertTransactions(t, txn1)
+	// 1 host announced in txn1
+	assertMetrics(1)
+
+	txn2 := types.Transaction{
+		ArbitraryData: [][]byte{
+			testutil.CreateAnnouncement(pk1, "127.0.0.1:5678"),
+		},
+	}
+
+	n.mineTransactions(t, txn2)
+
+	n.assertTransactions(t, txn1, txn2)
+	// host announced in txn2 has same pubkey as existing host so count
+	// shouldn't go up
+	assertMetrics(1)
+
+	txn3 := types.Transaction{
+		ArbitraryData: [][]byte{
+			testutil.CreateAnnouncement(pk2, "127.0.0.1:8888"),
+		},
+	}
+	txn4 := types.Transaction{
+		ArbitraryData: [][]byte{
+			testutil.CreateAnnouncement(pk3, "127.0.0.1:9999"),
+		},
+	}
+
+	n.mineTransactions(t, txn3, txn4)
+
+	n.assertTransactions(t, txn1, txn2, txn3, txn4)
+	// 2 hosts with new publickeys announced; 1 + 2 = 3
+	assertMetrics(3)
+
+	n.revertBlock(t)
+
+	n.assertTransactions(t, txn1, txn2)
+	assertMetrics(1)
+
+	n.revertBlock(t)
+
+	n.assertTransactions(t, txn1)
+	assertMetrics(1)
+
+	n.revertBlock(t)
+
+	assertMetrics(0)
+}
+
+func TestHostScan(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+
+	n := newTestChain(t, false, nil)
+
+	assertHost := func(pubkey types.PublicKey, expected explorer.Host) {
+		hosts, err := n.db.QueryHosts(explorer.HostQuery{PublicKeys: []types.PublicKey{pubkey}}, explorer.HostSortPublicKey, explorer.HostSortAsc, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(hosts)", 1, len(hosts))
+
+		testutil.Equal(t, "Host", expected, hosts[0])
+	}
+
+	const netAddr1 = "127.0.0.1:1234"
+	txn1 := types.Transaction{
+		ArbitraryData: [][]byte{
+			testutil.CreateAnnouncement(pk1, netAddr1),
+		},
+	}
+
+	n.mineTransactions(t, txn1)
+
+	hosts, err := n.db.HostsForScanning(time.Unix(0, 0), 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testutil.Equal(t, "len(hosts)", 1, len(hosts))
+
+	now := types.CurrentTimestamp()
+	settings := proto2.HostSettings{
+		AcceptingContracts: true,
+	}
+	priceTable := proto3.HostPriceTable{
+		HostBlockHeight: 123,
+	}
+	scan1 := explorer.HostScan{
+		PublicKey:  hosts[0].PublicKey,
+		Success:    true,
+		Timestamp:  now,
+		NextScan:   now.Add(time.Hour),
+		Settings:   settings,
+		PriceTable: priceTable,
+	}
+
+	if err := n.db.AddHostScans([]explorer.HostScan{scan1}...); err != nil {
+		t.Fatal(err)
+	}
+
+	lastAnnouncement := n.tipBlock().Timestamp
+	host1 := explorer.Host{
+		PublicKey:              hosts[0].PublicKey,
+		NetAddress:             netAddr1,
+		KnownSince:             lastAnnouncement,
+		LastScan:               scan1.Timestamp,
+		LastScanSuccessful:     true,
+		LastAnnouncement:       lastAnnouncement,
+		NextScan:               scan1.NextScan,
+		TotalScans:             1,
+		SuccessfulInteractions: 1,
+		FailedInteractions:     0,
+		Settings:               settings,
+		PriceTable:             priceTable,
+	}
+	assertHost(hosts[0].PublicKey, host1)
+
+	now = types.CurrentTimestamp()
+	scan2 := explorer.HostScan{
+		PublicKey: hosts[0].PublicKey,
+		Success:   false,
+		Timestamp: now,
+		NextScan:  now.Add(time.Hour),
+		Error: func() *string {
+			x := "error"
+			return &x
+		}(),
+	}
+
+	if err := n.db.AddHostScans([]explorer.HostScan{scan2}...); err != nil {
+		t.Fatal(err)
+	}
+	// previous settings and price table should be preserved in case of failure
+	host1.LastScan = scan2.Timestamp
+	host1.NextScan = scan2.NextScan
+	host1.LastScanError = scan2.Error
+	host1.LastScanSuccessful = false
+	host1.TotalScans += 1
+	host1.FailedInteractions += 1
+
+	assertHost(hosts[0].PublicKey, host1)
 }

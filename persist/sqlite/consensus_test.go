@@ -107,55 +107,6 @@ func CheckMetrics(t *testing.T, db explorer.Store, cm *chain.Manager, expected e
 	// don't check circulating supply here because it requires a lot of accounting
 }
 
-// CheckChainIndices checks that the chain indices that a transaction was in
-// from the explorer match the expected chain indices.
-func CheckChainIndices(t *testing.T, db explorer.Store, txnID types.TransactionID, expected []types.ChainIndex) {
-	t.Helper()
-
-	indices, err := db.TransactionChainIndices(txnID, 0, 100)
-	switch {
-	case err != nil:
-		t.Fatal(err)
-	case len(indices) != len(expected):
-		t.Fatalf("expected %d indices, got %d", len(expected), len(indices))
-	}
-	for i := range indices {
-		testutil.Equal(t, "index", expected[i], indices[i])
-	}
-}
-
-// CheckFCRevisions checks that the revision numbers for the file contracts match.
-func CheckFCRevisions(t *testing.T, confirmationIndex types.ChainIndex, confirmationTransactionID types.TransactionID, valid, missed []types.SiacoinOutput, revisionNumbers []uint64, fcs []explorer.ExtendedFileContract) {
-	t.Helper()
-
-	testutil.Equal(t, "number of revisions", len(revisionNumbers), len(fcs))
-	for i := range revisionNumbers {
-		testutil.Equal(t, "revision number", revisionNumbers[i], fcs[i].RevisionNumber)
-		testutil.Equal(t, "confirmation index", confirmationIndex, fcs[i].ConfirmationIndex)
-		testutil.Equal(t, "confirmation transaction ID", confirmationTransactionID, fcs[i].ConfirmationTransactionID)
-
-		testutil.Equal(t, "valid proof outputs", len(valid), len(fcs[i].ValidProofOutputs))
-		for j := range valid {
-			expected := valid[j]
-			got := fcs[i].ValidProofOutputs[j]
-
-			testutil.Equal(t, "id", fcs[i].ID.ValidOutputID(j), got.ID)
-			testutil.Equal(t, "value", expected.Value, got.Value)
-			testutil.Equal(t, "address", expected.Address, got.Address)
-		}
-
-		testutil.Equal(t, "missed proof outputs", len(missed), len(fcs[i].MissedProofOutputs))
-		for j := range missed {
-			expected := missed[j]
-			got := fcs[i].MissedProofOutputs[j]
-
-			testutil.Equal(t, "id", fcs[i].ID.MissedOutputID(j), got.ID)
-			testutil.Equal(t, "value", expected.Value, got.Value)
-			testutil.Equal(t, "address", expected.Address, got.Address)
-		}
-	}
-}
-
 func checkTransaction(t *testing.T, db explorer.Store, expected types.Transaction) {
 	txns, err := db.Transactions([]types.TransactionID{expected.ID()})
 	if err != nil {

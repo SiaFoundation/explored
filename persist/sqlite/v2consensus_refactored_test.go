@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 	"testing"
+	"time"
 
 	"go.sia.tech/core/consensus"
 	proto4 "go.sia.tech/core/rhp/v4"
@@ -2197,4 +2198,100 @@ func TestV2Attestations(t *testing.T) {
 	n.assertV2Transactions(t, txn1, txn2)
 
 	n.revertBlock(t)
+}
+
+func TestV2HostScan(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+
+	n := newTestChain(t, true, nil)
+
+	assertHost := func(pubkey types.PublicKey, expected explorer.Host) {
+		hosts, err := n.db.QueryHosts(explorer.HostQuery{PublicKeys: []types.PublicKey{pubkey}}, explorer.HostSortPublicKey, explorer.HostSortAsc, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(hosts)", 1, len(hosts))
+
+		testutil.Equal(t, "Host", expected, hosts[0])
+	}
+
+	const netAddr1 = "127.0.0.1:1234"
+	ha1 := chain.V2HostAnnouncement{{
+		Protocol: "http",
+		Address:  netAddr1,
+	}}
+
+	txn1 := types.V2Transaction{
+		Attestations: []types.Attestation{ha1.ToAttestation(n.tipState(), pk1)},
+	}
+
+	n.mineV2Transactions(t, txn1)
+
+	hosts, err := n.db.HostsForScanning(time.Unix(0, 0), 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testutil.Equal(t, "len(hosts)", 1, len(hosts))
+
+	now := types.CurrentTimestamp()
+	settings := proto4.HostSettings{
+		ProtocolVersion:    [3]uint8{1, 2, 3},
+		AcceptingContracts: true,
+		Prices: proto4.HostPrices{
+			TipHeight: 123,
+		},
+	}
+	scan1 := explorer.HostScan{
+		PublicKey:  hosts[0].PublicKey,
+		Success:    true,
+		Timestamp:  now,
+		NextScan:   now.Add(time.Hour),
+		V2Settings: settings,
+	}
+
+	if err := n.db.AddHostScans([]explorer.HostScan{scan1}...); err != nil {
+		t.Fatal(err)
+	}
+
+	lastAnnouncement := n.tipBlock().Timestamp
+	host1 := explorer.Host{
+		V2:                     true,
+		PublicKey:              hosts[0].PublicKey,
+		V2NetAddresses:         []chain.NetAddress(ha1),
+		KnownSince:             lastAnnouncement,
+		LastScan:               scan1.Timestamp,
+		LastScanSuccessful:     true,
+		LastAnnouncement:       lastAnnouncement,
+		NextScan:               scan1.NextScan,
+		TotalScans:             1,
+		SuccessfulInteractions: 1,
+		FailedInteractions:     0,
+		V2Settings:             settings,
+	}
+	assertHost(hosts[0].PublicKey, host1)
+
+	now = types.CurrentTimestamp()
+	scan2 := explorer.HostScan{
+		PublicKey: hosts[0].PublicKey,
+		Success:   false,
+		Timestamp: now,
+		NextScan:  now.Add(time.Hour),
+		Error: func() *string {
+			x := "error"
+			return &x
+		}(),
+	}
+
+	if err := n.db.AddHostScans([]explorer.HostScan{scan2}...); err != nil {
+		t.Fatal(err)
+	}
+	// previous settings and price table should be preserved in case of failure
+	host1.LastScan = scan2.Timestamp
+	host1.NextScan = scan2.NextScan
+	host1.LastScanError = scan2.Error
+	host1.LastScanSuccessful = false
+	host1.TotalScans += 1
+	host1.FailedInteractions += 1
+
+	assertHost(hosts[0].PublicKey, host1)
 }
