@@ -115,7 +115,7 @@ func (n *testChain) assertV2TransactionContracts(t *testing.T, txnID types.Trans
 	}
 }
 
-// assertV2TransactionContracts asserts that the enhanced
+// assertV2TransactionResolutions asserts that the enhanced
 // FileContractResolutions in a v2 transaction retrieved from the explorer
 // match the expected resolutions.
 func (n *testChain) assertV2TransactionResolutions(t *testing.T, txnID types.TransactionID, expected ...explorer.V2FileContractResolution) {
