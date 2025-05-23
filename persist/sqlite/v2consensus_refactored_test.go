@@ -8,6 +8,7 @@ import (
 	"go.sia.tech/core/consensus"
 	proto4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/coreutils/wallet"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/testutil"
@@ -1914,4 +1915,162 @@ func TestEventV2FileContract(t *testing.T) {
 	ev0.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, genesisTxn.ID())}
 	n.assertEvents(t, addr1, ev0)
 	n.assertEvents(t, addr2)
+}
+
+func TestV2ArbitraryData(t *testing.T) {
+	n := newTestChain(t, true, nil)
+
+	txn1 := types.V2Transaction{
+		ArbitraryData: []byte("hello"),
+	}
+
+	txn2 := types.V2Transaction{
+		ArbitraryData: []byte("world"),
+	}
+
+	n.mineV2Transactions(t, txn1, txn2)
+
+	n.assertV2Transactions(t, txn1, txn2)
+
+	txn3 := types.V2Transaction{
+		ArbitraryData: []byte("12345"),
+	}
+
+	n.mineV2Transactions(t, txn3)
+
+	n.assertV2Transactions(t, txn1, txn2, txn3)
+
+	n.revertBlock(t)
+}
+
+func TestV2MinerFee(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(uc1)}
+
+	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	genesisTxn := n.genesis().Transactions[0]
+
+	txn1 := types.V2Transaction{
+		MinerFee: genesisTxn.SiacoinOutputs[0].Value,
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, n.db, genesisTxn.SiacoinOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+	}
+	testutil.SignV2Transaction(n.tipState(), pk1, &txn1)
+
+	n.mineV2Transactions(t, txn1)
+
+	n.assertV2Transactions(t, txn1)
+
+	n.revertBlock(t)
+}
+
+func TestV2FoundationAddress(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(types.StandardUnlockConditions(pk1.PublicKey()))}
+
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
+	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		network.HardforkFoundation.FailsafeAddress = addr1
+		network.HardforkFoundation.PrimaryAddress = addr1
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	genesisTxn := n.genesis().Transactions[0]
+
+	// event for transaction in genesis block
+	ev0 := explorer.Event{
+		ID:             types.Hash256(genesisTxn.ID()),
+		Index:          n.tipState().Index,
+		Type:           wallet.EventTypeV1Transaction,
+		MaturityHeight: n.tipState().Index.Height,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+
+	// we have to spend an output beloning to foundation address to change it
+	txn1 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, n.db, genesisTxn.SiacoinOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		MinerFee:             genesisTxn.SiacoinOutputs[0].Value,
+		NewFoundationAddress: &addr2,
+	}
+	testutil.SignV2Transaction(n.tipState(), pk1, &txn1)
+
+	n.mineV2Transactions(t, txn1)
+
+	n.assertV2Transactions(t, txn1)
+
+	ev0.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, genesisTxn.ID())}
+	// event for txn1
+	ev1 := explorer.Event{
+		ID:             types.Hash256(txn1.ID()),
+		Index:          n.tipState().Index,
+		Type:           wallet.EventTypeV2Transaction,
+		Data:           explorer.EventV2Transaction(n.getV2Txn(t, txn1.ID())),
+		MaturityHeight: n.tipState().Index.Height,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+
+	// event for foundation payout
+	scID := n.tipState().Index.ID.FoundationOutputID()
+
+	ev2 := explorer.Event{
+		ID:             types.Hash256(scID),
+		Index:          n.tipState().Index,
+		Type:           wallet.EventTypeFoundationSubsidy,
+		Data:           explorer.EventPayout{SiacoinElement: n.getSCE(t, scID)},
+		MaturityHeight: n.tipState().MaturityHeight() - 1,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+
+	n.assertEvents(t, addr1, ev2, ev1, ev0)
+
+	n.revertBlock(t)
+}
+
+func TestV2AttestationsA(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	pk2 := types.GeneratePrivateKey()
+
+	n := newTestChain(t, true, nil)
+
+	ha1 := chain.V2HostAnnouncement{{
+		Protocol: "http",
+		Address:  "127.0.0.1:4444",
+	}}
+	ha2 := chain.V2HostAnnouncement{{
+		Protocol: "http",
+		Address:  "127.0.0.1:8888",
+	}}
+
+	otherAttestation := types.Attestation{
+		PublicKey: pk1.PublicKey(),
+		Key:       "hello",
+		Value:     []byte("world"),
+	}
+	otherAttestation.Signature = pk1.SignHash(n.tipState().AttestationSigHash(otherAttestation))
+
+	txn1 := types.V2Transaction{
+		Attestations: []types.Attestation{ha1.ToAttestation(n.tipState(), pk1), otherAttestation},
+	}
+	testutil.SignV2Transaction(n.tipState(), pk1, &txn1)
+	txn2 := types.V2Transaction{
+		Attestations: []types.Attestation{ha2.ToAttestation(n.tipState(), pk2)},
+	}
+	testutil.SignV2Transaction(n.tipState(), pk1, &txn2)
+
+	n.mineV2Transactions(t, txn1, txn2)
+
+	n.assertV2Transactions(t, txn1, txn2)
+
+	n.revertBlock(t)
 }
