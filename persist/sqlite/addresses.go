@@ -154,7 +154,7 @@ func (s *Store) UnspentSiafundOutputs(address types.Address, offset, limit uint6
 	return
 }
 
-func getSiacoinElements(tx *txn, merkle bool, ids []types.SiacoinOutputID) (result []explorer.SiacoinOutput, err error) {
+func getSiacoinElements(tx *txn, ids []types.SiacoinOutputID, includeProof bool) (result []explorer.SiacoinOutput, err error) {
 	var encoded []any
 	for _, id := range ids {
 		encoded = append(encoded, encode(id))
@@ -171,7 +171,7 @@ func getSiacoinElements(tx *txn, merkle bool, ids []types.SiacoinOutputID) (resu
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan siacoin output: %w", err)
 		}
-		if merkle {
+		if includeProof {
 			sco.StateElement.MerkleProof, err = merkleProof(tx, sco.StateElement.LeafIndex)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get output merkle proof: %w", err)
@@ -186,7 +186,7 @@ func getSiacoinElements(tx *txn, merkle bool, ids []types.SiacoinOutputID) (resu
 // SiacoinElements implements explorer.Store.
 func (s *Store) SiacoinElements(ids []types.SiacoinOutputID) (result []explorer.SiacoinOutput, err error) {
 	err = s.transaction(func(tx *txn) error {
-		result, err = getSiacoinElements(tx, true, ids)
+		result, err = getSiacoinElements(tx, ids, true)
 		return err
 	})
 	return

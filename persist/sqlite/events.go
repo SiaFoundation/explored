@@ -104,7 +104,7 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 			return explorer.Event{}, 0, fmt.Errorf("v1 resolution contract not found")
 		}
 
-		sces, err := getSiacoinElements(tx, false, []types.SiacoinOutputID{scID})
+		sces, err := getSiacoinElements(tx, []types.SiacoinOutputID{scID}, false)
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v1 proof output: %w", err)
 		} else if len(sces) == 0 {
@@ -130,7 +130,7 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v2 resolution event: %w", err)
 		}
 
-		sces, err := getSiacoinElements(tx, false, []types.SiacoinOutputID{scID})
+		sces, err := getSiacoinElements(tx, []types.SiacoinOutputID{scID}, false)
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v1 proof output: %w", err)
 		} else if len(sces) == 0 {
@@ -161,7 +161,7 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 		ev.Data = resolution
 	case wallet.EventTypeSiafundClaim, wallet.EventTypeMinerPayout, wallet.EventTypeFoundationSubsidy:
 		scID := types.SiacoinOutputID(ev.ID)
-		sces, err := getSiacoinElements(tx, false, []types.SiacoinOutputID{scID})
+		sces, err := getSiacoinElements(tx, []types.SiacoinOutputID{scID}, false)
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v1 payout output: %w", err)
 		} else if len(sces) == 0 {
