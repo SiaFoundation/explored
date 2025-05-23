@@ -4,14 +4,74 @@ import (
 	"errors"
 	"math"
 	"testing"
+	"time"
 
 	"go.sia.tech/core/consensus"
 	proto4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/coreutils/wallet"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/testutil"
 )
+
+func getSCE(t *testing.T, db explorer.Store, scid types.SiacoinOutputID) types.SiacoinElement {
+	t.Helper()
+
+	sces, err := db.SiacoinElements([]types.SiacoinOutputID{scid})
+	if err != nil {
+		t.Fatal(err)
+	} else if len(sces) == 0 {
+		t.Fatal("can't find sce")
+	}
+	return sces[0].SiacoinElement
+}
+
+func getSFE(t *testing.T, db explorer.Store, sfid types.SiafundOutputID) types.SiafundElement {
+	t.Helper()
+
+	sfes, err := db.SiafundElements([]types.SiafundOutputID{sfid})
+	if err != nil {
+		t.Fatal(err)
+	} else if len(sfes) == 0 {
+		t.Fatal("can't find sfe")
+	}
+	return sfes[0].SiafundElement
+}
+
+func getFCE(t *testing.T, db explorer.Store, fcid types.FileContractID) types.V2FileContractElement {
+	t.Helper()
+
+	fces, err := db.V2Contracts([]types.FileContractID{fcid})
+	if err != nil {
+		t.Fatal(err)
+	} else if len(fces) == 0 {
+		t.Fatal("can't find fces")
+	}
+	return fces[0].V2FileContractElement
+}
+
+func getCIE(t *testing.T, db explorer.Store, bid types.BlockID) types.ChainIndexElement {
+	t.Helper()
+
+	b, err := db.Block(bid)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	merkleProof, err := db.MerkleProof(b.LeafIndex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return types.ChainIndexElement{
+		ID: bid,
+		StateElement: types.StateElement{
+			LeafIndex:   b.LeafIndex,
+			MerkleProof: merkleProof,
+		},
+		ChainIndex: types.ChainIndex{ID: bid, Height: b.Height},
+	}
+}
 
 func (n *testChain) mineV2Transactions(t *testing.T, txns ...types.V2Transaction) {
 	t.Helper()
@@ -119,7 +179,7 @@ func (n *testChain) assertV2TransactionContracts(t *testing.T, txnID types.Trans
 // FileContractResolutions in a v2 transaction retrieved from the explorer
 // match the expected resolutions.
 func (n *testChain) assertV2TransactionResolutions(t *testing.T, txnID types.TransactionID, expected ...explorer.V2FileContractResolution) {
-	// t.Helper()
+	t.Helper()
 
 	txns, err := n.db.V2Transactions([]types.TransactionID{txnID})
 	if err != nil {
@@ -1217,7 +1277,7 @@ func TestV2FileContractRenewal(t *testing.T) {
 	})
 	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
 
-	fc, payout := prepareV2Contract(renterPK, hostPK, n.tipState().Index.Height+1)
+	fc, payout := prepareV2Contract(renterPK, hostPK, n.tipState().Index.Height+2)
 	txn1 := types.V2Transaction{
 		SiacoinInputs: []types.V2SiacoinInput{{
 			Parent:          getSCE(t, n.db, n.genesis().Transactions[0].SiacoinOutputID(0)),
@@ -1271,55 +1331,121 @@ func TestV2FileContractRenewal(t *testing.T) {
 
 	n.mineV2Transactions(t, txn2)
 
-	tip := n.tipState().Index
-	txnID := txn2.ID()
-	renewalID := fce.ID.V2RenewalID()
+	renewalTip1 := n.tipState().Index
+	renewalTxnID1 := txn2.ID()
+	renewalID1 := fce.ID.V2RenewalID()
 	resolutionType := explorer.V2ResolutionRenewal
 
 	// should be resolved
 	fceResolved := fce
 	fceResolved.ResolutionType = &resolutionType
-	fceResolved.ResolutionIndex = &tip
-	fceResolved.ResolutionTransactionID = &txnID
-	fceResolved.RenewedTo = &renewalID
+	fceResolved.ResolutionIndex = &renewalTip1
+	fceResolved.ResolutionTransactionID = &renewalTxnID1
+	fceResolved.RenewedTo = &renewalID1
 
-	fceRenewal := coreToV2ExplorerFC(renewalID, renewal.NewContract)
-	fceRenewal.TransactionID = txn2.ID()
-	fceRenewal.ConfirmationIndex = n.tipState().Index
-	fceRenewal.ConfirmationTransactionID = txn2.ID()
-	fceRenewal.RenewedFrom = &fce.ID
+	fceRenewal1 := coreToV2ExplorerFC(renewalID1, renewal.NewContract)
+	fceRenewal1.TransactionID = renewalTxnID1
+	fceRenewal1.ConfirmationIndex = n.tipState().Index
+	fceRenewal1.ConfirmationTransactionID = renewalTxnID1
+	fceRenewal1.RenewedFrom = &fce.ID
 
 	n.assertV2FCE(t, fce.ID, fceResolved)
 	n.assertV2TransactionContracts(t, txn1.ID(), false, fceResolved)
-	n.assertV2FCE(t, renewalID, fceRenewal)
-	n.assertV2TransactionResolutions(t, txn2.ID(), explorer.V2FileContractResolution{
-		Parent: fceResolved,
-		Type:   resolutionType,
-		Resolution: &explorer.V2FileContractRenewal{
-			FinalRenterOutput: renewal.FinalRenterOutput,
-			FinalHostOutput:   renewal.FinalHostOutput,
-			RenterRollover:    renewal.RenterRollover,
-			HostRollover:      renewal.HostRollover,
-			NewContract:       fceRenewal,
-			RenterSignature:   renewal.RenterSignature,
-			HostSignature:     renewal.HostSignature,
-		},
-	})
+	n.assertV2FCE(t, renewalID1, fceRenewal1)
+
+	renewal1 := explorer.V2FileContractRenewal{
+		FinalRenterOutput: renewal.FinalRenterOutput,
+		FinalHostOutput:   renewal.FinalHostOutput,
+		RenterRollover:    renewal.RenterRollover,
+		HostRollover:      renewal.HostRollover,
+		NewContract:       fceRenewal1,
+		RenterSignature:   renewal.RenterSignature,
+		HostSignature:     renewal.HostSignature,
+	}
+	resolution1 := explorer.V2FileContractResolution{
+		Parent:     fceResolved,
+		Type:       resolutionType,
+		Resolution: &renewal1,
+	}
+	n.assertV2TransactionResolutions(t, txn2.ID(), resolution1)
+
+	// renew again
+	txn3 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, n.db, txn1.SiacoinOutputID(txn2.ID(), 0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   txn2.SiacoinOutputs[0].Value.Sub(payout),
+		}},
+		FileContractResolutions: []types.V2FileContractResolution{{
+			Parent:     getFCE(t, n.db, fceRenewal1.ID),
+			Resolution: renewal,
+		}},
+	}
+	testutil.SignV2TransactionWithContracts(n.tipState(), pk1, renterPK, hostPK, &txn3)
+
+	n.mineV2Transactions(t, txn3)
+
+	renewalTip2 := n.tipState().Index
+	renewalTxnID2 := txn3.ID()
+
+	renewalID2 := renewalID1.V2RenewalID()
+	fceRenewal1.ResolutionType = &resolutionType
+	fceRenewal1.ResolutionIndex = &renewalTip2
+	fceRenewal1.ResolutionTransactionID = &renewalTxnID2
+	fceRenewal1.RenewedTo = &renewalID2
+	renewal1.NewContract = fceRenewal1
+
+	fceRenewal2 := coreToV2ExplorerFC(renewalID2, renewal.NewContract)
+	fceRenewal2.ConfirmationIndex = renewalTip2
+	fceRenewal2.ConfirmationTransactionID = renewalTxnID2
+	fceRenewal2.TransactionID = renewalTxnID2
+	fceRenewal2.RenewedFrom = &renewalID1
+	fceRenewal2.RenewedTo = nil
+	renewal2 := renewal1
+	renewal2.NewContract = fceRenewal2
+	resolution2 := explorer.V2FileContractResolution{
+		Parent:     fceRenewal1,
+		Type:       resolutionType,
+		Resolution: &renewal2,
+	}
+
+	n.assertV2FCE(t, fce.ID, fceResolved)
+	n.assertV2FCE(t, renewalID1, fceRenewal1)
+	n.assertV2FCE(t, renewalID2, fceRenewal2)
+	n.assertV2TransactionResolutions(t, txn2.ID(), resolution1)
+	n.assertV2TransactionResolutions(t, txn3.ID(), resolution2)
 
 	n.revertBlock(t)
 
-	// revert resolution
+	// revert second renewal
+	fceRenewal1.ResolutionType = nil
+	fceRenewal1.ResolutionIndex = nil
+	fceRenewal1.ResolutionTransactionID = nil
+	fceRenewal1.RenewedTo = nil
+	renewal1.NewContract = fceRenewal1
+
+	n.assertV2FCE(t, fce.ID, fceResolved)
+	n.assertV2FCE(t, renewalID1, fceRenewal1)
+	n.assertNoV2FCE(t, renewalID2)
+	n.assertV2TransactionResolutions(t, txn2.ID(), resolution1)
+
+	n.revertBlock(t)
+
+	// reverted first renewal
 	// should have old FCE back
 	n.assertV2FCE(t, fce.ID, fce)
 	n.assertV2TransactionContracts(t, txn1.ID(), false, fce)
 
 	// Renewal FCE should not exist after resolution reverted
-	n.assertNoV2FCE(t, renewalID)
+	n.assertNoV2FCE(t, renewalID1, renewalID2)
 
 	n.revertBlock(t)
 
 	// FCE should not exist
-	n.assertNoV2FCE(t, fce.ID, renewalID)
+	n.assertNoV2FCE(t, fce.ID, renewalID1, renewalID2)
 	n.assertV2ContractRevisions(t, fce.ID)
 }
 
@@ -1914,4 +2040,261 @@ func TestEventV2FileContract(t *testing.T) {
 	ev0.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, genesisTxn.ID())}
 	n.assertEvents(t, addr1, ev0)
 	n.assertEvents(t, addr2)
+}
+
+func TestV2ArbitraryData(t *testing.T) {
+	n := newTestChain(t, true, nil)
+
+	txn1 := types.V2Transaction{
+		ArbitraryData: []byte("hello"),
+	}
+
+	txn2 := types.V2Transaction{
+		ArbitraryData: []byte("world"),
+	}
+
+	n.mineV2Transactions(t, txn1, txn2)
+
+	n.assertV2Transactions(t, txn1, txn2)
+
+	txn3 := types.V2Transaction{
+		ArbitraryData: []byte("12345"),
+	}
+
+	n.mineV2Transactions(t, txn3)
+
+	n.assertV2Transactions(t, txn1, txn2, txn3)
+
+	n.revertBlock(t)
+}
+
+func TestV2MinerFee(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(uc1)}
+
+	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	genesisTxn := n.genesis().Transactions[0]
+
+	txn1 := types.V2Transaction{
+		MinerFee: genesisTxn.SiacoinOutputs[0].Value,
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, n.db, genesisTxn.SiacoinOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+	}
+	testutil.SignV2Transaction(n.tipState(), pk1, &txn1)
+
+	n.mineV2Transactions(t, txn1)
+
+	n.assertV2Transactions(t, txn1)
+
+	n.revertBlock(t)
+}
+
+func TestV2FoundationAddress(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	addr1 := types.StandardUnlockHash(pk1.PublicKey())
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(types.StandardUnlockConditions(pk1.PublicKey()))}
+
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
+	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		network.HardforkFoundation.FailsafeAddress = addr1
+		network.HardforkFoundation.PrimaryAddress = addr1
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	genesisTxn := n.genesis().Transactions[0]
+
+	// event for transaction in genesis block
+	ev0 := explorer.Event{
+		ID:             types.Hash256(genesisTxn.ID()),
+		Index:          n.tipState().Index,
+		Type:           wallet.EventTypeV1Transaction,
+		MaturityHeight: n.tipState().Index.Height,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+
+	// we have to spend an output beloning to foundation address to change it
+	txn1 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, n.db, genesisTxn.SiacoinOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		MinerFee:             genesisTxn.SiacoinOutputs[0].Value,
+		NewFoundationAddress: &addr2,
+	}
+	testutil.SignV2Transaction(n.tipState(), pk1, &txn1)
+
+	n.mineV2Transactions(t, txn1)
+
+	n.assertV2Transactions(t, txn1)
+
+	ev0.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, genesisTxn.ID())}
+	// event for txn1
+	ev1 := explorer.Event{
+		ID:             types.Hash256(txn1.ID()),
+		Index:          n.tipState().Index,
+		Type:           wallet.EventTypeV2Transaction,
+		Data:           explorer.EventV2Transaction(n.getV2Txn(t, txn1.ID())),
+		MaturityHeight: n.tipState().Index.Height,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+
+	// event for foundation payout
+	scID := n.tipState().Index.ID.FoundationOutputID()
+
+	ev2 := explorer.Event{
+		ID:             types.Hash256(scID),
+		Index:          n.tipState().Index,
+		Type:           wallet.EventTypeFoundationSubsidy,
+		Data:           explorer.EventPayout{SiacoinElement: n.getSCE(t, scID)},
+		MaturityHeight: n.tipState().MaturityHeight() - 1,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+
+	n.assertEvents(t, addr1, ev2, ev1, ev0)
+
+	n.revertBlock(t)
+}
+
+func TestV2Attestations(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	pk2 := types.GeneratePrivateKey()
+
+	n := newTestChain(t, true, nil)
+
+	ha1 := chain.V2HostAnnouncement{{
+		Protocol: "http",
+		Address:  "127.0.0.1:4444",
+	}}
+	ha2 := chain.V2HostAnnouncement{{
+		Protocol: "http",
+		Address:  "127.0.0.1:8888",
+	}}
+
+	otherAttestation := types.Attestation{
+		PublicKey: pk1.PublicKey(),
+		Key:       "hello",
+		Value:     []byte("world"),
+	}
+	otherAttestation.Signature = pk1.SignHash(n.tipState().AttestationSigHash(otherAttestation))
+
+	txn1 := types.V2Transaction{
+		Attestations: []types.Attestation{ha1.ToAttestation(n.tipState(), pk1), otherAttestation},
+	}
+	testutil.SignV2Transaction(n.tipState(), pk1, &txn1)
+	txn2 := types.V2Transaction{
+		Attestations: []types.Attestation{ha2.ToAttestation(n.tipState(), pk2)},
+	}
+	testutil.SignV2Transaction(n.tipState(), pk1, &txn2)
+
+	n.mineV2Transactions(t, txn1, txn2)
+
+	n.assertV2Transactions(t, txn1, txn2)
+
+	n.revertBlock(t)
+}
+
+func TestV2HostScan(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+
+	n := newTestChain(t, true, nil)
+
+	assertHost := func(pubkey types.PublicKey, expected explorer.Host) {
+		hosts, err := n.db.QueryHosts(explorer.HostQuery{PublicKeys: []types.PublicKey{pubkey}}, explorer.HostSortPublicKey, explorer.HostSortAsc, 0, math.MaxInt64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testutil.Equal(t, "len(hosts)", 1, len(hosts))
+
+		testutil.Equal(t, "Host", expected, hosts[0])
+	}
+
+	// announce a host
+	const netAddr1 = "127.0.0.1:1234"
+	ha1 := chain.V2HostAnnouncement{{
+		Protocol: "http",
+		Address:  netAddr1,
+	}}
+
+	txn1 := types.V2Transaction{
+		Attestations: []types.Attestation{ha1.ToAttestation(n.tipState(), pk1)},
+	}
+
+	n.mineV2Transactions(t, txn1)
+
+	hosts, err := n.db.HostsForScanning(time.Unix(0, 0), 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testutil.Equal(t, "len(hosts)", 1, len(hosts))
+
+	now := types.CurrentTimestamp()
+	settings := proto4.HostSettings{
+		ProtocolVersion:    [3]uint8{1, 2, 3},
+		AcceptingContracts: true,
+		Prices: proto4.HostPrices{
+			TipHeight: 123,
+		},
+	}
+	// successful scan; should update settings and price table
+	scan1 := explorer.HostScan{
+		PublicKey:  hosts[0].PublicKey,
+		Success:    true,
+		Timestamp:  now,
+		NextScan:   now.Add(time.Hour),
+		V2Settings: settings,
+	}
+
+	if err := n.db.AddHostScans([]explorer.HostScan{scan1}...); err != nil {
+		t.Fatal(err)
+	}
+
+	lastAnnouncement := n.tipBlock().Timestamp
+	host1 := explorer.Host{
+		V2:                     true,
+		PublicKey:              hosts[0].PublicKey,
+		V2NetAddresses:         []chain.NetAddress(ha1),
+		KnownSince:             lastAnnouncement,
+		LastScan:               scan1.Timestamp,
+		LastScanSuccessful:     true,
+		LastAnnouncement:       lastAnnouncement,
+		NextScan:               scan1.NextScan,
+		TotalScans:             1,
+		SuccessfulInteractions: 1,
+		FailedInteractions:     0,
+		V2Settings:             settings,
+	}
+	assertHost(hosts[0].PublicKey, host1)
+
+	now = types.CurrentTimestamp()
+	// unsuccessful scan
+	scan2 := explorer.HostScan{
+		PublicKey: hosts[0].PublicKey,
+		Success:   false,
+		Timestamp: now,
+		NextScan:  now.Add(time.Hour),
+		Error: func() *string {
+			x := "error"
+			return &x
+		}(),
+	}
+
+	if err := n.db.AddHostScans([]explorer.HostScan{scan2}...); err != nil {
+		t.Fatal(err)
+	}
+	// previous settings and price table should be preserved in case of failure
+	host1.LastScan = scan2.Timestamp
+	host1.NextScan = scan2.NextScan
+	host1.LastScanError = scan2.Error
+	host1.LastScanSuccessful = false
+	host1.TotalScans++
+	host1.FailedInteractions++
+
+	assertHost(hosts[0].PublicKey, host1)
 }

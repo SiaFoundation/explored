@@ -29,6 +29,35 @@ import (
 
 const testPassword = "password"
 
+// checkFC checks the retrieved file contract with the source file contract in
+// addition to checking the resolved and valid fields.
+func checkFC(t *testing.T, revision, resolved, valid bool, expected types.FileContract, got explorer.ExtendedFileContract) {
+	t.Helper()
+
+	testutil.Equal(t, "resolved state", resolved, got.Resolved)
+	testutil.Equal(t, "valid state", valid, got.Valid)
+
+	testutil.Equal(t, "filesize", expected.Filesize, got.Filesize)
+	testutil.Equal(t, "file merkle root", expected.FileMerkleRoot, got.FileMerkleRoot)
+	testutil.Equal(t, "window start", expected.WindowStart, got.WindowStart)
+	testutil.Equal(t, "window end", expected.WindowEnd, got.WindowEnd)
+	if !revision {
+		testutil.Equal(t, "payout", expected.Payout, got.Payout)
+	}
+	testutil.Equal(t, "unlock hash", expected.UnlockHash, got.UnlockHash)
+	testutil.Equal(t, "revision number", expected.RevisionNumber, got.RevisionNumber)
+	testutil.Equal(t, "valid proof outputs", len(expected.ValidProofOutputs), len(got.ValidProofOutputs))
+	for i := range expected.ValidProofOutputs {
+		testutil.Equal(t, "valid proof output address", expected.ValidProofOutputs[i].Address, got.ValidProofOutputs[i].Address)
+		testutil.Equal(t, "valid proof output value", expected.ValidProofOutputs[i].Value, got.ValidProofOutputs[i].Value)
+	}
+	testutil.Equal(t, "missed proof outputs", len(expected.MissedProofOutputs), len(got.MissedProofOutputs))
+	for i := range expected.MissedProofOutputs {
+		testutil.Equal(t, "missed proof output address", expected.MissedProofOutputs[i].Address, got.MissedProofOutputs[i].Address)
+		testutil.Equal(t, "missed proof output value", expected.MissedProofOutputs[i].Value, got.MissedProofOutputs[i].Value)
+	}
+}
+
 func newExplorer(t *testing.T, network *consensus.Network, genesisBlock types.Block, scanCfg config.Scanner) (*explorer.Explorer, *chain.Manager, error) {
 	log := zaptest.NewLogger(t)
 	dir := t.TempDir()
@@ -498,7 +527,7 @@ func TestAPI(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			testutil.CheckFC(t, true, false, false, revFC, resp)
+			checkFC(t, true, false, false, revFC, resp)
 		}},
 		{"Contracts", func(t *testing.T) {
 			resp, err := client.Contracts([]types.FileContractID{txn1.FileContractID(0)})
@@ -506,7 +535,7 @@ func TestAPI(t *testing.T) {
 				t.Fatal(err)
 			}
 			testutil.Equal(t, "len(contracts)", 1, len(resp))
-			testutil.CheckFC(t, true, false, false, revFC, resp[0])
+			checkFC(t, true, false, false, revFC, resp[0])
 		}},
 		{"ContractsKey", func(t *testing.T) {
 			resp, err := client.ContractsKey(renterPublicKey)
@@ -514,7 +543,7 @@ func TestAPI(t *testing.T) {
 				t.Fatal(err)
 			}
 			testutil.Equal(t, "len(contracts)", 1, len(resp))
-			testutil.CheckFC(t, true, false, false, revFC, resp[0])
+			checkFC(t, true, false, false, revFC, resp[0])
 		}},
 		{"Search siacoin", func(t *testing.T) {
 			resp, err := client.Search(txn1.SiacoinOutputID(0).String())
