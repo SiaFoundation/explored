@@ -2215,6 +2215,7 @@ func TestV2HostScan(t *testing.T) {
 		testutil.Equal(t, "Host", expected, hosts[0])
 	}
 
+	// announce a host
 	const netAddr1 = "127.0.0.1:1234"
 	ha1 := chain.V2HostAnnouncement{{
 		Protocol: "http",
@@ -2241,6 +2242,7 @@ func TestV2HostScan(t *testing.T) {
 			TipHeight: 123,
 		},
 	}
+	// successful scan; should update settings and price table
 	scan1 := explorer.HostScan{
 		PublicKey:  hosts[0].PublicKey,
 		Success:    true,
@@ -2271,6 +2273,7 @@ func TestV2HostScan(t *testing.T) {
 	assertHost(hosts[0].PublicKey, host1)
 
 	now = types.CurrentTimestamp()
+	// unsucessful scan
 	scan2 := explorer.HostScan{
 		PublicKey: hosts[0].PublicKey,
 		Success:   false,

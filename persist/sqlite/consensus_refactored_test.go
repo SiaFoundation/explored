@@ -2476,6 +2476,7 @@ func TestHostScan(t *testing.T) {
 		testutil.Equal(t, "Host", expected, hosts[0])
 	}
 
+	// announce a host
 	const netAddr1 = "127.0.0.1:1234"
 	txn1 := types.Transaction{
 		ArbitraryData: [][]byte{
@@ -2498,6 +2499,7 @@ func TestHostScan(t *testing.T) {
 	priceTable := proto3.HostPriceTable{
 		HostBlockHeight: 123,
 	}
+	// successful scan; should update settings and price table
 	scan1 := explorer.HostScan{
 		PublicKey:  hosts[0].PublicKey,
 		Success:    true,
@@ -2529,6 +2531,7 @@ func TestHostScan(t *testing.T) {
 	assertHost(hosts[0].PublicKey, host1)
 
 	now = types.CurrentTimestamp()
+	// unsucessful scan
 	scan2 := explorer.HostScan{
 		PublicKey: hosts[0].PublicKey,
 		Success:   false,
