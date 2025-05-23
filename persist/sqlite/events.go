@@ -69,16 +69,20 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 	switch ev.Type {
 	case wallet.EventTypeV1Transaction:
 		txns, err := getTransactions(tx, []types.TransactionID{types.TransactionID(ev.ID)})
-		if err != nil || len(txns) == 0 {
+		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to fetch v1 transaction: %w", err)
+		} else if len(txns) == 0 {
+			return explorer.Event{}, 0, fmt.Errorf("v1 transaction not found")
 		}
 		ev.Data = explorer.EventV1Transaction{
 			Transaction: txns[0],
 		}
 	case wallet.EventTypeV2Transaction:
 		txns, err := getV2Transactions(tx, []types.TransactionID{types.TransactionID(ev.ID)})
-		if err != nil || len(txns) == 0 {
+		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to fetch v2 transaction: %w", err)
+		} else if len(txns) == 0 {
+			return explorer.Event{}, 0, fmt.Errorf("v2 transaction not found")
 		}
 		ev.Data = explorer.EventV2Transaction(txns[0])
 	case wallet.EventTypeV1ContractResolution:
@@ -97,14 +101,14 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v1 resolution file contract: %w", err)
 		} else if len(fces) == 0 {
-			return explorer.Event{}, 0, fmt.Errorf("no v1 resolution contract found")
+			return explorer.Event{}, 0, fmt.Errorf("v1 resolution contract not found")
 		}
 
 		sces, err := getSiacoinElements(tx, false, []types.SiacoinOutputID{scID})
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v1 proof output: %w", err)
 		} else if len(sces) == 0 {
-			return explorer.Event{}, 0, fmt.Errorf("no v1 proof output found")
+			return explorer.Event{}, 0, fmt.Errorf("v1 proof output not found")
 		}
 
 		ev.Data = explorer.EventV1ContractResolution{
@@ -130,7 +134,7 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v1 proof output: %w", err)
 		} else if len(sces) == 0 {
-			return explorer.Event{}, 0, fmt.Errorf("no v1 proof output found")
+			return explorer.Event{}, 0, fmt.Errorf("v1 proof output not found")
 		}
 		resolution.SiacoinElement = sces[0]
 
@@ -161,7 +165,7 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v1 payout output: %w", err)
 		} else if len(sces) == 0 {
-			return explorer.Event{}, 0, fmt.Errorf("no payout event output found")
+			return explorer.Event{}, 0, fmt.Errorf("payout event output not found")
 		}
 		ev.Data = explorer.EventPayout{SiacoinElement: sces[0]}
 	default:
