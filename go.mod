@@ -8,8 +8,8 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/oschwald/geoip2-golang v1.11.0
-	go.sia.tech/core v0.12.3
-	go.sia.tech/coreutils v0.13.6
+	go.sia.tech/core v0.13.0
+	go.sia.tech/coreutils v0.15.0
 	go.sia.tech/jape v0.14.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842
@@ -25,7 +25,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.12.0 // indirect
 	github.com/oschwald/maxminddb-golang v1.13.0 // indirect
 	github.com/quic-go/qpack v0.5.1 // indirect
-	github.com/quic-go/quic-go v0.51.0 // indirect
+	github.com/quic-go/quic-go v0.52.0 // indirect
 	github.com/quic-go/webtransport-go v0.8.1-0.20241018022711-4ac2c9250e66 // indirect
 	go.etcd.io/bbolt v1.4.0 // indirect
 	go.sia.tech/mux v1.4.0 // indirect
