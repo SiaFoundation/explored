@@ -13,7 +13,7 @@ import (
 )
 
 // Equal checks if two values of the same type are equal and fails otherwise.
-func Equal[T any](t *testing.T, desc string, expected, got T) {
+func Equal[T any](t testing.TB, desc string, expected, got T) {
 	t.Helper()
 
 	options := cmp.Options([]cmp.Option{
@@ -30,7 +30,7 @@ func Equal[T any](t *testing.T, desc string, expected, got T) {
 
 // CheckTransaction checks the inputs and outputs of the retrieved transaction
 // with the source transaction.
-func CheckTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer.Transaction) {
+func CheckTransaction(t testing.TB, expectTxn types.Transaction, gotTxn explorer.Transaction) {
 	t.Helper()
 
 	Equal(t, "siacoin inputs", len(expectTxn.SiacoinInputs), len(gotTxn.SiacoinInputs))
@@ -134,7 +134,7 @@ func CheckTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer
 
 // CheckV2Transaction checks the inputs and outputs of the retrieved transaction
 // with the source transaction.
-func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn explorer.V2Transaction) {
+func CheckV2Transaction(t testing.TB, expectTxn types.V2Transaction, gotTxn explorer.V2Transaction) {
 	t.Helper()
 
 	// checkV2FC checks the retrieved file contract with the source file contract

@@ -30,7 +30,7 @@ type testChain struct {
 	states      []consensus.State
 }
 
-func newTestChain(t *testing.T, v2 bool, modifyGenesis func(*consensus.Network, types.Block)) *testChain {
+func newTestChain(t testing.TB, v2 bool, modifyGenesis func(*consensus.Network, types.Block)) *testChain {
 	log := zaptest.NewLogger(t)
 	dir := t.TempDir()
 
@@ -95,7 +95,7 @@ func (n *testChain) tipState() consensus.State {
 	return n.states[len(n.states)-1]
 }
 
-func (n *testChain) applyBlock(t *testing.T, b types.Block) {
+func (n *testChain) applyBlock(t testing.TB, b types.Block) {
 	t.Helper()
 
 	cs := n.tipState()
@@ -125,7 +125,7 @@ func (n *testChain) applyBlock(t *testing.T, b types.Block) {
 	n.states = append(n.states, cs)
 }
 
-func (n *testChain) revertBlock(t *testing.T) {
+func (n *testChain) revertBlock(t testing.TB) {
 	b := n.blocks[len(n.blocks)-1]
 	bs := n.supplements[len(n.supplements)-1]
 	prevState := n.states[len(n.states)-2]
@@ -146,14 +146,14 @@ func (n *testChain) revertBlock(t *testing.T) {
 	n.states = n.states[:len(n.states)-1]
 }
 
-func (n *testChain) mineTransactions(t *testing.T, txns ...types.Transaction) {
+func (n *testChain) mineTransactions(t testing.TB, txns ...types.Transaction) {
 	t.Helper()
 
 	b := testutil.MineBlock(n.tipState(), txns, types.VoidAddress)
 	n.applyBlock(t, b)
 }
 
-func (n *testChain) assertTransactions(t *testing.T, expected ...types.Transaction) {
+func (n *testChain) assertTransactions(t testing.TB, expected ...types.Transaction) {
 	t.Helper()
 
 	for _, txn := range expected {
@@ -167,7 +167,7 @@ func (n *testChain) assertTransactions(t *testing.T, expected ...types.Transacti
 	}
 }
 
-func (n *testChain) assertChainIndices(t *testing.T, txnID types.TransactionID, expected ...types.ChainIndex) {
+func (n *testChain) assertChainIndices(t testing.TB, txnID types.TransactionID, expected ...types.ChainIndex) {
 	t.Helper()
 
 	indices, err := n.db.TransactionChainIndices(txnID, 0, math.MaxInt64)
@@ -183,7 +183,7 @@ func (n *testChain) assertChainIndices(t *testing.T, txnID types.TransactionID, 
 }
 
 // assertSCE asserts the Siacoin element in the db has the right source, index and output
-func (n *testChain) assertSCE(t *testing.T, scID types.SiacoinOutputID, index *types.ChainIndex, sco types.SiacoinOutput) {
+func (n *testChain) assertSCE(t testing.TB, scID types.SiacoinOutputID, index *types.ChainIndex, sco types.SiacoinOutput) {
 	t.Helper()
 
 	sces, err := n.db.SiacoinElements([]types.SiacoinOutputID{scID})
@@ -199,7 +199,7 @@ func (n *testChain) assertSCE(t *testing.T, scID types.SiacoinOutputID, index *t
 }
 
 // assertSFE asserts the Siafund element in the db has the right source, index and output
-func (n *testChain) assertSFE(t *testing.T, sfID types.SiafundOutputID, index *types.ChainIndex, sfo types.SiafundOutput) {
+func (n *testChain) assertSFE(t testing.TB, sfID types.SiafundOutputID, index *types.ChainIndex, sfo types.SiafundOutput) {
 	t.Helper()
 
 	sfes, err := n.db.SiafundElements([]types.SiafundOutputID{sfID})
@@ -215,7 +215,7 @@ func (n *testChain) assertSFE(t *testing.T, sfID types.SiafundOutputID, index *t
 
 // assertFCE asserts the contract element in the db has the right state and
 // block/transaction indices
-func (n *testChain) assertFCE(t *testing.T, fcID types.FileContractID, expected explorer.ExtendedFileContract) {
+func (n *testChain) assertFCE(t testing.TB, fcID types.FileContractID, expected explorer.ExtendedFileContract) {
 	t.Helper()
 
 	fces, err := n.db.Contracts([]types.FileContractID{fcID})
@@ -234,7 +234,7 @@ func (n *testChain) assertFCE(t *testing.T, fcID types.FileContractID, expected 
 // assertTransactionContracts asserts that the enhanced FileContracts
 // (revisions = false) or FileContractRevisions (revisions = true) in a
 // transaction retrieved from the explorer match the expected contracts.
-func (n *testChain) assertTransactionContracts(t *testing.T, txnID types.TransactionID, revisions bool, expected ...explorer.ExtendedFileContract) {
+func (n *testChain) assertTransactionContracts(t testing.TB, txnID types.TransactionID, revisions bool, expected ...explorer.ExtendedFileContract) {
 	t.Helper()
 
 	txns, err := n.db.Transactions([]types.TransactionID{txnID})
@@ -257,7 +257,7 @@ func (n *testChain) assertTransactionContracts(t *testing.T, txnID types.Transac
 	}
 }
 
-func (n *testChain) assertContractRevisions(t *testing.T, fcID types.FileContractID, expected ...explorer.ExtendedFileContract) {
+func (n *testChain) assertContractRevisions(t testing.TB, fcID types.FileContractID, expected ...explorer.ExtendedFileContract) {
 	t.Helper()
 
 	fces, err := n.db.ContractRevisions(fcID)
@@ -276,7 +276,7 @@ func (n *testChain) assertContractRevisions(t *testing.T, fcID types.FileContrac
 	}
 }
 
-func (n *testChain) assertEvents(t *testing.T, addr types.Address, expected ...explorer.Event) {
+func (n *testChain) assertEvents(t testing.TB, addr types.Address, expected ...explorer.Event) {
 	t.Helper()
 
 	events, err := n.db.AddressEvents(addr, 0, math.MaxInt64)
@@ -303,7 +303,7 @@ func (n *testChain) assertEvents(t *testing.T, addr types.Address, expected ...e
 	}
 }
 
-func (n *testChain) getSCE(t *testing.T, scID types.SiacoinOutputID) explorer.SiacoinOutput {
+func (n *testChain) getSCE(t testing.TB, scID types.SiacoinOutputID) explorer.SiacoinOutput {
 	t.Helper()
 
 	sces, err := n.db.SiacoinElements([]types.SiacoinOutputID{scID})
@@ -316,7 +316,7 @@ func (n *testChain) getSCE(t *testing.T, scID types.SiacoinOutputID) explorer.Si
 	return sces[0]
 }
 
-func (n *testChain) getFCE(t *testing.T, fcID types.FileContractID) explorer.ExtendedFileContract {
+func (n *testChain) getFCE(t testing.TB, fcID types.FileContractID) explorer.ExtendedFileContract {
 	t.Helper()
 
 	fces, err := n.db.Contracts([]types.FileContractID{fcID})
@@ -328,7 +328,7 @@ func (n *testChain) getFCE(t *testing.T, fcID types.FileContractID) explorer.Ext
 	return fces[0]
 }
 
-func (n *testChain) getTxn(t *testing.T, txnID types.TransactionID) explorer.Transaction {
+func (n *testChain) getTxn(t testing.TB, txnID types.TransactionID) explorer.Transaction {
 	t.Helper()
 
 	txns, err := n.db.Transactions([]types.TransactionID{txnID})
@@ -354,7 +354,7 @@ func prepareContract(addr types.Address, endHeight uint64) types.FileContract {
 	return fc
 }
 
-func (n *testChain) assertBlock(t *testing.T, cs consensus.State, block types.Block) {
+func (n *testChain) assertBlock(t testing.TB, cs consensus.State, block types.Block) {
 	got, err := n.db.Block(block.ID())
 	if err != nil {
 		t.Fatal(err)
@@ -2555,4 +2555,123 @@ func TestHostScan(t *testing.T) {
 	host1.FailedInteractions++
 
 	assertHost(hosts[0].PublicKey, host1)
+}
+
+func BenchmarkTransactions(b *testing.B) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	n := newTestChain(b, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+
+	txn1 := types.Transaction{}
+
+	txn2 := types.Transaction{ArbitraryData: [][]byte{{0, 1, 2, 3}}}
+
+	fc := prepareContract(addr1, n.tipState().Index.Height+1)
+	txn3 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         n.genesis().Transactions[0].SiacoinOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   val.Sub(fc.Payout),
+		}},
+		FileContracts: []types.FileContract{fc},
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn3)
+
+	n.mineTransactions(b, txn1, txn2, txn3)
+
+	benchmarks := []struct {
+		name  string
+		txnID types.TransactionID
+	}{
+		{"empty transaction", txn1.ID()},
+		{"transaction with only arbitrary data", txn2.ID()},
+		{"file contract formation transaction", txn3.ID()},
+	}
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			txnIDs := []types.TransactionID{bm.txnID}
+			for range b.N {
+				_, err := n.db.Transactions(txnIDs)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkUnspentSiacoinOutputs(b *testing.B) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	pk2 := types.GeneratePrivateKey()
+	uc2 := types.StandardUnlockConditions(pk2.PublicKey())
+	addr2 := uc2.UnlockHash()
+
+	pk3 := types.GeneratePrivateKey()
+	uc3 := types.StandardUnlockConditions(pk3.PublicKey())
+	addr3 := uc3.UnlockHash()
+
+	n := newTestChain(b, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	genesisTxn := n.genesis().Transactions[0]
+
+	txn1 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         genesisTxn.SiacoinOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiacoinOutputs: func() (result []types.SiacoinOutput) {
+			val := genesisTxn.SiacoinOutputs[0].Value
+			// send 1000 small outputs to addr2
+			for range 1000 {
+				amount := types.NewCurrency64(1)
+				result = append(result, types.SiacoinOutput{
+					Address: addr2,
+					Value:   amount,
+				})
+				val = val.Sub(amount)
+			}
+			// send change to addr3
+			result = append(result, types.SiacoinOutput{
+				Address: addr3,
+				Value:   val,
+			})
+			return
+		}(),
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+
+	n.mineTransactions(b, txn1)
+
+	benchmarks := []struct {
+		name   string
+		addr   types.Address
+		offset uint64
+	}{
+		{"addr1 (no unspent outputs)", addr1, 0},
+		{"addr2 (outputs 0-99)", addr2, 0},
+		{"addr2 (outputs 100-199)", addr2, 100},
+		{"addr3 (1 output)", addr3, 0},
+	}
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			for range b.N {
+				_, err := n.db.UnspentSiacoinOutputs(bm.addr, bm.offset, 100)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
 }
