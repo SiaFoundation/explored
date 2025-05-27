@@ -2595,6 +2595,7 @@ func BenchmarkTransactions(b *testing.B) {
 		{"transaction with only arbitrary data", txn2.ID()},
 		{"file contract formation transaction", txn3.ID()},
 	}
+	b.ResetTimer()
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
 			txnIDs := []types.TransactionID{bm.txnID}
@@ -2608,7 +2609,7 @@ func BenchmarkTransactions(b *testing.B) {
 	}
 }
 
-func BenchmarkUnspentSiacoinOutputs(b *testing.B) {
+func BenchmarkSiacoinOutputs(b *testing.B) {
 	pk1 := types.GeneratePrivateKey()
 	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
 	addr1 := uc1.UnlockHash()
@@ -2654,20 +2655,41 @@ func BenchmarkUnspentSiacoinOutputs(b *testing.B) {
 
 	n.mineTransactions(b, txn1)
 
-	benchmarks := []struct {
+	unspentBenchmarks := []struct {
 		name   string
 		addr   types.Address
 		offset uint64
 	}{
 		{"addr1 (no unspent outputs)", addr1, 0},
-		{"addr2 (outputs 0-99)", addr2, 0},
-		{"addr2 (outputs 100-199)", addr2, 100},
-		{"addr3 (1 output)", addr3, 0},
+		{"addr2 (unspent outputs 0-99)", addr2, 0},
+		{"addr2 (unspent outputs 100-199)", addr2, 100},
+		{"addr3 (unspent output 0)", addr3, 0},
 	}
-	for _, bm := range benchmarks {
+	b.ResetTimer()
+	for _, bm := range unspentBenchmarks {
 		b.Run(bm.name, func(b *testing.B) {
 			for range b.N {
 				_, err := n.db.UnspentSiacoinOutputs(bm.addr, bm.offset, 100)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+
+	elementBenchmarks := []struct {
+		name string
+		id   types.SiacoinOutputID
+	}{
+		{"genesis output (spent)", genesisTxn.SiacoinOutputID(0)},
+		{"txn1 change output (unspent)", txn1.SiacoinOutputID(len(txn1.SiacoinOutputs) - 1)},
+	}
+	b.ResetTimer()
+	for _, bm := range elementBenchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			scIDs := []types.SiacoinOutputID{bm.id}
+			for range b.N {
+				_, err := n.db.SiacoinElements(scIDs)
 				if err != nil {
 					b.Fatal(err)
 				}
