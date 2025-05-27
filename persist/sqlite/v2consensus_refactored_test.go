@@ -115,6 +115,40 @@ func (n *testChain) assertV2TransactionContracts(t *testing.T, txnID types.Trans
 	}
 }
 
+// assertV2TransactionResolutions asserts that the enhanced
+// FileContractResolutions in a v2 transaction retrieved from the explorer
+// match the expected resolutions.
+func (n *testChain) assertV2TransactionResolutions(t *testing.T, txnID types.TransactionID, expected ...explorer.V2FileContractResolution) {
+	// t.Helper()
+
+	txns, err := n.db.V2Transactions([]types.TransactionID{txnID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	testutil.Equal(t, "len(txns)", 1, len(txns))
+
+	txn := txns[0]
+	testutil.Equal(t, "len(txn.FileContractResolutions)", len(expected), len(txn.FileContractResolutions))
+	for i := range expected {
+		fcr := txn.FileContractResolutions[i]
+
+		checkV2Contract(t, expected[i].Parent, fcr.Parent)
+		testutil.Equal(t, "Type", expected[i].Type, fcr.Type)
+		if expectedRenewal, ok := expected[i].Resolution.(*explorer.V2FileContractRenewal); ok {
+			// handle manually to ignore StateElement
+			if gotRenewal, ok := fcr.Resolution.(*explorer.V2FileContractRenewal); ok {
+				gotRenewal.NewContract.StateElement = types.StateElement{}
+				txn.FileContractResolutions[i].Resolution = gotRenewal
+				testutil.Equal(t, "Resolution", expectedRenewal, gotRenewal)
+			} else {
+				t.Fatalf("wrong type %T vs %T", expected[i].Resolution, fcr.Resolution)
+			}
+		} else {
+			testutil.Equal(t, "Resolution", expected[i].Resolution, fcr.Resolution)
+		}
+	}
+}
+
 func (n *testChain) assertV2ContractRevisions(t *testing.T, fcID types.FileContractID, expected ...explorer.V2FileContract) {
 	t.Helper()
 
@@ -132,6 +166,31 @@ func (n *testChain) assertV2ContractRevisions(t *testing.T, fcID types.FileContr
 	for i := range expected {
 		checkV2Contract(t, expected[i], fces[i])
 	}
+}
+
+func (n *testChain) getV2FCE(t *testing.T, fcID types.FileContractID) explorer.V2FileContract {
+	t.Helper()
+
+	fces, err := n.db.V2Contracts([]types.FileContractID{fcID})
+	if err != nil {
+		t.Fatal(err)
+	} else if len(fces) == 0 {
+		t.Fatal("can't find fce")
+	}
+	fces[0].V2FileContractElement.StateElement.MerkleProof = nil
+	return fces[0]
+}
+
+func (n *testChain) getV2Txn(t *testing.T, txnID types.TransactionID) explorer.V2Transaction {
+	t.Helper()
+
+	txns, err := n.db.V2Transactions([]types.TransactionID{txnID})
+	if err != nil {
+		t.Fatal(err)
+	} else if len(txns) == 0 {
+		t.Fatal("can't find txn")
+	}
+	return txns[0]
 }
 
 func TestV2TransactionChainIndices(t *testing.T) {
@@ -1037,6 +1096,11 @@ func TestV2FileContractProof(t *testing.T) {
 
 	n.assertV2FCE(t, fce.ID, fceResolved)
 	n.assertV2TransactionContracts(t, txn1.ID(), false, fceResolved)
+	n.assertV2TransactionResolutions(t, txn2.ID(), explorer.V2FileContractResolution{
+		Parent:     fceResolved,
+		Type:       resolutionType,
+		Resolution: sp,
+	})
 
 	n.revertBlock(t)
 
@@ -1114,6 +1178,11 @@ func TestV2FileContractMissed(t *testing.T) {
 
 	n.assertV2FCE(t, fce.ID, fceResolved)
 	n.assertV2TransactionContracts(t, txn1.ID(), false, fceResolved)
+	n.assertV2TransactionResolutions(t, txn2.ID(), explorer.V2FileContractResolution{
+		Parent:     fceResolved,
+		Type:       resolutionType,
+		Resolution: &types.V2FileContractExpiration{},
+	})
 
 	n.revertBlock(t)
 
@@ -1222,8 +1291,20 @@ func TestV2FileContractRenewal(t *testing.T) {
 
 	n.assertV2FCE(t, fce.ID, fceResolved)
 	n.assertV2TransactionContracts(t, txn1.ID(), false, fceResolved)
-
 	n.assertV2FCE(t, renewalID, fceRenewal)
+	n.assertV2TransactionResolutions(t, txn2.ID(), explorer.V2FileContractResolution{
+		Parent: fceResolved,
+		Type:   resolutionType,
+		Resolution: &explorer.V2FileContractRenewal{
+			FinalRenterOutput: renewal.FinalRenterOutput,
+			FinalHostOutput:   renewal.FinalHostOutput,
+			RenterRollover:    renewal.RenterRollover,
+			HostRollover:      renewal.HostRollover,
+			NewContract:       fceRenewal,
+			RenterSignature:   renewal.RenterSignature,
+			HostSignature:     renewal.HostSignature,
+		},
+	})
 
 	n.revertBlock(t)
 
@@ -1330,6 +1411,11 @@ func TestV2FileContractRevision(t *testing.T) {
 	n.assertV2ContractRevisions(t, fce.ID, fce, fceRevision1)
 	n.assertV2TransactionContracts(t, txn1.ID(), false, fce)
 	n.assertV2TransactionContracts(t, txn2.ID(), true, fceRevision1)
+	n.assertV2TransactionResolutions(t, txn4.ID(), explorer.V2FileContractResolution{
+		Parent:     fceRevision1,
+		Type:       resolutionType,
+		Resolution: &types.V2FileContractExpiration{},
+	})
 
 	// revert resolution of contract
 	for i := n.tipState().Index.Height; i >= fc.ExpirationHeight; i-- {
@@ -1471,6 +1557,11 @@ func TestV2FileContractMultipleRevisions(t *testing.T) {
 	n.assertV2TransactionContracts(t, txn1.ID(), false, fce)
 	n.assertV2TransactionContracts(t, txn2.ID(), true, fceRevision1)
 	n.assertV2TransactionContracts(t, txn3.ID(), true, fceRevision2)
+	n.assertV2TransactionResolutions(t, txn4.ID(), explorer.V2FileContractResolution{
+		Parent:     fceRevision2,
+		Type:       resolutionType,
+		Resolution: &types.V2FileContractExpiration{},
+	})
 
 	// revert resolution of contract
 	for i := n.tipState().Index.Height; i >= fc.ExpirationHeight; i-- {
@@ -1628,29 +1719,6 @@ func TestEventV2Transaction(t *testing.T) {
 	})
 	genesisTxn := n.genesis().Transactions[0]
 
-	getTxn := func(txnID types.TransactionID) explorer.Transaction {
-		t.Helper()
-
-		txns, err := n.db.Transactions([]types.TransactionID{txnID})
-		if err != nil {
-			t.Fatal(err)
-		} else if len(txns) == 0 {
-			t.Fatal("can't find txn")
-		}
-		return txns[0]
-	}
-	getV2Txn := func(txnID types.TransactionID) explorer.V2Transaction {
-		t.Helper()
-
-		txns, err := n.db.V2Transactions([]types.TransactionID{txnID})
-		if err != nil {
-			t.Fatal(err)
-		} else if len(txns) == 0 {
-			t.Fatal("can't find txn")
-		}
-		return txns[0]
-	}
-
 	// event for transaction in genesis block
 	ev0 := explorer.Event{
 		ID:             types.Hash256(genesisTxn.ID()),
@@ -1690,13 +1758,13 @@ func TestEventV2Transaction(t *testing.T) {
 
 	n.mineV2Transactions(t, txn1, txn2)
 
-	ev0.Data = explorer.EventV1Transaction{Transaction: getTxn(genesisTxn.ID())}
+	ev0.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, genesisTxn.ID())}
 	// event for txn1
 	ev1 := explorer.Event{
 		ID:             types.Hash256(txn1.ID()),
 		Index:          n.tipState().Index,
 		Type:           wallet.EventTypeV2Transaction,
-		Data:           explorer.EventV2Transaction(getV2Txn(txn1.ID())),
+		Data:           explorer.EventV2Transaction(n.getV2Txn(t, txn1.ID())),
 		MaturityHeight: n.tipState().Index.Height,
 		Timestamp:      n.tipBlock().Timestamp,
 	}
@@ -1705,7 +1773,7 @@ func TestEventV2Transaction(t *testing.T) {
 		ID:             types.Hash256(txn2.ID()),
 		Index:          n.tipState().Index,
 		Type:           wallet.EventTypeV2Transaction,
-		Data:           explorer.EventV2Transaction(getV2Txn(txn2.ID())),
+		Data:           explorer.EventV2Transaction(n.getV2Txn(t, txn2.ID())),
 		MaturityHeight: n.tipState().Index.Height,
 		Timestamp:      n.tipBlock().Timestamp,
 	}
@@ -1717,10 +1785,133 @@ func TestEventV2Transaction(t *testing.T) {
 
 	n.revertBlock(t)
 
-	ev0.Data = explorer.EventV1Transaction{Transaction: getTxn(genesisTxn.ID())}
+	ev0.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, genesisTxn.ID())}
 
 	// genesis transaction still present but txn1 and txn2 reverted
 	n.assertEvents(t, addr1, ev0)
 	n.assertEvents(t, addr2)
 	n.assertEvents(t, addr3)
+}
+
+func TestEventV2FileContract(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(uc1)}
+
+	pk2 := types.GeneratePrivateKey()
+	uc2 := types.StandardUnlockConditions(pk2.PublicKey())
+	addr2 := uc2.UnlockHash()
+
+	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	genesisTxn := n.genesis().Transactions[0]
+
+	// event for transaction in genesis block
+	ev0 := explorer.Event{
+		ID:             types.Hash256(genesisTxn.ID()),
+		Index:          n.tipState().Index,
+		Type:           wallet.EventTypeV1Transaction,
+		MaturityHeight: n.tipState().Index.Height,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+
+	// create file contract
+	fc, payout := prepareV2Contract(pk1, pk2, n.tipState().Index.Height+1)
+	txn1 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, n.db, n.genesis().Transactions[0].SiacoinOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   genesisTxn.SiacoinOutputs[0].Value.Sub(payout),
+		}},
+		FileContracts: []types.V2FileContract{fc},
+	}
+	testutil.SignV2TransactionWithContracts(n.tipState(), pk1, pk1, pk2, &txn1)
+
+	n.mineV2Transactions(t, txn1)
+
+	ev0.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, genesisTxn.ID())}
+	// event for fc creation txn
+	ev1 := explorer.Event{
+		ID:             types.Hash256(txn1.ID()),
+		Index:          n.tipState().Index,
+		Type:           wallet.EventTypeV2Transaction,
+		Data:           explorer.EventV2Transaction(n.getV2Txn(t, txn1.ID())),
+		MaturityHeight: n.tipState().Index.Height,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+
+	n.assertEvents(t, addr1, ev1, ev0)
+	n.assertEvents(t, addr2, ev1)
+
+	fcID := txn1.V2FileContractID(txn1.ID(), 0)
+	sp := &types.V2StorageProof{
+		ProofIndex: getCIE(t, n.db, n.tipState().Index.ID),
+	}
+	txn2 := types.V2Transaction{
+		FileContractResolutions: []types.V2FileContractResolution{{
+			Parent:     getFCE(t, n.db, fcID),
+			Resolution: sp,
+		}},
+	}
+	n.mineV2Transactions(t, txn2)
+
+	ev1.Data = explorer.EventV2Transaction(n.getV2Txn(t, txn1.ID()))
+	// event for resolution txn
+	ev2 := explorer.Event{
+		ID:             types.Hash256(txn2.ID()),
+		Index:          n.tipState().Index,
+		Type:           wallet.EventTypeV2Transaction,
+		Data:           explorer.EventV2Transaction(n.getV2Txn(t, txn2.ID())),
+		MaturityHeight: n.tipState().Index.Height,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+
+	resolution := n.getV2Txn(t, txn2.ID()).FileContractResolutions[0]
+	// event for renter output
+	ev3 := explorer.Event{
+		ID:    types.Hash256(fcID.V2RenterOutputID()),
+		Index: n.tipState().Index,
+		Type:  wallet.EventTypeV2ContractResolution,
+		Data: explorer.EventV2ContractResolution{
+			Resolution:     resolution,
+			SiacoinElement: n.getSCE(t, fcID.V2RenterOutputID()),
+			Missed:         false,
+		},
+		MaturityHeight: n.tipState().MaturityHeight() - 1,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+	// event for host output
+	ev4 := explorer.Event{
+		ID:    types.Hash256(fcID.V2HostOutputID()),
+		Index: n.tipState().Index,
+		Type:  wallet.EventTypeV2ContractResolution,
+		Data: explorer.EventV2ContractResolution{
+			Resolution:     resolution,
+			SiacoinElement: n.getSCE(t, fcID.V2HostOutputID()),
+			Missed:         false,
+		},
+		MaturityHeight: n.tipState().MaturityHeight() - 1,
+		Timestamp:      n.tipBlock().Timestamp,
+	}
+
+	n.assertEvents(t, addr1, ev3, ev2, ev1, ev0)
+	n.assertEvents(t, addr2, ev4, ev2, ev1)
+
+	n.revertBlock(t)
+
+	ev0.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, genesisTxn.ID())}
+	ev1.Data = explorer.EventV2Transaction(n.getV2Txn(t, txn1.ID()))
+	n.assertEvents(t, addr1, ev1, ev0)
+	n.assertEvents(t, addr2, ev1)
+
+	n.revertBlock(t)
+
+	ev0.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, genesisTxn.ID())}
+	n.assertEvents(t, addr1, ev0)
+	n.assertEvents(t, addr2)
 }
