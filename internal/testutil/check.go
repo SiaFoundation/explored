@@ -28,19 +28,6 @@ func Equal[T any](t *testing.T, desc string, expected, got T) {
 	}
 }
 
-// CheckBalance checks that an address has the balances we expect.
-func CheckBalance(t *testing.T, db explorer.Store, addr types.Address, expectSC, expectImmatureSC types.Currency, expectSF uint64) {
-	t.Helper()
-
-	sc, immatureSC, sf, err := db.Balance(addr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	Equal(t, "siacoins", expectSC, sc)
-	Equal(t, "immature siacoins", expectImmatureSC, immatureSC)
-	Equal(t, "siafunds", expectSF, sf)
-}
-
 // CheckTransaction checks the inputs and outputs of the retrieved transaction
 // with the source transaction.
 func CheckTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer.Transaction) {
@@ -150,6 +137,29 @@ func CheckTransaction(t *testing.T, expectTxn types.Transaction, gotTxn explorer
 func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn explorer.V2Transaction) {
 	t.Helper()
 
+	// checkV2FC checks the retrieved file contract with the source file contract
+	// in addition to checking the resolved and valid fields.
+	checkV2FC := func(expected types.V2FileContract, got explorer.V2FileContract) {
+		t.Helper()
+
+		gotFC := got.V2FileContractElement.V2FileContract
+		Equal(t, "capacity", expected.Capacity, gotFC.Capacity)
+		Equal(t, "filesize", expected.Filesize, gotFC.Filesize)
+		Equal(t, "proof height", expected.ProofHeight, gotFC.ProofHeight)
+		Equal(t, "expiration height", expected.ExpirationHeight, gotFC.ExpirationHeight)
+		Equal(t, "renter output address", expected.RenterOutput.Address, gotFC.RenterOutput.Address)
+		Equal(t, "renter output value", expected.RenterOutput.Address, gotFC.RenterOutput.Address)
+		Equal(t, "host output address", expected.HostOutput.Address, gotFC.HostOutput.Address)
+		Equal(t, "host output value", expected.HostOutput.Address, gotFC.HostOutput.Address)
+		Equal(t, "missed host value", expected.MissedHostValue, gotFC.MissedHostValue)
+		Equal(t, "total collateral", expected.TotalCollateral, gotFC.TotalCollateral)
+		Equal(t, "renter public key", expected.RenterPublicKey, gotFC.RenterPublicKey)
+		Equal(t, "host public key", expected.HostPublicKey, gotFC.HostPublicKey)
+		Equal(t, "revision number", expected.RevisionNumber, gotFC.RevisionNumber)
+		Equal(t, "renter signature", expected.RenterSignature, gotFC.RenterSignature)
+		Equal(t, "host signature", expected.HostSignature, gotFC.HostSignature)
+	}
+
 	txnID := expectTxn.ID()
 	Equal(t, "id", txnID, gotTxn.ID)
 	Equal(t, "new foundation address", expectTxn.NewFoundationAddress, gotTxn.NewFoundationAddress)
@@ -217,7 +227,7 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 		expected := expectTxn.FileContracts[i]
 		got := gotTxn.FileContracts[i]
 
-		CheckV2FC(t, expected, got)
+		checkV2FC(expected, got)
 		Equal(t, "id", expectTxn.V2FileContractID(txnID, i), got.ID)
 	}
 
@@ -228,8 +238,8 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 
 		Equal(t, "parent ID", expected.Parent.ID, got.Parent.ID)
 		Equal(t, "revision ID", expected.Parent.ID, got.Revision.ID)
-		CheckV2FC(t, expected.Parent.V2FileContract, got.Parent)
-		CheckV2FC(t, expected.Revision, got.Revision)
+		checkV2FC(expected.Parent.V2FileContract, got.Parent)
+		checkV2FC(expected.Revision, got.Revision)
 	}
 
 	Equal(t, "file contract resolutions", len(expectTxn.FileContractResolutions), len(gotTxn.FileContractResolutions))
@@ -237,14 +247,14 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 		expected := expectTxn.FileContractResolutions[i]
 		got := gotTxn.FileContractResolutions[i]
 
-		CheckV2FC(t, expected.Parent.V2FileContract, got.Parent)
+		checkV2FC(expected.Parent.V2FileContract, got.Parent)
 
 		switch v := expected.Resolution.(type) {
 		case *types.V2FileContractRenewal:
 			if gotV, ok := got.Resolution.(*explorer.V2FileContractRenewal); !ok {
 				t.Fatalf("expected V2FileContractRenewal, got %v", reflect.TypeOf(got.Resolution))
 			} else {
-				CheckV2FC(t, v.NewContract, gotV.NewContract)
+				checkV2FC(v.NewContract, gotV.NewContract)
 
 				Equal(t, "type", explorer.V2ResolutionRenewal, got.Type)
 				Equal(t, "final renter output address", v.FinalRenterOutput.Address, gotV.FinalRenterOutput.Address)
@@ -313,73 +323,4 @@ func CheckV2Transaction(t *testing.T, expectTxn types.V2Transaction, gotTxn expl
 	for i := range expectTxn.ArbitraryData {
 		Equal(t, "arbitrary data value", expectTxn.ArbitraryData[i], gotTxn.ArbitraryData[i])
 	}
-}
-
-// CheckV2ChainIndices checks that the chain indices that a v2 transaction was
-// in from the explorer match the expected chain indices.
-func CheckV2ChainIndices(t *testing.T, db explorer.Store, txnID types.TransactionID, expected []types.ChainIndex) {
-	t.Helper()
-
-	indices, err := db.V2TransactionChainIndices(txnID, 0, 100)
-	switch {
-	case err != nil:
-		t.Fatal(err)
-	case len(indices) != len(expected):
-		t.Fatalf("expected %d indices, got %d", len(expected), len(indices))
-	}
-	for i := range indices {
-		Equal(t, "index", expected[i], indices[i])
-	}
-}
-
-// CheckFC checks the retrieved file contract with the source file contract in
-// addition to checking the resolved and valid fields.
-func CheckFC(t *testing.T, revision, resolved, valid bool, expected types.FileContract, got explorer.ExtendedFileContract) {
-	t.Helper()
-
-	Equal(t, "resolved state", resolved, got.Resolved)
-	Equal(t, "valid state", valid, got.Valid)
-
-	Equal(t, "filesize", expected.Filesize, got.Filesize)
-	Equal(t, "file merkle root", expected.FileMerkleRoot, got.FileMerkleRoot)
-	Equal(t, "window start", expected.WindowStart, got.WindowStart)
-	Equal(t, "window end", expected.WindowEnd, got.WindowEnd)
-	if !revision {
-		Equal(t, "payout", expected.Payout, got.Payout)
-	}
-	Equal(t, "unlock hash", expected.UnlockHash, got.UnlockHash)
-	Equal(t, "revision number", expected.RevisionNumber, got.RevisionNumber)
-	Equal(t, "valid proof outputs", len(expected.ValidProofOutputs), len(got.ValidProofOutputs))
-	for i := range expected.ValidProofOutputs {
-		Equal(t, "valid proof output address", expected.ValidProofOutputs[i].Address, got.ValidProofOutputs[i].Address)
-		Equal(t, "valid proof output value", expected.ValidProofOutputs[i].Value, got.ValidProofOutputs[i].Value)
-	}
-	Equal(t, "missed proof outputs", len(expected.MissedProofOutputs), len(got.MissedProofOutputs))
-	for i := range expected.MissedProofOutputs {
-		Equal(t, "missed proof output address", expected.MissedProofOutputs[i].Address, got.MissedProofOutputs[i].Address)
-		Equal(t, "missed proof output value", expected.MissedProofOutputs[i].Value, got.MissedProofOutputs[i].Value)
-	}
-}
-
-// CheckV2FC checks the retrieved file contract with the source file contract
-// in addition to checking the resolved and valid fields.
-func CheckV2FC(t *testing.T, expected types.V2FileContract, got explorer.V2FileContract) {
-	t.Helper()
-
-	gotFC := got.V2FileContractElement.V2FileContract
-	Equal(t, "capacity", expected.Capacity, gotFC.Capacity)
-	Equal(t, "filesize", expected.Filesize, gotFC.Filesize)
-	Equal(t, "proof height", expected.ProofHeight, gotFC.ProofHeight)
-	Equal(t, "expiration height", expected.ExpirationHeight, gotFC.ExpirationHeight)
-	Equal(t, "renter output address", expected.RenterOutput.Address, gotFC.RenterOutput.Address)
-	Equal(t, "renter output value", expected.RenterOutput.Address, gotFC.RenterOutput.Address)
-	Equal(t, "host output address", expected.HostOutput.Address, gotFC.HostOutput.Address)
-	Equal(t, "host output value", expected.HostOutput.Address, gotFC.HostOutput.Address)
-	Equal(t, "missed host value", expected.MissedHostValue, gotFC.MissedHostValue)
-	Equal(t, "total collateral", expected.TotalCollateral, gotFC.TotalCollateral)
-	Equal(t, "renter public key", expected.RenterPublicKey, gotFC.RenterPublicKey)
-	Equal(t, "host public key", expected.HostPublicKey, gotFC.HostPublicKey)
-	Equal(t, "revision number", expected.RevisionNumber, gotFC.RevisionNumber)
-	Equal(t, "renter signature", expected.RenterSignature, gotFC.RenterSignature)
-	Equal(t, "host signature", expected.HostSignature, gotFC.HostSignature)
 }
