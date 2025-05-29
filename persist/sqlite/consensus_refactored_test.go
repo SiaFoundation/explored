@@ -1,4 +1,4 @@
-package sqlite_test
+package sqlite
 
 import (
 	"errors"
@@ -16,12 +16,12 @@ import (
 	"go.sia.tech/coreutils/wallet"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/testutil"
-	"go.sia.tech/explored/persist/sqlite"
 	"go.uber.org/zap/zaptest"
+	"lukechampine.com/frand"
 )
 
 type testChain struct {
-	db    explorer.Store
+	db    *Store
 	store *chain.DBStore
 
 	network     *consensus.Network
@@ -34,7 +34,7 @@ func newTestChain(t testing.TB, v2 bool, modifyGenesis func(*consensus.Network, 
 	log := zaptest.NewLogger(t)
 	dir := t.TempDir()
 
-	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
+	db, err := OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2587,6 +2587,116 @@ func BenchmarkTransactions(b *testing.B) {
 
 	n.mineTransactions(b, txn1, txn2, txn3)
 
+	// add a bunch of random transactions with contract formations and a random
+	// amount of inputs/outputs and contract formations
+	err := n.db.transaction(func(tx *txn) error {
+		sceStmt, err := tx.Prepare(`INSERT INTO siacoin_elements(block_id, output_id, leaf_index, spent_index, source, maturity_height, address, value) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+		if err != nil {
+			return err
+		}
+
+		fceStmt, err := tx.Prepare(`INSERT INTO file_contract_elements(block_id, transaction_id, contract_id, leaf_index, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		if err != nil {
+			return err
+		}
+
+		txnStmt, err := tx.Prepare(`INSERT INTO transactions(transaction_id) VALUES (?)`)
+		if err != nil {
+			return err
+		}
+
+		txnInputsStmt, err := tx.Prepare(`INSERT INTO transaction_siacoin_inputs(transaction_id, transaction_order, parent_id, unlock_conditions) VALUES (?, ?, ?, ?)`)
+		if err != nil {
+			return err
+		}
+
+		txnOutputsStmt, err := tx.Prepare(`INSERT INTO transaction_siacoin_outputs(transaction_id, transaction_order, output_id) VALUES (?, ?, ?)`)
+		if err != nil {
+			return err
+		}
+
+		txnContractsStmt, err := tx.Prepare(`INSERT INTO transaction_file_contracts(transaction_id, transaction_order, contract_id) VALUES (?, ?, ?)`)
+		if err != nil {
+			return err
+		}
+
+		bid := encode(n.tipState().Index.ID)
+		leafIndex := encode(uint64(0))
+		val := types.NewCurrency64(1)
+		uc := encode(types.StandardUnlockConditions(types.GeneratePrivateKey().PublicKey()))
+		filesize, fileMerkleRoot, windowStart, windowEnd, payout, unlockHash, revisionNumber := encode(uint64(0)), encode(types.Hash256{}), encode(uint64(0)), encode(uint64(0)), encode(types.NewCurrency64(1)), encode(types.Address{}), encode(uint64(0))
+		for i := range 1_000_000 {
+			if i%100000 == 0 {
+				b.Log("Inserted transaction:", i)
+			}
+
+			var txnID types.TransactionID
+			frand.Read(txnID[:])
+
+			result, err := txnStmt.Exec(encode(txnID))
+			if err != nil {
+				return err
+			}
+			txnDBID, err := result.LastInsertId()
+			if err != nil {
+				return err
+			}
+
+			// add up to 4 inputs and outputs
+			var inputs, outputs int
+			for j := range frand.Uint64n(4) {
+				var scID types.SiacoinOutputID
+				frand.Read(scID[:])
+
+				var addr types.Address
+				frand.Read(addr[:])
+
+				result, err := sceStmt.Exec(bid, encode(scID), leafIndex, nil, explorer.SourceTransaction, 0, encode(addr), encode(val))
+				if err != nil {
+					return err
+				}
+				scDBID, err := result.LastInsertId()
+				if err != nil {
+					return err
+				}
+
+				// if even add an input, if odd add an output
+				if j%2 == 0 {
+					if _, err := txnInputsStmt.Exec(txnDBID, inputs, scDBID, uc); err != nil {
+						return err
+					}
+					inputs++
+				} else {
+					if _, err := txnOutputsStmt.Exec(txnDBID, inputs, scDBID); err != nil {
+						return err
+					}
+					outputs++
+				}
+			}
+
+			// add a file contract
+			var fcID types.FileContractID
+			frand.Read(fcID[:])
+
+			result, err = fceStmt.Exec(bid, encode(txnID), encode(fcID), leafIndex, filesize, fileMerkleRoot, windowStart, windowEnd, payout, unlockHash, revisionNumber)
+			if err != nil {
+				return err
+			}
+			fcDBID, err := result.LastInsertId()
+			if err != nil {
+				return err
+			}
+			if _, err := txnContractsStmt.Exec(txnDBID, 0, fcDBID); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		b.Fatal(err)
+	}
+
 	benchmarks := []struct {
 		name  string
 		txnID types.TransactionID
@@ -2627,6 +2737,7 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 	})
 	genesisTxn := n.genesis().Transactions[0]
 
+	b.ResetTimer()
 	txn1 := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
 			ParentID:         genesisTxn.SiacoinOutputID(0),
@@ -2655,6 +2766,43 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 
 	n.mineTransactions(b, txn1)
 
+	// add a bunch of random outputs
+	err := n.db.transaction(func(tx *txn) error {
+		stmt, err := tx.Prepare(`INSERT INTO siacoin_elements(block_id, output_id, leaf_index, spent_index, source, maturity_height, address, value) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+		if err != nil {
+			return err
+		}
+
+		spentIndex := encode(n.tipState().Index)
+		bid := encode(n.tipState().Index.ID)
+		val := encode(types.NewCurrency64(1))
+		var addr types.Address
+		for i := range 5_000_000 {
+			if i%100_000 == 0 {
+				b.Log("Inserted siacoin element:", i)
+			}
+			var oid types.SiacoinOutputID
+			frand.Read(oid[:])
+
+			// label half of inputs spent
+			var spent any
+			if i%2 == 0 {
+				spent = spentIndex
+			}
+			// give each address three outputs
+			if i%3 == 0 {
+				frand.Read(addr[:])
+			}
+			if _, err := stmt.Exec(bid, encode(oid), encode(uint64(0)), spent, explorer.SourceTransaction, frand.Uint64n(144), encode(addr), val); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		b.Fatal(err)
+	}
 	unspentBenchmarks := []struct {
 		name   string
 		addr   types.Address

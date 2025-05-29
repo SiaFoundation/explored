@@ -1,4 +1,4 @@
-package sqlite_test
+package sqlite
 
 import (
 	"errors"
