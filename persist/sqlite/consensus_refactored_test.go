@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -2558,43 +2559,12 @@ func TestHostScan(t *testing.T) {
 }
 
 func BenchmarkTransactions(b *testing.B) {
-	pk1 := types.GeneratePrivateKey()
-	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
-	addr1 := uc1.UnlockHash()
+	n := newTestChain(b, false, nil)
 
-	n := newTestChain(b, false, func(network *consensus.Network, genesisBlock types.Block) {
-		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
-	})
-	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
-
-	txn1 := types.Transaction{}
-
-	txn2 := types.Transaction{ArbitraryData: [][]byte{{0, 1, 2, 3}}}
-
-	fc := prepareContract(addr1, n.tipState().Index.Height+1)
-	txn3 := types.Transaction{
-		SiacoinInputs: []types.SiacoinInput{{
-			ParentID:         n.genesis().Transactions[0].SiacoinOutputID(0),
-			UnlockConditions: uc1,
-		}},
-		SiacoinOutputs: []types.SiacoinOutput{{
-			Address: addr1,
-			Value:   val.Sub(fc.Payout),
-		}},
-		FileContracts: []types.FileContract{fc},
-	}
-	testutil.SignTransaction(n.tipState(), pk1, &txn3)
-
-	n.mineTransactions(b, txn1, txn2, txn3)
-
-	// add a bunch of random transactions with contract formations and a random
-	// amount of inputs/outputs and contract formations
+	// add a bunch of random transactions that are either empty, contain arbitrary
+	// or contain a contract formation
+	var ids []types.TransactionID
 	err := n.db.transaction(func(tx *txn) error {
-		sceStmt, err := tx.Prepare(`INSERT INTO siacoin_elements(block_id, output_id, leaf_index, spent_index, source, maturity_height, address, value) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-		if err != nil {
-			return err
-		}
-
 		fceStmt, err := tx.Prepare(`INSERT INTO file_contract_elements(block_id, transaction_id, contract_id, leaf_index, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 		if err != nil {
 			return err
@@ -2605,12 +2575,7 @@ func BenchmarkTransactions(b *testing.B) {
 			return err
 		}
 
-		txnInputsStmt, err := tx.Prepare(`INSERT INTO transaction_siacoin_inputs(transaction_id, transaction_order, parent_id, unlock_conditions) VALUES (?, ?, ?, ?)`)
-		if err != nil {
-			return err
-		}
-
-		txnOutputsStmt, err := tx.Prepare(`INSERT INTO transaction_siacoin_outputs(transaction_id, transaction_order, output_id) VALUES (?, ?, ?)`)
+		txnArbitraryDataStmt, err := tx.Prepare(`INSERT INTO transaction_arbitrary_data(transaction_id, transaction_order, data) VALUES (?, ?, ?)`)
 		if err != nil {
 			return err
 		}
@@ -2620,18 +2585,20 @@ func BenchmarkTransactions(b *testing.B) {
 			return err
 		}
 
+		arbitraryData := make([]byte, 64)
+		frand.Read(arbitraryData)
+
 		bid := encode(n.tipState().Index.ID)
 		leafIndex := encode(uint64(0))
-		val := types.NewCurrency64(1)
-		uc := encode(types.StandardUnlockConditions(types.GeneratePrivateKey().PublicKey()))
 		filesize, fileMerkleRoot, windowStart, windowEnd, payout, unlockHash, revisionNumber := encode(uint64(0)), encode(types.Hash256{}), encode(uint64(0)), encode(uint64(0)), encode(types.NewCurrency64(1)), encode(types.Address{}), encode(uint64(0))
 		for i := range 1_000_000 {
-			if i%100000 == 0 {
+			if i%100_000 == 0 {
 				b.Log("Inserted transaction:", i)
 			}
 
 			var txnID types.TransactionID
 			frand.Read(txnID[:])
+			ids = append(ids, txnID)
 
 			result, err := txnStmt.Exec(encode(txnID))
 			if err != nil {
@@ -2642,78 +2609,57 @@ func BenchmarkTransactions(b *testing.B) {
 				return err
 			}
 
-			// add up to 4 inputs and outputs
-			var inputs, outputs int
-			for j := range frand.Uint64n(4) {
-				var scID types.SiacoinOutputID
-				frand.Read(scID[:])
+			switch i % 3 {
+			case 0:
+				// empty transaction
+			case 1:
+				// transaction with arbitrary data
+				if _, err = txnArbitraryDataStmt.Exec(txnDBID, 0, arbitraryData); err != nil {
+					return err
+				}
+			case 2:
+				// transaction with file contract formation
+				var fcID types.FileContractID
+				frand.Read(fcID[:])
 
-				var addr types.Address
-				frand.Read(addr[:])
-
-				result, err := sceStmt.Exec(bid, encode(scID), leafIndex, nil, explorer.SourceTransaction, 0, encode(addr), encode(val))
+				result, err = fceStmt.Exec(bid, encode(txnID), encode(fcID), leafIndex, filesize, fileMerkleRoot, windowStart, windowEnd, payout, unlockHash, revisionNumber)
 				if err != nil {
 					return err
 				}
-				scDBID, err := result.LastInsertId()
+				fcDBID, err := result.LastInsertId()
 				if err != nil {
 					return err
 				}
-
-				// if even add an input, if odd add an output
-				if j%2 == 0 {
-					if _, err := txnInputsStmt.Exec(txnDBID, inputs, scDBID, uc); err != nil {
-						return err
-					}
-					inputs++
-				} else {
-					if _, err := txnOutputsStmt.Exec(txnDBID, inputs, scDBID); err != nil {
-						return err
-					}
-					outputs++
+				if _, err := txnContractsStmt.Exec(txnDBID, 0, fcDBID); err != nil {
+					return err
 				}
-			}
-
-			// add a file contract
-			var fcID types.FileContractID
-			frand.Read(fcID[:])
-
-			result, err = fceStmt.Exec(bid, encode(txnID), encode(fcID), leafIndex, filesize, fileMerkleRoot, windowStart, windowEnd, payout, unlockHash, revisionNumber)
-			if err != nil {
-				return err
-			}
-			fcDBID, err := result.LastInsertId()
-			if err != nil {
-				return err
-			}
-			if _, err := txnContractsStmt.Exec(txnDBID, 0, fcDBID); err != nil {
-				return err
 			}
 		}
-
 		return nil
 	})
+
 	if err != nil {
 		b.Fatal(err)
 	}
 
 	benchmarks := []struct {
-		name  string
-		txnID types.TransactionID
+		limit int
 	}{
-		{"empty transaction", txn1.ID()},
-		{"transaction with only arbitrary data", txn2.ID()},
-		{"file contract formation transaction", txn3.ID()},
+		{10},
+		{100},
+		{1000},
 	}
 	b.ResetTimer()
 	for _, bm := range benchmarks {
-		b.Run(bm.name, func(b *testing.B) {
-			txnIDs := []types.TransactionID{bm.txnID}
+		b.Run(strconv.Itoa(bm.limit)+" transactions", func(b *testing.B) {
+			offset := frand.Intn(len(ids) - bm.limit)
+			txnIDs := ids[offset : offset+bm.limit]
 			for range b.N {
-				_, err := n.db.Transactions(txnIDs)
+				txns, err := n.db.Transactions(txnIDs)
 				if err != nil {
 					b.Fatal(err)
 				}
+				testutil.Equal(b, "len(txns)", bm.limit, len(txns))
 			}
 		})
 	}
