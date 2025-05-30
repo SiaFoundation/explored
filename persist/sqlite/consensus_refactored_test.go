@@ -2666,52 +2666,11 @@ func BenchmarkTransactions(b *testing.B) {
 }
 
 func BenchmarkSiacoinOutputs(b *testing.B) {
-	pk1 := types.GeneratePrivateKey()
-	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
-	addr1 := uc1.UnlockHash()
-
-	pk2 := types.GeneratePrivateKey()
-	uc2 := types.StandardUnlockConditions(pk2.PublicKey())
-	addr2 := uc2.UnlockHash()
-
-	pk3 := types.GeneratePrivateKey()
-	uc3 := types.StandardUnlockConditions(pk3.PublicKey())
-	addr3 := uc3.UnlockHash()
-
-	n := newTestChain(b, false, func(network *consensus.Network, genesisBlock types.Block) {
-		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
-	})
-	genesisTxn := n.genesis().Transactions[0]
-
-	txn1 := types.Transaction{
-		SiacoinInputs: []types.SiacoinInput{{
-			ParentID:         genesisTxn.SiacoinOutputID(0),
-			UnlockConditions: uc1,
-		}},
-		SiacoinOutputs: func() (result []types.SiacoinOutput) {
-			val := genesisTxn.SiacoinOutputs[0].Value
-			// send 1000 small outputs to addr2
-			for range 1000 {
-				amount := types.NewCurrency64(1)
-				result = append(result, types.SiacoinOutput{
-					Address: addr2,
-					Value:   amount,
-				})
-				val = val.Sub(amount)
-			}
-			// send change to addr3
-			result = append(result, types.SiacoinOutput{
-				Address: addr3,
-				Value:   val,
-			})
-			return
-		}(),
-	}
-	testutil.SignTransaction(n.tipState(), pk1, &txn1)
-
-	n.mineTransactions(b, txn1)
+	addr1 := types.StandardUnlockConditions(types.GeneratePrivateKey().PublicKey()).UnlockHash()
+	n := newTestChain(b, false, nil)
 
 	// add a bunch of random outputs
+	var ids []types.SiacoinOutputID
 	err := n.db.transaction(func(tx *txn) error {
 		stmt, err := tx.Prepare(`INSERT INTO siacoin_elements(block_id, output_id, leaf_index, spent_index, source, maturity_height, address, value) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
 		if err != nil {
@@ -2721,15 +2680,18 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 		spentIndex := encode(n.tipState().Index)
 		bid := encode(n.tipState().Index.ID)
 		val := encode(types.NewCurrency64(1))
+
 		var addr types.Address
-		for i := range 5_000_000 {
+		for i := range 1_000_000 {
 			if i%100_000 == 0 {
 				b.Log("Inserted siacoin element:", i)
 			}
-			var oid types.SiacoinOutputID
-			frand.Read(oid[:])
 
-			// label half of inputs spent
+			var scID types.SiacoinOutputID
+			frand.Read(scID[:])
+			ids = append(ids, scID)
+
+			// label half of elements spent
 			var spent any
 			if i%2 == 0 {
 				spent = spentIndex
@@ -2738,7 +2700,23 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 			if i%3 == 0 {
 				frand.Read(addr[:])
 			}
-			if _, err := stmt.Exec(bid, encode(oid), encode(uint64(0)), spent, explorer.SourceTransaction, frand.Uint64n(144), encode(addr), val); err != nil {
+			if _, err := stmt.Exec(bid, encode(scID), encode(uint64(0)), spent, explorer.SourceTransaction, frand.Uint64n(144), encode(addr), val); err != nil {
+				return err
+			}
+		}
+
+		// give addr1 2000 outputs, 1000 of which are spent
+		for i := range 2000 {
+			// label half of elements spent
+			var spent any
+			if i%2 == 0 {
+				spent = spentIndex
+			}
+
+			var scID types.SiacoinOutputID
+			frand.Read(scID[:])
+
+			if _, err := stmt.Exec(bid, encode(scID), encode(uint64(0)), spent, explorer.SourceTransaction, 0, encode(addr1), val); err != nil {
 				return err
 			}
 		}
@@ -2748,44 +2726,46 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
+
 	unspentBenchmarks := []struct {
-		name   string
-		addr   types.Address
-		offset uint64
+		limit uint64
 	}{
-		{"addr1 (no unspent outputs)", addr1, 0},
-		{"addr2 (unspent outputs 0-99)", addr2, 0},
-		{"addr2 (unspent outputs 100-199)", addr2, 100},
-		{"addr3 (unspent output 0)", addr3, 0},
+		{10},
+		{100},
+		{1000},
 	}
 	b.ResetTimer()
 	for _, bm := range unspentBenchmarks {
-		b.Run(bm.name, func(b *testing.B) {
+		b.Run(strconv.FormatUint(bm.limit, 10)+" unspent outputs", func(b *testing.B) {
+			offset := frand.Uint64n(1000 - bm.limit + 1)
 			for range b.N {
-				_, err := n.db.UnspentSiacoinOutputs(bm.addr, bm.offset, 100)
+				sces, err := n.db.UnspentSiacoinOutputs(addr1, offset, bm.limit)
 				if err != nil {
 					b.Fatal(err)
 				}
+				testutil.Equal(b, "len(sces)", bm.limit, uint64(len(sces)))
 			}
 		})
 	}
 
-	elementBenchmarks := []struct {
-		name string
-		id   types.SiacoinOutputID
+	benchmarks := []struct {
+		limit int
 	}{
-		{"genesis output (spent)", genesisTxn.SiacoinOutputID(0)},
-		{"txn1 change output (unspent)", txn1.SiacoinOutputID(len(txn1.SiacoinOutputs) - 1)},
+		{10},
+		{100},
+		{1000},
 	}
 	b.ResetTimer()
-	for _, bm := range elementBenchmarks {
-		b.Run(bm.name, func(b *testing.B) {
-			scIDs := []types.SiacoinOutputID{bm.id}
+	for _, bm := range benchmarks {
+		b.Run(strconv.Itoa(bm.limit)+" siacoin elements", func(b *testing.B) {
+			offset := frand.Intn(len(ids) - bm.limit)
+			scIDs := ids[offset : offset+bm.limit]
 			for range b.N {
-				_, err := n.db.SiacoinElements(scIDs)
+				sces, err := n.db.SiacoinElements(scIDs)
 				if err != nil {
 					b.Fatal(err)
 				}
+				testutil.Equal(b, "len(sces)", bm.limit, len(sces))
 			}
 		})
 	}
