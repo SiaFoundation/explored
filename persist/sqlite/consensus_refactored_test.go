@@ -2642,24 +2642,17 @@ func BenchmarkTransactions(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	benchmarks := []struct {
-		limit int
-	}{
-		{10},
-		{100},
-		{1000},
-	}
 	b.ResetTimer()
-	for _, bm := range benchmarks {
-		b.Run(strconv.Itoa(bm.limit)+" transactions", func(b *testing.B) {
-			offset := frand.Intn(len(ids) - bm.limit)
-			txnIDs := ids[offset : offset+bm.limit]
+	for _, limit := range []int{10, 100, 1000} {
+		b.Run(strconv.Itoa(limit)+" transactions", func(b *testing.B) {
+			offset := frand.Intn(len(ids) - limit)
+			txnIDs := ids[offset : offset+limit]
 			for range b.N {
 				txns, err := n.db.Transactions(txnIDs)
 				if err != nil {
 					b.Fatal(err)
 				}
-				testutil.Equal(b, "len(txns)", bm.limit, len(txns))
+				testutil.Equal(b, "len(txns)", limit, len(txns))
 			}
 		})
 	}
@@ -2682,7 +2675,7 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 		val := encode(types.NewCurrency64(1))
 
 		var addr types.Address
-		for i := range 1_000_000 {
+		for i := range 5_000_000 {
 			if i%100_000 == 0 {
 				b.Log("Inserted siacoin element:", i)
 			}
@@ -2727,45 +2720,31 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	unspentBenchmarks := []struct {
-		limit uint64
-	}{
-		{10},
-		{100},
-		{1000},
-	}
 	b.ResetTimer()
-	for _, bm := range unspentBenchmarks {
-		b.Run(strconv.FormatUint(bm.limit, 10)+" unspent outputs", func(b *testing.B) {
-			offset := frand.Uint64n(1000 - bm.limit + 1)
+	for _, limit := range []uint64{10, 100, 1000} {
+		b.Run(strconv.FormatUint(limit, 10)+" unspent outputs", func(b *testing.B) {
+			offset := frand.Uint64n(1000 - limit + 1)
 			for range b.N {
-				sces, err := n.db.UnspentSiacoinOutputs(addr1, offset, bm.limit)
+				sces, err := n.db.UnspentSiacoinOutputs(addr1, offset, limit)
 				if err != nil {
 					b.Fatal(err)
 				}
-				testutil.Equal(b, "len(sces)", bm.limit, uint64(len(sces)))
+				testutil.Equal(b, "len(sces)", limit, uint64(len(sces)))
 			}
 		})
 	}
 
-	benchmarks := []struct {
-		limit int
-	}{
-		{10},
-		{100},
-		{1000},
-	}
 	b.ResetTimer()
-	for _, bm := range benchmarks {
-		b.Run(strconv.Itoa(bm.limit)+" siacoin elements", func(b *testing.B) {
-			offset := frand.Intn(len(ids) - bm.limit)
-			scIDs := ids[offset : offset+bm.limit]
+	for _, limit := range []int{10, 100, 1000} {
+		b.Run(strconv.Itoa(limit)+" siacoin elements", func(b *testing.B) {
+			offset := frand.Intn(len(ids) - limit)
+			scIDs := ids[offset : offset+limit]
 			for range b.N {
 				sces, err := n.db.SiacoinElements(scIDs)
 				if err != nil {
 					b.Fatal(err)
 				}
-				testutil.Equal(b, "len(sces)", bm.limit, len(sces))
+				testutil.Equal(b, "len(sces)", limit, len(sces))
 			}
 		})
 	}
