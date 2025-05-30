@@ -2737,7 +2737,6 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 	})
 	genesisTxn := n.genesis().Transactions[0]
 
-	b.ResetTimer()
 	txn1 := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
 			ParentID:         genesisTxn.SiacoinOutputID(0),
