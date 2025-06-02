@@ -223,7 +223,6 @@ func getSiafundElements(tx *txn, ids []types.SiafundOutputID, includeProof bool)
 		}
 	}
 	return
-
 }
 
 // SiacoinElements implements explorer.Store.
