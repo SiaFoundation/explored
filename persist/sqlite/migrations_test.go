@@ -1,4 +1,16 @@
-CREATE TABLE global_settings (
+package sqlite
+
+import (
+	"database/sql"
+	"fmt"
+	"path/filepath"
+	"testing"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest"
+)
+
+const initialSchema = `CREATE TABLE global_settings (
 	id INTEGER PRIMARY KEY NOT NULL DEFAULT 0 CHECK (id = 0), -- enforce a single row
 	db_version INTEGER NOT NULL -- used for migrations
 );
@@ -57,7 +69,7 @@ CREATE TABLE siacoin_elements (
 	address BLOB NOT NULL,
 	value BLOB NOT NULL
 );
-CREATE INDEX siacoin_elements_blocks_id_index ON siacoin_elements(block_id);
+
 CREATE INDEX siacoin_elements_maturity_height_index ON siacoin_elements(maturity_height);
 CREATE INDEX siacoin_elements_output_id_index ON siacoin_elements(output_id);
 CREATE INDEX siacoin_elements_address_spent_index ON siacoin_elements(address, spent_index);
@@ -74,7 +86,7 @@ CREATE TABLE siafund_elements (
 	address BLOB NOT NULL,
 	value BLOB NOT NULL
 );
-CREATE INDEX siafund_elements_blocks_id_index ON siafund_elements(block_id);
+
 CREATE INDEX siafund_elements_output_id_index ON siafund_elements(output_id);
 CREATE INDEX siafund_elements_address_spent_index ON siafund_elements(address, spent_index);
 
@@ -95,7 +107,6 @@ CREATE TABLE file_contract_elements (
 	revision_number BLOB NOT NULL,
 	UNIQUE(contract_id, revision_number)
 );
-CREATE INDEX file_contract_elements_blocks_id_index ON file_contract_elements(block_id);
 CREATE INDEX file_contract_elements_contract_id_revision_number_index ON file_contract_elements(contract_id, revision_number);
 
 CREATE TABLE last_contract_revision (
@@ -117,7 +128,6 @@ CREATE TABLE last_contract_revision (
 
 	contract_element_id INTEGER UNIQUE REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL
 );
-CREATE INDEX last_contract_revision_confirmation_block_id_index ON last_contract_revision(confirmation_block_id);
 
 CREATE TABLE file_contract_valid_proof_outputs (
 	contract_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL,
@@ -147,6 +157,7 @@ CREATE TABLE miner_payouts (
 	output_id INTEGER REFERENCES siacoin_elements(id) ON DELETE CASCADE NOT NULL,
 	UNIQUE(block_id, block_order)
 );
+
 CREATE INDEX miner_payouts_block_id_index ON miner_payouts(block_id);
 
 CREATE TABLE transactions (
@@ -458,7 +469,6 @@ CREATE TABLE v2_file_contract_elements (
 
     UNIQUE(contract_id, revision_number)
 );
-CREATE INDEX v2_file_contract_elements_blocks_id_index ON v2_file_contract_elements(block_id);
 CREATE INDEX v2_file_contract_elements_contract_id_revision_number_index ON v2_file_contract_elements(contract_id, revision_number);
 
 CREATE TABLE v2_last_contract_revision (
@@ -478,7 +488,6 @@ CREATE TABLE v2_last_contract_revision (
 
     contract_element_id INTEGER UNIQUE REFERENCES v2_file_contract_elements(id) ON DELETE CASCADE NOT NULL
 );
-CREATE INDEX v2_last_contract_revision_confirmation_block_id_index ON v2_last_contract_revision(confirmation_block_id);
 
 CREATE TABLE host_info (
     public_key BLOB PRIMARY KEY NOT NULL,
@@ -592,4 +601,213 @@ CREATE TABLE host_info_v2_netaddresses(
 );
 
 CREATE INDEX host_info_v2_netaddresses_public_key ON host_info_v2_netaddresses(public_key);
-CREATE INDEX host_info_v2_netaddresses_address ON host_info_v2_netaddresses(address);
+CREATE INDEX host_info_v2_netaddresses_address ON host_info_v2_netaddresses(address);`
+
+func TestMigrationConsistency(t *testing.T) {
+	log := zaptest.NewLogger(t)
+
+	// manually initialize a sqlite database with the
+	// initial explored schema
+	fp := filepath.Join(t.TempDir(), "explored.sqlite3")
+	db, err := sql.Open("sqlite3", sqliteFilepath(fp))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	if _, err := db.Exec(initialSchema); err != nil {
+		t.Fatal(err)
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+
+	if err := initializeSettings(&txn{tx, log}, 1); err != nil {
+		t.Fatal(err)
+	} else if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	} else if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	expectedVersion := int64(len(migrations) + 1)
+
+	// open the database to trigger migrations
+	store, err := OpenDatabase(fp, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	v := getDBVersion(store.db)
+	if v != expectedVersion {
+		t.Fatalf("expected version %d, got %d", expectedVersion, v)
+	} else if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// ensure the database does not change version when opened again
+	store, err = OpenDatabase(fp, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	v = getDBVersion(store.db)
+	if v != expectedVersion {
+		t.Fatalf("expected version %d, got %d", expectedVersion, v)
+	}
+
+	// initialize a new database with the updated schema
+	fp2 := filepath.Join(t.TempDir(), "explored.sqlite3")
+	baseline, err := OpenDatabase(fp2, zap.NewNop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer baseline.Close()
+
+	// compare the baseline database with the migrated database
+	// to ensure they have the same indices, tables, and columns
+	getTableIndices := func(db *sql.DB) (map[string]bool, error) {
+		const query = `SELECT name, tbl_name, sql FROM sqlite_schema WHERE type='index'`
+		rows, err := db.Query(query)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		indices := make(map[string]bool)
+		for rows.Next() {
+			var name, table string
+			var sqlStr sql.NullString // auto indices have no sql
+			if err := rows.Scan(&name, &table, &sqlStr); err != nil {
+				return nil, err
+			}
+			indices[fmt.Sprintf("%s.%s.%s", name, table, sqlStr.String)] = true
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		return indices, nil
+	}
+
+	// ensure the migrated database has the same indices as the baseline
+	baselineIndices, err := getTableIndices(baseline.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	migratedIndices, err := getTableIndices(store.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for k := range baselineIndices {
+		if !migratedIndices[k] {
+			t.Errorf("missing index %s", k)
+		}
+	}
+
+	for k := range migratedIndices {
+		if !baselineIndices[k] {
+			t.Errorf("unexpected index %s", k)
+		}
+	}
+
+	getTables := func(db *sql.DB) (map[string]bool, error) {
+		const query = `SELECT name FROM sqlite_schema WHERE type='table'`
+		rows, err := db.Query(query)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		tables := make(map[string]bool)
+		for rows.Next() {
+			var name string
+			if err := rows.Scan(&name); err != nil {
+				return nil, err
+			}
+			tables[name] = true
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		return tables, nil
+	}
+
+	// ensure the migrated database has the same tables as the baseline
+	baselineTables, err := getTables(baseline.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	migratedTables, err := getTables(store.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for k := range baselineTables {
+		if !migratedTables[k] {
+			t.Errorf("missing table %s", k)
+		}
+	}
+	for k := range migratedTables {
+		if !baselineTables[k] {
+			t.Errorf("unexpected table %s", k)
+		}
+	}
+
+	// ensure each table has the same columns as the baseline
+	getTableColumns := func(db *sql.DB, table string) (map[string]bool, error) {
+		query := fmt.Sprintf(`PRAGMA table_info(%s)`, table) // cannot use parameterized query for PRAGMA statements
+		rows, err := db.Query(query)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		columns := make(map[string]bool)
+		for rows.Next() {
+			var cid int
+			var name, colType string
+			var defaultValue sql.NullString
+			var notNull bool
+			var primaryKey int // composite keys are indices
+			if err := rows.Scan(&cid, &name, &colType, &notNull, &defaultValue, &primaryKey); err != nil {
+				return nil, err
+			}
+			// column ID is ignored since it may not match between the baseline and migrated databases
+			key := fmt.Sprintf("%s.%s.%s.%t.%d", name, colType, defaultValue.String, notNull, primaryKey)
+			columns[key] = true
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		return columns, nil
+	}
+
+	for k := range baselineTables {
+		baselineColumns, err := getTableColumns(baseline.db, k)
+		if err != nil {
+			t.Fatal(err)
+		}
+		migratedColumns, err := getTableColumns(store.db, k)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for c := range baselineColumns {
+			if !migratedColumns[c] {
+				t.Errorf("missing column %s.%s", k, c)
+			}
+		}
+
+		for c := range migratedColumns {
+			if !baselineColumns[c] {
+				t.Errorf("unexpected column %s.%s", k, c)
+			}
+		}
+	}
+}
