@@ -166,21 +166,64 @@ func getSiacoinElements(tx *txn, ids []types.SiacoinOutputID, includeProof bool)
 	}
 	defer rows.Close()
 
+	var leafIndices []uint64
 	for rows.Next() {
 		sco, err := scanSiacoinOutput(rows)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan siacoin output: %w", err)
 		}
-		if includeProof {
-			sco.StateElement.MerkleProof, err = merkleProof(tx, sco.StateElement.LeafIndex)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get output merkle proof: %w", err)
-			}
-		}
 
+		leafIndices = append(leafIndices, sco.StateElement.LeafIndex)
 		result = append(result, sco)
 	}
+
+	if includeProof {
+		proofs, err := fillElementProofs(tx, leafIndices)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fill siacoin output proofs: %w", err)
+		}
+		for i := range result {
+			result[i].StateElement.MerkleProof = proofs[i]
+		}
+	}
+
 	return
+}
+
+func getSiafundElements(tx *txn, ids []types.SiafundOutputID, includeProof bool) (result []explorer.SiafundOutput, err error) {
+	var encoded []any
+	for _, id := range ids {
+		encoded = append(encoded, encode(id))
+	}
+
+	rows, err := tx.Query(`SELECT output_id, leaf_index, spent_index, claim_start, address, value FROM siafund_elements WHERE output_id IN (`+queryPlaceHolders(len(encoded))+`)`, encoded...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query siafund outputs: %w", err)
+	}
+	defer rows.Close()
+
+	var leafIndices []uint64
+	for rows.Next() {
+		sfo, err := scanSiafundOutput(rows)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan siafund output: %w", err)
+		}
+
+		leafIndices = append(leafIndices, sfo.StateElement.LeafIndex)
+		result = append(result, sfo)
+	}
+
+	if includeProof {
+		proofs, err := fillElementProofs(tx, leafIndices)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fill siafund output proofs: %w", err)
+		}
+		for i := range result {
+			result[i].StateElement.MerkleProof = proofs[i]
+		}
+	}
+	return
+
 }
 
 // SiacoinElements implements explorer.Store.
@@ -195,29 +238,8 @@ func (s *Store) SiacoinElements(ids []types.SiacoinOutputID) (result []explorer.
 // SiafundElements implements explorer.Store.
 func (s *Store) SiafundElements(ids []types.SiafundOutputID) (result []explorer.SiafundOutput, err error) {
 	err = s.transaction(func(tx *txn) error {
-		var encoded []any
-		for _, id := range ids {
-			encoded = append(encoded, encode(id))
-		}
-
-		rows, err := tx.Query(`SELECT output_id, leaf_index, spent_index, claim_start, address, value FROM siafund_elements WHERE output_id IN (`+queryPlaceHolders(len(encoded))+`)`, encoded...)
-		if err != nil {
-			return fmt.Errorf("failed to query siafund outputs: %w", err)
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			sfo, err := scanSiafundOutput(rows)
-			if err != nil {
-				return fmt.Errorf("failed to scan siafund output: %w", err)
-			}
-			sfo.StateElement.MerkleProof, err = s.MerkleProof(sfo.StateElement.LeafIndex)
-			if err != nil {
-				return fmt.Errorf("failed to get output merkle proof: %w", err)
-			}
-			result = append(result, sfo)
-		}
-		return nil
+		result, err = getSiafundElements(tx, ids, true)
+		return err
 	})
 	return
 }
