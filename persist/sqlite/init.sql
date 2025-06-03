@@ -96,6 +96,7 @@ CREATE TABLE file_contract_elements (
 	UNIQUE(contract_id, revision_number)
 );
 CREATE INDEX file_contract_elements_blocks_id_index ON file_contract_elements(block_id);
+CREATE INDEX file_contract_elements_transactions_id_index ON file_contract_elements(transaction_id);
 CREATE INDEX file_contract_elements_contract_id_revision_number_index ON file_contract_elements(contract_id, revision_number);
 
 CREATE TABLE last_contract_revision (
@@ -118,6 +119,7 @@ CREATE TABLE last_contract_revision (
 	contract_element_id INTEGER UNIQUE REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL
 );
 CREATE INDEX last_contract_revision_confirmation_block_id_index ON last_contract_revision(confirmation_block_id);
+CREATE INDEX last_contract_revision_contract_element_id_index ON last_contract_revision(contract_element_id);
 
 CREATE TABLE file_contract_valid_proof_outputs (
 	contract_id INTEGER REFERENCES file_contract_elements(id) ON DELETE CASCADE NOT NULL,
@@ -405,11 +407,13 @@ CREATE TABLE v1_transaction_events (
     event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
     transaction_id INTEGER REFERENCES transactions(id) ON DELETE CASCADE NOT NULL
 );
+CREATE INDEX v1_transaction_events_transaction_id_index ON v1_transaction_events(transaction_id);
 
 CREATE TABLE v2_transaction_events (
     event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
     transaction_id INTEGER REFERENCES v2_transactions(id) ON DELETE CASCADE NOT NULL
 );
+CREATE INDEX v2_transaction_events_transaction_id_index ON v2_transaction_events(transaction_id);
 
 CREATE TABLE payout_events (
     event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE NOT NULL,
@@ -459,6 +463,7 @@ CREATE TABLE v2_file_contract_elements (
     UNIQUE(contract_id, revision_number)
 );
 CREATE INDEX v2_file_contract_elements_blocks_id_index ON v2_file_contract_elements(block_id);
+CREATE INDEX v2_file_contract_elements_transaction_id_index ON v2_file_contract_elements(transaction_id);
 CREATE INDEX v2_file_contract_elements_contract_id_revision_number_index ON v2_file_contract_elements(contract_id, revision_number);
 
 CREATE TABLE v2_last_contract_revision (
@@ -479,6 +484,7 @@ CREATE TABLE v2_last_contract_revision (
     contract_element_id INTEGER UNIQUE REFERENCES v2_file_contract_elements(id) ON DELETE CASCADE NOT NULL
 );
 CREATE INDEX v2_last_contract_revision_confirmation_block_id_index ON v2_last_contract_revision(confirmation_block_id);
+CREATE INDEX v2_last_contract_revision_contract_element_id_index ON v2_last_contract_revision(contract_element_id);
 
 CREATE TABLE host_info (
     public_key BLOB PRIMARY KEY NOT NULL,
