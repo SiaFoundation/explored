@@ -1,4 +1,4 @@
-package sqlite_test
+package sqlite
 
 import (
 	"errors"
@@ -15,7 +15,7 @@ import (
 	"go.sia.tech/explored/internal/testutil"
 )
 
-func getSCE(t *testing.T, db explorer.Store, scid types.SiacoinOutputID) types.SiacoinElement {
+func getSCE(t testing.TB, db explorer.Store, scid types.SiacoinOutputID) types.SiacoinElement {
 	t.Helper()
 
 	sces, err := db.SiacoinElements([]types.SiacoinOutputID{scid})
@@ -27,7 +27,7 @@ func getSCE(t *testing.T, db explorer.Store, scid types.SiacoinOutputID) types.S
 	return sces[0].SiacoinElement
 }
 
-func getSFE(t *testing.T, db explorer.Store, sfid types.SiafundOutputID) types.SiafundElement {
+func getSFE(t testing.TB, db explorer.Store, sfid types.SiafundOutputID) types.SiafundElement {
 	t.Helper()
 
 	sfes, err := db.SiafundElements([]types.SiafundOutputID{sfid})
@@ -39,7 +39,7 @@ func getSFE(t *testing.T, db explorer.Store, sfid types.SiafundOutputID) types.S
 	return sfes[0].SiafundElement
 }
 
-func getFCE(t *testing.T, db explorer.Store, fcid types.FileContractID) types.V2FileContractElement {
+func getFCE(t testing.TB, db explorer.Store, fcid types.FileContractID) types.V2FileContractElement {
 	t.Helper()
 
 	fces, err := db.V2Contracts([]types.FileContractID{fcid})
@@ -51,7 +51,7 @@ func getFCE(t *testing.T, db explorer.Store, fcid types.FileContractID) types.V2
 	return fces[0].V2FileContractElement
 }
 
-func getCIE(t *testing.T, db explorer.Store, bid types.BlockID) types.ChainIndexElement {
+func getCIE(t testing.TB, db explorer.Store, bid types.BlockID) types.ChainIndexElement {
 	t.Helper()
 
 	b, err := db.Block(bid)
@@ -73,14 +73,14 @@ func getCIE(t *testing.T, db explorer.Store, bid types.BlockID) types.ChainIndex
 	}
 }
 
-func (n *testChain) mineV2Transactions(t *testing.T, txns ...types.V2Transaction) {
+func (n *testChain) mineV2Transactions(t testing.TB, txns ...types.V2Transaction) {
 	t.Helper()
 
 	b := testutil.MineV2Block(n.tipState(), txns, types.VoidAddress)
 	n.applyBlock(t, b)
 }
 
-func (n *testChain) assertV2Transactions(t *testing.T, expected ...types.V2Transaction) {
+func (n *testChain) assertV2Transactions(t testing.TB, expected ...types.V2Transaction) {
 	t.Helper()
 
 	for _, txn := range expected {
@@ -94,7 +94,7 @@ func (n *testChain) assertV2Transactions(t *testing.T, expected ...types.V2Trans
 	}
 }
 
-func (n *testChain) assertV2ChainIndices(t *testing.T, txnID types.TransactionID, expected ...types.ChainIndex) {
+func (n *testChain) assertV2ChainIndices(t testing.TB, txnID types.TransactionID, expected ...types.ChainIndex) {
 	t.Helper()
 
 	indices, err := n.db.V2TransactionChainIndices(txnID, 0, math.MaxInt64)
@@ -109,7 +109,7 @@ func (n *testChain) assertV2ChainIndices(t *testing.T, txnID types.TransactionID
 	}
 }
 
-func checkV2Contract(t *testing.T, expected explorer.V2FileContract, got explorer.V2FileContract) {
+func checkV2Contract(t testing.TB, expected explorer.V2FileContract, got explorer.V2FileContract) {
 	t.Helper()
 
 	testutil.Equal(t, "V2FileContract", expected.V2FileContractElement.V2FileContract, got.V2FileContractElement.V2FileContract)
@@ -125,7 +125,7 @@ func checkV2Contract(t *testing.T, expected explorer.V2FileContract, got explore
 
 // assertV2FCE asserts the contract element in the db has the right state and
 // block/transaction indices
-func (n *testChain) assertV2FCE(t *testing.T, fcID types.FileContractID, expected explorer.V2FileContract) {
+func (n *testChain) assertV2FCE(t testing.TB, fcID types.FileContractID, expected explorer.V2FileContract) {
 	t.Helper()
 
 	fces, err := n.db.V2Contracts([]types.FileContractID{fcID})
@@ -139,7 +139,7 @@ func (n *testChain) assertV2FCE(t *testing.T, fcID types.FileContractID, expecte
 
 // assertNoV2FCE asserts the contract element in the db has the right state and
 // block/transaction indices
-func (n *testChain) assertNoV2FCE(t *testing.T, fcIDs ...types.FileContractID) {
+func (n *testChain) assertNoV2FCE(t testing.TB, fcIDs ...types.FileContractID) {
 	t.Helper()
 
 	fces, err := n.db.V2Contracts(fcIDs)
@@ -152,7 +152,7 @@ func (n *testChain) assertNoV2FCE(t *testing.T, fcIDs ...types.FileContractID) {
 // assertV2TransactionContracts asserts that the enhanced FileContracts
 // in a v2 transaction retrieved from the explorer match the expected
 // contracts.
-func (n *testChain) assertV2TransactionContracts(t *testing.T, txnID types.TransactionID, revisions bool, expected ...explorer.V2FileContract) {
+func (n *testChain) assertV2TransactionContracts(t testing.TB, txnID types.TransactionID, revisions bool, expected ...explorer.V2FileContract) {
 	t.Helper()
 
 	txns, err := n.db.V2Transactions([]types.TransactionID{txnID})
@@ -178,7 +178,7 @@ func (n *testChain) assertV2TransactionContracts(t *testing.T, txnID types.Trans
 // assertV2TransactionResolutions asserts that the enhanced
 // FileContractResolutions in a v2 transaction retrieved from the explorer
 // match the expected resolutions.
-func (n *testChain) assertV2TransactionResolutions(t *testing.T, txnID types.TransactionID, expected ...explorer.V2FileContractResolution) {
+func (n *testChain) assertV2TransactionResolutions(t testing.TB, txnID types.TransactionID, expected ...explorer.V2FileContractResolution) {
 	t.Helper()
 
 	txns, err := n.db.V2Transactions([]types.TransactionID{txnID})
@@ -209,7 +209,7 @@ func (n *testChain) assertV2TransactionResolutions(t *testing.T, txnID types.Tra
 	}
 }
 
-func (n *testChain) assertV2ContractRevisions(t *testing.T, fcID types.FileContractID, expected ...explorer.V2FileContract) {
+func (n *testChain) assertV2ContractRevisions(t testing.TB, fcID types.FileContractID, expected ...explorer.V2FileContract) {
 	t.Helper()
 
 	fces, err := n.db.V2ContractRevisions(fcID)
@@ -228,7 +228,7 @@ func (n *testChain) assertV2ContractRevisions(t *testing.T, fcID types.FileContr
 	}
 }
 
-func (n *testChain) getV2FCE(t *testing.T, fcID types.FileContractID) explorer.V2FileContract {
+func (n *testChain) getV2FCE(t testing.TB, fcID types.FileContractID) explorer.V2FileContract {
 	t.Helper()
 
 	fces, err := n.db.V2Contracts([]types.FileContractID{fcID})
@@ -241,7 +241,7 @@ func (n *testChain) getV2FCE(t *testing.T, fcID types.FileContractID) explorer.V
 	return fces[0]
 }
 
-func (n *testChain) getV2Txn(t *testing.T, txnID types.TransactionID) explorer.V2Transaction {
+func (n *testChain) getV2Txn(t testing.TB, txnID types.TransactionID) explorer.V2Transaction {
 	t.Helper()
 
 	txns, err := n.db.V2Transactions([]types.TransactionID{txnID})

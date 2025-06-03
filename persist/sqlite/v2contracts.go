@@ -52,17 +52,23 @@ WHERE rev.contract_id = ?
 		}
 		defer stmt.Close()
 
+		var leafIndices []uint64
 		for _, id := range ids {
 			fc, err := scanV2FileContract(stmt.QueryRow(encode(id)))
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				return fmt.Errorf("failed to scan file contract: %w", err)
 			} else if err == nil {
-				fc.V2FileContractElement.StateElement.MerkleProof, err = s.MerkleProof(fc.V2FileContractElement.StateElement.LeafIndex)
-				if err != nil {
-					return fmt.Errorf("failed to get contract merkle proof: %w", err)
-				}
+				leafIndices = append(leafIndices, fc.V2FileContractElement.StateElement.LeafIndex)
 				result = append(result, fc)
 			}
+		}
+
+		proofs, err := fillElementProofs(tx, leafIndices)
+		if err != nil {
+			return fmt.Errorf("failed to fill siafund output proofs: %w", err)
+		}
+		for i := range result {
+			result[i].V2FileContractElement.StateElement.MerkleProof = proofs[i]
 		}
 
 		return nil

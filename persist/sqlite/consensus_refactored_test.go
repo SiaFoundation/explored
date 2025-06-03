@@ -1,9 +1,10 @@
-package sqlite_test
+package sqlite
 
 import (
 	"errors"
 	"math"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -16,12 +17,12 @@ import (
 	"go.sia.tech/coreutils/wallet"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/testutil"
-	"go.sia.tech/explored/persist/sqlite"
 	"go.uber.org/zap/zaptest"
+	"lukechampine.com/frand"
 )
 
 type testChain struct {
-	db    explorer.Store
+	db    *Store
 	store *chain.DBStore
 
 	network     *consensus.Network
@@ -30,11 +31,11 @@ type testChain struct {
 	states      []consensus.State
 }
 
-func newTestChain(t *testing.T, v2 bool, modifyGenesis func(*consensus.Network, types.Block)) *testChain {
+func newTestChain(t testing.TB, v2 bool, modifyGenesis func(*consensus.Network, types.Block)) *testChain {
 	log := zaptest.NewLogger(t)
 	dir := t.TempDir()
 
-	db, err := sqlite.OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
+	db, err := OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +96,7 @@ func (n *testChain) tipState() consensus.State {
 	return n.states[len(n.states)-1]
 }
 
-func (n *testChain) applyBlock(t *testing.T, b types.Block) {
+func (n *testChain) applyBlock(t testing.TB, b types.Block) {
 	t.Helper()
 
 	cs := n.tipState()
@@ -125,7 +126,7 @@ func (n *testChain) applyBlock(t *testing.T, b types.Block) {
 	n.states = append(n.states, cs)
 }
 
-func (n *testChain) revertBlock(t *testing.T) {
+func (n *testChain) revertBlock(t testing.TB) {
 	b := n.blocks[len(n.blocks)-1]
 	bs := n.supplements[len(n.supplements)-1]
 	prevState := n.states[len(n.states)-2]
@@ -146,14 +147,14 @@ func (n *testChain) revertBlock(t *testing.T) {
 	n.states = n.states[:len(n.states)-1]
 }
 
-func (n *testChain) mineTransactions(t *testing.T, txns ...types.Transaction) {
+func (n *testChain) mineTransactions(t testing.TB, txns ...types.Transaction) {
 	t.Helper()
 
 	b := testutil.MineBlock(n.tipState(), txns, types.VoidAddress)
 	n.applyBlock(t, b)
 }
 
-func (n *testChain) assertTransactions(t *testing.T, expected ...types.Transaction) {
+func (n *testChain) assertTransactions(t testing.TB, expected ...types.Transaction) {
 	t.Helper()
 
 	for _, txn := range expected {
@@ -167,7 +168,7 @@ func (n *testChain) assertTransactions(t *testing.T, expected ...types.Transacti
 	}
 }
 
-func (n *testChain) assertChainIndices(t *testing.T, txnID types.TransactionID, expected ...types.ChainIndex) {
+func (n *testChain) assertChainIndices(t testing.TB, txnID types.TransactionID, expected ...types.ChainIndex) {
 	t.Helper()
 
 	indices, err := n.db.TransactionChainIndices(txnID, 0, math.MaxInt64)
@@ -183,7 +184,7 @@ func (n *testChain) assertChainIndices(t *testing.T, txnID types.TransactionID, 
 }
 
 // assertSCE asserts the Siacoin element in the db has the right source, index and output
-func (n *testChain) assertSCE(t *testing.T, scID types.SiacoinOutputID, index *types.ChainIndex, sco types.SiacoinOutput) {
+func (n *testChain) assertSCE(t testing.TB, scID types.SiacoinOutputID, index *types.ChainIndex, sco types.SiacoinOutput) {
 	t.Helper()
 
 	sces, err := n.db.SiacoinElements([]types.SiacoinOutputID{scID})
@@ -199,7 +200,7 @@ func (n *testChain) assertSCE(t *testing.T, scID types.SiacoinOutputID, index *t
 }
 
 // assertSFE asserts the Siafund element in the db has the right source, index and output
-func (n *testChain) assertSFE(t *testing.T, sfID types.SiafundOutputID, index *types.ChainIndex, sfo types.SiafundOutput) {
+func (n *testChain) assertSFE(t testing.TB, sfID types.SiafundOutputID, index *types.ChainIndex, sfo types.SiafundOutput) {
 	t.Helper()
 
 	sfes, err := n.db.SiafundElements([]types.SiafundOutputID{sfID})
@@ -215,7 +216,7 @@ func (n *testChain) assertSFE(t *testing.T, sfID types.SiafundOutputID, index *t
 
 // assertFCE asserts the contract element in the db has the right state and
 // block/transaction indices
-func (n *testChain) assertFCE(t *testing.T, fcID types.FileContractID, expected explorer.ExtendedFileContract) {
+func (n *testChain) assertFCE(t testing.TB, fcID types.FileContractID, expected explorer.ExtendedFileContract) {
 	t.Helper()
 
 	fces, err := n.db.Contracts([]types.FileContractID{fcID})
@@ -234,7 +235,7 @@ func (n *testChain) assertFCE(t *testing.T, fcID types.FileContractID, expected 
 // assertTransactionContracts asserts that the enhanced FileContracts
 // (revisions = false) or FileContractRevisions (revisions = true) in a
 // transaction retrieved from the explorer match the expected contracts.
-func (n *testChain) assertTransactionContracts(t *testing.T, txnID types.TransactionID, revisions bool, expected ...explorer.ExtendedFileContract) {
+func (n *testChain) assertTransactionContracts(t testing.TB, txnID types.TransactionID, revisions bool, expected ...explorer.ExtendedFileContract) {
 	t.Helper()
 
 	txns, err := n.db.Transactions([]types.TransactionID{txnID})
@@ -257,7 +258,7 @@ func (n *testChain) assertTransactionContracts(t *testing.T, txnID types.Transac
 	}
 }
 
-func (n *testChain) assertContractRevisions(t *testing.T, fcID types.FileContractID, expected ...explorer.ExtendedFileContract) {
+func (n *testChain) assertContractRevisions(t testing.TB, fcID types.FileContractID, expected ...explorer.ExtendedFileContract) {
 	t.Helper()
 
 	fces, err := n.db.ContractRevisions(fcID)
@@ -276,7 +277,7 @@ func (n *testChain) assertContractRevisions(t *testing.T, fcID types.FileContrac
 	}
 }
 
-func (n *testChain) assertEvents(t *testing.T, addr types.Address, expected ...explorer.Event) {
+func (n *testChain) assertEvents(t testing.TB, addr types.Address, expected ...explorer.Event) {
 	t.Helper()
 
 	events, err := n.db.AddressEvents(addr, 0, math.MaxInt64)
@@ -303,7 +304,7 @@ func (n *testChain) assertEvents(t *testing.T, addr types.Address, expected ...e
 	}
 }
 
-func (n *testChain) getSCE(t *testing.T, scID types.SiacoinOutputID) explorer.SiacoinOutput {
+func (n *testChain) getSCE(t testing.TB, scID types.SiacoinOutputID) explorer.SiacoinOutput {
 	t.Helper()
 
 	sces, err := n.db.SiacoinElements([]types.SiacoinOutputID{scID})
@@ -316,7 +317,7 @@ func (n *testChain) getSCE(t *testing.T, scID types.SiacoinOutputID) explorer.Si
 	return sces[0]
 }
 
-func (n *testChain) getFCE(t *testing.T, fcID types.FileContractID) explorer.ExtendedFileContract {
+func (n *testChain) getFCE(t testing.TB, fcID types.FileContractID) explorer.ExtendedFileContract {
 	t.Helper()
 
 	fces, err := n.db.Contracts([]types.FileContractID{fcID})
@@ -328,7 +329,7 @@ func (n *testChain) getFCE(t *testing.T, fcID types.FileContractID) explorer.Ext
 	return fces[0]
 }
 
-func (n *testChain) getTxn(t *testing.T, txnID types.TransactionID) explorer.Transaction {
+func (n *testChain) getTxn(t testing.TB, txnID types.TransactionID) explorer.Transaction {
 	t.Helper()
 
 	txns, err := n.db.Transactions([]types.TransactionID{txnID})
@@ -354,7 +355,7 @@ func prepareContract(addr types.Address, endHeight uint64) types.FileContract {
 	return fc
 }
 
-func (n *testChain) assertBlock(t *testing.T, cs consensus.State, block types.Block) {
+func (n *testChain) assertBlock(t testing.TB, cs consensus.State, block types.Block) {
 	got, err := n.db.Block(block.ID())
 	if err != nil {
 		t.Fatal(err)
@@ -2555,4 +2556,196 @@ func TestHostScan(t *testing.T) {
 	host1.FailedInteractions++
 
 	assertHost(hosts[0].PublicKey, host1)
+}
+
+func BenchmarkTransactions(b *testing.B) {
+	n := newTestChain(b, false, nil)
+
+	// add a bunch of random transactions that are either empty, contain arbitrary
+	// or contain a contract formation
+	var ids []types.TransactionID
+	err := n.db.transaction(func(tx *txn) error {
+		fceStmt, err := tx.Prepare(`INSERT INTO file_contract_elements(block_id, transaction_id, contract_id, leaf_index, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		if err != nil {
+			return err
+		}
+
+		txnStmt, err := tx.Prepare(`INSERT INTO transactions(transaction_id) VALUES (?)`)
+		if err != nil {
+			return err
+		}
+
+		txnArbitraryDataStmt, err := tx.Prepare(`INSERT INTO transaction_arbitrary_data(transaction_id, transaction_order, data) VALUES (?, ?, ?)`)
+		if err != nil {
+			return err
+		}
+
+		txnContractsStmt, err := tx.Prepare(`INSERT INTO transaction_file_contracts(transaction_id, transaction_order, contract_id) VALUES (?, ?, ?)`)
+		if err != nil {
+			return err
+		}
+
+		arbitraryData := make([]byte, 64)
+		frand.Read(arbitraryData)
+
+		bid := encode(n.tipState().Index.ID)
+		leafIndex := encode(uint64(0))
+		filesize, fileMerkleRoot, windowStart, windowEnd, payout, unlockHash, revisionNumber := encode(uint64(0)), encode(types.Hash256{}), encode(uint64(0)), encode(uint64(0)), encode(types.NewCurrency64(1)), encode(types.Address{}), encode(uint64(0))
+		for i := range 1_000_000 {
+			if i%100_000 == 0 {
+				b.Log("Inserted transaction:", i)
+			}
+
+			var txnID types.TransactionID
+			frand.Read(txnID[:])
+			ids = append(ids, txnID)
+
+			result, err := txnStmt.Exec(encode(txnID))
+			if err != nil {
+				return err
+			}
+			txnDBID, err := result.LastInsertId()
+			if err != nil {
+				return err
+			}
+
+			switch i % 3 {
+			case 0:
+				// empty transaction
+			case 1:
+				// transaction with arbitrary data
+				if _, err = txnArbitraryDataStmt.Exec(txnDBID, 0, arbitraryData); err != nil {
+					return err
+				}
+			case 2:
+				// transaction with file contract formation
+				var fcID types.FileContractID
+				frand.Read(fcID[:])
+
+				result, err = fceStmt.Exec(bid, encode(txnID), encode(fcID), leafIndex, filesize, fileMerkleRoot, windowStart, windowEnd, payout, unlockHash, revisionNumber)
+				if err != nil {
+					return err
+				}
+				fcDBID, err := result.LastInsertId()
+				if err != nil {
+					return err
+				}
+				if _, err := txnContractsStmt.Exec(txnDBID, 0, fcDBID); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+	for _, limit := range []int{10, 100, 1000} {
+		b.Run(strconv.Itoa(limit)+" transactions", func(b *testing.B) {
+			offset := frand.Intn(len(ids) - limit)
+			txnIDs := ids[offset : offset+limit]
+			for range b.N {
+				txns, err := n.db.Transactions(txnIDs)
+				if err != nil {
+					b.Fatal(err)
+				}
+				testutil.Equal(b, "len(txns)", limit, len(txns))
+			}
+		})
+	}
+}
+
+func BenchmarkSiacoinOutputs(b *testing.B) {
+	addr1 := types.StandardUnlockConditions(types.GeneratePrivateKey().PublicKey()).UnlockHash()
+	n := newTestChain(b, false, nil)
+
+	// add a bunch of random outputs
+	var ids []types.SiacoinOutputID
+	err := n.db.transaction(func(tx *txn) error {
+		stmt, err := tx.Prepare(`INSERT INTO siacoin_elements(block_id, output_id, leaf_index, spent_index, source, maturity_height, address, value) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+		if err != nil {
+			return err
+		}
+
+		spentIndex := encode(n.tipState().Index)
+		bid := encode(n.tipState().Index.ID)
+		val := encode(types.NewCurrency64(1))
+
+		var addr types.Address
+		for i := range 5_000_000 {
+			if i%100_000 == 0 {
+				b.Log("Inserted siacoin element:", i)
+			}
+
+			var scID types.SiacoinOutputID
+			frand.Read(scID[:])
+			ids = append(ids, scID)
+
+			// label half of elements spent
+			var spent any
+			if i%2 == 0 {
+				spent = spentIndex
+			}
+			// give each address three outputs
+			if i%3 == 0 {
+				frand.Read(addr[:])
+			}
+			if _, err := stmt.Exec(bid, encode(scID), encode(uint64(0)), spent, explorer.SourceTransaction, frand.Uint64n(144), encode(addr), val); err != nil {
+				return err
+			}
+		}
+
+		// give addr1 2000 outputs, 1000 of which are spent
+		for i := range 2000 {
+			// label half of elements spent
+			var spent any
+			if i%2 == 0 {
+				spent = spentIndex
+			}
+
+			var scID types.SiacoinOutputID
+			frand.Read(scID[:])
+
+			if _, err := stmt.Exec(bid, encode(scID), encode(uint64(0)), spent, explorer.SourceTransaction, 0, encode(addr1), val); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+	for _, limit := range []uint64{10, 100, 1000} {
+		b.Run(strconv.FormatUint(limit, 10)+" unspent outputs", func(b *testing.B) {
+			offset := frand.Uint64n(1000 - limit + 1)
+			for range b.N {
+				sces, err := n.db.UnspentSiacoinOutputs(addr1, offset, limit)
+				if err != nil {
+					b.Fatal(err)
+				}
+				testutil.Equal(b, "len(sces)", limit, uint64(len(sces)))
+			}
+		})
+	}
+
+	b.ResetTimer()
+	for _, limit := range []int{10, 100, 1000} {
+		b.Run(strconv.Itoa(limit)+" siacoin elements", func(b *testing.B) {
+			offset := frand.Intn(len(ids) - limit)
+			scIDs := ids[offset : offset+limit]
+			for range b.N {
+				sces, err := n.db.SiacoinElements(scIDs)
+				if err != nil {
+					b.Fatal(err)
+				}
+				testutil.Equal(b, "len(sces)", limit, len(sces))
+			}
+		})
+	}
 }
