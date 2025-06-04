@@ -198,14 +198,6 @@ func deleteBlock(tx *txn, bid types.BlockID) error {
 }
 
 func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
-	// if _, err := ut.tx.Exec(`PRAGMA defer_foreign_keys=ON;`); err != nil {
-	// 	return fmt.Errorf("failed to foreign key checks: %w", err)
-	// }
-
-	// if _, err := ut.tx.Exec(`PRAGMA foreign_keys=OFF;`); err != nil {
-	// 	return fmt.Errorf("failed to disable foreign key checks: %w", err)
-	// }
-
 	if err := updateMaturedBalances(ut.tx, true, state.Metrics.Index.Height); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update matured balances: %w", err)
 	} else if _, err := addSiacoinElements(
@@ -248,14 +240,6 @@ func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
 	} else if err := deleteBlock(ut.tx, bid); err != nil {
 		return fmt.Errorf("RevertIndex: failed to delete block: %w", err)
 	}
-
-	// if _, err := ut.tx.Exec(`PRAGMA foreign_key_check;`); err != nil {
-	// 	return fmt.Errorf("failed to foreign key checks: %w", err)
-	// }
-
-	// if _, err := ut.tx.Exec(`PRAGMA foreign_keys=ON;`); err != nil {
-	// 	return fmt.Errorf("failed to enable foreign key checks: %w", err)
-	// }
 
 	return nil
 }
