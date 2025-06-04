@@ -30,10 +30,6 @@ func migrateV3(txn *txn, log *zap.Logger) error {
 }
 
 func migrateV4(txn *txn, _ *zap.Logger) error {
-	if _, err := txn.Exec(`PRAGMA defer_foreign_keys=ON`); err != nil {
-		return fmt.Errorf("failed to defer foreign key checks: %w", err)
-	}
-
 	const createNewTables = `
 CREATE TABLE new_network_metrics (
 	block_id BLOB PRIMARY KEY REFERENCES blocks(id) NOT NULL,
