@@ -30,15 +30,10 @@ func deleteEvents(tx *txn, bid types.BlockID) error {
 	return nil
 }
 
-func deleteBlockTransactionsLastRevisionss(tx *txn, bid types.BlockID) error {
-	encoded := encode(bid)
-	if _, err := tx.Exec(`DELETE FROM block_transactions WHERE block_id = ?;`, encoded); err != nil {
-		return fmt.Errorf("failed to delete from block_transactions: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM v2_block_transactions WHERE block_id = ?;`, encoded); err != nil {
-		return fmt.Errorf("failed to delete from v2_block_transactions: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM last_contract_revision WHERE confirmation_block_id = ?;`, encoded); err != nil {
+func deleteLastContractRevisions(tx *txn, bid types.BlockID) error {
+	if _, err := tx.Exec(`DELETE FROM last_contract_revision WHERE confirmation_block_id = ?;`, encode(bid)); err != nil {
 		return fmt.Errorf("failed to delete from last_contract_revision: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM v2_last_contract_revision WHERE confirmation_block_id = ?;`, encoded); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM v2_last_contract_revision WHERE confirmation_block_id = ?;`, encode(bid)); err != nil {
 		return fmt.Errorf("failed to delete from v2_last_contract_revision: %w", err)
 	}
 	return nil
@@ -47,6 +42,10 @@ func deleteBlockTransactionsLastRevisionss(tx *txn, bid types.BlockID) error {
 // deleteV1Transactions deletes the transactions from the database if they are
 // not referenced in any blocks.
 func deleteV1Transactions(tx *txn, bid types.BlockID, txns []types.Transaction) error {
+	if _, err := tx.Exec(`DELETE FROM block_transactions WHERE block_id = ?;`, encode(bid)); err != nil {
+		return fmt.Errorf("failed to delete from block_transactions: %w", err)
+	}
+
 	var ids []any
 	for _, txn := range txns {
 		ids = append(ids, encode(txn.ID()))
@@ -62,7 +61,7 @@ WHERE
     t.transaction_id IN (`+queryPlaceHolders(len(txns))+`)
     AND NOT EXISTS (
         SELECT
-			1
+            1
         FROM
             block_transactions AS bt
         WHERE
@@ -94,13 +93,13 @@ WHERE
 		return fmt.Errorf("failed to delete from transaction_file_contract_revisions: %w", err)
 	}
 
-	// have to remove file contract elements here due to ordering issues
+	// have to remove file contract elements because it depends on transactions table
 	if _, err := tx.Exec(`
 CREATE TEMP TABLE tmp_file_contract_element_ids AS
 SELECT
-	fce.id
+    fce.id
 FROM
-	file_contract_elements AS fce
+    file_contract_elements AS fce
 WHERE fce.block_id = ?`, encode(bid)); err != nil {
 		return fmt.Errorf("failed to create temporary file_contract_elements table: %w", err)
 	} else if _, err := tx.Exec(`DELETE FROM file_contract_valid_proof_outputs WHERE contract_id IN (SELECT id FROM tmp_file_contract_element_ids);`); err != nil {
@@ -125,6 +124,10 @@ WHERE fce.block_id = ?`, encode(bid)); err != nil {
 // deleteV2Transactions deletes the transactions from the database if they are
 // not referenced in any blocks.
 func deleteV2Transactions(tx *txn, bid types.BlockID, txns []types.V2Transaction) error {
+	if _, err := tx.Exec(`DELETE FROM v2_block_transactions WHERE block_id = ?;`, encode(bid)); err != nil {
+		return fmt.Errorf("failed to delete from v2_block_transactions: %w", err)
+	}
+
 	var ids []any
 	for _, txn := range txns {
 		ids = append(ids, encode(txn.ID()))
@@ -140,7 +143,7 @@ WHERE
     t.transaction_id IN (`+queryPlaceHolders(len(txns))+`)
     AND NOT EXISTS (
         SELECT
-			1
+            1
         FROM
             v2_block_transactions AS bt
         WHERE
@@ -169,6 +172,7 @@ WHERE
 	} else if _, err := tx.Exec(`DELETE FROM v2_transaction_attestations WHERE transaction_id IN (SELECT id FROM tmp_v2_transaction_ids);`); err != nil {
 		return fmt.Errorf("failed to delete from v2_transaction_attestations: %w", err)
 	} else if _, err := tx.Exec(`DELETE FROM v2_file_contract_elements WHERE block_id = ?;`, encode(bid)); err != nil {
+		// have to remove file contract elements because it depends on transactions table
 		return fmt.Errorf("failed to delete from v2_file_contract_elements: %w", err)
 	} else if _, err := tx.Exec(`DELETE FROM v2_transactions WHERE id IN (SELECT id FROM tmp_v2_transaction_ids);`); err != nil {
 		return fmt.Errorf("failed to delete from v2_transactions: %w", err)
@@ -189,8 +193,6 @@ func deleteBlock(tx *txn, bid types.BlockID) error {
 		return fmt.Errorf("failed to delete from siacoin_elements: %w", err)
 	} else if _, err := tx.Exec(`DELETE FROM siafund_elements WHERE block_id = ?;`, encoded); err != nil {
 		return fmt.Errorf("failed to delete from siafund_elements: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM v2_file_contract_elements WHERE block_id = ?;`, encoded); err != nil {
-		return fmt.Errorf("failed to delete from v2_file_contract_elements: %w", err)
 	} else if _, err := tx.Exec(`DELETE FROM blocks WHERE id = ?;`, encoded); err != nil {
 		return fmt.Errorf("failed to delete from blocks: %w", err)
 	}
@@ -231,7 +233,7 @@ func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
 	bid := state.Block.ID()
 	if err := deleteEvents(ut.tx, bid); err != nil {
 		return fmt.Errorf("RevertIndex: failed to delete events: %w", err)
-	} else if err := deleteBlockTransactionsLastRevisionss(ut.tx, bid); err != nil {
+	} else if err := deleteLastContractRevisions(ut.tx, bid); err != nil {
 		return fmt.Errorf("RevertIndex: failed to delete from block transactions tables: %w", err)
 	} else if err := deleteV1Transactions(ut.tx, bid, state.Block.Transactions); err != nil {
 		return fmt.Errorf("RevertIndex: failed to delete v1 transactions: %w", err)
