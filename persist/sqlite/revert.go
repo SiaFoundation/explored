@@ -201,9 +201,9 @@ func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("RevertIndex: failed to update state tree: %w", err)
 	}
 
-	// if _, err := ut.tx.Exec(`PRAGMA foreign_key_check;`); err != nil {
-	// 	return fmt.Errorf("failed to foreign key checks: %w", err)
-	// }
+	if _, err := ut.tx.Exec(`PRAGMA defer_foreign_keys=ON;`); err != nil {
+		return fmt.Errorf("failed to foreign key checks: %w", err)
+	}
 
 	if err := deleteEvents(ut.tx, state.Block.ID()); err != nil {
 		return fmt.Errorf("RevertIndex: failed to delete events: %w", err)
@@ -214,6 +214,10 @@ func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
 	} else if err := deleteBlock(ut.tx, state.Block.ID()); err != nil {
 		return fmt.Errorf("RevertIndex: failed to delete block: %w", err)
 	}
+
+	// if _, err := ut.tx.Exec(`PRAGMA foreign_key_check;`); err != nil {
+	// 	return fmt.Errorf("failed to foreign key checks: %w", err)
+	// }
 
 	return nil
 }
