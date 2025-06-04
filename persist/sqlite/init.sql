@@ -31,7 +31,6 @@ CREATE TABLE network_metrics (
 	circulating_supply BLOB NOT NULL,
 	contract_revenue BLOB NOT NULL
 );
-
 CREATE INDEX network_metrics_height_index ON network_metrics(height);
 
 CREATE TABLE address_balance (
@@ -41,7 +40,6 @@ CREATE TABLE address_balance (
 	immature_siacoin_balance BLOB NOT NULL,
 	siafund_balance BLOB NOT NULL
 );
-
 CREATE INDEX address_balance_address_index ON address_balance(address);
 
 CREATE TABLE siacoin_elements (
@@ -131,7 +129,6 @@ CREATE TABLE file_contract_valid_proof_outputs (
 	value BLOB NOT NULL,
 	UNIQUE(contract_id, contract_order)
 );
-
 CREATE INDEX file_contract_valid_proof_outputs_contract_id_index ON file_contract_valid_proof_outputs(contract_id);
 
 CREATE TABLE file_contract_missed_proof_outputs (
@@ -142,7 +139,6 @@ CREATE TABLE file_contract_missed_proof_outputs (
 	value BLOB NOT NULL,
 	UNIQUE(contract_id, contract_order)
 );
-
 CREATE INDEX file_contract_missed_proof_outputs_contract_id_index ON file_contract_missed_proof_outputs(contract_id);
 
 CREATE TABLE miner_payouts (
@@ -152,6 +148,7 @@ CREATE TABLE miner_payouts (
 	UNIQUE(block_id, block_order)
 );
 CREATE INDEX miner_payouts_block_id_index ON miner_payouts(block_id);
+CREATE INDEX miner_payouts_output_id_index ON miner_payouts(output_id);
 
 CREATE TABLE transactions (
 	id INTEGER PRIMARY KEY,
@@ -175,7 +172,6 @@ CREATE TABLE transaction_arbitrary_data (
 	data BLOB NOT NULL,
 	UNIQUE(transaction_id, transaction_order)
 );
-
 CREATE INDEX transaction_arbitrary_data_transaction_id_index ON transaction_arbitrary_data(transaction_id);
 
 CREATE TABLE transaction_miner_fees (
@@ -184,7 +180,6 @@ CREATE TABLE transaction_miner_fees (
 	fee BLOB NOT NULL,
 	UNIQUE(transaction_id, transaction_order)
 );
-
 CREATE INDEX transaction_miner_fees_transaction_id_index ON transaction_miner_fees(transaction_id);
 
 CREATE TABLE transaction_signatures (
@@ -197,7 +192,6 @@ CREATE TABLE transaction_signatures (
 	signature BLOB NOT NULL,
 	UNIQUE(transaction_id, transaction_order)
 );
-
 CREATE INDEX transaction_signatures_transaction_id_index ON transaction_signatures(transaction_id);
 
 CREATE TABLE transaction_storage_proofs (
@@ -219,6 +213,7 @@ CREATE TABLE transaction_siacoin_inputs (
 	UNIQUE(transaction_id, transaction_order)
 );
 CREATE INDEX transaction_siacoin_inputs_transaction_id_index ON transaction_siacoin_inputs(transaction_id);
+CREATE INDEX transaction_siacoin_inputs_parent_id_index ON transaction_siacoin_inputs(parent_id);
 
 CREATE TABLE transaction_siacoin_outputs (
 	transaction_id INTEGER REFERENCES transactions(id) NOT NULL,
@@ -227,6 +222,7 @@ CREATE TABLE transaction_siacoin_outputs (
 	UNIQUE(transaction_id, transaction_order)
 );
 CREATE INDEX transaction_siacoin_outputs_transaction_id_index ON transaction_siacoin_outputs(transaction_id);
+CREATE INDEX transaction_siacoin_outputs_output_id_index ON transaction_siacoin_outputs(output_id);
 
 CREATE TABLE transaction_siafund_inputs (
 	transaction_id INTEGER REFERENCES transactions(id) NOT NULL,
@@ -237,6 +233,7 @@ CREATE TABLE transaction_siafund_inputs (
 	UNIQUE(transaction_id, transaction_order)
 );
 CREATE INDEX transaction_siafund_inputs_transaction_id_index ON transaction_siafund_inputs(transaction_id);
+CREATE INDEX transaction_siafund_inputs_parent_id_index ON transaction_siafund_inputs(parent_id);
 
 CREATE TABLE transaction_siafund_outputs (
 	transaction_id INTEGER REFERENCES transactions(id) NOT NULL,
@@ -245,6 +242,7 @@ CREATE TABLE transaction_siafund_outputs (
 	UNIQUE(transaction_id, transaction_order)
 );
 CREATE INDEX transaction_siafund_outputs_transaction_id_index ON transaction_siafund_outputs(transaction_id);
+CREATE INDEX transaction_siafund_outputs_output_id_index ON transaction_siafund_outputs(output_id);
 
 CREATE TABLE transaction_file_contracts (
 	transaction_id INTEGER REFERENCES transactions(id) NOT NULL,
@@ -253,6 +251,7 @@ CREATE TABLE transaction_file_contracts (
 	UNIQUE(transaction_id, transaction_order)
 );
 CREATE INDEX transaction_file_contracts_transaction_id_index ON transaction_file_contracts(transaction_id);
+CREATE INDEX transaction_file_contracts_contract_id_index ON transaction_file_contracts(contract_id);
 
 CREATE TABLE transaction_file_contract_revisions (
 	transaction_id INTEGER REFERENCES transactions(id) NOT NULL,
@@ -263,6 +262,7 @@ CREATE TABLE transaction_file_contract_revisions (
 	UNIQUE(transaction_id, transaction_order)
 );
 CREATE INDEX transaction_file_contract_revisions_transaction_id_index ON transaction_file_contract_revisions(transaction_id);
+CREATE INDEX transaction_file_contract_revisions_contract_id_index ON transaction_file_contract_revisions(contract_id);
 
 CREATE TABLE v2_transactions (
 	id INTEGER PRIMARY KEY,
@@ -291,6 +291,7 @@ CREATE TABLE v2_transaction_siacoin_inputs (
     UNIQUE(transaction_id, transaction_order)
 );
 CREATE INDEX v2_transaction_siacoin_inputs_transaction_id_index ON v2_transaction_siacoin_inputs(transaction_id);
+CREATE INDEX v2_transaction_siacoin_inputs_parent_id_index ON v2_transaction_siacoin_inputs(parent_id);
 
 CREATE TABLE v2_transaction_siacoin_outputs (
     transaction_id INTEGER REFERENCES v2_transactions(id) NOT NULL,
@@ -299,6 +300,7 @@ CREATE TABLE v2_transaction_siacoin_outputs (
     UNIQUE(transaction_id, transaction_order)
 );
 CREATE INDEX v2_transaction_siacoin_outputs_transaction_id_index ON v2_transaction_siacoin_outputs(transaction_id);
+CREATE INDEX v2_transaction_siacoin_outputs_output_id_index ON v2_transaction_siacoin_outputs(output_id);
 
 CREATE TABLE v2_transaction_siafund_inputs (
     transaction_id INTEGER REFERENCES v2_transactions(id) NOT NULL,
@@ -309,6 +311,7 @@ CREATE TABLE v2_transaction_siafund_inputs (
     UNIQUE(transaction_id, transaction_order)
 );
 CREATE INDEX v2_transaction_siafund_inputs_transaction_id_index ON v2_transaction_siafund_inputs(transaction_id);
+CREATE INDEX v2_transaction_siafund_inputs_parent_id_index ON v2_transaction_siafund_inputs(parent_id);
 
 CREATE TABLE v2_transaction_siafund_outputs (
     transaction_id INTEGER REFERENCES v2_transactions(id) NOT NULL,
@@ -317,6 +320,7 @@ CREATE TABLE v2_transaction_siafund_outputs (
     UNIQUE(transaction_id, transaction_order)
 );
 CREATE INDEX v2_transaction_siafund_outputs_transaction_id_index ON v2_transaction_siafund_outputs(transaction_id);
+CREATE INDEX v2_transaction_siafund_outputs_output_id_index ON v2_transaction_siafund_outputs(output_id);
 
 CREATE TABLE v2_transaction_file_contracts (
     transaction_id INTEGER REFERENCES v2_transactions(id) NOT NULL,
@@ -325,6 +329,7 @@ CREATE TABLE v2_transaction_file_contracts (
     UNIQUE(transaction_id, transaction_order)
 );
 CREATE INDEX v2_transaction_file_contracts_transaction_id_index ON v2_transaction_file_contracts(transaction_id);
+CREATE INDEX v2_transaction_file_contracts_contract_id_index ON v2_transaction_file_contracts(contract_id);
 
 CREATE TABLE v2_transaction_file_contract_revisions (
     transaction_id INTEGER REFERENCES v2_transactions(id) NOT NULL,
@@ -334,6 +339,8 @@ CREATE TABLE v2_transaction_file_contract_revisions (
     UNIQUE(transaction_id, transaction_order)
 );
 CREATE INDEX v2_transaction_file_contract_revisions_transaction_id_index ON v2_transaction_file_contract_revisions(transaction_id);
+CREATE INDEX v2_transaction_file_contract_revisions_parent_contract_id_index ON v2_transaction_file_contract_revisions(parent_contract_id);
+CREATE INDEX v2_transaction_file_contract_revisions_revision_contract_id_index ON v2_transaction_file_contract_revisions(revision_contract_id);
 
 CREATE TABLE v2_transaction_file_contract_resolutions (
     transaction_id INTEGER REFERENCES v2_transactions(id) NOT NULL,
@@ -365,6 +372,8 @@ CREATE TABLE v2_transaction_file_contract_resolutions (
     UNIQUE(transaction_id, transaction_order)
 );
 CREATE INDEX v2_transaction_file_contract_resolutions_transaction_id_index ON v2_transaction_file_contract_resolutions(transaction_id);
+CREATE INDEX v2_transaction_file_contract_resolutions_parent_contract_id_index ON v2_transaction_file_contract_resolutions(parent_contract_id);
+CREATE INDEX v2_transaction_file_contract_resolutions_renewal_new_contract_id_index ON v2_transaction_file_contract_resolutions(renewal_new_contract_id);
 
 CREATE TABLE v2_transaction_attestations (
 	transaction_id INTEGER REFERENCES v2_transactions(id) NOT NULL,
@@ -421,6 +430,7 @@ CREATE TABLE payout_events (
     event_id INTEGER PRIMARY KEY REFERENCES events(id) NOT NULL,
     output_id INTEGER REFERENCES siacoin_elements(id) NOT NULL
 );
+CREATE INDEX payout_events_output_id_index ON payout_events(output_id);
 
 CREATE TABLE v1_contract_resolution_events (
     event_id INTEGER PRIMARY KEY REFERENCES events(id) NOT NULL,
@@ -428,6 +438,8 @@ CREATE TABLE v1_contract_resolution_events (
     output_id INTEGER REFERENCES siacoin_elements(id) NOT NULL,
     missed INTEGER NOT NULL
 );
+CREATE INDEX v1_contract_resolution_events_output_id_index ON v1_contract_resolution_events(output_id);
+CREATE INDEX v1_contract_resolution_events_parent_id_index ON v1_contract_resolution_events(parent_id);
 
 CREATE TABLE v2_contract_resolution_events (
     event_id INTEGER PRIMARY KEY REFERENCES events(id) NOT NULL,
@@ -435,6 +447,8 @@ CREATE TABLE v2_contract_resolution_events (
     output_id INTEGER REFERENCES siacoin_elements(id) NOT NULL,
     missed INTEGER NOT NULL
 );
+CREATE INDEX v2_contract_resolution_events_output_id_index ON v2_contract_resolution_events(output_id);
+CREATE INDEX v2_contract_resolution_events_parent_id_index ON v2_contract_resolution_events(parent_id);
 
 CREATE TABLE v2_file_contract_elements (
     id INTEGER PRIMARY KEY,
