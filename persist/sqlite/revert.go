@@ -10,7 +10,10 @@ import (
 func deleteEvents(tx *txn, bid types.BlockID) error {
 	if _, err := tx.Exec(`CREATE TEMP TABLE tmp_event_ids AS SELECT id FROM events WHERE block_id = ?;`, encode(bid)); err != nil {
 		return fmt.Errorf("failed to create temporary table: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM event_addresses WHERE event_id IN (SELECT id FROM tmp_event_ids);`); err != nil {
+	}
+	defer tx.Exec(`DROP TABLE tmp_event_ids;`)
+
+	if _, err := tx.Exec(`DELETE FROM event_addresses WHERE event_id IN (SELECT id FROM tmp_event_ids);`); err != nil {
 		return fmt.Errorf("failed to delete from event_addresses table: %w", err)
 	} else if _, err := tx.Exec(`DELETE FROM v1_transaction_events WHERE event_id IN (SELECT id FROM tmp_event_ids);`); err != nil {
 		return fmt.Errorf("failed to delete from v1_transaction_events table: %w", err)
@@ -24,8 +27,6 @@ func deleteEvents(tx *txn, bid types.BlockID) error {
 		return fmt.Errorf("failed to delete from v2_contract_resolution_events table: %w", err)
 	} else if _, err := tx.Exec(`DELETE FROM events WHERE id IN (SELECT id FROM tmp_event_ids);`); err != nil {
 		return fmt.Errorf("failed to delete from events table: %w", err)
-	} else if _, err := tx.Exec(`DROP TABLE tmp_event_ids;`); err != nil {
-		return fmt.Errorf("failed to drop temporary table: %w", err)
 	}
 	return nil
 }
@@ -58,6 +59,7 @@ WHERE
 	if err != nil {
 		return fmt.Errorf("failed to create temporary transactions table: %w", err)
 	}
+	defer tx.Exec(`DROP TABLE tmp_transaction_ids;`)
 
 	if _, err := tx.Exec(`DELETE FROM block_transactions WHERE block_id = ?;`, encode(bid)); err != nil {
 		return fmt.Errorf("failed to delete from block_transactions: %w", err)
@@ -94,20 +96,19 @@ FROM
     file_contract_elements AS fce
 WHERE fce.block_id = ?`, encode(bid)); err != nil {
 		return fmt.Errorf("failed to create temporary file_contract_elements table: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM file_contract_valid_proof_outputs WHERE contract_id IN (SELECT id FROM tmp_file_contract_element_ids);`); err != nil {
+	}
+	defer tx.Exec(`DROP TABLE tmp_file_contract_element_ids;`)
+
+	if _, err := tx.Exec(`DELETE FROM file_contract_valid_proof_outputs WHERE contract_id IN (SELECT id FROM tmp_file_contract_element_ids);`); err != nil {
 		return fmt.Errorf("failed to delete from transaction_file_contract_revisions: %w", err)
 	} else if _, err := tx.Exec(`DELETE FROM file_contract_missed_proof_outputs WHERE contract_id IN (SELECT id FROM tmp_file_contract_element_ids);`); err != nil {
 		return fmt.Errorf("failed to delete from transaction_file_contract_revisions: %w", err)
 	} else if _, err := tx.Exec(`DELETE FROM file_contract_elements WHERE id IN (SELECT id FROM tmp_file_contract_element_ids);`); err != nil {
 		return fmt.Errorf("failed to delete from transaction_file_contract_revisions: %w", err)
-	} else if _, err := tx.Exec(`DROP TABLE tmp_file_contract_element_ids;`); err != nil {
-		return fmt.Errorf("failed to drop temporary file_contract_elements table: %w", err)
 	}
 
 	if _, err := tx.Exec(`DELETE FROM transactions WHERE id IN (SELECT id FROM tmp_transaction_ids);`); err != nil {
 		return fmt.Errorf("failed to delete from transactions: %w", err)
-	} else if _, err := tx.Exec(`DROP TABLE tmp_transaction_ids;`); err != nil {
-		return fmt.Errorf("failed to drop temporary transactions table: %w", err)
 	}
 
 	return nil
@@ -132,6 +133,7 @@ WHERE
 	if err != nil {
 		return fmt.Errorf("failed to create temporary transactions table: %w", err)
 	}
+	defer tx.Exec(`DROP TABLE tmp_v2_transaction_ids;`)
 
 	if _, err := tx.Exec(`DELETE FROM v2_block_transactions WHERE block_id = ?;`, encode(bid)); err != nil {
 		return fmt.Errorf("failed to delete from v2_block_transactions: %w", err)
@@ -160,8 +162,6 @@ WHERE
 		return fmt.Errorf("failed to delete from v2_file_contract_elements: %w", err)
 	} else if _, err := tx.Exec(`DELETE FROM v2_transactions WHERE id IN (SELECT id FROM tmp_v2_transaction_ids);`); err != nil {
 		return fmt.Errorf("failed to delete from v2_transactions: %w", err)
-	} else if _, err := tx.Exec(`DROP TABLE tmp_v2_transaction_ids;`); err != nil {
-		return fmt.Errorf("failed to drop temporary table: %w", err)
 	}
 
 	return nil
