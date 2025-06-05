@@ -595,11 +595,11 @@ CREATE INDEX v2_transaction_file_contract_resolutions_transaction_id_index ON v2
 CREATE INDEX v2_transaction_file_contract_resolutions_parent_contract_id_index ON v2_transaction_file_contract_resolutions(parent_contract_id);
 CREATE INDEX v2_transaction_file_contract_resolutions_renewal_new_contract_id_index ON v2_transaction_file_contract_resolutions(renewal_new_contract_id);
 CREATE INDEX v2_transaction_attestations_transaction_id_index ON v2_transaction_attestations(transaction_id);
-CREATE INDEX events_block_id_idx ON events (block_id);
-CREATE INDEX events_maturity_height_id_idx ON events (maturity_height DESC, id DESC);
-CREATE INDEX event_addresses_event_id_idx ON event_addresses (event_id);
-CREATE INDEX event_addresses_address_id_idx ON event_addresses (address_id);
-CREATE INDEX event_addresses_event_id_address_id_event_maturity_height_event_id_idx ON event_addresses (address_id, event_maturity_height DESC, event_id DESC);
+CREATE INDEX events_block_id_index ON events (block_id);
+CREATE INDEX events_maturity_height_id_index ON events (maturity_height DESC, id DESC);
+CREATE INDEX event_addresses_event_id_index ON event_addresses (event_id);
+CREATE INDEX event_addresses_address_id_index ON event_addresses (address_id);
+CREATE INDEX event_addresses_event_id_address_id_event_maturity_height_event_id_index ON event_addresses (address_id, event_maturity_height DESC, event_id DESC);
 CREATE INDEX v1_transaction_events_transaction_id_index ON v1_transaction_events(transaction_id);
 CREATE INDEX v2_transaction_events_transaction_id_index ON v2_transaction_events(transaction_id);
 CREATE INDEX payout_events_output_id_index ON payout_events(output_id);
