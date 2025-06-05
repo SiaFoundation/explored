@@ -401,8 +401,8 @@ CREATE TABLE events (
 	date_created INTEGER NOT NULL,
 	event_type TEXT NOT NULL
 );
-CREATE INDEX events_block_id_idx ON events (block_id);
-CREATE INDEX events_maturity_height_id_idx ON events (maturity_height DESC, id DESC);
+CREATE INDEX events_block_id_index ON events (block_id);
+CREATE INDEX events_maturity_height_id_index ON events (maturity_height DESC, id DESC);
 
 CREATE TABLE event_addresses (
 	event_id INTEGER NOT NULL REFERENCES events (id),
@@ -410,9 +410,9 @@ CREATE TABLE event_addresses (
 	event_maturity_height INTEGER NOT NULL, -- flattened from events to improve query performance
 	PRIMARY KEY (event_id, address_id)
 );
-CREATE INDEX event_addresses_event_id_idx ON event_addresses (event_id);
-CREATE INDEX event_addresses_address_id_idx ON event_addresses (address_id);
-CREATE INDEX event_addresses_event_id_address_id_event_maturity_height_event_id_idx ON event_addresses (address_id, event_maturity_height DESC, event_id DESC);
+CREATE INDEX event_addresses_event_id_index ON event_addresses (event_id);
+CREATE INDEX event_addresses_address_id_index ON event_addresses (address_id);
+CREATE INDEX event_addresses_event_id_address_id_event_maturity_height_event_id_index ON event_addresses (address_id, event_maturity_height DESC, event_id DESC);
 
 CREATE TABLE v1_transaction_events (
     event_id INTEGER PRIMARY KEY REFERENCES events(id) NOT NULL,
