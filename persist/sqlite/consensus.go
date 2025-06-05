@@ -10,6 +10,7 @@ import (
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
+	"go.uber.org/zap"
 )
 
 type updateTx struct {
@@ -1178,6 +1179,70 @@ func (s *Store) UpdateChainState(reverted []chain.RevertUpdate, applied []chain.
 	})
 }
 
+func resetChainState(tx *txn, log *zap.Logger, target int64) error {
+	names := []string{
+		"network_metrics",
+		"file_contract_valid_proof_outputs",
+		"file_contract_missed_proof_outputs",
+		"miner_payouts",
+		"block_transactions",
+		"transaction_arbitrary_data",
+		"transaction_miner_fees",
+		"transaction_signatures",
+		"transaction_storage_proofs",
+		"transaction_siacoin_inputs",
+		"transaction_siacoin_outputs",
+		"transaction_siafund_inputs",
+		"transaction_siafund_outputs",
+		"transaction_file_contracts",
+		"transaction_file_contract_revisions",
+		"v2_block_transactions",
+		"v2_transaction_siacoin_inputs",
+		"v2_transaction_siacoin_outputs",
+		"v2_transaction_siafund_inputs",
+		"v2_transaction_siafund_outputs",
+		"v2_transaction_file_contracts",
+		"v2_transaction_file_contract_revisions",
+		"v2_transaction_file_contract_resolutions",
+		"v2_transaction_attestations",
+		"event_addresses",
+		"v1_transaction_events",
+		"v2_transaction_events",
+		"payout_events",
+		"v1_contract_resolution_events",
+		"v2_contract_resolution_events",
+		"last_contract_revision",
+		"v2_last_contract_revision",
+		"host_info_v2_netaddresses",
+		"file_contract_elements",
+		"v2_file_contract_elements",
+		"transactions",
+		"v2_transactions",
+		"address_balance",
+		"siacoin_elements",
+		"siafund_elements",
+		"events",
+		"blocks",
+		"host_info",
+		"state_tree",
+		"global_settings",
+	}
+	for _, name := range names {
+		if log != nil {
+			log.Info("resetChainState: Dropping", zap.String("table", name))
+		}
+		if _, err := tx.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, name)); err != nil {
+			return fmt.Errorf("failed to drop table %s: %w", name, err)
+		}
+	}
+
+	if err := initNewDatabase(tx, target); err != nil {
+		return fmt.Errorf("failed to reinit tables: %w", err)
+	}
+
+	return nil
+}
+
 // ResetChainState implements explorer.Store
 func (s *Store) ResetChainState() error {
 	if err := s.transaction(func(tx *txn) error {
@@ -1185,65 +1250,7 @@ func (s *Store) ResetChainState() error {
 			return fmt.Errorf("failed to defer foreign key checks: %w", err)
 		}
 
-		names := []string{
-			"network_metrics",
-			"file_contract_valid_proof_outputs",
-			"file_contract_missed_proof_outputs",
-			"miner_payouts",
-			"block_transactions",
-			"transaction_arbitrary_data",
-			"transaction_miner_fees",
-			"transaction_signatures",
-			"transaction_storage_proofs",
-			"transaction_siacoin_inputs",
-			"transaction_siacoin_outputs",
-			"transaction_siafund_inputs",
-			"transaction_siafund_outputs",
-			"transaction_file_contracts",
-			"transaction_file_contract_revisions",
-			"v2_block_transactions",
-			"v2_transaction_siacoin_inputs",
-			"v2_transaction_siacoin_outputs",
-			"v2_transaction_siafund_inputs",
-			"v2_transaction_siafund_outputs",
-			"v2_transaction_file_contracts",
-			"v2_transaction_file_contract_revisions",
-			"v2_transaction_file_contract_resolutions",
-			"v2_transaction_attestations",
-			"event_addresses",
-			"v1_transaction_events",
-			"v2_transaction_events",
-			"payout_events",
-			"v1_contract_resolution_events",
-			"v2_contract_resolution_events",
-			"last_contract_revision",
-			"v2_last_contract_revision",
-			"host_info_v2_netaddresses",
-			"file_contract_elements",
-			"v2_file_contract_elements",
-			"transactions",
-			"v2_transactions",
-			"address_balance",
-			"siacoin_elements",
-			"siafund_elements",
-			"events",
-			"blocks",
-			"host_info",
-			"state_tree",
-			"global_settings",
-		}
-		for _, name := range names {
-			if _, err := tx.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, name)); err != nil {
-				return fmt.Errorf("failed to drop table %s: %w", name, err)
-			}
-		}
-
-		target := int64(len(migrations) + 1)
-		if err := s.initNewDatabase(tx, target); err != nil {
-			return fmt.Errorf("failed to reinit tables: %w", err)
-		}
-
-		return nil
+		return resetChainState(tx, s.log, int64(len(migrations)+1))
 	}); err != nil {
 		return fmt.Errorf("ResetChainState: failed to delete and reinit database: %w", err)
 	}

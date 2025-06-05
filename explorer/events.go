@@ -465,7 +465,7 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) (events []
 	for _, diff := range cu.FileContractElementDiffs() {
 		fce, resolved, valid := diff.FileContractElement, diff.Resolved, diff.Valid
 		if !resolved {
-			return
+			continue
 		}
 
 		fce.StateElement.MerkleProof = nil
@@ -518,7 +518,7 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) (events []
 	for _, diff := range cu.V2FileContractElementDiffs() {
 		fce, res := diff.V2FileContractElement, diff.Resolution
 		if res == nil {
-			return
+			continue
 		}
 
 		fce.StateElement.MerkleProof = nil

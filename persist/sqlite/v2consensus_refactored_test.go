@@ -2298,3 +2298,68 @@ func TestV2HostScan(t *testing.T) {
 
 	assertHost(hosts[0].PublicKey, host1)
 }
+
+func TestEventV2PayoutContract(t *testing.T) {
+	// test to catch bug where slice returned by explorer.AppliedEvents did not
+	// include miner payout events if there was any contract action in the
+	// block besides resolutions because it mistakenly returned early
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(uc1)}
+
+	pk2 := types.GeneratePrivateKey()
+	uc2 := types.StandardUnlockConditions(pk2.PublicKey())
+	addr2 := uc2.UnlockHash()
+
+	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+
+	// create file contract
+	fc, payout := prepareV2Contract(pk1, pk1, n.tipState().Index.Height+1)
+	txn1 := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          getSCE(t, n.db, n.genesis().Transactions[0].SiacoinOutputID(0)),
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   val.Sub(payout),
+		}},
+		FileContracts: []types.V2FileContract{fc},
+	}
+	testutil.SignV2TransactionWithContracts(n.tipState(), pk1, pk1, pk1, &txn1)
+
+	b := testutil.MineV2Block(n.tipState(), []types.V2Transaction{txn1}, addr2)
+	n.applyBlock(t, b)
+
+	scID := b.ID().MinerOutputID(0)
+	ev1 := explorer.Event{
+		ID:             types.Hash256(scID),
+		Index:          n.tipState().Index,
+		Type:           wallet.EventTypeMinerPayout,
+		Data:           explorer.EventPayout{SiacoinElement: n.getSCE(t, scID)},
+		MaturityHeight: n.tipState().MaturityHeight() - 1,
+		Timestamp:      b.Timestamp,
+	}
+	n.assertEvents(t, addr2, ev1)
+
+	// see if confirmations number goes up when we mine another block
+	n.mineTransactions(t)
+
+	// MerkleProof changes
+	ev1.Data = explorer.EventPayout{SiacoinElement: n.getSCE(t, scID)}
+	n.assertEvents(t, addr2, ev1)
+
+	n.revertBlock(t)
+
+	// MerkleProof changes
+	ev1.Data = explorer.EventPayout{SiacoinElement: n.getSCE(t, scID)}
+	n.assertEvents(t, addr2, ev1)
+
+	n.revertBlock(t)
+
+	n.assertEvents(t, addr2)
+}

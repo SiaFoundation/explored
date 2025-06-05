@@ -1,6 +1,10 @@
 package sqlite
 
-import "go.uber.org/zap"
+import (
+	"fmt"
+
+	"go.uber.org/zap"
+)
 
 func migrateV2(txn *txn, _ *zap.Logger) error {
 	const createForeignKeyIndices = `
@@ -15,6 +19,17 @@ CREATE INDEX v2_last_contract_revision_confirmation_block_id_index ON v2_last_co
 	return err
 }
 
+func migrateV3(txn *txn, log *zap.Logger) error {
+	// initialization cycle issue if we do len(migrations)+1 here because
+	// migrations refers to migrateV3 and migrateV3 refers to migrations
+	// so we have to hardcode 3
+	if err := resetChainState(txn, log, 3); err != nil {
+		return fmt.Errorf("failed to reset chain state: %w", err)
+	}
+	return nil
+}
+
 var migrations = []func(tx *txn, log *zap.Logger) error{
 	migrateV2,
+	migrateV3,
 }

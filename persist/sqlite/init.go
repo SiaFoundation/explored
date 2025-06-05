@@ -21,7 +21,7 @@ func initializeSettings(tx *txn, target int64) error {
 	return err
 }
 
-func (s *Store) initNewDatabase(tx *txn, target int64) error {
+func initNewDatabase(tx *txn, target int64) error {
 	if _, err := tx.Exec(initDatabase); err != nil {
 		return fmt.Errorf("failed to initialize database: %w", err)
 	} else if err := initializeSettings(tx, target); err != nil {
@@ -90,7 +90,7 @@ func (s *Store) init() error {
 	switch {
 	case version == 0:
 		return s.transaction(func(tx *txn) error {
-			return s.initNewDatabase(tx, target)
+			return initNewDatabase(tx, target)
 		})
 	case version < target:
 		return s.upgradeDatabase(version, target)
