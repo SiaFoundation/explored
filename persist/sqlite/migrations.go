@@ -415,126 +415,6 @@ CREATE TABLE new_v2_last_contract_revision (
 );
 `
 
-	const copyData = `
-INSERT INTO new_network_metrics SELECT * FROM network_metrics;
-INSERT INTO new_siacoin_elements SELECT * FROM siacoin_elements;
-INSERT INTO new_siafund_elements SELECT * FROM siafund_elements;
-INSERT INTO new_file_contract_elements SELECT * FROM file_contract_elements;
-INSERT INTO new_last_contract_revision SELECT * FROM last_contract_revision;
-INSERT INTO new_file_contract_valid_proof_outputs SELECT * FROM file_contract_valid_proof_outputs;
-INSERT INTO new_file_contract_missed_proof_outputs SELECT * FROM file_contract_missed_proof_outputs;
-INSERT INTO new_miner_payouts SELECT * FROM miner_payouts;
-INSERT INTO new_block_transactions SELECT * FROM block_transactions;
-INSERT INTO new_transaction_arbitrary_data SELECT * FROM transaction_arbitrary_data;
-INSERT INTO new_transaction_miner_fees SELECT * FROM transaction_miner_fees;
-INSERT INTO new_transaction_signatures SELECT * FROM transaction_signatures;
-INSERT INTO new_transaction_storage_proofs SELECT * FROM transaction_storage_proofs;
-INSERT INTO new_transaction_siacoin_inputs SELECT * FROM transaction_siacoin_inputs;
-INSERT INTO new_transaction_siacoin_outputs SELECT * FROM transaction_siacoin_outputs;
-INSERT INTO new_transaction_siafund_inputs SELECT * FROM transaction_siafund_inputs;
-INSERT INTO new_transaction_siafund_outputs SELECT * FROM transaction_siafund_outputs;
-INSERT INTO new_transaction_file_contracts SELECT * FROM transaction_file_contracts;
-INSERT INTO new_transaction_file_contract_revisions SELECT * FROM transaction_file_contract_revisions;
-INSERT INTO new_v2_block_transactions SELECT * FROM v2_block_transactions;
-INSERT INTO new_v2_transaction_siacoin_inputs SELECT * FROM v2_transaction_siacoin_inputs;
-INSERT INTO new_v2_transaction_siacoin_outputs SELECT * FROM v2_transaction_siacoin_outputs;
-INSERT INTO new_v2_transaction_siafund_inputs SELECT * FROM v2_transaction_siafund_inputs;
-INSERT INTO new_v2_transaction_siafund_outputs SELECT * FROM v2_transaction_siafund_outputs;
-INSERT INTO new_v2_transaction_file_contracts SELECT * FROM v2_transaction_file_contracts;
-INSERT INTO new_v2_transaction_file_contract_revisions SELECT * FROM v2_transaction_file_contract_revisions;
-INSERT INTO new_v2_transaction_file_contract_resolutions SELECT * FROM v2_transaction_file_contract_resolutions;
-INSERT INTO new_v2_transaction_attestations SELECT * FROM v2_transaction_attestations;
-INSERT INTO new_events SELECT * FROM events;
-INSERT INTO new_event_addresses SELECT * FROM event_addresses;
-INSERT INTO new_v1_transaction_events SELECT * FROM v1_transaction_events;
-INSERT INTO new_v2_transaction_events SELECT * FROM v2_transaction_events;
-INSERT INTO new_payout_events SELECT * FROM payout_events;
-INSERT INTO new_v1_contract_resolution_events SELECT * FROM v1_contract_resolution_events;
-INSERT INTO new_v2_contract_resolution_events SELECT * FROM v2_contract_resolution_events;
-INSERT INTO new_v2_file_contract_elements SELECT * FROM v2_file_contract_elements;
-INSERT INTO new_v2_last_contract_revision SELECT * FROM v2_last_contract_revision;
-`
-
-	const dropOldTables = `
-DROP TABLE events;
-DROP TABLE event_addresses;
-DROP TABLE v1_transaction_events;
-DROP TABLE v2_transaction_events;
-DROP TABLE payout_events;
-DROP TABLE v1_contract_resolution_events;
-DROP TABLE v2_contract_resolution_events;
-DROP TABLE block_transactions;
-DROP TABLE v2_block_transactions;
-DROP TABLE transaction_arbitrary_data;
-DROP TABLE transaction_miner_fees;
-DROP TABLE transaction_signatures;
-DROP TABLE transaction_storage_proofs;
-DROP TABLE transaction_siacoin_inputs;
-DROP TABLE transaction_siacoin_outputs;
-DROP TABLE transaction_siafund_inputs;
-DROP TABLE transaction_siafund_outputs;
-DROP TABLE transaction_file_contracts;
-DROP TABLE transaction_file_contract_revisions;
-DROP TABLE v2_transaction_siacoin_inputs;
-DROP TABLE v2_transaction_siacoin_outputs;
-DROP TABLE v2_transaction_siafund_inputs;
-DROP TABLE v2_transaction_siafund_outputs;
-DROP TABLE v2_transaction_file_contracts;
-DROP TABLE v2_transaction_file_contract_revisions;
-DROP TABLE v2_transaction_file_contract_resolutions;
-DROP TABLE v2_transaction_attestations;
-DROP TABLE file_contract_elements;
-DROP TABLE last_contract_revision;
-DROP TABLE file_contract_valid_proof_outputs;
-DROP TABLE file_contract_missed_proof_outputs;
-DROP TABLE miner_payouts;
-DROP TABLE network_metrics;
-DROP TABLE siacoin_elements;
-DROP TABLE siafund_elements;
-DROP TABLE v2_file_contract_elements;
-DROP TABLE v2_last_contract_revision;
-`
-
-	const renameTables = `
-ALTER TABLE new_network_metrics RENAME TO network_metrics;
-ALTER TABLE new_siacoin_elements RENAME TO siacoin_elements;
-ALTER TABLE new_siafund_elements RENAME TO siafund_elements;
-ALTER TABLE new_file_contract_elements RENAME TO file_contract_elements;
-ALTER TABLE new_last_contract_revision RENAME TO last_contract_revision;
-ALTER TABLE new_file_contract_valid_proof_outputs RENAME TO file_contract_valid_proof_outputs;
-ALTER TABLE new_file_contract_missed_proof_outputs RENAME TO file_contract_missed_proof_outputs;
-ALTER TABLE new_miner_payouts RENAME TO miner_payouts;
-ALTER TABLE new_block_transactions RENAME TO block_transactions;
-ALTER TABLE new_transaction_arbitrary_data RENAME TO transaction_arbitrary_data;
-ALTER TABLE new_transaction_miner_fees RENAME TO transaction_miner_fees;
-ALTER TABLE new_transaction_signatures RENAME TO transaction_signatures;
-ALTER TABLE new_transaction_storage_proofs RENAME TO transaction_storage_proofs;
-ALTER TABLE new_transaction_siacoin_inputs RENAME TO transaction_siacoin_inputs;
-ALTER TABLE new_transaction_siacoin_outputs RENAME TO transaction_siacoin_outputs;
-ALTER TABLE new_transaction_siafund_inputs RENAME TO transaction_siafund_inputs;
-ALTER TABLE new_transaction_siafund_outputs RENAME TO transaction_siafund_outputs;
-ALTER TABLE new_transaction_file_contracts RENAME TO transaction_file_contracts;
-ALTER TABLE new_transaction_file_contract_revisions RENAME TO transaction_file_contract_revisions;
-ALTER TABLE new_v2_block_transactions RENAME TO v2_block_transactions;
-ALTER TABLE new_v2_transaction_siacoin_inputs RENAME TO v2_transaction_siacoin_inputs;
-ALTER TABLE new_v2_transaction_siacoin_outputs RENAME TO v2_transaction_siacoin_outputs;
-ALTER TABLE new_v2_transaction_siafund_inputs RENAME TO v2_transaction_siafund_inputs;
-ALTER TABLE new_v2_transaction_siafund_outputs RENAME TO v2_transaction_siafund_outputs;
-ALTER TABLE new_v2_transaction_file_contracts RENAME TO v2_transaction_file_contracts;
-ALTER TABLE new_v2_transaction_file_contract_revisions RENAME TO v2_transaction_file_contract_revisions;
-ALTER TABLE new_v2_transaction_file_contract_resolutions RENAME TO v2_transaction_file_contract_resolutions;
-ALTER TABLE new_v2_transaction_attestations RENAME TO v2_transaction_attestations;
-ALTER TABLE new_events RENAME TO events;
-ALTER TABLE new_event_addresses RENAME TO event_addresses;
-ALTER TABLE new_v1_transaction_events RENAME TO v1_transaction_events;
-ALTER TABLE new_v2_transaction_events RENAME TO v2_transaction_events;
-ALTER TABLE new_payout_events RENAME TO payout_events;
-ALTER TABLE new_v1_contract_resolution_events RENAME TO v1_contract_resolution_events;
-ALTER TABLE new_v2_contract_resolution_events RENAME TO v2_contract_resolution_events;
-ALTER TABLE new_v2_file_contract_elements RENAME TO v2_file_contract_elements;
-ALTER TABLE new_v2_last_contract_revision RENAME TO v2_last_contract_revision;
-`
-
 	const createIndices = `
 CREATE INDEX network_metrics_height_index ON network_metrics(height);
 CREATE INDEX siacoin_elements_blocks_id_index ON siacoin_elements(block_id);
@@ -621,19 +501,29 @@ CREATE INDEX v2_last_contract_revision_contract_element_id_index ON v2_last_cont
 		return fmt.Errorf("failed to create new tables: %w", err)
 	}
 
-	log.Info("Copying data from old tables")
-	if _, err := txn.Exec(copyData); err != nil {
-		return fmt.Errorf("failed to copy data from old tables: %w", err)
-	}
+	tableNames := []string{"network_metrics", "siacoin_elements", "siafund_elements", "file_contract_elements", "last_contract_revision", "file_contract_valid_proof_outputs", "file_contract_missed_proof_outputs", "miner_payouts", "block_transactions", "transaction_arbitrary_data", "transaction_miner_fees", "transaction_signatures", "transaction_storage_proofs", "transaction_siacoin_inputs", "transaction_siacoin_outputs", "transaction_siafund_inputs", "transaction_siafund_outputs", "transaction_file_contracts", "transaction_file_contract_revisions", "v2_block_transactions", "v2_transaction_siacoin_inputs", "v2_transaction_siacoin_outputs", "v2_transaction_siafund_inputs", "v2_transaction_siafund_outputs", "v2_transaction_file_contracts", "v2_transaction_file_contract_revisions", "v2_transaction_file_contract_resolutions", "v2_transaction_attestations", "events", "event_addresses", "v1_transaction_events", "v2_transaction_events", "payout_events", "v1_contract_resolution_events", "v2_contract_resolution_events", "v2_file_contract_elements", "v2_last_contract_revision"}
+	for _, tableName := range tableNames {
+		newTableName := "new_" + tableName
 
-	log.Info("Dropping old tables")
-	if _, err := txn.Exec(dropOldTables); err != nil {
-		return fmt.Errorf("failed to drop old tables: %w", err)
-	}
+		log.Info("Replacing old table", zap.String("name", tableName))
+		if _, err := txn.Exec(fmt.Sprintf(`INSERT INTO %s SELECT * FROM %s;`, newTableName, tableName)); err != nil {
+			return fmt.Errorf("failed to copy data into new %s: %w", tableName, err)
+		}
 
-	log.Info("Renaming tables")
-	if _, err := txn.Exec(renameTables); err != nil {
-		return fmt.Errorf("failed to rename tables: %w", err)
+		var countOld, countNew int64
+		if err := txn.QueryRow(fmt.Sprintf(`SELECT COUNT(*) FROM %s`, tableName)).Scan(&countOld); err != nil {
+			return fmt.Errorf("failed to get old table %s row count: %w", tableName, err)
+		} else if err := txn.QueryRow(fmt.Sprintf(`SELECT COUNT(*) FROM %s`, newTableName)).Scan(&countNew); err != nil {
+			return fmt.Errorf("failed to get old table %s row count: %w", tableName, err)
+		} else if countOld != countNew {
+			return fmt.Errorf("row count for %s differed: expected %d, got %d", tableName, countOld, countNew)
+		}
+
+		if _, err := txn.Exec(fmt.Sprintf(`DROP TABLE %s;`, tableName)); err != nil {
+			return fmt.Errorf("failed to drop old %s: %w", tableName, err)
+		} else if _, err := txn.Exec(fmt.Sprintf(`ALTER TABLE %s RENAME TO %s`, newTableName, tableName)); err != nil {
+			return fmt.Errorf("failed to drop new table to %s: %w", tableName, err)
+		}
 	}
 
 	log.Info("Creating indices")
