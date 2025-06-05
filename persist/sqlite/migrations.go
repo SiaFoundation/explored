@@ -1,6 +1,8 @@
 package sqlite
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 
 	"go.sia.tech/core/types"
@@ -23,12 +25,6 @@ CREATE INDEX v2_last_contract_revision_confirmation_block_id_index ON v2_last_co
 }
 
 func migrateV3(txn *txn, log *zap.Logger) error {
-	stmt, err := txn.Prepare(`SELECT 1 FROM events WHERE event_id = ?`)
-	if err != nil {
-		return fmt.Errorf("failed to prepare statement: %w", err)
-	}
-	defer stmt.Close()
-
 	insertEventStmt, err := txn.Prepare(`INSERT INTO events (event_id, maturity_height, date_created, event_type, block_id) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (event_id) DO NOTHING RETURNING id`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare event statement: %w", err)
@@ -87,7 +83,9 @@ JOIN
 
 		var eventID int64
 		err = insertEventStmt.QueryRow(encode(event.ID), event.MaturityHeight, encode(event.Timestamp), event.Type, encode(event.Index.ID)).Scan(&eventID)
-		if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			continue // skip if the event already exists
+		} else if err != nil {
 			return fmt.Errorf("failed to add event: %w", err)
 		}
 
