@@ -50,6 +50,7 @@ func migrateV3(txn *txn, log *zap.Logger) error {
 	defer payoutEventStmt.Close()
 
 	rows, err := txn.Query(`SELECT
+    miner_payouts.output_id,
     miner_payouts.block_id,
     blocks.height,
     siacoin_elements.output_id,
@@ -76,9 +77,10 @@ JOIN
 		i += 1
 
 		var addr types.Address
+		var scDBID int64
 		event := explorer.Event{Type: wallet.EventTypeMinerPayout}
 
-		err := rows.Scan(decode(&event.Index.ID), decode(&event.Index.Height), decode(&event.ID), decode(&event.MaturityHeight), decode(&event.Timestamp), decode(&addr))
+		err := rows.Scan(&scDBID, decode(&event.Index.ID), decode(&event.Index.Height), decode(&event.ID), decode(&event.MaturityHeight), decode(&event.Timestamp), decode(&addr))
 		if err != nil {
 			return fmt.Errorf("failed to scan rows: %w", err)
 		}
@@ -101,6 +103,12 @@ JOIN
 		if err != nil {
 			return fmt.Errorf("failed to add relevant address: %w", err)
 		}
+
+		_, err = payoutEventStmt.Exec(eventID, scDBID)
+		if err != nil {
+			return fmt.Errorf("failed to add payout event: %w", err)
+		}
+
 	}
 
 	if err := rows.Err(); err != nil {
