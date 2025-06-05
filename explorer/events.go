@@ -3,6 +3,7 @@ package explorer
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	"go.sia.tech/core/consensus"
@@ -403,6 +404,9 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) (events []
 			}
 		}
 
+		if eventType == wallet.EventTypeMinerPayout {
+			log.Printf("%v: AppliedEvents: miner payout, id: %v, relevant: %v", b.ID(), id, relevant)
+		}
 		events = append(events, Event{
 			ID:             id,
 			Timestamp:      b.Timestamp,

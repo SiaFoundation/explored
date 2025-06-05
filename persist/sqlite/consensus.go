@@ -4,11 +4,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
 	"time"
 
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
+	"go.sia.tech/coreutils/wallet"
 	"go.sia.tech/explored/explorer"
 )
 
@@ -684,9 +686,16 @@ func addEvents(tx *txn, bid types.BlockID, scDBIds map[types.SiacoinOutputID]int
 	defer v2ContractResolutionEventStmt.Close()
 
 	for _, event := range events {
+		if event.Type == wallet.EventTypeMinerPayout {
+			log.Printf("%v: Inserting miner payout, id: %v, relevant: %v", bid, event.ID, event.Relevant)
+		}
+
 		var eventID int64
 		err = insertEventStmt.QueryRow(encode(event.ID), event.MaturityHeight, encode(event.Timestamp), event.Type, encode(bid)).Scan(&eventID)
 		if errors.Is(err, sql.ErrNoRows) {
+			if event.Type == wallet.EventTypeMinerPayout {
+				log.Printf("Event %v already exists", event.ID)
+			}
 			continue // skip if the event already exists
 		} else if err != nil {
 			return fmt.Errorf("failed to add event: %w", err)
@@ -724,6 +733,9 @@ func addEvents(tx *txn, bid types.BlockID, scDBIds map[types.SiacoinOutputID]int
 				return fmt.Errorf("failed to insert transaction event: %w", err)
 			}
 		case explorer.EventPayout:
+			if event.Type == wallet.EventTypeMinerPayout {
+				log.Printf("%v: Inserting miner payout, dbID: %v", bid, scDBIds[types.SiacoinOutputID(event.ID)])
+			}
 			_, err = payoutEventStmt.Exec(eventID, scDBIds[types.SiacoinOutputID(event.ID)])
 		case explorer.EventV1ContractResolution:
 			_, err = v1ContractResolutionEventStmt.Exec(eventID, scDBIds[v.SiacoinElement.ID], fcDBIds[explorer.DBFileContract{ID: v.Parent.ID, RevisionNumber: v.Parent.RevisionNumber}], v.Missed)
