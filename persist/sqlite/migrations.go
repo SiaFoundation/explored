@@ -75,7 +75,7 @@ JOIN
 	i := 0
 	for rows.Next() {
 		if i%100 == 0 {
-			log.Printf("Inserted miner payout event: %d\n", i)
+			log.Info("Inserted miner payout event:", zap.Int("count", i))
 		}
 		var addr types.Address
 		event := explorer.Event{Type: wallet.EventTypeMinerPayout}
