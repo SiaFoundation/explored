@@ -42,33 +42,25 @@ func deleteLastContractRevisions(tx *txn, bid types.BlockID) error {
 // deleteV1Transactions deletes the transactions from the database if they are
 // not referenced in any blocks.
 func deleteV1Transactions(tx *txn, bid types.BlockID, txns []types.Transaction) error {
-	if _, err := tx.Exec(`DELETE FROM block_transactions WHERE block_id = ?;`, encode(bid)); err != nil {
-		return fmt.Errorf("failed to delete from block_transactions: %w", err)
-	}
-
-	var ids []any
-	for _, txn := range txns {
-		ids = append(ids, encode(txn.ID()))
-	}
-
 	_, err := tx.Exec(`
 CREATE TEMP TABLE tmp_transaction_ids AS
 SELECT
-    t.id
+	transaction_id AS id
 FROM
-    transactions AS t
+	block_transactions
 WHERE
-    t.transaction_id IN (`+queryPlaceHolders(len(txns))+`)
-    AND NOT EXISTS (
-        SELECT
-            1
-        FROM
-            block_transactions AS bt
-        WHERE
-            bt.transaction_id = t.id
-    );`, ids...)
+	block_id = ?
+	AND transaction_id NOT IN (
+      SELECT transaction_id
+      FROM block_transactions
+      WHERE block_id != ?
+  );`, encode(bid), encode(bid))
 	if err != nil {
 		return fmt.Errorf("failed to create temporary transactions table: %w", err)
+	}
+
+	if _, err := tx.Exec(`DELETE FROM block_transactions WHERE block_id = ?;`, encode(bid)); err != nil {
+		return fmt.Errorf("failed to delete from block_transactions: %w", err)
 	}
 
 	if _, err := tx.Exec(`DELETE FROM transaction_arbitrary_data WHERE transaction_id IN (SELECT id FROM tmp_transaction_ids);`); err != nil {
@@ -124,33 +116,25 @@ WHERE fce.block_id = ?`, encode(bid)); err != nil {
 // deleteV2Transactions deletes the transactions from the database if they are
 // not referenced in any blocks.
 func deleteV2Transactions(tx *txn, bid types.BlockID, txns []types.V2Transaction) error {
-	if _, err := tx.Exec(`DELETE FROM v2_block_transactions WHERE block_id = ?;`, encode(bid)); err != nil {
-		return fmt.Errorf("failed to delete from v2_block_transactions: %w", err)
-	}
-
-	var ids []any
-	for _, txn := range txns {
-		ids = append(ids, encode(txn.ID()))
-	}
-
 	_, err := tx.Exec(`
 CREATE TEMP TABLE tmp_v2_transaction_ids AS
 SELECT
-    t.id
+	transaction_id AS id
 FROM
-    v2_transactions AS t
+	v2_block_transactions
 WHERE
-    t.transaction_id IN (`+queryPlaceHolders(len(txns))+`)
-    AND NOT EXISTS (
-        SELECT
-            1
-        FROM
-            v2_block_transactions AS bt
-        WHERE
-            bt.transaction_id = t.id
-    );`, ids...)
+	block_id = ?
+	AND transaction_id NOT IN (
+      SELECT transaction_id
+      FROM v2_block_transactions
+      WHERE block_id != ?
+  );`, encode(bid), encode(bid))
 	if err != nil {
-		return fmt.Errorf("failed to create temporary table: %w", err)
+		return fmt.Errorf("failed to create temporary transactions table: %w", err)
+	}
+
+	if _, err := tx.Exec(`DELETE FROM v2_block_transactions WHERE block_id = ?;`, encode(bid)); err != nil {
+		return fmt.Errorf("failed to delete from v2_block_transactions: %w", err)
 	}
 
 	if _, err := tx.Exec(`DELETE FROM v2_transaction_siacoin_inputs WHERE transaction_id IN (SELECT id FROM tmp_v2_transaction_ids);`); err != nil {
