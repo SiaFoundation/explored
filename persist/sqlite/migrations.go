@@ -73,6 +73,8 @@ JOIN
 		if i%100 == 0 {
 			log.Info("Inserted miner payout event:", zap.Int("count", i))
 		}
+		i += 1
+
 		var addr types.Address
 		event := explorer.Event{Type: wallet.EventTypeMinerPayout}
 
