@@ -550,8 +550,10 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate) (events []
 	}
 
 	// handle block rewards
+	log.Printf("%v: AppliedEvents: got %d miner payouts", b.ID(), len(b.MinerPayouts))
 	for i := range b.MinerPayouts {
 		element := sces[cs.Index.ID.MinerOutputID(i)]
+		log.Printf("%v: AppliedEvents: calling addEvent, id: %v, element: %+v", b.ID(), cs.Index.ID.MinerOutputID(i), element)
 		addEvent(types.Hash256(element.ID), element.MaturityHeight, wallet.EventTypeMinerPayout, EventPayout{
 			SiacoinElement: SiacoinOutput{SiacoinElement: element},
 		}, []types.Address{b.MinerPayouts[i].Address})
