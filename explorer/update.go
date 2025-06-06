@@ -517,7 +517,8 @@ func updateMetrics(tx UpdateTx, s UpdateState, metrics Metrics) (Metrics, error)
 			metrics.StorageUtilization += fc.Filesize
 		} else {
 			// filesize changed
-			metrics.StorageUtilization += (fc.Filesize - fce.FileContractElement.FileContract.Filesize)
+			metrics.StorageUtilization += fc.Filesize
+			metrics.StorageUtilization -= fce.FileContractElement.FileContract.Filesize
 		}
 
 		if fce.Resolved {
@@ -527,6 +528,43 @@ func updateMetrics(tx UpdateTx, s UpdateState, metrics Metrics) (Metrics, error)
 				metrics.SuccessfulContracts++
 				for _, vpo := range fc.ValidProofOutputs {
 					metrics.ContractRevenue = metrics.ContractRevenue.Add(vpo.Value)
+				}
+			}
+		}
+	}
+
+	for _, fce := range s.V2FileContractElements {
+		fc := fce.FileContractElement.V2FileContract
+		if fce.Revision != nil {
+			fc = fce.Revision.V2FileContract
+		}
+
+		if fce.Resolution != nil {
+			metrics.ActiveContracts--
+			metrics.StorageUtilization -= fc.Filesize
+		} else if fce.Revision == nil {
+			// don't count revision as a new contract
+			metrics.ActiveContracts++
+			metrics.StorageUtilization += fc.Filesize
+		} else {
+			// filesize changed
+			metrics.StorageUtilization += fc.Filesize
+			metrics.StorageUtilization -= fce.FileContractElement.V2FileContract.Filesize
+		}
+
+		if fce.Resolution != nil {
+			if _, ok := fce.Resolution.(*types.V2FileContractExpiration); ok {
+				metrics.FailedContracts++
+			} else {
+				metrics.SuccessfulContracts++
+
+				switch r := fce.Resolution.(type) {
+				case *types.V2FileContractRenewal:
+					metrics.ContractRevenue = metrics.ContractRevenue.Add(r.FinalRenterOutput.Value)
+					metrics.ContractRevenue = metrics.ContractRevenue.Add(r.FinalHostOutput.Value)
+				case *types.V2StorageProof:
+					metrics.ContractRevenue = metrics.ContractRevenue.Add(fc.RenterOutput.Value)
+					metrics.ContractRevenue = metrics.ContractRevenue.Add(fc.HostOutput.Value)
 				}
 			}
 		}
