@@ -3046,3 +3046,92 @@ func BenchmarkAddressEvents(b *testing.B) {
 		runBenchmarkEvents(fmt.Sprintf("%d addresses and %d transactions per address", bm.addresses, bm.eventsPerAddress), bm.addresses, bm.eventsPerAddress)
 	}
 }
+
+func BenchmarkRevert(b *testing.B) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	n := newTestChain(b, false, func(network *consensus.Network, genesisBlock types.Block) {
+		network.HardforkV2.AllowHeight = 1_000_000
+		network.HardforkV2.RequireHeight = 2_000_000
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	genesisTxn := n.genesis().Transactions[0]
+
+	val := genesisTxn.SiacoinOutputs[0].Value
+	scID := genesisTxn.SiacoinOutputID(0)
+
+	for i := range 20000 {
+		if i%100 == 0 {
+			b.Logf("Mined %d blocks", i)
+		}
+
+		// transaction with random arbitrary data
+		data := make([]byte, 16)
+		frand.Read(data)
+		txn1 := types.Transaction{
+			ArbitraryData: [][]byte{data},
+		}
+
+		fc := prepareContract(addr1, n.tipState().Index.Height+1)
+		// create file contract
+		txn2 := types.Transaction{
+			SiacoinInputs: []types.SiacoinInput{{
+				ParentID:         scID,
+				UnlockConditions: uc1,
+			}},
+			SiacoinOutputs: []types.SiacoinOutput{{
+				Address: addr1,
+				Value:   val.Sub(fc.Payout),
+			}},
+			FileContracts: []types.FileContract{fc},
+		}
+		testutil.SignTransaction(n.tipState(), pk1, &txn2)
+
+		scID = txn2.SiacoinOutputID(0)
+		val = txn2.SiacoinOutputs[0].Value
+
+		// txn3
+		txn3 := types.Transaction{
+			SiacoinInputs: []types.SiacoinInput{{
+				ParentID:         scID,
+				UnlockConditions: uc1,
+			}},
+			SiacoinOutputs: []types.SiacoinOutput{{
+				Address: addr1,
+				Value:   val,
+			}},
+		}
+		testutil.SignTransaction(n.tipState(), pk1, &txn3)
+
+		scID = txn3.SiacoinOutputID(0)
+		val = txn3.SiacoinOutputs[0].Value
+
+		n.mineTransactions(b, txn1, txn2, txn3)
+	}
+
+	tip, err := n.db.Tip()
+	if err != nil {
+		b.Fatal(err)
+	}
+	bid := tip.ID
+	b.ResetTimer()
+	for range b.N {
+		n.db.transaction(func(tx *txn) error {
+			defer tx.Rollback()
+			if err := deleteEvents(tx, bid); err != nil {
+				return fmt.Errorf("failed to delete events: %w", err)
+			} else if err := deleteLastContractRevisions(tx, bid); err != nil {
+				return fmt.Errorf("failed to delete from block transactions tables: %w", err)
+			} else if err := deleteV1Transactions(tx, bid); err != nil {
+				return fmt.Errorf("failed to delete v1 transactions: %w", err)
+			} else if err := deleteV2Transactions(tx, bid); err != nil {
+				return fmt.Errorf("failed to delete v2 transactions: %w", err)
+			} else if err := deleteBlock(tx, bid); err != nil {
+				return fmt.Errorf("failed to delete block: %w", err)
+			}
+			return nil
+		})
+	}
+}
