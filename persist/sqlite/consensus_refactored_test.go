@@ -11,6 +11,7 @@ import (
 	"go.sia.tech/core/consensus"
 	proto2 "go.sia.tech/core/rhp/v2"
 	proto3 "go.sia.tech/core/rhp/v3"
+	proto4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	ctestutil "go.sia.tech/coreutils/testutil"
@@ -2299,7 +2300,7 @@ func TestMetrics(t *testing.T) {
 	// revise first contract
 	fcID := txn1.FileContractID(0)
 	fcRevision1 := fc
-	fcRevision1.Filesize = proto2.SectorSize
+	fcRevision1.Filesize = proto4.SectorSize
 	fcRevision1.RevisionNumber++
 	txn2 := types.Transaction{
 		FileContractRevisions: []types.FileContractRevision{{
