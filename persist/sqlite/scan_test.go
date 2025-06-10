@@ -52,7 +52,7 @@ func startTestNode(tb testing.TB, n *consensus.Network, genesis types.Block) (*c
 	tb.Cleanup(func() { s.Close() })
 
 	ws := ctestutil.NewEphemeralWalletStore()
-	w, err := wallet.NewSingleAddressWallet(types.GeneratePrivateKey(), cm, ws)
+	w, err := wallet.NewSingleAddressWallet(types.GeneratePrivateKey(), cm, ws, s)
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -63,7 +63,12 @@ func startTestNode(tb testing.TB, n *consensus.Network, genesis types.Block) (*c
 
 	go func() {
 		for range reorgCh {
-			reverted, applied, err := cm.UpdatesSince(w.Tip(), 1000)
+			tip, err := w.Tip()
+			if err != nil {
+				tb.Error(err)
+				return
+			}
+			reverted, applied, err := cm.UpdatesSince(tip, 1000)
 			if err != nil {
 				tb.Error(err)
 			}

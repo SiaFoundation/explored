@@ -48,7 +48,7 @@ func waitForSync(t testing.TB, cm *chain.Manager, e *explorer.Explorer) {
 
 func testV2Host(tb testing.TB, cm *chain.Manager) rhp4.TransportClient {
 	hostKey := types.GeneratePrivateKey()
-	w, err := wallet.NewSingleAddressWallet(hostKey, cm, ctestutil.NewEphemeralWalletStore())
+	w, err := wallet.NewSingleAddressWallet(hostKey, cm, ctestutil.NewEphemeralWalletStore(), ctestutil.MockSyncer{})
 	if err != nil {
 		tb.Fatal(err)
 	}
