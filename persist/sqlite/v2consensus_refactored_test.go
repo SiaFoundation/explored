@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"go.sia.tech/core/consensus"
-	proto2 "go.sia.tech/core/rhp/v2"
 	proto4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
@@ -2425,7 +2424,7 @@ func TestV2Metrics(t *testing.T) {
 
 	// form two contracts
 	fc, payout := prepareV2Contract(renterPK, hostPK, n.tipState().Index.Height+2)
-	fc.Capacity = proto2.SectorSize
+	fc.Capacity = proto4.SectorSize
 	txn1 := types.V2Transaction{
 		SiacoinInputs: []types.V2SiacoinInput{{
 			Parent:          getSCE(t, n.db, n.genesis().Transactions[0].SiacoinOutputID(0)),
@@ -2453,7 +2452,7 @@ func TestV2Metrics(t *testing.T) {
 	fcID1 := txn1.V2FileContractID(txn1.ID(), 0)
 	fcID2 := txn1.V2FileContractID(txn1.ID(), 1)
 	fcRevision1 := fc
-	fcRevision1.Filesize = proto2.SectorSize
+	fcRevision1.Filesize = proto4.SectorSize
 	fcRevision1.RevisionNumber++
 	txn2 := types.V2Transaction{
 		FileContractRevisions: []types.V2FileContractRevision{{
