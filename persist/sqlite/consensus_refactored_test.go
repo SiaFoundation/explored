@@ -6,6 +6,7 @@ import (
 	"math"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -2880,27 +2881,31 @@ func BenchmarkRevert(b *testing.B) {
 		n.mineTransactions(b, txn1, txn2, txn3)
 	}
 
-	tip, err := n.db.Tip()
-	if err != nil {
-		b.Fatal(err)
-	}
-	bid := tip.ID
+	block := n.blocks[len(n.blocks)-1]
+	bs := n.supplements[len(n.supplements)-1]
+	prevState := n.states[len(n.states)-2]
+
+	ru := consensus.RevertBlock(prevState, block, bs)
+	crus := []chain.RevertUpdate{{
+		RevertUpdate: ru,
+		Block:        block,
+		State:        prevState,
+	}}
+
 	b.ResetTimer()
 	for range b.N {
-		n.db.transaction(func(tx *txn) error {
+		err := n.db.transaction(func(tx *txn) error {
 			defer tx.Rollback()
-			if err := deleteEvents(tx, bid); err != nil {
-				return fmt.Errorf("failed to delete events: %w", err)
-			} else if err := deleteLastContractRevisions(tx, bid); err != nil {
-				return fmt.Errorf("failed to delete from block transactions tables: %w", err)
-			} else if err := deleteV1Transactions(tx, bid); err != nil {
-				return fmt.Errorf("failed to delete v1 transactions: %w", err)
-			} else if err := deleteV2Transactions(tx, bid); err != nil {
-				return fmt.Errorf("failed to delete v2 transactions: %w", err)
-			} else if err := deleteBlock(tx, bid); err != nil {
-				return fmt.Errorf("failed to delete block: %w", err)
+			utx := &updateTx{
+				tx: tx,
+			}
+			if err := explorer.UpdateChainState(utx, crus, nil); err != nil {
+				return fmt.Errorf("failed to update chain state: %w", err)
 			}
 			return nil
 		})
+		if err != nil && !strings.Contains(err.Error(), "rolled back") {
+			b.Fatal(err)
+		}
 	}
 }
