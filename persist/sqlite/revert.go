@@ -42,7 +42,7 @@ func deleteLastContractRevisions(tx *txn, bid types.BlockID) error {
 
 // deleteV1Transactions deletes the transactions from the database if they are
 // not referenced in any blocks.
-func deleteV1Transactions(tx *txn, bid types.BlockID, txns []types.Transaction) error {
+func deleteV1Transactions(tx *txn, bid types.BlockID) error {
 	_, err := tx.Exec(`
 CREATE TEMP TABLE tmp_transaction_ids AS
 SELECT
@@ -116,7 +116,7 @@ WHERE fce.block_id = ?`, encode(bid)); err != nil {
 
 // deleteV2Transactions deletes the transactions from the database if they are
 // not referenced in any blocks.
-func deleteV2Transactions(tx *txn, bid types.BlockID, txns []types.V2Transaction) error {
+func deleteV2Transactions(tx *txn, bid types.BlockID) error {
 	_, err := tx.Exec(`
 CREATE TEMP TABLE tmp_v2_transaction_ids AS
 SELECT
@@ -219,9 +219,9 @@ func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("RevertIndex: failed to delete events: %w", err)
 	} else if err := deleteLastContractRevisions(ut.tx, bid); err != nil {
 		return fmt.Errorf("RevertIndex: failed to delete from block transactions tables: %w", err)
-	} else if err := deleteV1Transactions(ut.tx, bid, state.Block.Transactions); err != nil {
+	} else if err := deleteV1Transactions(ut.tx, bid); err != nil {
 		return fmt.Errorf("RevertIndex: failed to delete v1 transactions: %w", err)
-	} else if err := deleteV2Transactions(ut.tx, bid, state.Block.V2Transactions()); err != nil {
+	} else if err := deleteV2Transactions(ut.tx, bid); err != nil {
 		return fmt.Errorf("RevertIndex: failed to delete v2 transactions: %w", err)
 	} else if err := deleteBlock(ut.tx, bid); err != nil {
 		return fmt.Errorf("RevertIndex: failed to delete block: %w", err)
