@@ -29,7 +29,7 @@ func migrateV3(txn *txn, log *zap.Logger) error {
 	return nil
 }
 
-func migrateV4(txn *txn, _ *zap.Logger) error {
+func migrateV4(txn *txn, log *zap.Logger) error {
 	const createNewTables = `
 CREATE TABLE new_network_metrics (
 	block_id BLOB PRIMARY KEY REFERENCES blocks(id) NOT NULL,
@@ -425,7 +425,6 @@ CREATE INDEX siafund_elements_blocks_id_index ON siafund_elements(block_id);
 CREATE INDEX siafund_elements_output_id_index ON siafund_elements(output_id);
 CREATE INDEX siafund_elements_address_spent_index ON siafund_elements(address, spent_index);
 CREATE INDEX file_contract_elements_blocks_id_index ON file_contract_elements(block_id);
->>>>>>> f736924 (add migration)
 CREATE INDEX file_contract_elements_transactions_id_index ON file_contract_elements(transaction_id);
 CREATE INDEX file_contract_elements_contract_id_revision_number_index ON file_contract_elements(contract_id, revision_number);
 CREATE INDEX last_contract_revision_confirmation_block_id_index ON last_contract_revision(confirmation_block_id);
