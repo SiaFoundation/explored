@@ -99,9 +99,14 @@ func MineBlock(state consensus.State, txns []types.Transaction, minerAddr types.
 
 // MineV2Block mines sets the metadata fields of the block along with the
 // transactions and then generates a valid nonce for the block.
-func MineV2Block(state consensus.State, txns []types.V2Transaction, minerAddr types.Address) types.Block {
+func MineV2Block(state consensus.State, v1Txns []types.Transaction, v2Txns []types.V2Transaction, minerAddr types.Address) types.Block {
 	reward := state.BlockReward()
-	for _, txn := range txns {
+	for _, txn := range v1Txns {
+		for _, fee := range txn.MinerFees {
+			reward = reward.Add(fee)
+		}
+	}
+	for _, txn := range v2Txns {
 		reward = reward.Add(txn.MinerFee)
 	}
 
@@ -109,9 +114,9 @@ func MineV2Block(state consensus.State, txns []types.V2Transaction, minerAddr ty
 		ParentID:     state.Index.ID,
 		Timestamp:    types.CurrentTimestamp(),
 		MinerPayouts: []types.SiacoinOutput{{Address: minerAddr, Value: reward}},
-
+		Transactions: v1Txns,
 		V2: &types.V2BlockData{
-			Transactions: txns,
+			Transactions: v2Txns,
 			Height:       state.Index.Height + 1,
 		},
 	}
