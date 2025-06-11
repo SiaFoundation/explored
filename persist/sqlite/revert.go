@@ -2,30 +2,57 @@ package sqlite
 
 import (
 	"fmt"
+	"strconv"
 
 	"go.sia.tech/core/types"
 	"go.sia.tech/explored/explorer"
 )
 
-func deleteEvents(tx *txn, bid types.BlockID) error {
-	if _, err := tx.Exec(`CREATE TEMP TABLE tmp_event_ids AS SELECT id FROM events WHERE block_id = ?;`, encode(bid)); err != nil {
-		return fmt.Errorf("failed to create temporary table: %w", err)
+func generateInClause(ids []int64) string {
+	clause := ` (`
+	for i, id := range ids {
+		clause += strconv.FormatInt(id, 10)
+		if i < len(ids)-1 {
+			clause += ","
+		}
 	}
-	defer tx.Exec(`DROP TABLE tmp_event_ids;`)
+	clause += `)`
+	return clause
+}
 
-	if _, err := tx.Exec(`DELETE FROM event_addresses WHERE event_id IN (SELECT id FROM tmp_event_ids);`); err != nil {
+func deleteEvents(tx *txn, bid types.BlockID) error {
+	rows, err := tx.Query(`SELECT id FROM events WHERE block_id = ?`, encode(bid))
+	if err != nil {
+		return fmt.Errorf("failed to query event IDs: %w", err)
+	}
+	defer rows.Close()
+
+	var dbIDs []int64
+	for rows.Next() {
+		var dbID int64
+		if err := rows.Scan(&dbID); err != nil {
+			return fmt.Errorf("failed to scan event ID: %w", err)
+		}
+		dbIDs = append(dbIDs, dbID)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("failed to get event ID rows: %w", err)
+	}
+
+	clause := generateInClause(dbIDs)
+	if _, err := tx.Exec(`DELETE FROM event_addresses WHERE event_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from event_addresses table: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM v1_transaction_events WHERE event_id IN (SELECT id FROM tmp_event_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM v1_transaction_events WHERE event_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from v1_transaction_events table: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM v2_transaction_events WHERE event_id IN (SELECT id FROM tmp_event_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM v2_transaction_events WHERE event_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from v2_transaction_events table: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM payout_events WHERE event_id IN (SELECT id FROM tmp_event_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM payout_events WHERE event_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from payout_events table: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM v1_contract_resolution_events WHERE event_id IN (SELECT id FROM tmp_event_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM v1_contract_resolution_events WHERE event_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from v1_contract_resolution_events table: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM v2_contract_resolution_events WHERE event_id IN (SELECT id FROM tmp_event_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM v2_contract_resolution_events WHERE event_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from v2_contract_resolution_events table: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM events WHERE id IN (SELECT id FROM tmp_event_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM events WHERE id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from events table: %w", err)
 	}
 	return nil
@@ -43,10 +70,7 @@ func deleteLastContractRevisions(tx *txn, bid types.BlockID) error {
 // deleteV1Transactions deletes the transactions from the database if they are
 // not referenced in any blocks.
 func deleteV1Transactions(tx *txn, bid types.BlockID) error {
-	_, err := tx.Exec(`
-CREATE TEMP TABLE tmp_transaction_ids AS
-SELECT
-	transaction_id AS id
+	rows, err := tx.Query(`SELECT transaction_id AS id
 FROM
 	block_transactions
 WHERE
@@ -55,59 +79,83 @@ WHERE
       SELECT transaction_id
       FROM block_transactions
       WHERE block_id != ?
-  );`, encode(bid), encode(bid))
+);`, encode(bid), encode(bid))
 	if err != nil {
-		return fmt.Errorf("failed to create temporary transactions table: %w", err)
+		return fmt.Errorf("failed to query orphaned transaction IDs: %w", err)
 	}
-	defer tx.Exec(`DROP TABLE tmp_transaction_ids;`)
+	defer rows.Close()
 
+	var txnDBIDs []int64
+	for rows.Next() {
+		var txnDBID int64
+		if err := rows.Scan(&txnDBID); err != nil {
+			return fmt.Errorf("failed to scan transaction ID: %w", err)
+		}
+		txnDBIDs = append(txnDBIDs, txnDBID)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("failed to get transaction ID rows: %w", err)
+	}
+
+	clause := generateInClause(txnDBIDs)
 	if _, err := tx.Exec(`DELETE FROM block_transactions WHERE block_id = ?;`, encode(bid)); err != nil {
 		return fmt.Errorf("failed to delete from block_transactions: %w", err)
 	}
 
-	if _, err := tx.Exec(`DELETE FROM transaction_arbitrary_data WHERE transaction_id IN (SELECT id FROM tmp_transaction_ids);`); err != nil {
+	if _, err := tx.Exec(`DELETE FROM transaction_arbitrary_data WHERE transaction_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from transaction_arbitrary_data: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM transaction_miner_fees WHERE transaction_id IN (SELECT id FROM tmp_transaction_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM transaction_miner_fees WHERE transaction_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from transaction_miner_fees: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM transaction_signatures WHERE transaction_id IN (SELECT id FROM tmp_transaction_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM transaction_signatures WHERE transaction_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from transaction_signatures: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM transaction_storage_proofs WHERE transaction_id IN (SELECT id FROM tmp_transaction_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM transaction_storage_proofs WHERE transaction_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from transaction_storage_proofs: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM transaction_siacoin_inputs WHERE transaction_id IN (SELECT id FROM tmp_transaction_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM transaction_siacoin_inputs WHERE transaction_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from transaction_siacoin_inputs: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM transaction_siacoin_outputs WHERE transaction_id IN (SELECT id FROM tmp_transaction_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM transaction_siacoin_outputs WHERE transaction_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from transaction_siacoin_outputs: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM transaction_siafund_inputs WHERE transaction_id IN (SELECT id FROM tmp_transaction_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM transaction_siafund_inputs WHERE transaction_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from transaction_siafund_inputs: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM transaction_siafund_outputs WHERE transaction_id IN (SELECT id FROM tmp_transaction_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM transaction_siafund_outputs WHERE transaction_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from transaction_siafund_outputs: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM transaction_file_contracts WHERE transaction_id IN (SELECT id FROM tmp_transaction_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM transaction_file_contracts WHERE transaction_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from transaction_file_contracts: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM transaction_file_contract_revisions WHERE transaction_id IN (SELECT id FROM tmp_transaction_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM transaction_file_contract_revisions WHERE transaction_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from transaction_file_contract_revisions: %w", err)
 	}
 
 	// have to remove file contract elements because it depends on transactions table
-	if _, err := tx.Exec(`
-CREATE TEMP TABLE tmp_file_contract_element_ids AS
-SELECT
-    fce.id
+	rows, err = tx.Query(`SELECT fce.id
 FROM
     file_contract_elements AS fce
-WHERE fce.block_id = ?`, encode(bid)); err != nil {
-		return fmt.Errorf("failed to create temporary file_contract_elements table: %w", err)
+WHERE fce.block_id = ?`, encode(bid))
+	if err != nil {
+		return fmt.Errorf("failed to query file contract element IDs: %w", err)
 	}
-	defer tx.Exec(`DROP TABLE tmp_file_contract_element_ids;`)
+	defer rows.Close()
 
-	if _, err := tx.Exec(`DELETE FROM file_contract_valid_proof_outputs WHERE contract_id IN (SELECT id FROM tmp_file_contract_element_ids);`); err != nil {
+	var fceDBIDs []int64
+	for rows.Next() {
+		var fceDBID int64
+		if err := rows.Scan(&fceDBID); err != nil {
+			return fmt.Errorf("failed to scan contract ID: %w", err)
+		}
+		fceDBIDs = append(fceDBIDs, fceDBID)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("failed to get contract ID rows: %w", err)
+	}
+	fceClause := generateInClause(fceDBIDs)
+
+	if _, err := tx.Exec(`DELETE FROM file_contract_valid_proof_outputs WHERE contract_id IN` + fceClause); err != nil {
 		return fmt.Errorf("failed to delete from transaction_file_contract_revisions: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM file_contract_missed_proof_outputs WHERE contract_id IN (SELECT id FROM tmp_file_contract_element_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM file_contract_missed_proof_outputs WHERE contract_id IN` + fceClause); err != nil {
 		return fmt.Errorf("failed to delete from transaction_file_contract_revisions: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM file_contract_elements WHERE id IN (SELECT id FROM tmp_file_contract_element_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM file_contract_elements WHERE id IN` + fceClause); err != nil {
 		return fmt.Errorf("failed to delete from transaction_file_contract_revisions: %w", err)
 	}
 
-	if _, err := tx.Exec(`DELETE FROM transactions WHERE id IN (SELECT id FROM tmp_transaction_ids);`); err != nil {
+	if _, err := tx.Exec(`DELETE FROM transactions WHERE id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from transactions: %w", err)
 	}
 
@@ -117,50 +165,61 @@ WHERE fce.block_id = ?`, encode(bid)); err != nil {
 // deleteV2Transactions deletes the transactions from the database if they are
 // not referenced in any blocks.
 func deleteV2Transactions(tx *txn, bid types.BlockID) error {
-	_, err := tx.Exec(`
-CREATE TEMP TABLE tmp_v2_transaction_ids AS
-SELECT
-	transaction_id AS id
+	rows, err := tx.Query(`SELECT transaction_id AS id
 FROM
-	v2_block_transactions
+    v2_block_transactions
 WHERE
-	block_id = ?
-	AND transaction_id NOT IN (
+    block_id = ?
+    AND transaction_id NOT IN (
       SELECT transaction_id
       FROM v2_block_transactions
       WHERE block_id != ?
-  );`, encode(bid), encode(bid))
+);`, encode(bid), encode(bid))
 	if err != nil {
-		return fmt.Errorf("failed to create temporary transactions table: %w", err)
+		return fmt.Errorf("failed to query orphaned v2 transaction IDs: %w", err)
 	}
-	defer tx.Exec(`DROP TABLE tmp_v2_transaction_ids;`)
+	defer rows.Close()
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return fmt.Errorf("failed to scan v2 transaction ID: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("failed to get v2 transaction ID rows: %w", err)
+	}
+
+	clause := generateInClause(ids)
 
 	if _, err := tx.Exec(`DELETE FROM v2_block_transactions WHERE block_id = ?;`, encode(bid)); err != nil {
 		return fmt.Errorf("failed to delete from v2_block_transactions: %w", err)
 	}
 
-	if _, err := tx.Exec(`DELETE FROM v2_transaction_siacoin_inputs WHERE transaction_id IN (SELECT id FROM tmp_v2_transaction_ids);`); err != nil {
+	if _, err := tx.Exec(`DELETE FROM v2_transaction_siacoin_inputs WHERE transaction_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from v2_transaction_siacoin_inputs: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM v2_transaction_siacoin_inputs WHERE transaction_id IN (SELECT id FROM tmp_v2_transaction_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM v2_transaction_siacoin_inputs WHERE transaction_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from v2_transaction_siacoin_outputs: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM v2_transaction_siacoin_outputs WHERE transaction_id IN (SELECT id FROM tmp_v2_transaction_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM v2_transaction_siacoin_outputs WHERE transaction_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from v2_transaction_siacoin_inputs: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM v2_transaction_siafund_inputs WHERE transaction_id IN (SELECT id FROM tmp_v2_transaction_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM v2_transaction_siafund_inputs WHERE transaction_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from v2_transaction_siafund_inputs: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM v2_transaction_siafund_outputs WHERE transaction_id IN (SELECT id FROM tmp_v2_transaction_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM v2_transaction_siafund_outputs WHERE transaction_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from v2_transaction_siafund_outputs: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM v2_transaction_file_contracts WHERE transaction_id IN (SELECT id FROM tmp_v2_transaction_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM v2_transaction_file_contracts WHERE transaction_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from v2_transaction_file_contracts: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM v2_transaction_file_contract_revisions WHERE transaction_id IN (SELECT id FROM tmp_v2_transaction_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM v2_transaction_file_contract_revisions WHERE transaction_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from v2_transaction_file_contract_revisions: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM v2_transaction_file_contract_resolutions WHERE transaction_id IN (SELECT id FROM tmp_v2_transaction_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM v2_transaction_file_contract_resolutions WHERE transaction_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from v2_transaction_file_contract_resolutions: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM v2_transaction_attestations WHERE transaction_id IN (SELECT id FROM tmp_v2_transaction_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM v2_transaction_attestations WHERE transaction_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from v2_transaction_attestations: %w", err)
 	} else if _, err := tx.Exec(`DELETE FROM v2_file_contract_elements WHERE block_id = ?;`, encode(bid)); err != nil {
 		// have to remove file contract elements because it depends on transactions table
 		return fmt.Errorf("failed to delete from v2_file_contract_elements: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM v2_transactions WHERE id IN (SELECT id FROM tmp_v2_transaction_ids);`); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM v2_transactions WHERE id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from v2_transactions: %w", err)
 	}
 
