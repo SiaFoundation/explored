@@ -3052,10 +3052,11 @@ func BenchmarkRevert(b *testing.B) {
 	pk1 := types.GeneratePrivateKey()
 	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
 	addr1 := uc1.UnlockHash()
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(uc1)}
 
 	n := newTestChain(b, false, func(network *consensus.Network, genesisBlock types.Block) {
-		network.HardforkV2.AllowHeight = 1_000_000
-		network.HardforkV2.RequireHeight = 2_000_000
+		network.HardforkV2.AllowHeight = 1
+		network.HardforkV2.RequireHeight = 1_000_000
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
 	genesisTxn := n.genesis().Transactions[0]
@@ -3094,22 +3095,30 @@ func BenchmarkRevert(b *testing.B) {
 		val = txn2.SiacoinOutputs[0].Value
 
 		// txn3
-		txn3 := types.Transaction{
-			SiacoinInputs: []types.SiacoinInput{{
-				ParentID:         scID,
-				UnlockConditions: uc1,
+		txn3 := types.V2Transaction{
+			SiacoinInputs: []types.V2SiacoinInput{{
+				// Parent:          getSCE(b, n.db, scID),
+				Parent: types.SiacoinElement{
+					ID: txn2.SiacoinOutputID(0),
+					StateElement: types.StateElement{
+						LeafIndex: types.UnassignedLeafIndex,
+					},
+					SiacoinOutput: txn2.SiacoinOutputs[0],
+				},
+				SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
 			}},
 			SiacoinOutputs: []types.SiacoinOutput{{
 				Address: addr1,
 				Value:   val,
 			}},
 		}
-		testutil.SignTransaction(n.tipState(), pk1, &txn3)
+		testutil.SignV2Transaction(n.tipState(), pk1, &txn3)
 
-		scID = txn3.SiacoinOutputID(0)
+		scID = txn3.SiacoinOutputID(txn3.ID(), 0)
 		val = txn3.SiacoinOutputs[0].Value
 
-		n.mineTransactions(b, txn1, txn2, txn3)
+		block := testutil.MineV2Block(n.tipState(), []types.Transaction{txn1, txn2}, []types.V2Transaction{txn3}, types.VoidAddress)
+		n.applyBlock(b, block)
 	}
 
 	block := n.blocks[len(n.blocks)-1]

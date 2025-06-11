@@ -374,7 +374,7 @@ func TestScan(t *testing.T) {
 	}
 	testutil.SignV2Transaction(cm.TipState(), pks[3], &txn3)
 
-	b2 := testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn2, txn3}, types.VoidAddress)
+	b2 := testutil.MineV2Block(cm.TipState(), nil, []types.V2Transaction{txn2, txn3}, types.VoidAddress)
 	if err := cm.AddBlocks([]types.Block{b2}); err != nil {
 		t.Fatal(err)
 	}
@@ -508,7 +508,7 @@ func TestScan(t *testing.T) {
 	// Test host scanning after reannouncement
 	b3 := testutil.MineBlock(cm.TipState(), []types.Transaction{txn1}, types.VoidAddress)
 	cm.AddBlocks([]types.Block{b3})
-	b4 := testutil.MineV2Block(cm.TipState(), []types.V2Transaction{txn2, txn3}, types.VoidAddress)
+	b4 := testutil.MineV2Block(cm.TipState(), nil, []types.V2Transaction{txn2, txn3}, types.VoidAddress)
 	cm.AddBlocks([]types.Block{b4})
 
 	waitForTip()
