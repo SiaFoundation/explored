@@ -2817,6 +2817,98 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 	}
 }
 
+func BenchmarkSiafundOutputs(b *testing.B) {
+	addr1 := types.StandardUnlockConditions(types.GeneratePrivateKey().PublicKey()).UnlockHash()
+	n := newTestChain(b, false, nil)
+
+	// add a bunch of random outputs
+	var ids []types.SiafundOutputID
+	err := n.db.transaction(func(tx *txn) error {
+		stmt, err := tx.Prepare(`INSERT INTO siafund_elements(block_id, output_id, leaf_index, spent_index, claim_start, address, value) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+		if err != nil {
+			return err
+		}
+
+		spentIndex := encode(n.tipState().Index)
+		bid := encode(n.tipState().Index.ID)
+		val := encode(types.NewCurrency64(1))
+
+		var addr types.Address
+		for i := range 5_000_000 {
+			if i%100_000 == 0 {
+				b.Log("Inserted siafund element:", i)
+			}
+
+			var sfID types.SiafundOutputID
+			frand.Read(sfID[:])
+			ids = append(ids, sfID)
+
+			// label half of elements spent
+			var spent any
+			if i%2 == 0 {
+				spent = spentIndex
+			}
+			// give each address three outputs
+			if i%3 == 0 {
+				frand.Read(addr[:])
+			}
+			if _, err := stmt.Exec(bid, encode(sfID), encode(uint64(0)), spent, val, encode(addr), val); err != nil {
+				return err
+			}
+		}
+
+		// give addr1 2000 outputs, 1000 of which are spent
+		for i := range 2000 {
+			// label half of elements spent
+			var spent any
+			if i%2 == 0 {
+				spent = spentIndex
+			}
+
+			var sfID types.SiacoinOutputID
+			frand.Read(sfID[:])
+
+			if _, err := stmt.Exec(bid, encode(sfID), encode(uint64(0)), spent, val, encode(addr1), val); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+	for _, limit := range []uint64{10, 100, 1000} {
+		b.Run(strconv.FormatUint(limit, 10)+" unspent outputs", func(b *testing.B) {
+			offset := frand.Uint64n(1000 - limit + 1)
+			for range b.N {
+				sfes, err := n.db.UnspentSiafundOutputs(addr1, offset, limit)
+				if err != nil {
+					b.Fatal(err)
+				}
+				testutil.Equal(b, "len(sfes)", limit, uint64(len(sfes)))
+			}
+		})
+	}
+
+	b.ResetTimer()
+	for _, limit := range []int{10, 100, 1000} {
+		b.Run(strconv.Itoa(limit)+" siafund elements", func(b *testing.B) {
+			offset := frand.Intn(len(ids) - limit)
+			scIDs := ids[offset : offset+limit]
+			for range b.N {
+				sfes, err := n.db.SiafundElements(scIDs)
+				if err != nil {
+					b.Fatal(err)
+				}
+				testutil.Equal(b, "len(sfes)", limit, len(sfes))
+			}
+		})
+	}
+}
+
 func BenchmarkRevert(b *testing.B) {
 	pk1 := types.GeneratePrivateKey()
 	uc1 := types.StandardUnlockConditions(pk1.PublicKey())

@@ -3,6 +3,7 @@ package sqlite
 import (
 	"errors"
 	"math"
+	"strconv"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"go.sia.tech/coreutils/wallet"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/testutil"
+	"lukechampine.com/frand"
 )
 
 func getSCE(t testing.TB, db explorer.Store, scid types.SiacoinOutputID) types.SiacoinElement {
@@ -2544,4 +2546,103 @@ func TestV2Metrics(t *testing.T) {
 	n.revertBlock(t)
 
 	assertMetrics(metricsGenesis)
+}
+
+func BenchmarkV2Transactions(b *testing.B) {
+	n := newTestChain(b, false, nil)
+
+	// add a bunch of random transactions that are either empty, contain arbitrary
+	// or contain a contract formation
+	var ids []types.TransactionID
+	err := n.db.transaction(func(tx *txn) error {
+		fceStmt, err := tx.Prepare(`INSERT INTO v2_file_contract_elements(contract_id, block_id, transaction_id, leaf_index, capacity, filesize, file_merkle_root, proof_height, expiration_height, renter_output_address, renter_output_value, host_output_address, host_output_value, missed_host_value, total_collateral, renter_public_key, host_public_key, revision_number, renter_signature, host_signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		if err != nil {
+			return err
+		}
+
+		txnStmt, err := tx.Prepare(`INSERT INTO v2_transactions(transaction_id, miner_fee) VALUES (?, ?)`)
+		if err != nil {
+			return err
+		}
+
+		txnAttestationsStmt, err := tx.Prepare(`INSERT INTO v2_transaction_attestations(transaction_id, transaction_order, public_key, key, value, signature) VALUES (?, ?, ?, ?, ?, ?)`)
+		if err != nil {
+			return err
+		}
+
+		txnContractsStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contracts(transaction_id, transaction_order, contract_id) VALUES (?, ?, ?)`)
+		if err != nil {
+			return err
+		}
+
+		pubkey, key, value, sig := encode(types.GeneratePrivateKey().PublicKey()), "key", []byte("value"), encode(types.Signature{})
+
+		bid := encode(n.tipState().Index.ID)
+		leafIndex := encode(uint64(0))
+		capacity, filesize, fileMerkleRoot, proofHeight, expirationHeight, renterOutputAddress, renterOutputValue, hostOutputAddress, hostOutputValue, missedHostValue, totalCollateral, renterPublicKey, hostPublicKey, revisionNumber, renterSignature, hostSignature := encode(uint64(0)), encode(uint64(0)), encode(types.Hash256{}), encode(uint64(0)), encode(uint64(0)), encode(types.Address{}), encode(types.ZeroCurrency), encode(types.Address{}), encode(types.ZeroCurrency), encode(types.ZeroCurrency), encode(types.ZeroCurrency), encode(types.GeneratePrivateKey().PublicKey()), encode(types.GeneratePrivateKey().PublicKey()), encode(uint64(0)), encode(types.Signature{}), encode(types.Signature{})
+		for i := range 1_000_000 {
+			if i%100_000 == 0 {
+				b.Log("Inserted transaction:", i)
+			}
+
+			var txnID types.TransactionID
+			frand.Read(txnID[:])
+			ids = append(ids, txnID)
+
+			result, err := txnStmt.Exec(encode(txnID), encode(types.ZeroCurrency))
+			if err != nil {
+				return err
+			}
+			txnDBID, err := result.LastInsertId()
+			if err != nil {
+				return err
+			}
+
+			switch i % 3 {
+			case 0:
+				// empty transaction
+			case 1:
+				// transaction with attestation
+				if _, err = txnAttestationsStmt.Exec(txnDBID, 0, pubkey, key, value, sig); err != nil {
+					return err
+				}
+			case 2:
+				// transaction with file contract formation
+				var fcID types.FileContractID
+				frand.Read(fcID[:])
+
+				result, err = fceStmt.Exec(encode(fcID), bid, encode(txnID), leafIndex, capacity, filesize, fileMerkleRoot, proofHeight, expirationHeight, renterOutputAddress, renterOutputValue, hostOutputAddress, hostOutputValue, missedHostValue, totalCollateral, renterPublicKey, hostPublicKey, revisionNumber, renterSignature, hostSignature)
+				if err != nil {
+					return err
+				}
+				fcDBID, err := result.LastInsertId()
+				if err != nil {
+					return err
+				}
+				if _, err := txnContractsStmt.Exec(txnDBID, 0, fcDBID); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+	for _, limit := range []int{10, 100, 1000} {
+		b.Run(strconv.Itoa(limit)+" transactions", func(b *testing.B) {
+			offset := frand.Intn(len(ids) - limit)
+			txnIDs := ids[offset : offset+limit]
+			for range b.N {
+				txns, err := n.db.V2Transactions(txnIDs)
+				if err != nil {
+					b.Fatal(err)
+				}
+				testutil.Equal(b, "len(txns)", limit, len(txns))
+			}
+		})
+	}
 }
