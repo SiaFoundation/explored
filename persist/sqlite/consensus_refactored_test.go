@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"path/filepath"
 	"strconv"
@@ -2812,5 +2813,212 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 				testutil.Equal(b, "len(sces)", limit, len(sces))
 			}
 		})
+	}
+}
+
+func BenchmarkSiafundOutputs(b *testing.B) {
+	addr1 := types.StandardUnlockConditions(types.GeneratePrivateKey().PublicKey()).UnlockHash()
+	n := newTestChain(b, false, nil)
+
+	// add a bunch of random outputs
+	var ids []types.SiafundOutputID
+	err := n.db.transaction(func(tx *txn) error {
+		stmt, err := tx.Prepare(`INSERT INTO siafund_elements(block_id, output_id, leaf_index, spent_index, claim_start, address, value) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+		if err != nil {
+			return err
+		}
+
+		spentIndex := encode(n.tipState().Index)
+		bid := encode(n.tipState().Index.ID)
+		val := encode(types.NewCurrency64(1))
+
+		var addr types.Address
+		for i := range 5_000_000 {
+			if i%100_000 == 0 {
+				b.Log("Inserted siafund element:", i)
+			}
+
+			var sfID types.SiafundOutputID
+			frand.Read(sfID[:])
+			ids = append(ids, sfID)
+
+			// label half of elements spent
+			var spent any
+			if i%2 == 0 {
+				spent = spentIndex
+			}
+			// give each address three outputs
+			if i%3 == 0 {
+				frand.Read(addr[:])
+			}
+			if _, err := stmt.Exec(bid, encode(sfID), encode(uint64(0)), spent, val, encode(addr), val); err != nil {
+				return err
+			}
+		}
+
+		// give addr1 2000 outputs, 1000 of which are spent
+		for i := range 2000 {
+			// label half of elements spent
+			var spent any
+			if i%2 == 0 {
+				spent = spentIndex
+			}
+
+			var sfID types.SiacoinOutputID
+			frand.Read(sfID[:])
+
+			if _, err := stmt.Exec(bid, encode(sfID), encode(uint64(0)), spent, val, encode(addr1), val); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+	for _, limit := range []uint64{10, 100, 1000} {
+		b.Run(strconv.FormatUint(limit, 10)+" unspent outputs", func(b *testing.B) {
+			offset := frand.Uint64n(1000 - limit + 1)
+			for range b.N {
+				sfes, err := n.db.UnspentSiafundOutputs(addr1, offset, limit)
+				if err != nil {
+					b.Fatal(err)
+				}
+				testutil.Equal(b, "len(sfes)", limit, uint64(len(sfes)))
+			}
+		})
+	}
+
+	b.ResetTimer()
+	for _, limit := range []int{10, 100, 1000} {
+		b.Run(strconv.Itoa(limit)+" siafund elements", func(b *testing.B) {
+			offset := frand.Intn(len(ids) - limit)
+			scIDs := ids[offset : offset+limit]
+			for range b.N {
+				sfes, err := n.db.SiafundElements(scIDs)
+				if err != nil {
+					b.Fatal(err)
+				}
+				testutil.Equal(b, "len(sfes)", limit, len(sfes))
+			}
+		})
+	}
+}
+
+func BenchmarkAddressEvents(b *testing.B) {
+	// adapted from https://github.com/SiaFoundation/walletd/blob/c3cc9d9b3efba616d20baa2962474d73f872f2ba/persist/sqlite/events_test.go
+	runBenchmarkEvents := func(name string, addresses, eventsPerAddress int) {
+		b.Run(name, func(b *testing.B) {
+			n := newTestChain(b, false, nil)
+
+			var addrs []types.Address
+			err := n.db.transaction(func(tx *txn) error {
+				txnStmt, err := tx.Prepare(`INSERT INTO transactions(transaction_id) VALUES (?)`)
+				if err != nil {
+					return err
+				}
+
+				insertEventStmt, err := tx.Prepare(`INSERT INTO events (event_id, maturity_height, date_created, event_type, block_id) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (event_id) DO NOTHING RETURNING id`)
+				if err != nil {
+					b.Fatal(err)
+				}
+				defer insertEventStmt.Close()
+
+				addrStmt, err := tx.Prepare(`INSERT INTO address_balance (address, siacoin_balance, immature_siacoin_balance, siafund_balance) VALUES ($1, $2, $2, 0) ON CONFLICT (address) DO UPDATE SET address=EXCLUDED.address RETURNING id`)
+				if err != nil {
+					b.Fatal(err)
+				}
+				defer addrStmt.Close()
+
+				relevantAddrStmt, err := tx.Prepare(`INSERT INTO event_addresses (event_id, address_id, event_maturity_height) VALUES ($1, $2, $3) ON CONFLICT (event_id, address_id) DO NOTHING`)
+				if err != nil {
+					b.Fatal(err)
+				}
+				defer relevantAddrStmt.Close()
+
+				v1TransactionEventStmt, err := tx.Prepare(`INSERT INTO v1_transaction_events (event_id, transaction_id) VALUES (?, ?)`)
+				if err != nil {
+					b.Fatal(err)
+				}
+				defer v1TransactionEventStmt.Close()
+
+				for range addresses {
+					addr := types.Address(frand.Entropy256())
+					addrs = append(addrs, addr)
+					bid := n.tipState().Index.ID
+
+					var addressID int64
+					err = addrStmt.QueryRow(encode(addr), encode(types.ZeroCurrency)).Scan(&addressID)
+					if err != nil {
+						b.Fatal(err)
+					}
+
+					now := time.Now()
+					for i := range eventsPerAddress {
+						ev := wallet.Event{
+							ID:             types.Hash256(frand.Entropy256()),
+							MaturityHeight: uint64(i + 1),
+							Relevant:       []types.Address{addr},
+							Type:           wallet.EventTypeV1Transaction,
+						}
+
+						result, err := txnStmt.Exec(encode(ev.ID))
+						if err != nil {
+							b.Fatal(err)
+						}
+						txnID, err := result.LastInsertId()
+						if err != nil {
+							b.Fatal(err)
+						}
+
+						var eventID int64
+						if err := insertEventStmt.QueryRow(encode(ev.ID), ev.MaturityHeight, encode(now), ev.Type, encode(bid)).Scan(&eventID); err != nil {
+							b.Fatal(err)
+						} else if _, err := relevantAddrStmt.Exec(eventID, addressID, ev.MaturityHeight); err != nil {
+							b.Fatal(err)
+						} else if _, err := v1TransactionEventStmt.Exec(eventID, txnID); err != nil {
+							b.Fatal(err)
+						}
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				b.Fatal(err)
+			}
+
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := range b.N {
+				const limit = 100
+				offset := frand.Intn(eventsPerAddress - min(eventsPerAddress, limit) + 1)
+				events, err := n.db.AddressEvents(addrs[i%len(addrs)], uint64(offset), limit)
+				if err != nil {
+					b.Fatal(err)
+				} else if len(events) != eventsPerAddress {
+					b.Fatalf("expected %d events, got %d", eventsPerAddress, len(events))
+				}
+			}
+		})
+	}
+
+	benchmarks := []struct {
+		addresses        int
+		eventsPerAddress int
+	}{
+		{1, 1},
+		{1, 10},
+		{1, 1000},
+		{10, 1},
+		{10, 1000},
+		{10, 100000},
+		{100000, 1},
+		{100000, 10},
+	}
+	for _, bm := range benchmarks {
+		runBenchmarkEvents(fmt.Sprintf("%d addresses and %d transactions per address", bm.addresses, bm.eventsPerAddress), bm.addresses, bm.eventsPerAddress)
 	}
 }
