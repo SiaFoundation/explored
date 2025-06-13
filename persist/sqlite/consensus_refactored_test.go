@@ -3139,7 +3139,12 @@ func BenchmarkRevert(b *testing.B) {
 			utx := &updateTx{
 				tx: tx,
 			}
-			if err := explorer.UpdateChainState(utx, crus, nil); err != nil {
+
+			b.StartTimer()
+			err := explorer.UpdateChainState(utx, crus, nil)
+			b.StopTimer()
+
+			if err != nil {
 				return fmt.Errorf("failed to update chain state: %w", err)
 			}
 			return nil
