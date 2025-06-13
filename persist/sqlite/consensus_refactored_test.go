@@ -2912,7 +2912,7 @@ func BenchmarkSiafundOutputs(b *testing.B) {
 	}
 
 	for _, limit := range []int{10, 100, 1000} {
-		b.Run(fmt.Sprintf("%d siafudn elements", limit), func(b *testing.B) {
+		b.Run(fmt.Sprintf("%d siafund elements", limit), func(b *testing.B) {
 			for b.Loop() {
 				offset := frand.Intn(len(ids) - limit)
 				scIDs := ids[offset : offset+limit]
