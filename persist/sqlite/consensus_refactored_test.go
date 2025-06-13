@@ -2624,9 +2624,11 @@ func TestEventPayoutContract(t *testing.T) {
 }
 
 func BenchmarkTransactions(b *testing.B) {
+	const nTransactions = 1_000_000
+
 	n := newTestChain(b, false, nil)
 
-	// add a bunch of random transactions that are either empty, contain arbitrary
+	// add random transactions that are either empty, contain arbitrary
 	// or contain a contract formation
 	var ids []types.TransactionID
 	err := n.db.transaction(func(tx *txn) error {
@@ -2660,8 +2662,8 @@ func BenchmarkTransactions(b *testing.B) {
 		bid := encode(n.tipState().Index.ID)
 		leafIndex := encode(uint64(0))
 		filesize, fileMerkleRoot, windowStart, windowEnd, payout, unlockHash, revisionNumber := encode(uint64(0)), encode(types.Hash256{}), encode(uint64(0)), encode(uint64(0)), encode(types.NewCurrency64(1)), encode(types.Address{}), encode(uint64(0))
-		for i := range 1_000_000 {
-			if i%100_000 == 0 {
+		for i := range nTransactions {
+			if i%(nTransactions/10) == 0 {
 				b.Log("Inserted transaction:", i)
 			}
 
@@ -2730,6 +2732,8 @@ func BenchmarkTransactions(b *testing.B) {
 }
 
 func BenchmarkSiacoinOutputs(b *testing.B) {
+	const nElements = 5_000_000
+
 	addr1 := types.StandardUnlockConditions(types.GeneratePrivateKey().PublicKey()).UnlockHash()
 	n := newTestChain(b, false, nil)
 
@@ -2747,8 +2751,8 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 		val := encode(types.NewCurrency64(1))
 
 		var addr types.Address
-		for i := range 5_000_000 {
-			if i%100_000 == 0 {
+		for i := range nElements {
+			if i%(nElements/10) == 0 {
 				b.Log("Inserted siacoin element:", i)
 			}
 
@@ -2827,6 +2831,8 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 }
 
 func BenchmarkSiafundOutputs(b *testing.B) {
+	const nElements = 5_000_000
+
 	addr1 := types.StandardUnlockConditions(types.GeneratePrivateKey().PublicKey()).UnlockHash()
 	n := newTestChain(b, false, nil)
 
@@ -2844,8 +2850,8 @@ func BenchmarkSiafundOutputs(b *testing.B) {
 		val := encode(types.NewCurrency64(1))
 
 		var addr types.Address
-		for i := range 5_000_000 {
-			if i%100_000 == 0 {
+		for i := range nElements {
+			if i%(nElements/10) == 0 {
 				b.Log("Inserted siafund element:", i)
 			}
 

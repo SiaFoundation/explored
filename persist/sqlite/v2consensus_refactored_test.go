@@ -2549,6 +2549,8 @@ func TestV2Metrics(t *testing.T) {
 }
 
 func BenchmarkV2Transactions(b *testing.B) {
+	const nTransactions = 1_000_000
+
 	n := newTestChain(b, false, nil)
 
 	// add a bunch of random transactions that are either empty, contain arbitrary
@@ -2584,8 +2586,8 @@ func BenchmarkV2Transactions(b *testing.B) {
 		bid := encode(n.tipState().Index.ID)
 		leafIndex := encode(uint64(0))
 		capacity, filesize, fileMerkleRoot, proofHeight, expirationHeight, renterOutputAddress, renterOutputValue, hostOutputAddress, hostOutputValue, missedHostValue, totalCollateral, renterPublicKey, hostPublicKey, revisionNumber, renterSignature, hostSignature := encode(uint64(0)), encode(uint64(0)), encode(types.Hash256{}), encode(uint64(0)), encode(uint64(0)), encode(types.Address{}), encode(types.ZeroCurrency), encode(types.Address{}), encode(types.ZeroCurrency), encode(types.ZeroCurrency), encode(types.ZeroCurrency), encode(types.GeneratePrivateKey().PublicKey()), encode(types.GeneratePrivateKey().PublicKey()), encode(uint64(0)), encode(types.Signature{}), encode(types.Signature{})
-		for i := range 1_000_000 {
-			if i%100_000 == 0 {
+		for i := range nTransactions {
+			if i%(nTransactions/10) == 0 {
 				b.Log("Inserted transaction:", i)
 			}
 
