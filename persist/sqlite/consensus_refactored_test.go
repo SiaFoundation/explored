@@ -3012,18 +3012,19 @@ func BenchmarkAddressEvents(b *testing.B) {
 				b.Fatal(err)
 			}
 
-			b.ResetTimer()
-			b.ReportAllocs()
-			for i := range b.N {
+			i := 0
+			for b.Loop() {
 				const limit = 100
 				offset := frand.Intn(eventsPerAddress - min(eventsPerAddress, limit) + 1)
 				events, err := n.db.AddressEvents(addrs[i%len(addrs)], uint64(offset), limit)
 				if err != nil {
 					b.Fatal(err)
 				}
-				if len(events) != eventsPerAddress {
+				if len(events) != min(limit, eventsPerAddress) {
 					b.Fatalf("expected %d events, got %d", eventsPerAddress, len(events))
 				}
+
+				i++
 			}
 		})
 	}
