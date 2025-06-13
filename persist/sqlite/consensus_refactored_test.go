@@ -2634,21 +2634,25 @@ func BenchmarkTransactions(b *testing.B) {
 		if err != nil {
 			return err
 		}
+		defer fceStmt.Close()
 
 		txnStmt, err := tx.Prepare(`INSERT INTO transactions(transaction_id) VALUES (?)`)
 		if err != nil {
 			return err
 		}
+		defer txnStmt.Close()
 
 		txnArbitraryDataStmt, err := tx.Prepare(`INSERT INTO transaction_arbitrary_data(transaction_id, transaction_order, data) VALUES (?, ?, ?)`)
 		if err != nil {
 			return err
 		}
+		defer txnArbitraryDataStmt.Close()
 
 		txnContractsStmt, err := tx.Prepare(`INSERT INTO transaction_file_contracts(transaction_id, transaction_order, contract_id) VALUES (?, ?, ?)`)
 		if err != nil {
 			return err
 		}
+		defer txnContractsStmt.Close()
 
 		arbitraryData := make([]byte, 64)
 		frand.Read(arbitraryData)
@@ -2733,6 +2737,7 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 		if err != nil {
 			return err
 		}
+		defer stmt.Close()
 
 		spentIndex := encode(n.tipState().Index)
 		bid := encode(n.tipState().Index.ID)
@@ -2823,6 +2828,7 @@ func BenchmarkSiafundOutputs(b *testing.B) {
 		if err != nil {
 			return err
 		}
+		defer stmt.Close()
 
 		spentIndex := encode(n.tipState().Index)
 		bid := encode(n.tipState().Index.ID)
@@ -2914,6 +2920,7 @@ func BenchmarkAddressEvents(b *testing.B) {
 				if err != nil {
 					return err
 				}
+				defer txnStmt.Close()
 
 				insertEventStmt, err := tx.Prepare(`INSERT INTO events (event_id, maturity_height, date_created, event_type, block_id) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (event_id) DO NOTHING RETURNING id`)
 				if err != nil {
