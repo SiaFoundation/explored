@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
-	"strconv"
 	"testing"
 	"time"
 
@@ -2710,7 +2709,7 @@ func BenchmarkTransactions(b *testing.B) {
 
 	b.ResetTimer()
 	for _, limit := range []int{10, 100, 1000} {
-		b.Run(strconv.Itoa(limit)+" transactions", func(b *testing.B) {
+		b.Run(fmt.Sprintf("%d transactions", limit), func(b *testing.B) {
 			offset := frand.Intn(len(ids) - limit)
 			txnIDs := ids[offset : offset+limit]
 			for b.Loop() {
@@ -2788,7 +2787,7 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 
 	b.ResetTimer()
 	for _, limit := range []uint64{10, 100, 1000} {
-		b.Run(strconv.FormatUint(limit, 10)+" unspent outputs", func(b *testing.B) {
+		b.Run(fmt.Sprintf("%d unspent outputs", limit), func(b *testing.B) {
 			offset := frand.Uint64n(1000 - limit + 1)
 			for b.Loop() {
 				sces, err := n.db.UnspentSiacoinOutputs(addr1, offset, limit)
@@ -2802,7 +2801,7 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 
 	b.ResetTimer()
 	for _, limit := range []int{10, 100, 1000} {
-		b.Run(strconv.Itoa(limit)+" siacoin elements", func(b *testing.B) {
+		b.Run(fmt.Sprintf("%d siacoin elements", limit), func(b *testing.B) {
 			offset := frand.Intn(len(ids) - limit)
 			scIDs := ids[offset : offset+limit]
 			for b.Loop() {
@@ -2880,7 +2879,7 @@ func BenchmarkSiafundOutputs(b *testing.B) {
 
 	b.ResetTimer()
 	for _, limit := range []uint64{10, 100, 1000} {
-		b.Run(strconv.FormatUint(limit, 10)+" unspent outputs", func(b *testing.B) {
+		b.Run(fmt.Sprintf("%d unspent outputs", limit), func(b *testing.B) {
 			offset := frand.Uint64n(1000 - limit + 1)
 			for b.Loop() {
 				sfes, err := n.db.UnspentSiafundOutputs(addr1, offset, limit)
@@ -2894,7 +2893,7 @@ func BenchmarkSiafundOutputs(b *testing.B) {
 
 	b.ResetTimer()
 	for _, limit := range []int{10, 100, 1000} {
-		b.Run(strconv.Itoa(limit)+" siafund elements", func(b *testing.B) {
+		b.Run(fmt.Sprintf("%d siafudn elements", limit), func(b *testing.B) {
 			offset := frand.Intn(len(ids) - limit)
 			scIDs := ids[offset : offset+limit]
 			for b.Loop() {

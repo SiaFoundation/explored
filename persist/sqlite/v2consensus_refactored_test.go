@@ -2,8 +2,8 @@ package sqlite
 
 import (
 	"errors"
+	"fmt"
 	"math"
-	"strconv"
 	"testing"
 	"time"
 
@@ -2633,7 +2633,7 @@ func BenchmarkV2Transactions(b *testing.B) {
 
 	b.ResetTimer()
 	for _, limit := range []int{10, 100, 1000} {
-		b.Run(strconv.Itoa(limit)+" transactions", func(b *testing.B) {
+		b.Run(fmt.Sprintf("%d transactions", limit), func(b *testing.B) {
 			offset := frand.Intn(len(ids) - limit)
 			txnIDs := ids[offset : offset+limit]
 			for b.Loop() {
