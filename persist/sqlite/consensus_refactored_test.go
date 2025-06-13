@@ -2713,9 +2713,10 @@ func BenchmarkTransactions(b *testing.B) {
 
 	for _, limit := range []int{10, 100, 1000} {
 		b.Run(fmt.Sprintf("%d transactions", limit), func(b *testing.B) {
-			offset := frand.Intn(len(ids) - limit)
-			txnIDs := ids[offset : offset+limit]
 			for b.Loop() {
+				offset := frand.Intn(len(ids) - limit)
+				txnIDs := ids[offset : offset+limit]
+
 				txns, err := n.db.Transactions(txnIDs)
 				if err != nil {
 					b.Fatal(err)
@@ -2793,8 +2794,9 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 
 	for _, limit := range []uint64{10, 100, 1000} {
 		b.Run(fmt.Sprintf("%d unspent outputs", limit), func(b *testing.B) {
-			offset := frand.Uint64n(1000 - limit + 1)
 			for b.Loop() {
+				offset := frand.Uint64n(1000 - limit + 1)
+
 				sces, err := n.db.UnspentSiacoinOutputs(addr1, offset, limit)
 				if err != nil {
 					b.Fatal(err)
@@ -2808,9 +2810,10 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 
 	for _, limit := range []int{10, 100, 1000} {
 		b.Run(fmt.Sprintf("%d siacoin elements", limit), func(b *testing.B) {
-			offset := frand.Intn(len(ids) - limit)
-			scIDs := ids[offset : offset+limit]
 			for b.Loop() {
+				offset := frand.Intn(len(ids) - limit)
+				scIDs := ids[offset : offset+limit]
+
 				sces, err := n.db.SiacoinElements(scIDs)
 				if err != nil {
 					b.Fatal(err)
@@ -2888,8 +2891,9 @@ func BenchmarkSiafundOutputs(b *testing.B) {
 
 	for _, limit := range []uint64{10, 100, 1000} {
 		b.Run(fmt.Sprintf("%d unspent outputs", limit), func(b *testing.B) {
-			offset := frand.Uint64n(1000 - limit + 1)
 			for b.Loop() {
+				offset := frand.Uint64n(1000 - limit + 1)
+
 				sfes, err := n.db.UnspentSiafundOutputs(addr1, offset, limit)
 				if err != nil {
 					b.Fatal(err)
@@ -2903,9 +2907,10 @@ func BenchmarkSiafundOutputs(b *testing.B) {
 
 	for _, limit := range []int{10, 100, 1000} {
 		b.Run(fmt.Sprintf("%d siafudn elements", limit), func(b *testing.B) {
-			offset := frand.Intn(len(ids) - limit)
-			scIDs := ids[offset : offset+limit]
 			for b.Loop() {
+				offset := frand.Intn(len(ids) - limit)
+				scIDs := ids[offset : offset+limit]
+
 				sfes, err := n.db.SiafundElements(scIDs)
 				if err != nil {
 					b.Fatal(err)
