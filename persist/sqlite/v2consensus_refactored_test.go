@@ -2636,7 +2636,7 @@ func BenchmarkV2Transactions(b *testing.B) {
 		b.Run(strconv.Itoa(limit)+" transactions", func(b *testing.B) {
 			offset := frand.Intn(len(ids) - limit)
 			txnIDs := ids[offset : offset+limit]
-			for range b.N {
+			for b.Loop() {
 				txns, err := n.db.V2Transactions(txnIDs)
 				if err != nil {
 					b.Fatal(err)

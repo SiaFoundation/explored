@@ -2713,7 +2713,7 @@ func BenchmarkTransactions(b *testing.B) {
 		b.Run(strconv.Itoa(limit)+" transactions", func(b *testing.B) {
 			offset := frand.Intn(len(ids) - limit)
 			txnIDs := ids[offset : offset+limit]
-			for range b.N {
+			for b.Loop() {
 				txns, err := n.db.Transactions(txnIDs)
 				if err != nil {
 					b.Fatal(err)
@@ -2790,7 +2790,7 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 	for _, limit := range []uint64{10, 100, 1000} {
 		b.Run(strconv.FormatUint(limit, 10)+" unspent outputs", func(b *testing.B) {
 			offset := frand.Uint64n(1000 - limit + 1)
-			for range b.N {
+			for b.Loop() {
 				sces, err := n.db.UnspentSiacoinOutputs(addr1, offset, limit)
 				if err != nil {
 					b.Fatal(err)
@@ -2805,7 +2805,7 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 		b.Run(strconv.Itoa(limit)+" siacoin elements", func(b *testing.B) {
 			offset := frand.Intn(len(ids) - limit)
 			scIDs := ids[offset : offset+limit]
-			for range b.N {
+			for b.Loop() {
 				sces, err := n.db.SiacoinElements(scIDs)
 				if err != nil {
 					b.Fatal(err)
@@ -2882,7 +2882,7 @@ func BenchmarkSiafundOutputs(b *testing.B) {
 	for _, limit := range []uint64{10, 100, 1000} {
 		b.Run(strconv.FormatUint(limit, 10)+" unspent outputs", func(b *testing.B) {
 			offset := frand.Uint64n(1000 - limit + 1)
-			for range b.N {
+			for b.Loop() {
 				sfes, err := n.db.UnspentSiafundOutputs(addr1, offset, limit)
 				if err != nil {
 					b.Fatal(err)
@@ -2897,7 +2897,7 @@ func BenchmarkSiafundOutputs(b *testing.B) {
 		b.Run(strconv.Itoa(limit)+" siafund elements", func(b *testing.B) {
 			offset := frand.Intn(len(ids) - limit)
 			scIDs := ids[offset : offset+limit]
-			for range b.N {
+			for b.Loop() {
 				sfes, err := n.db.SiafundElements(scIDs)
 				if err != nil {
 					b.Fatal(err)
