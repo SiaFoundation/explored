@@ -2645,7 +2645,9 @@ func BenchmarkV2Transactions(b *testing.B) {
 				if err != nil {
 					b.Fatal(err)
 				}
-				testutil.Equal(b, "len(txns)", limit, len(txns))
+				if len(txns) != limit {
+					b.Fatalf("expected %d txns, got %d", limit, len(txns))
+				}
 			}
 		})
 	}
