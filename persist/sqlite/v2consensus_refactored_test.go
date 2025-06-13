@@ -2559,21 +2559,25 @@ func BenchmarkV2Transactions(b *testing.B) {
 		if err != nil {
 			return err
 		}
+		defer fceStmt.Close()
 
 		txnStmt, err := tx.Prepare(`INSERT INTO v2_transactions(transaction_id, miner_fee) VALUES (?, ?)`)
 		if err != nil {
 			return err
 		}
+		defer txnStmt.Close()
 
 		txnAttestationsStmt, err := tx.Prepare(`INSERT INTO v2_transaction_attestations(transaction_id, transaction_order, public_key, key, value, signature) VALUES (?, ?, ?, ?, ?, ?)`)
 		if err != nil {
 			return err
 		}
+		defer txnAttestationsStmt.Close()
 
 		txnContractsStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contracts(transaction_id, transaction_order, contract_id) VALUES (?, ?, ?)`)
 		if err != nil {
 			return err
 		}
+		defer txnContractsStmt.Close()
 
 		pubkey, key, value, sig := encode(types.GeneratePrivateKey().PublicKey()), "key", []byte("value"), encode(types.Signature{})
 
