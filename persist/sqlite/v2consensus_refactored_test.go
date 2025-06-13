@@ -2638,9 +2638,10 @@ func BenchmarkV2Transactions(b *testing.B) {
 	b.ResetTimer()
 	for _, limit := range []int{10, 100, 1000} {
 		b.Run(fmt.Sprintf("%d transactions", limit), func(b *testing.B) {
-			offset := frand.Intn(len(ids) - limit)
-			txnIDs := ids[offset : offset+limit]
 			for b.Loop() {
+				offset := frand.Intn(len(ids) - limit)
+				txnIDs := ids[offset : offset+limit]
+
 				txns, err := n.db.V2Transactions(txnIDs)
 				if err != nil {
 					b.Fatal(err)
