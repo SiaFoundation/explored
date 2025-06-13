@@ -2707,7 +2707,6 @@ func BenchmarkTransactions(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	b.ResetTimer()
 	for _, limit := range []int{10, 100, 1000} {
 		b.Run(fmt.Sprintf("%d transactions", limit), func(b *testing.B) {
 			offset := frand.Intn(len(ids) - limit)
@@ -2785,7 +2784,6 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	b.ResetTimer()
 	for _, limit := range []uint64{10, 100, 1000} {
 		b.Run(fmt.Sprintf("%d unspent outputs", limit), func(b *testing.B) {
 			offset := frand.Uint64n(1000 - limit + 1)
@@ -2799,7 +2797,6 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 		})
 	}
 
-	b.ResetTimer()
 	for _, limit := range []int{10, 100, 1000} {
 		b.Run(fmt.Sprintf("%d siacoin elements", limit), func(b *testing.B) {
 			offset := frand.Intn(len(ids) - limit)
@@ -2877,7 +2874,6 @@ func BenchmarkSiafundOutputs(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	b.ResetTimer()
 	for _, limit := range []uint64{10, 100, 1000} {
 		b.Run(fmt.Sprintf("%d unspent outputs", limit), func(b *testing.B) {
 			offset := frand.Uint64n(1000 - limit + 1)
@@ -2891,7 +2887,6 @@ func BenchmarkSiafundOutputs(b *testing.B) {
 		})
 	}
 
-	b.ResetTimer()
 	for _, limit := range []int{10, 100, 1000} {
 		b.Run(fmt.Sprintf("%d siafudn elements", limit), func(b *testing.B) {
 			offset := frand.Intn(len(ids) - limit)
