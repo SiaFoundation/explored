@@ -2720,7 +2720,9 @@ func BenchmarkTransactions(b *testing.B) {
 				if err != nil {
 					b.Fatal(err)
 				}
-				testutil.Equal(b, "len(txns)", limit, len(txns))
+				if len(txns) != limit {
+					b.Fatalf("expected %d txns, got %d", limit, len(txns))
+				}
 			}
 		})
 	}
@@ -2797,7 +2799,9 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 				if err != nil {
 					b.Fatal(err)
 				}
-				testutil.Equal(b, "len(sces)", limit, uint64(len(sces)))
+				if limit != uint64(len(sces)) {
+					b.Fatalf("expected %d sces, got %d", limit, len(sces))
+				}
 			}
 		})
 	}
@@ -2811,7 +2815,9 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 				if err != nil {
 					b.Fatal(err)
 				}
-				testutil.Equal(b, "len(sces)", limit, len(sces))
+				if limit != len(sces) {
+					b.Fatalf("expected %d sces, got %d", limit, len(sces))
+				}
 			}
 		})
 	}
@@ -2888,7 +2894,9 @@ func BenchmarkSiafundOutputs(b *testing.B) {
 				if err != nil {
 					b.Fatal(err)
 				}
-				testutil.Equal(b, "len(sfes)", limit, uint64(len(sfes)))
+				if limit != uint64(len(sfes)) {
+					b.Fatalf("expected %d sfes, got %d", limit, len(sfes))
+				}
 			}
 		})
 	}
@@ -2902,7 +2910,9 @@ func BenchmarkSiafundOutputs(b *testing.B) {
 				if err != nil {
 					b.Fatal(err)
 				}
-				testutil.Equal(b, "len(sfes)", limit, len(sfes))
+				if limit != len(sfes) {
+					b.Fatalf("expected %d sfes, got %d", limit, len(sfes))
+				}
 			}
 		})
 	}
@@ -2999,7 +3009,8 @@ func BenchmarkAddressEvents(b *testing.B) {
 				events, err := n.db.AddressEvents(addrs[i%len(addrs)], uint64(offset), limit)
 				if err != nil {
 					b.Fatal(err)
-				} else if len(events) != eventsPerAddress {
+				}
+				if len(events) != eventsPerAddress {
 					b.Fatalf("expected %d events, got %d", eventsPerAddress, len(events))
 				}
 			}
