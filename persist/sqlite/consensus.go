@@ -740,11 +740,6 @@ func addEvents(tx *txn, bid types.BlockID, scDBIds map[types.SiacoinOutputID]int
 	return nil
 }
 
-func deleteBlock(tx *txn, bid types.BlockID) error {
-	_, err := tx.Exec("DELETE FROM blocks WHERE id = ?", encode(bid))
-	return err
-}
-
 func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b types.Block, fces []explorer.FileContractUpdate) (map[explorer.DBFileContract]int64, error) {
 	stmt, err := tx.Prepare(`INSERT INTO file_contract_elements(contract_id, block_id, transaction_id, leaf_index, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

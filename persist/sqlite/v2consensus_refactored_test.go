@@ -76,7 +76,7 @@ func getCIE(t testing.TB, db explorer.Store, bid types.BlockID) types.ChainIndex
 func (n *testChain) mineV2Transactions(t testing.TB, txns ...types.V2Transaction) {
 	t.Helper()
 
-	b := testutil.MineV2Block(n.tipState(), txns, types.VoidAddress)
+	b := testutil.MineV2Block(n.tipState(), nil, txns, types.VoidAddress)
 	n.applyBlock(t, b)
 }
 
@@ -638,7 +638,7 @@ func TestV2SiacoinBalance(t *testing.T) {
 	testutil.SignV2Transaction(n.tipState(), pk1, &txn1)
 
 	// send addr1 output to addr2
-	b := testutil.MineV2Block(n.tipState(), []types.V2Transaction{txn1}, types.VoidAddress)
+	b := testutil.MineV2Block(n.tipState(), nil, []types.V2Transaction{txn1}, types.VoidAddress)
 	n.applyBlock(t, b)
 
 	// addr2 should have SC and the void address should have immature SC from
@@ -2332,7 +2332,7 @@ func TestEventV2PayoutContract(t *testing.T) {
 	}
 	testutil.SignV2TransactionWithContracts(n.tipState(), pk1, pk1, pk1, &txn1)
 
-	b := testutil.MineV2Block(n.tipState(), []types.V2Transaction{txn1}, addr2)
+	b := testutil.MineV2Block(n.tipState(), nil, []types.V2Transaction{txn1}, addr2)
 	n.applyBlock(t, b)
 
 	scID := b.ID().MinerOutputID(0)
