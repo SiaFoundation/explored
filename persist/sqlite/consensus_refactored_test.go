@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -3044,5 +3045,112 @@ func BenchmarkAddressEvents(b *testing.B) {
 	}
 	for _, bm := range benchmarks {
 		runBenchmarkEvents(fmt.Sprintf("%d addresses and %d transactions per address", bm.addresses, bm.eventsPerAddress), bm.addresses, bm.eventsPerAddress)
+	}
+}
+
+func BenchmarkRevert(b *testing.B) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(uc1)}
+
+	n := newTestChain(b, false, func(network *consensus.Network, genesisBlock types.Block) {
+		network.HardforkV2.AllowHeight = 1
+		network.HardforkV2.RequireHeight = 1_000_000
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	genesisTxn := n.genesis().Transactions[0]
+
+	val := genesisTxn.SiacoinOutputs[0].Value
+	scID := genesisTxn.SiacoinOutputID(0)
+
+	for i := range 20000 {
+		if i%100 == 0 {
+			b.Logf("Mined %d blocks", i)
+		}
+
+		// transaction with random arbitrary data
+		data := make([]byte, 16)
+		frand.Read(data)
+		txn1 := types.Transaction{
+			ArbitraryData: [][]byte{data},
+		}
+
+		fc := prepareContract(addr1, n.tipState().Index.Height+1)
+		// create file contract
+		txn2 := types.Transaction{
+			SiacoinInputs: []types.SiacoinInput{{
+				ParentID:         scID,
+				UnlockConditions: uc1,
+			}},
+			SiacoinOutputs: []types.SiacoinOutput{{
+				Address: addr1,
+				Value:   val.Sub(fc.Payout),
+			}},
+			FileContracts: []types.FileContract{fc},
+		}
+		testutil.SignTransaction(n.tipState(), pk1, &txn2)
+
+		scID = txn2.SiacoinOutputID(0)
+		val = txn2.SiacoinOutputs[0].Value
+
+		// txn3
+		txn3 := types.V2Transaction{
+			SiacoinInputs: []types.V2SiacoinInput{{
+				// Parent:          getSCE(b, n.db, scID),
+				Parent: types.SiacoinElement{
+					ID: txn2.SiacoinOutputID(0),
+					StateElement: types.StateElement{
+						LeafIndex: types.UnassignedLeafIndex,
+					},
+					SiacoinOutput: txn2.SiacoinOutputs[0],
+				},
+				SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+			}},
+			SiacoinOutputs: []types.SiacoinOutput{{
+				Address: addr1,
+				Value:   val,
+			}},
+		}
+		testutil.SignV2Transaction(n.tipState(), pk1, &txn3)
+
+		scID = txn3.SiacoinOutputID(txn3.ID(), 0)
+		val = txn3.SiacoinOutputs[0].Value
+
+		block := testutil.MineV2Block(n.tipState(), []types.Transaction{txn1, txn2}, []types.V2Transaction{txn3}, types.VoidAddress)
+		n.applyBlock(b, block)
+	}
+
+	block := n.blocks[len(n.blocks)-1]
+	bs := n.supplements[len(n.supplements)-1]
+	prevState := n.states[len(n.states)-2]
+
+	ru := consensus.RevertBlock(prevState, block, bs)
+	crus := []chain.RevertUpdate{{
+		RevertUpdate: ru,
+		Block:        block,
+		State:        prevState,
+	}}
+
+	b.ResetTimer()
+	for range b.N {
+		err := n.db.transaction(func(tx *txn) error {
+			defer tx.Rollback()
+			utx := &updateTx{
+				tx: tx,
+			}
+
+			b.StartTimer()
+			err := explorer.UpdateChainState(utx, crus, nil)
+			b.StopTimer()
+
+			if err != nil {
+				return fmt.Errorf("failed to update chain state: %w", err)
+			}
+			return nil
+		})
+		if err != nil && !strings.Contains(err.Error(), "rolled back") {
+			b.Fatal(err)
+		}
 	}
 }

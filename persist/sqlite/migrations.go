@@ -29,7 +29,15 @@ func migrateV3(txn *txn, log *zap.Logger) error {
 	return nil
 }
 
+func migrateV4(txn *txn, log *zap.Logger) error {
+	if err := resetChainState(txn, log, 4); err != nil {
+		return fmt.Errorf("failed to reset chain state: %w", err)
+	}
+	return nil
+}
+
 var migrations = []func(tx *txn, log *zap.Logger) error{
 	migrateV2,
 	migrateV3,
+	migrateV4,
 }
