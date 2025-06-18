@@ -5,6 +5,7 @@ import (
 
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
+	"go.uber.org/zap"
 )
 
 type (
@@ -589,21 +590,25 @@ func updateMetrics(tx UpdateTx, s UpdateState, metrics Metrics) (Metrics, error)
 }
 
 // UpdateChainState applies the reverts and updates.
-func UpdateChainState(tx UpdateTx, crus []chain.RevertUpdate, caus []chain.ApplyUpdate) error {
+func UpdateChainState(tx UpdateTx, crus []chain.RevertUpdate, caus []chain.ApplyUpdate, log *zap.Logger) error {
 	for _, cru := range crus {
 		revertedIndex := types.ChainIndex{
 			ID:     cru.Block.ID(),
 			Height: cru.State.Index.Height + 1,
 		}
+		log.Debug("reverting chain update", zap.Stringer("index", revertedIndex))
 		if err := revertChainUpdate(tx, cru, revertedIndex); err != nil {
 			return fmt.Errorf("failed to revert chain update %q: %w", revertedIndex, err)
 		}
+		log.Debug("reverted chain update", zap.Stringer("index", revertedIndex))
 	}
 
 	for _, cau := range caus {
+		log.Debug("applying chain update", zap.Stringer("index", cau.State.Index))
 		if err := applyChainUpdate(tx, cau); err != nil {
 			return fmt.Errorf("failed to apply chain update %q: %w", cau.State.Index, err)
 		}
+		log.Debug("applied chain update", zap.Stringer("index", cau.State.Index))
 	}
 	return nil
 }
