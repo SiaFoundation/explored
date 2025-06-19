@@ -3141,7 +3141,7 @@ func BenchmarkRevert(b *testing.B) {
 			}
 
 			b.StartTimer()
-			err := explorer.UpdateChainState(utx, crus, nil)
+			err := explorer.UpdateChainState(utx, crus, nil, n.db.log.Named("update"))
 			b.StopTimer()
 
 			if err != nil {

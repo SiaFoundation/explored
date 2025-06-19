@@ -1167,7 +1167,7 @@ func (s *Store) UpdateChainState(reverted []chain.RevertUpdate, applied []chain.
 			tx: tx,
 		}
 
-		if err := explorer.UpdateChainState(utx, reverted, applied); err != nil {
+		if err := explorer.UpdateChainState(utx, reverted, applied, s.log.Named("UpdateChainState")); err != nil {
 			return fmt.Errorf("failed to update chain state: %w", err)
 		}
 		return nil

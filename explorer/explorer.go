@@ -146,7 +146,6 @@ func (e *Explorer) syncStore(index types.ChainIndex, batchSize int) error {
 			if err != nil {
 				return fmt.Errorf("failed to subscribe to chain manager: %w", err)
 			}
-
 			if err := e.s.UpdateChainState(crus, caus); err != nil {
 				return fmt.Errorf("failed to process updates: %w", err)
 			}
