@@ -182,8 +182,8 @@ func addFileContracts(tx *txn, id int64, txn types.Transaction, fcDBIds map[expl
 	}
 	defer stmt.Close()
 
-	for i := range txn.FileContracts {
-		dbID, ok := fcDBIds[explorer.DBFileContract{ID: txn.FileContractID(i), RevisionNumber: 0}]
+	for i, fc := range txn.FileContracts {
+		dbID, ok := fcDBIds[explorer.DBFileContract{ID: txn.FileContractID(i), RevisionNumber: fc.RevisionNumber}]
 		if !ok {
 			return errors.New("addFileContracts: fcDbID not in map")
 		}
