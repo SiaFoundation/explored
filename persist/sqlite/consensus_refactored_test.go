@@ -1867,6 +1867,42 @@ func TestFileContractMissed(t *testing.T) {
 	n.assertContractRevisions(t, fce.ID)
 }
 
+func TestFileContractFormationRevisionNumber(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+
+	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+
+	fc := prepareContract(addr1, n.tipState().Index.Height+1)
+	fc.RevisionNumber = 5
+	txn1 := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         n.genesis().Transactions[0].SiacoinOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{{
+			Address: addr1,
+			Value:   val.Sub(fc.Payout),
+		}},
+		FileContracts: []types.FileContract{fc},
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+
+	n.mineTransactions(t, txn1)
+
+	fce := coreToExplorerFC(txn1.FileContractID(0), fc)
+	fce.TransactionID = txn1.ID()
+	fce.ConfirmationIndex = n.tipState().Index
+	fce.ConfirmationTransactionID = txn1.ID()
+
+	n.assertFCE(t, fce.ID, fce)
+	n.assertTransactionContracts(t, txn1.ID(), false, fce)
+}
+
 func signRevisions(cs consensus.State, txn *types.Transaction, pks ...types.PrivateKey) {
 	appendSig := func(key types.PrivateKey, pubkeyIndex uint64, parentID types.Hash256) {
 		sig := key.SignHash(cs.WholeSigHash(*txn, parentID, pubkeyIndex, 0, nil))
