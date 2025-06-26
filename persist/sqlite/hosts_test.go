@@ -10,10 +10,8 @@ import (
 	"lukechampine.com/frand"
 
 	proto2 "go.sia.tech/core/rhp/v2"
-	rhpv2 "go.sia.tech/core/rhp/v2"
 	proto3 "go.sia.tech/core/rhp/v3"
 	proto4 "go.sia.tech/core/rhp/v4"
-	rhpv4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/explored/explorer"
@@ -247,7 +245,7 @@ func TestLastSuccessScan(t *testing.T) {
 			LastScanSuccessful:     false,
 			SuccessfulInteractions: 75,
 			TotalScans:             100,
-			Settings: rhpv2.HostSettings{
+			Settings: proto2.HostSettings{
 				AcceptingContracts:     true,
 				MaxDuration:            1000,
 				StoragePrice:           types.Siacoins(1),
@@ -328,7 +326,7 @@ func TestQueryHosts(t *testing.T) {
 			LastScanSuccessful:     true,
 			SuccessfulInteractions: 75,
 			TotalScans:             100,
-			Settings: rhpv2.HostSettings{
+			Settings: proto2.HostSettings{
 				AcceptingContracts:     true,
 				MaxDuration:            1000,
 				StoragePrice:           types.Siacoins(1),
@@ -355,7 +353,7 @@ func TestQueryHosts(t *testing.T) {
 			LastScanSuccessful:     true,
 			SuccessfulInteractions: 90,
 			TotalScans:             100,
-			Settings: rhpv2.HostSettings{
+			Settings: proto2.HostSettings{
 				AcceptingContracts:     false,
 				MaxDuration:            10000,
 				StoragePrice:           types.Siacoins(60),
@@ -382,12 +380,12 @@ func TestQueryHosts(t *testing.T) {
 			LastScanSuccessful:     false,
 			SuccessfulInteractions: 95,
 			TotalScans:             100,
-			V2Settings: rhpv4.HostSettings{
+			V2Settings: proto4.HostSettings{
 				AcceptingContracts:  true,
 				MaxContractDuration: 1000,
 				TotalStorage:        2000,
 				RemainingStorage:    1000,
-				Prices: rhpv4.HostPrices{
+				Prices: proto4.HostPrices{
 					StoragePrice:  types.Siacoins(10),
 					ContractPrice: types.Siacoins(20),
 					EgressPrice:   types.Siacoins(30),
@@ -409,12 +407,12 @@ func TestQueryHosts(t *testing.T) {
 			LastScanSuccessful:     false,
 			SuccessfulInteractions: 75,
 			TotalScans:             100,
-			V2Settings: rhpv4.HostSettings{
+			V2Settings: proto4.HostSettings{
 				AcceptingContracts:  false,
 				MaxContractDuration: 10000,
 				TotalStorage:        1000,
 				RemainingStorage:    500,
-				Prices: rhpv4.HostPrices{
+				Prices: proto4.HostPrices{
 					StoragePrice:  types.Siacoins(1),
 					ContractPrice: types.Siacoins(2),
 					EgressPrice:   types.Siacoins(3),
