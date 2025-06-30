@@ -29,20 +29,15 @@ func addBlock(tx *txn, b types.Block, cie types.ChainIndexElement, height uint64
 	return err
 }
 
-func addMinerPayouts(tx *txn, bid types.BlockID, scos []types.SiacoinOutput, dbIDs map[types.SiacoinOutputID]int64) error {
-	stmt, err := tx.Prepare(`INSERT INTO miner_payouts(block_id, block_order, output_id) VALUES (?, ?, ?);`)
+func addMinerPayouts(tx *txn, bid types.BlockID, scos []types.SiacoinOutput) error {
+	stmt, err := tx.Prepare(`INSERT INTO miner_payouts(block_id, block_order, output_id) VALUES (?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?));`)
 	if err != nil {
 		return fmt.Errorf("addMinerPayouts: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i := range scos {
-		dbID, ok := dbIDs[bid.MinerOutputID(i)]
-		if !ok {
-			return errors.New("addMinerPayouts: dbID not in map")
-		}
-
-		if _, err := stmt.Exec(encode(bid), i, dbID); err != nil {
+		if _, err := stmt.Exec(encode(bid), i, encode(bid.MinerOutputID(i))); err != nil {
 			return fmt.Errorf("addMinerPayouts: failed to execute statement: %w", err)
 		}
 	}
@@ -94,60 +89,45 @@ func addSignatures(tx *txn, id int64, txn types.Transaction) error {
 	return nil
 }
 
-func addSiacoinInputs(tx *txn, id int64, txn types.Transaction, dbIDs map[types.SiacoinOutputID]int64) error {
-	stmt, err := tx.Prepare(`INSERT INTO transaction_siacoin_inputs(transaction_id, transaction_order, parent_id, unlock_conditions) VALUES (?, ?, ?, ?)`)
+func addSiacoinInputs(tx *txn, id int64, txn types.Transaction) error {
+	stmt, err := tx.Prepare(`INSERT INTO transaction_siacoin_inputs(transaction_id, transaction_order, parent_id, unlock_conditions) VALUES (?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?), ?)`)
 	if err != nil {
 		return fmt.Errorf("addSiacoinInputs: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i, sci := range txn.SiacoinInputs {
-		dbID, ok := dbIDs[sci.ParentID]
-		if !ok {
-			return errors.New("addSiacoinOutputs: dbID not in map")
-		}
-
-		if _, err := stmt.Exec(id, i, dbID, encode(sci.UnlockConditions)); err != nil {
+		if _, err := stmt.Exec(id, i, encode(sci.ParentID), encode(sci.UnlockConditions)); err != nil {
 			return fmt.Errorf("addSiacoinInputs: failed to execute statement: %w", err)
 		}
 	}
 	return nil
 }
 
-func addSiacoinOutputs(tx *txn, id int64, txn types.Transaction, dbIDs map[types.SiacoinOutputID]int64) error {
-	stmt, err := tx.Prepare(`INSERT INTO transaction_siacoin_outputs(transaction_id, transaction_order, output_id) VALUES (?, ?, ?)`)
+func addSiacoinOutputs(tx *txn, id int64, txn types.Transaction) error {
+	stmt, err := tx.Prepare(`INSERT INTO transaction_siacoin_outputs(transaction_id, transaction_order, output_id) VALUES (?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?))`)
 	if err != nil {
 		return fmt.Errorf("addSiacoinOutputs: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i := range txn.SiacoinOutputs {
-		dbID, ok := dbIDs[txn.SiacoinOutputID(i)]
-		if !ok {
-			return errors.New("addSiacoinOutputs: dbID not in map")
-		}
-
-		if _, err := stmt.Exec(id, i, dbID); err != nil {
+		if _, err := stmt.Exec(id, i, encode(txn.SiacoinOutputID(i))); err != nil {
 			return fmt.Errorf("addSiacoinOutputs: failed to execute statement: %w", err)
 		}
 	}
 	return nil
 }
 
-func addSiafundInputs(tx *txn, id int64, txn types.Transaction, dbIDs map[types.SiafundOutputID]int64) error {
-	stmt, err := tx.Prepare(`INSERT INTO transaction_siafund_inputs(transaction_id, transaction_order, parent_id, unlock_conditions, claim_address) VALUES (?, ?, ?, ?, ?)`)
+func addSiafundInputs(tx *txn, id int64, txn types.Transaction) error {
+	stmt, err := tx.Prepare(`INSERT INTO transaction_siafund_inputs(transaction_id, transaction_order, parent_id, unlock_conditions, claim_address) VALUES (?, ?, (SELECT id FROM siafund_elements WHERE output_id = ?), ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("addSiafundInputs: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i, sfi := range txn.SiafundInputs {
-		dbID, ok := dbIDs[sfi.ParentID]
-		if !ok {
-			return errors.New("addSiafundOutputs: dbID not in map")
-		}
-
-		if _, err := stmt.Exec(id, i, dbID, encode(sfi.UnlockConditions), encode(sfi.ClaimAddress)); err != nil {
+		if _, err := stmt.Exec(id, i, encode(sfi.ParentID), encode(sfi.UnlockConditions), encode(sfi.ClaimAddress)); err != nil {
 			return fmt.Errorf("addSiafundInputs: failed to execute statement: %w", err)
 		}
 	}
@@ -155,48 +135,38 @@ func addSiafundInputs(tx *txn, id int64, txn types.Transaction, dbIDs map[types.
 	return nil
 }
 
-func addSiafundOutputs(tx *txn, id int64, txn types.Transaction, dbIDs map[types.SiafundOutputID]int64) error {
-	stmt, err := tx.Prepare(`INSERT INTO transaction_siafund_outputs(transaction_id, transaction_order, output_id) VALUES (?, ?, ?)`)
+func addSiafundOutputs(tx *txn, id int64, txn types.Transaction) error {
+	stmt, err := tx.Prepare(`INSERT INTO transaction_siafund_outputs(transaction_id, transaction_order, output_id) VALUES (?, ?, (SELECT id FROM siafund_elements WHERE output_id = ?))`)
 	if err != nil {
 		return fmt.Errorf("addSiafundOutputs: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i := range txn.SiafundOutputs {
-		dbID, ok := dbIDs[txn.SiafundOutputID(i)]
-		if !ok {
-			return errors.New("addSiafundOutputs: dbID not in map")
-		}
-
-		if _, err := stmt.Exec(id, i, dbID); err != nil {
+		if _, err := stmt.Exec(id, i, encode(txn.SiafundOutputID(i))); err != nil {
 			return fmt.Errorf("addSiafundOutputs: failed to execute statement: %w", err)
 		}
 	}
 	return nil
 }
 
-func addFileContracts(tx *txn, id int64, txn types.Transaction, fcDBIds map[explorer.DBFileContract]int64) error {
-	stmt, err := tx.Prepare(`INSERT INTO transaction_file_contracts(transaction_id, transaction_order, contract_id) VALUES (?, ?, ?)`)
+func addFileContracts(tx *txn, id int64, txn types.Transaction) error {
+	stmt, err := tx.Prepare(`INSERT INTO transaction_file_contracts(transaction_id, transaction_order, contract_id) VALUES (?, ?, (SELECT id FROM file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
 	if err != nil {
 		return fmt.Errorf("addFileContracts: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i, fc := range txn.FileContracts {
-		dbID, ok := fcDBIds[explorer.DBFileContract{ID: txn.FileContractID(i), RevisionNumber: fc.RevisionNumber}]
-		if !ok {
-			return errors.New("addFileContracts: fcDbID not in map")
-		}
-
-		if _, err := stmt.Exec(id, i, dbID); err != nil {
+		if _, err := stmt.Exec(id, i, encode(txn.FileContractID(i)), encode(fc.RevisionNumber)); err != nil {
 			return fmt.Errorf("addFileContracts: failed to execute transaction_file_contracts statement: %w", err)
 		}
 	}
 	return nil
 }
 
-func addFileContractRevisions(tx *txn, id int64, txn types.Transaction, dbIDs map[explorer.DBFileContract]int64) error {
-	stmt, err := tx.Prepare(`INSERT INTO transaction_file_contract_revisions(transaction_id, transaction_order, contract_id, parent_id, unlock_conditions) VALUES (?, ?, ?, ?, ?)`)
+func addFileContractRevisions(tx *txn, id int64, txn types.Transaction) error {
+	stmt, err := tx.Prepare(`INSERT INTO transaction_file_contract_revisions(transaction_id, transaction_order, parent_id, unlock_conditions, contract_id) VALUES (?, ?, ?, ?, (SELECT id FROM file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
 	if err != nil {
 		return fmt.Errorf("addFileContractRevisions: failed to prepare statement: %w", err)
 	}
@@ -204,12 +174,7 @@ func addFileContractRevisions(tx *txn, id int64, txn types.Transaction, dbIDs ma
 
 	for i := range txn.FileContractRevisions {
 		fcr := &txn.FileContractRevisions[i]
-		dbID, ok := dbIDs[explorer.DBFileContract{ID: fcr.ParentID, RevisionNumber: fcr.FileContract.RevisionNumber}]
-		if !ok {
-			return errors.New("addFileContractRevisions: dbID not in map")
-		}
-
-		if _, err := stmt.Exec(id, i, dbID, encode(fcr.ParentID), encode(fcr.UnlockConditions)); err != nil {
+		if _, err := stmt.Exec(id, i, encode(fcr.ParentID), encode(fcr.UnlockConditions), encode(fcr.ParentID), encode(fcr.FileContract.RevisionNumber)); err != nil {
 			return fmt.Errorf("addFileContractRevisions: failed to execute statement: %w", err)
 		}
 	}
@@ -294,7 +259,7 @@ func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction) (map[
 	return txnDBIds, nil
 }
 
-func addTransactionFields(tx *txn, txns []types.Transaction, scDBIds map[types.SiacoinOutputID]int64, sfDBIds map[types.SiafundOutputID]int64, fcDBIds map[explorer.DBFileContract]int64, txnDBIds map[types.TransactionID]txnDBId) error {
+func addTransactionFields(tx *txn, txns []types.Transaction, txnDBIds map[types.TransactionID]txnDBId) error {
 	for _, txn := range txns {
 		txnID := txn.ID()
 		dbID, ok := txnDBIds[txnID]
@@ -316,17 +281,17 @@ func addTransactionFields(tx *txn, txns []types.Transaction, scDBIds map[types.S
 			return fmt.Errorf("failed to add arbitrary data: %w", err)
 		} else if err := addSignatures(tx, dbID.id, txn); err != nil {
 			return fmt.Errorf("failed to add signatures: %w", err)
-		} else if err := addSiacoinInputs(tx, dbID.id, txn, scDBIds); err != nil {
+		} else if err := addSiacoinInputs(tx, dbID.id, txn); err != nil {
 			return fmt.Errorf("failed to add siacoin inputs: %w", err)
-		} else if err := addSiacoinOutputs(tx, dbID.id, txn, scDBIds); err != nil {
+		} else if err := addSiacoinOutputs(tx, dbID.id, txn); err != nil {
 			return fmt.Errorf("failed to add siacoin outputs: %w", err)
-		} else if err := addSiafundInputs(tx, dbID.id, txn, sfDBIds); err != nil {
+		} else if err := addSiafundInputs(tx, dbID.id, txn); err != nil {
 			return fmt.Errorf("failed to add siafund inputs: %w", err)
-		} else if err := addSiafundOutputs(tx, dbID.id, txn, sfDBIds); err != nil {
+		} else if err := addSiafundOutputs(tx, dbID.id, txn); err != nil {
 			return fmt.Errorf("failed to add siafund outputs: %w", err)
-		} else if err := addFileContracts(tx, dbID.id, txn, fcDBIds); err != nil {
+		} else if err := addFileContracts(tx, dbID.id, txn); err != nil {
 			return fmt.Errorf("failed to add file contract: %w", err)
-		} else if err := addFileContractRevisions(tx, dbID.id, txn, fcDBIds); err != nil {
+		} else if err := addFileContractRevisions(tx, dbID.id, txn); err != nil {
 			return fmt.Errorf("failed to add file contract revisions: %w", err)
 		} else if err := addStorageProofs(tx, dbID.id, txn); err != nil {
 			return fmt.Errorf("failed to add storage proofs: %w", err)
@@ -540,98 +505,80 @@ func updateStateTree(tx *txn, changes []explorer.TreeNodeUpdate) error {
 	return nil
 }
 
-func addSiacoinElements(tx *txn, index types.ChainIndex, spentElements, newElements []explorer.SiacoinOutput) (map[types.SiacoinOutputID]int64, error) {
-	scDBIds := make(map[types.SiacoinOutputID]int64)
+func addSiacoinElements(tx *txn, index types.ChainIndex, spentElements, newElements []explorer.SiacoinOutput) error {
 	if len(newElements) > 0 {
 		stmt, err := tx.Prepare(`INSERT INTO siacoin_elements(output_id, block_id, leaf_index, source, maturity_height, address, value)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (output_id)
-                DO UPDATE SET leaf_index = ?, spent_index = NULL
-                RETURNING id;`)
+                DO UPDATE SET leaf_index = ?, spent_index = NULL;`)
 		if err != nil {
-			return nil, fmt.Errorf("addSiacoinElements: failed to prepare siacoin_elements statement: %w", err)
+			return fmt.Errorf("addSiacoinElements: failed to prepare siacoin_elements statement: %w", err)
 		}
 		defer stmt.Close()
 
 		for _, sce := range newElements {
-			var dbID int64
-			if err := stmt.QueryRow(encode(sce.ID), encode(index.ID), encode(sce.StateElement.LeafIndex), int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), encode(sce.StateElement.LeafIndex)).Scan(&dbID); err != nil {
-				return nil, fmt.Errorf("addSiacoinElements: failed to execute siacoin_elements statement: %w", err)
+			if _, err := stmt.Exec(encode(sce.ID), encode(index.ID), encode(sce.StateElement.LeafIndex), int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), encode(sce.StateElement.LeafIndex)); err != nil {
+				return fmt.Errorf("addSiacoinElements: failed to execute siacoin_elements statement: %w", err)
 			}
-
-			scDBIds[types.SiacoinOutputID(sce.ID)] = dbID
 		}
 	}
 	if len(spentElements) > 0 {
 		stmt, err := tx.Prepare(`INSERT INTO siacoin_elements(output_id, block_id, leaf_index, spent_index, source, maturity_height, address, value)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (output_id)
-                DO UPDATE SET spent_index = ?, leaf_index = ?
-                RETURNING id;`)
+                DO UPDATE SET spent_index = ?, leaf_index = ?;`)
 		if err != nil {
-			return nil, fmt.Errorf("addSiacoinElements: failed to prepare siacoin_elements statement: %w", err)
+			return fmt.Errorf("addSiacoinElements: failed to prepare siacoin_elements statement: %w", err)
 		}
 		defer stmt.Close()
 
 		for _, sce := range spentElements {
-			var dbID int64
-			if err := stmt.QueryRow(encode(sce.ID), encode(index.ID), encode(sce.StateElement.LeafIndex), encode(index), int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), encode(index), encode(sce.StateElement.LeafIndex)).Scan(&dbID); err != nil {
-				return nil, fmt.Errorf("addSiacoinElements: failed to execute siacoin_elements statement: %w", err)
+			if _, err := stmt.Exec(encode(sce.ID), encode(index.ID), encode(sce.StateElement.LeafIndex), encode(index), int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), encode(index), encode(sce.StateElement.LeafIndex)); err != nil {
+				return fmt.Errorf("addSiacoinElements: failed to execute siacoin_elements statement: %w", err)
 			}
-
-			scDBIds[types.SiacoinOutputID(sce.ID)] = dbID
 		}
 	}
 
-	return scDBIds, nil
+	return nil
 }
 
-func addSiafundElements(tx *txn, index types.ChainIndex, spentElements, newElements []types.SiafundElement) (map[types.SiafundOutputID]int64, error) {
-	sfDBIds := make(map[types.SiafundOutputID]int64)
+func addSiafundElements(tx *txn, index types.ChainIndex, spentElements, newElements []types.SiafundElement) error {
 	if len(newElements) > 0 {
 		stmt, err := tx.Prepare(`INSERT INTO siafund_elements(output_id, block_id, leaf_index, claim_start, address, value)
             VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT
-            DO UPDATE SET leaf_index = ?, spent_index = NULL
-            RETURNING id;`)
+            DO UPDATE SET leaf_index = ?, spent_index = NULL`)
 		if err != nil {
-			return nil, fmt.Errorf("addSiafundElements: failed to prepare siafund_elements statement: %w", err)
+			return fmt.Errorf("addSiafundElements: failed to prepare siafund_elements statement: %w", err)
 		}
 		defer stmt.Close()
 
 		for _, sfe := range newElements {
-			var dbID int64
-			if err := stmt.QueryRow(encode(sfe.ID), encode(index.ID), encode(sfe.StateElement.LeafIndex), encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), encode(sfe.StateElement.LeafIndex)).Scan(&dbID); err != nil {
-				return nil, fmt.Errorf("addSiafundElements: failed to execute siafund_elements statement: %w", err)
+			if _, err := stmt.Exec(encode(sfe.ID), encode(index.ID), encode(sfe.StateElement.LeafIndex), encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), encode(sfe.StateElement.LeafIndex)); err != nil {
+				return fmt.Errorf("addSiafundElements: failed to execute siafund_elements statement: %w", err)
 			}
-
-			sfDBIds[types.SiafundOutputID(sfe.ID)] = dbID
 		}
 	}
 	if len(spentElements) > 0 {
 		stmt, err := tx.Prepare(`INSERT INTO siafund_elements(output_id, block_id, leaf_index, spent_index, claim_start, address, value)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT
-            DO UPDATE SET leaf_index = ?, spent_index = ?
-            RETURNING id;`)
+            DO UPDATE SET leaf_index = ?, spent_index = ?`)
 		if err != nil {
-			return nil, fmt.Errorf("addSiafundElements: failed to prepare siafund_elements statement: %w", err)
+			return fmt.Errorf("addSiafundElements: failed to prepare siafund_elements statement: %w", err)
 		}
 		defer stmt.Close()
 
 		for _, sfe := range spentElements {
-			var dbID int64
-			if err := stmt.QueryRow(encode(sfe.ID), encode(index.ID), encode(sfe.StateElement.LeafIndex), encode(index), encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), encode(sfe.StateElement.LeafIndex), encode(index)).Scan(&dbID); err != nil {
-				return nil, fmt.Errorf("addSiafundElements: failed to execute siafund_elements statement: %w", err)
+			if _, err := stmt.Exec(encode(sfe.ID), encode(index.ID), encode(sfe.StateElement.LeafIndex), encode(index), encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), encode(sfe.StateElement.LeafIndex), encode(index)); err != nil {
+				return fmt.Errorf("addSiafundElements: failed to execute siafund_elements statement: %w", err)
 			}
-
-			sfDBIds[types.SiafundOutputID(sfe.ID)] = dbID
 		}
 	}
-	return sfDBIds, nil
+	return nil
 }
 
-func addEvents(tx *txn, bid types.BlockID, scDBIds map[types.SiacoinOutputID]int64, fcDBIds map[explorer.DBFileContract]int64, v2FcDBIds map[explorer.DBFileContract]int64, txnDBIds map[types.TransactionID]txnDBId, v2TxnDBIds map[types.TransactionID]txnDBId, events []explorer.Event) error {
+func addEvents(tx *txn, bid types.BlockID, v2FcDBIds map[explorer.DBFileContract]int64, txnDBIds map[types.TransactionID]txnDBId, v2TxnDBIds map[types.TransactionID]txnDBId, events []explorer.Event) error {
 	if len(events) == 0 {
 		return nil
 	}
@@ -666,19 +613,19 @@ func addEvents(tx *txn, bid types.BlockID, scDBIds map[types.SiacoinOutputID]int
 	}
 	defer v2TransactionEventStmt.Close()
 
-	payoutEventStmt, err := tx.Prepare(`INSERT INTO payout_events (event_id, output_id) VALUES (?, ?)`)
+	payoutEventStmt, err := tx.Prepare(`INSERT INTO payout_events (event_id, output_id) VALUES (?, (SELECT id FROM siacoin_elements WHERE output_id = ?))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare minerpayout event statement: %w", err)
 	}
 	defer payoutEventStmt.Close()
 
-	v1ContractResolutionEventStmt, err := tx.Prepare(`INSERT INTO v1_contract_resolution_events (event_id, output_id, parent_id, missed) VALUES (?, ?, ?, ?)`)
+	v1ContractResolutionEventStmt, err := tx.Prepare(`INSERT INTO v1_contract_resolution_events (event_id, output_id, parent_id, missed) VALUES (?, (SELECT id FROM siacoin_elements WHERE output_id = ?), (SELECT id FROM file_contract_elements WHERE contract_id = ? AND revision_number = ?), ?)`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare v1 contract resolution event statement: %w", err)
 	}
 	defer v1ContractResolutionEventStmt.Close()
 
-	v2ContractResolutionEventStmt, err := tx.Prepare(`INSERT INTO v2_contract_resolution_events (event_id, output_id, parent_id, missed) VALUES (?, ?, ?, ?)`)
+	v2ContractResolutionEventStmt, err := tx.Prepare(`INSERT INTO v2_contract_resolution_events (event_id, output_id, parent_id, missed) VALUES (?, (SELECT id FROM siacoin_elements WHERE output_id = ?), ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare v2 contract resolution event statement: %w", err)
 	}
@@ -725,11 +672,11 @@ func addEvents(tx *txn, bid types.BlockID, scDBIds map[types.SiacoinOutputID]int
 				return fmt.Errorf("failed to insert transaction event: %w", err)
 			}
 		case explorer.EventPayout:
-			_, err = payoutEventStmt.Exec(eventID, scDBIds[types.SiacoinOutputID(event.ID)])
+			_, err = payoutEventStmt.Exec(eventID, encode(types.SiacoinOutputID(event.ID)))
 		case explorer.EventV1ContractResolution:
-			_, err = v1ContractResolutionEventStmt.Exec(eventID, scDBIds[v.SiacoinElement.ID], fcDBIds[explorer.DBFileContract{ID: v.Parent.ID, RevisionNumber: v.Parent.RevisionNumber}], v.Missed)
+			_, err = v1ContractResolutionEventStmt.Exec(eventID, encode(v.SiacoinElement.ID), encode(v.Parent.ID), encode(v.Parent.RevisionNumber), v.Missed)
 		case explorer.EventV2ContractResolution:
-			_, err = v2ContractResolutionEventStmt.Exec(eventID, scDBIds[v.SiacoinElement.ID], v2FcDBIds[explorer.DBFileContract{ID: v.Resolution.Parent.ID, RevisionNumber: v.Resolution.Parent.V2FileContract.RevisionNumber}], v.Missed)
+			_, err = v2ContractResolutionEventStmt.Exec(eventID, encode(v.SiacoinElement.ID), v2FcDBIds[explorer.DBFileContract{ID: v.Resolution.Parent.ID, RevisionNumber: v.Resolution.Parent.V2FileContract.RevisionNumber}], v.Missed)
 		default:
 			return fmt.Errorf("unknown event type: %T", reflect.TypeOf(event.Data))
 		}
@@ -740,14 +687,14 @@ func addEvents(tx *txn, bid types.BlockID, scDBIds map[types.SiacoinOutputID]int
 	return nil
 }
 
-func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b types.Block, fces []explorer.FileContractUpdate) (map[explorer.DBFileContract]int64, error) {
+func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b types.Block, fces []explorer.FileContractUpdate) error {
 	stmt, err := tx.Prepare(`INSERT INTO file_contract_elements(contract_id, block_id, transaction_id, leaf_index, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (contract_id, revision_number)
         DO UPDATE SET leaf_index = ?
         RETURNING id;`)
 	if err != nil {
-		return nil, fmt.Errorf("updateFileContractElements: failed to prepare main statement: %w", err)
+		return fmt.Errorf("updateFileContractElements: failed to prepare main statement: %w", err)
 	}
 	defer stmt.Close()
 
@@ -756,19 +703,19 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
     ON CONFLICT (contract_id)
     DO UPDATE SET resolved = EXCLUDED.resolved, valid = EXCLUDED.valid, contract_element_id = ?, ed25519_renter_key = COALESCE(?, ed25519_renter_key), ed25519_host_key = COALESCE(?, ed25519_host_key), confirmation_height = COALESCE(?, confirmation_height), confirmation_block_id = COALESCE(?, confirmation_block_id), confirmation_transaction_id = COALESCE(?, confirmation_transaction_id)`)
 	if err != nil {
-		return nil, fmt.Errorf("updateFileContractElements: failed to prepare last_contract_revision statement: %w", err)
+		return fmt.Errorf("updateFileContractElements: failed to prepare last_contract_revision statement: %w", err)
 	}
 	defer revisionStmt.Close()
 
 	validOutputsStmt, err := tx.Prepare(`INSERT INTO file_contract_valid_proof_outputs(contract_id, contract_order, id, address, value) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`)
 	if err != nil {
-		return nil, fmt.Errorf("addFileContracts: failed to prepare valid proof outputs statement: %w", err)
+		return fmt.Errorf("addFileContracts: failed to prepare valid proof outputs statement: %w", err)
 	}
 	defer validOutputsStmt.Close()
 
 	missedOutputsStmt, err := tx.Prepare(`INSERT INTO file_contract_missed_proof_outputs(contract_id, contract_order, id, address, value) VALUES (?, ?, ?, ?, ?)  ON CONFLICT DO NOTHING`)
 	if err != nil {
-		return nil, fmt.Errorf("addFileContracts: failed to prepare missed proof outputs statement: %w", err)
+		return fmt.Errorf("addFileContracts: failed to prepare missed proof outputs statement: %w", err)
 	}
 	defer missedOutputsStmt.Close()
 
@@ -821,7 +768,7 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
 		}
 	}
 
-	fcDBIds := make(map[explorer.DBFileContract]int64)
+	seen := make(map[explorer.DBFileContract]struct{})
 	addFC := func(fcID types.FileContractID, leafIndex uint64, fc types.FileContract, confirmationTransactionID *types.TransactionID, resolved, valid, lastRevision bool) error {
 		var dbID int64
 		dbFC := explorer.DBFileContract{ID: fcID, RevisionNumber: fc.RevisionNumber}
@@ -862,7 +809,7 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
 			}
 		}
 
-		fcDBIds[dbFC] = dbID
+		seen[dbFC] = struct{}{}
 		return nil
 	}
 
@@ -912,12 +859,12 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
 			update.Valid,
 			true,
 		); err != nil {
-			return nil, fmt.Errorf("updateFileContractElements: %w", err)
+			return fmt.Errorf("updateFileContractElements: %w", err)
 		}
 	}
 
 	if revert {
-		return fcDBIds, nil
+		return nil
 	}
 
 	for _, txn := range b.Transactions {
@@ -926,12 +873,12 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
 		for j, fc := range txn.FileContracts {
 			fcID := txn.FileContractID(j)
 			dbFC := explorer.DBFileContract{ID: txn.FileContractID(j), RevisionNumber: fc.RevisionNumber}
-			if _, exists := fcDBIds[dbFC]; exists {
+			if _, exists := seen[dbFC]; exists {
 				continue
 			}
 
 			if err := addFC(fcID, 0, fc, nil, false, false, false); err != nil {
-				return nil, fmt.Errorf("updateFileContractElements: %w", err)
+				return fmt.Errorf("updateFileContractElements: %w", err)
 			}
 		}
 		// add in any revisions that are not the latest, i.e. contracts that
@@ -939,17 +886,17 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
 		for _, fcr := range txn.FileContractRevisions {
 			fc := fcr.FileContract
 			dbFC := explorer.DBFileContract{ID: fcr.ParentID, RevisionNumber: fc.RevisionNumber}
-			if _, exists := fcDBIds[dbFC]; exists {
+			if _, exists := seen[dbFC]; exists {
 				continue
 			}
 
 			if err := addFC(fcr.ParentID, 0, fc, nil, false, false, false); err != nil {
-				return nil, fmt.Errorf("updateFileContractElements: %w", err)
+				return fmt.Errorf("updateFileContractElements: %w", err)
 			}
 		}
 	}
 
-	return fcDBIds, nil
+	return nil
 }
 
 func updateFileContractIndices(tx *txn, revert bool, index types.ChainIndex, fces []explorer.FileContractUpdate) error {
@@ -1029,26 +976,21 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to add v2 transactions: %w", err)
 	}
 
-	scDBIds, err := addSiacoinElements(
+	if err := addSiacoinElements(
 		ut.tx,
 		state.Metrics.Index,
 		append(state.SpentSiacoinElements, state.EphemeralSiacoinElements...),
 		state.NewSiacoinElements,
-	)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add siacoin outputs: %w", err)
-	}
-	sfDBIds, err := addSiafundElements(
+	} else if err := addSiafundElements(
 		ut.tx,
 		state.Metrics.Index,
 		append(state.SpentSiafundElements, state.EphemeralSiafundElements...),
 		state.NewSiafundElements,
-	)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add siafund outputs: %w", err)
-	}
-	fcDBIds, err := updateFileContractElements(ut.tx, false, state.Metrics.Index, state.Block, state.FileContractElements)
-	if err != nil {
+	} else if err := updateFileContractElements(ut.tx, false, state.Metrics.Index, state.Block, state.FileContractElements); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add file contracts: %w", err)
 	}
 
@@ -1057,13 +999,13 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to add v2 file contracts: %w", err)
 	}
 
-	if err := addTransactionFields(ut.tx, state.Block.Transactions, scDBIds, sfDBIds, fcDBIds, txnDBIds); err != nil {
+	if err := addTransactionFields(ut.tx, state.Block.Transactions, txnDBIds); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add transaction fields: %w", err)
-	} else if err := addV2TransactionFields(ut.tx, state.Block.V2Transactions(), scDBIds, sfDBIds, v2FcDBIds, v2TxnDBIds); err != nil {
+	} else if err := addV2TransactionFields(ut.tx, state.Block.V2Transactions(), v2FcDBIds, v2TxnDBIds); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add v2 transaction fields: %w", err)
 	} else if err := updateBalances(ut.tx, state.Metrics.Index.Height, state.SpentSiacoinElements, state.NewSiacoinElements, state.SpentSiafundElements, state.NewSiafundElements); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update balances: %w", err)
-	} else if err := addMinerPayouts(ut.tx, state.Block.ID(), state.Block.MinerPayouts, scDBIds); err != nil {
+	} else if err := addMinerPayouts(ut.tx, state.Block.ID(), state.Block.MinerPayouts); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add miner payouts: %w", err)
 	} else if err := updateStateTree(ut.tx, state.TreeUpdates); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update state tree: %w", err)
@@ -1075,7 +1017,7 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to update file contract element indices: %w", err)
 	} else if err := updateV2FileContractIndices(ut.tx, false, state.Metrics.Index, state.V2FileContractElements); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update v2 file contract element indices: %w", err)
-	} else if err := addEvents(ut.tx, state.Block.ID(), scDBIds, fcDBIds, v2FcDBIds, txnDBIds, v2TxnDBIds, state.Events); err != nil {
+	} else if err := addEvents(ut.tx, state.Block.ID(), v2FcDBIds, txnDBIds, v2TxnDBIds, state.Events); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add events: %w", err)
 	}
 
