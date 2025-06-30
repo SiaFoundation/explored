@@ -578,7 +578,7 @@ func addSiafundElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 	return nil
 }
 
-func addEvents(tx *txn, bid types.BlockID, v2FcDBIds map[explorer.DBFileContract]int64, txnDBIds map[types.TransactionID]txnDBId, v2TxnDBIds map[types.TransactionID]txnDBId, events []explorer.Event) error {
+func addEvents(tx *txn, bid types.BlockID, txnDBIds map[types.TransactionID]txnDBId, v2TxnDBIds map[types.TransactionID]txnDBId, events []explorer.Event) error {
 	if len(events) == 0 {
 		return nil
 	}
@@ -625,7 +625,7 @@ func addEvents(tx *txn, bid types.BlockID, v2FcDBIds map[explorer.DBFileContract
 	}
 	defer v1ContractResolutionEventStmt.Close()
 
-	v2ContractResolutionEventStmt, err := tx.Prepare(`INSERT INTO v2_contract_resolution_events (event_id, output_id, parent_id, missed) VALUES (?, (SELECT id FROM siacoin_elements WHERE output_id = ?), ?, ?)`)
+	v2ContractResolutionEventStmt, err := tx.Prepare(`INSERT INTO v2_contract_resolution_events (event_id, output_id, parent_id, missed) VALUES (?, (SELECT id FROM siacoin_elements WHERE output_id = ?), (SELECT id from v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?), ?)`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare v2 contract resolution event statement: %w", err)
 	}
@@ -676,7 +676,7 @@ func addEvents(tx *txn, bid types.BlockID, v2FcDBIds map[explorer.DBFileContract
 		case explorer.EventV1ContractResolution:
 			_, err = v1ContractResolutionEventStmt.Exec(eventID, encode(v.SiacoinElement.ID), encode(v.Parent.ID), encode(v.Parent.RevisionNumber), v.Missed)
 		case explorer.EventV2ContractResolution:
-			_, err = v2ContractResolutionEventStmt.Exec(eventID, encode(v.SiacoinElement.ID), v2FcDBIds[explorer.DBFileContract{ID: v.Resolution.Parent.ID, RevisionNumber: v.Resolution.Parent.V2FileContract.RevisionNumber}], v.Missed)
+			_, err = v2ContractResolutionEventStmt.Exec(eventID, encode(v.SiacoinElement.ID), encode(v.Resolution.Parent.ID), encode(v.Resolution.Parent.V2FileContract.RevisionNumber), v.Missed)
 		default:
 			return fmt.Errorf("unknown event type: %T", reflect.TypeOf(event.Data))
 		}
@@ -992,16 +992,11 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to add siafund outputs: %w", err)
 	} else if err := updateFileContractElements(ut.tx, false, state.Metrics.Index, state.Block, state.FileContractElements); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add file contracts: %w", err)
-	}
-
-	v2FcDBIds, err := updateV2FileContractElements(ut.tx, false, state.Metrics.Index, state.Block, state.V2FileContractElements)
-	if err != nil {
+	} else if err := updateV2FileContractElements(ut.tx, false, state.Metrics.Index, state.Block, state.V2FileContractElements); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add v2 file contracts: %w", err)
-	}
-
-	if err := addTransactionFields(ut.tx, state.Block.Transactions, txnDBIds); err != nil {
+	} else if err := addTransactionFields(ut.tx, state.Block.Transactions, txnDBIds); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add transaction fields: %w", err)
-	} else if err := addV2TransactionFields(ut.tx, state.Block.V2Transactions(), v2FcDBIds, v2TxnDBIds); err != nil {
+	} else if err := addV2TransactionFields(ut.tx, state.Block.V2Transactions(), v2TxnDBIds); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add v2 transaction fields: %w", err)
 	} else if err := updateBalances(ut.tx, state.Metrics.Index.Height, state.SpentSiacoinElements, state.NewSiacoinElements, state.SpentSiafundElements, state.NewSiafundElements); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update balances: %w", err)
@@ -1017,7 +1012,7 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to update file contract element indices: %w", err)
 	} else if err := updateV2FileContractIndices(ut.tx, false, state.Metrics.Index, state.V2FileContractElements); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update v2 file contract element indices: %w", err)
-	} else if err := addEvents(ut.tx, state.Block.ID(), v2FcDBIds, txnDBIds, v2TxnDBIds, state.Events); err != nil {
+	} else if err := addEvents(ut.tx, state.Block.ID(), txnDBIds, v2TxnDBIds, state.Events); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add events: %w", err)
 	}
 

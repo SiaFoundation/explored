@@ -263,7 +263,7 @@ func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("RevertIndex: failed to update balances: %w", err)
 	} else if err := updateFileContractElements(ut.tx, true, state.Metrics.Index, state.Block, state.FileContractElements); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update file contract state: %w", err)
-	} else if _, err := updateV2FileContractElements(ut.tx, true, state.Metrics.Index, state.Block, state.V2FileContractElements); err != nil {
+	} else if err := updateV2FileContractElements(ut.tx, true, state.Metrics.Index, state.Block, state.V2FileContractElements); err != nil {
 		return fmt.Errorf("RevertIndex: failed to add v2 file contracts: %w", err)
 	} else if err := updateFileContractIndices(ut.tx, true, state.Metrics.Index, state.FileContractElements); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update file contract element indices: %w", err)
