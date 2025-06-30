@@ -880,7 +880,30 @@ func BenchmarkApplyRevert(b *testing.B) {
 		scID = txn3.SiacoinOutputID(txn3.ID(), 0)
 		val = txn3.SiacoinOutputs[0].Value
 
-		return testutil.MineV2Block(n.tipState(), []types.Transaction{txn1, txn2}, []types.V2Transaction{txn3}, types.VoidAddress)
+		v2FC, payout := prepareV2Contract(pk1, pk1, n.tipState().Index.Height+1)
+		txn4 := types.V2Transaction{
+			SiacoinInputs: []types.V2SiacoinInput{{
+				Parent: types.SiacoinElement{
+					ID: txn3.SiacoinOutputID(txn3.ID(), 0),
+					StateElement: types.StateElement{
+						LeafIndex: types.UnassignedLeafIndex,
+					},
+					SiacoinOutput: txn3.SiacoinOutputs[0],
+				},
+				SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+			}},
+			SiacoinOutputs: []types.SiacoinOutput{{
+				Address: addr1,
+				Value:   val.Sub(payout),
+			}},
+			FileContracts: []types.V2FileContract{v2FC},
+		}
+		testutil.SignV2TransactionWithContracts(n.tipState(), pk1, pk1, pk1, &txn4)
+
+		scID = txn4.SiacoinOutputID(txn4.ID(), 0)
+		val = txn4.SiacoinOutputs[0].Value
+
+		return testutil.MineV2Block(n.tipState(), []types.Transaction{txn1, txn2}, []types.V2Transaction{txn3, txn4}, types.VoidAddress)
 	}
 
 	for i := range nBlocks {
