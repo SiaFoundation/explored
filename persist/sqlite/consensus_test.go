@@ -912,7 +912,6 @@ func BenchmarkApplyRevert(b *testing.B) {
 		}
 
 		n.applyBlock(b, generateBlock())
-
 	}
 
 	block := generateBlock()
