@@ -936,17 +936,16 @@ func BenchmarkApplyRevert(b *testing.B) {
 
 	b.Run("apply", func(b *testing.B) {
 		b.ResetTimer()
-		for range b.N {
-			b.StartTimer()
+		for b.Loop() {
 			err := n.db.transaction(func(tx *txn) error {
 				utx := &updateTx{tx: tx}
 				return explorer.UpdateChainState(utx, nil, caus, n.db.log.Named("update"))
 			})
-			b.StopTimer()
 			if err != nil {
 				b.Fatal(err)
 			}
 
+			b.StopTimer()
 			err = n.db.transaction(func(tx *txn) error {
 				utx := &updateTx{tx: tx}
 				return explorer.UpdateChainState(utx, crus, nil, n.db.log.Named("update"))
@@ -954,6 +953,7 @@ func BenchmarkApplyRevert(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
+			b.StartTimer()
 		}
 	})
 
@@ -979,15 +979,13 @@ func BenchmarkApplyRevert(b *testing.B) {
 	}}
 
 	b.Run("revert", func(b *testing.B) {
-		b.ResetTimer()
-		for range b.N {
-			b.StartTimer()
+		for b.Loop() {
 			err := n.db.transaction(func(tx *txn) error {
 				utx := &updateTx{tx: tx}
 				return explorer.UpdateChainState(utx, crus, nil, n.db.log.Named("update"))
 			})
-			b.StopTimer()
 
+			b.StopTimer()
 			err = n.db.transaction(func(tx *txn) error {
 				utx := &updateTx{tx: tx}
 				return explorer.UpdateChainState(utx, nil, caus, n.db.log.Named("update"))
@@ -995,6 +993,7 @@ func BenchmarkApplyRevert(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
+			b.StartTimer()
 		}
 	})
 }
