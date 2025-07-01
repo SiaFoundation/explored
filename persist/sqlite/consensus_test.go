@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -916,45 +915,17 @@ func BenchmarkApplyRevert(b *testing.B) {
 
 	block := generateBlock()
 	bs := n.store.SupplementTipBlock(block)
-	cs := n.states[len(n.states)-1]
+	prevState := n.states[len(n.states)-1]
 
-	if err := consensus.ValidateBlock(cs, block, bs); err != nil {
+	if err := consensus.ValidateBlock(prevState, block, bs); err != nil {
 		b.Fatal(err)
 	}
-	cs, au := consensus.ApplyBlock(cs, block, bs, time.Time{})
+	cs, au := consensus.ApplyBlock(prevState, block, bs, time.Time{})
 	caus := []chain.ApplyUpdate{{
 		ApplyUpdate: au,
 		Block:       block,
 		State:       cs,
 	}}
-
-	b.Run("apply", func(b *testing.B) {
-		b.ResetTimer()
-		for range b.N {
-			err := n.db.transaction(func(tx *txn) error {
-				defer tx.Rollback()
-				utx := &updateTx{
-					tx: tx,
-				}
-
-				b.StartTimer()
-				err := explorer.UpdateChainState(utx, nil, caus, n.db.log.Named("update"))
-				b.StopTimer()
-
-				if err != nil {
-					return fmt.Errorf("failed to update chain state: %w", err)
-				}
-				return nil
-			})
-			if err != nil && !strings.Contains(err.Error(), "rolled back") {
-				b.Fatal(err)
-			}
-		}
-	})
-
-	block = n.blocks[len(n.blocks)-1]
-	bs = n.supplements[len(n.supplements)-1]
-	prevState := n.states[len(n.states)-2]
 
 	ru := consensus.RevertBlock(prevState, block, bs)
 	crus := []chain.RevertUpdate{{
@@ -963,25 +934,65 @@ func BenchmarkApplyRevert(b *testing.B) {
 		State:        prevState,
 	}}
 
+	b.Run("apply", func(b *testing.B) {
+		b.ResetTimer()
+		for range b.N {
+			b.StartTimer()
+			err := n.db.transaction(func(tx *txn) error {
+				utx := &updateTx{tx: tx}
+				return explorer.UpdateChainState(utx, nil, caus, n.db.log.Named("update"))
+			})
+			b.StopTimer()
+			if err != nil {
+				b.Fatal(err)
+			}
+
+			err = n.db.transaction(func(tx *txn) error {
+				utx := &updateTx{tx: tx}
+				return explorer.UpdateChainState(utx, crus, nil, n.db.log.Named("update"))
+			})
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+
+	block = n.blocks[len(n.blocks)-1]
+	bs = n.supplements[len(n.supplements)-1]
+	prevState = n.states[len(n.states)-2]
+
+	ru = consensus.RevertBlock(prevState, block, bs)
+	crus = []chain.RevertUpdate{{
+		RevertUpdate: ru,
+		Block:        block,
+		State:        prevState,
+	}}
+
+	if err := consensus.ValidateBlock(prevState, block, bs); err != nil {
+		b.Fatal(err)
+	}
+	cs, au = consensus.ApplyBlock(prevState, block, bs, time.Time{})
+	caus = []chain.ApplyUpdate{{
+		ApplyUpdate: au,
+		Block:       block,
+		State:       cs,
+	}}
+
 	b.Run("revert", func(b *testing.B) {
 		b.ResetTimer()
 		for range b.N {
+			b.StartTimer()
 			err := n.db.transaction(func(tx *txn) error {
-				defer tx.Rollback()
-				utx := &updateTx{
-					tx: tx,
-				}
-
-				b.StartTimer()
-				err := explorer.UpdateChainState(utx, crus, nil, n.db.log.Named("update"))
-				b.StopTimer()
-
-				if err != nil {
-					return fmt.Errorf("failed to update chain state: %w", err)
-				}
-				return nil
+				utx := &updateTx{tx: tx}
+				return explorer.UpdateChainState(utx, crus, nil, n.db.log.Named("update"))
 			})
-			if err != nil && !strings.Contains(err.Error(), "rolled back") {
+			b.StopTimer()
+
+			err = n.db.transaction(func(tx *txn) error {
+				utx := &updateTx{tx: tx}
+				return explorer.UpdateChainState(utx, nil, caus, n.db.log.Named("update"))
+			})
+			if err != nil {
 				b.Fatal(err)
 			}
 		}
