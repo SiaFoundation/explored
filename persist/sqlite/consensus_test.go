@@ -16,6 +16,7 @@ import (
 	"go.sia.tech/coreutils/wallet"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/testutil"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 	"lukechampine.com/frand"
 )
@@ -935,10 +936,11 @@ func BenchmarkApplyRevert(b *testing.B) {
 	}}
 
 	b.Run("apply", func(b *testing.B) {
+		log := zap.NewNop()
 		for b.Loop() {
 			err := n.db.transaction(func(tx *txn) error {
 				utx := &updateTx{tx: tx}
-				return explorer.UpdateChainState(utx, nil, caus, n.db.log.Named("update"))
+				return explorer.UpdateChainState(utx, nil, caus, log)
 			})
 			if err != nil {
 				b.Fatal(err)
@@ -947,7 +949,7 @@ func BenchmarkApplyRevert(b *testing.B) {
 			b.StopTimer()
 			err = n.db.transaction(func(tx *txn) error {
 				utx := &updateTx{tx: tx}
-				return explorer.UpdateChainState(utx, crus, nil, n.db.log.Named("update"))
+				return explorer.UpdateChainState(utx, crus, nil, log)
 			})
 			if err != nil {
 				b.Fatal(err)
@@ -978,16 +980,17 @@ func BenchmarkApplyRevert(b *testing.B) {
 	}}
 
 	b.Run("revert", func(b *testing.B) {
+		log := zap.NewNop()
 		for b.Loop() {
 			err := n.db.transaction(func(tx *txn) error {
 				utx := &updateTx{tx: tx}
-				return explorer.UpdateChainState(utx, crus, nil, n.db.log.Named("update"))
+				return explorer.UpdateChainState(utx, crus, nil, log)
 			})
 
 			b.StopTimer()
 			err = n.db.transaction(func(tx *txn) error {
 				utx := &updateTx{tx: tx}
-				return explorer.UpdateChainState(utx, nil, caus, n.db.log.Named("update"))
+				return explorer.UpdateChainState(utx, nil, caus, log)
 			})
 			if err != nil {
 				b.Fatal(err)
