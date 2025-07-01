@@ -935,7 +935,6 @@ func BenchmarkApplyRevert(b *testing.B) {
 	}}
 
 	b.Run("apply", func(b *testing.B) {
-		b.ResetTimer()
 		for b.Loop() {
 			err := n.db.transaction(func(tx *txn) error {
 				utx := &updateTx{tx: tx}
