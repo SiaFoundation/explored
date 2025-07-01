@@ -295,14 +295,14 @@ func updateV2FileContractIndices(tx *txn, revert bool, index types.ChainIndex, f
 }
 
 func addV2SiacoinInputs(tx *txn, txnID int64, txn types.V2Transaction) error {
-	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_siacoin_inputs(transaction_id, transaction_order, parent_id, satisfied_policy) VALUES (?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?), ?)`)
+	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_siacoin_inputs(transaction_id, transaction_order, satisfied_policy, parent_id) VALUES (?, ?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?))`)
 	if err != nil {
 		return fmt.Errorf("addV2SiacoinInputs: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i, sci := range txn.SiacoinInputs {
-		if _, err := stmt.Exec(txnID, i, encode(types.SiacoinOutputID(sci.Parent.ID)), encode(sci.SatisfiedPolicy)); err != nil {
+		if _, err := stmt.Exec(txnID, i, encode(sci.SatisfiedPolicy), encode(types.SiacoinOutputID(sci.Parent.ID))); err != nil {
 			return fmt.Errorf("addV2SiacoinInputs: failed to execute statement: %w", err)
 		}
 	}
@@ -326,14 +326,14 @@ func addV2SiacoinOutputs(tx *txn, txnID int64, txn types.V2Transaction) error {
 }
 
 func addV2SiafundInputs(tx *txn, txnID int64, txn types.V2Transaction) error {
-	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_siafund_inputs(transaction_id, transaction_order, parent_id, claim_address, satisfied_policy) VALUES (?, ?, (SELECT id FROM siafund_elements WHERE output_id = ?), ?, ?)`)
+	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_siafund_inputs(transaction_id, transaction_order, claim_address, satisfied_policy, parent_id) VALUES (?, ?, ?, ?, (SELECT id FROM siafund_elements WHERE output_id = ?))`)
 	if err != nil {
 		return fmt.Errorf("addV2SiafundInputs: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i, sfi := range txn.SiafundInputs {
-		if _, err := stmt.Exec(txnID, i, encode(types.SiafundOutputID(sfi.Parent.ID)), encode(sfi.ClaimAddress), encode(sfi.SatisfiedPolicy)); err != nil {
+		if _, err := stmt.Exec(txnID, i, encode(sfi.ClaimAddress), encode(sfi.SatisfiedPolicy), encode(types.SiafundOutputID(sfi.Parent.ID))); err != nil {
 			return fmt.Errorf("addV2SiafundInputs: failed to execute statement: %w", err)
 		}
 	}
@@ -387,19 +387,19 @@ func addV2FileContractRevisions(tx *txn, txnID int64, txn types.V2Transaction) e
 }
 
 func addV2FileContractResolutions(tx *txn, txnID int64, txn types.V2Transaction) error {
-	renewalStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_resolutions(transaction_id, transaction_order, parent_contract_id, resolution_type, renewal_new_contract_id, renewal_final_renter_output_address, renewal_final_renter_output_value, renewal_final_host_output_address, renewal_final_host_output_value, renewal_renter_rollover, renewal_host_rollover, renewal_renter_signature, renewal_host_signature) VALUES (?, ?, (SELECT id FROM v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?), ?, (SELECT id FROM v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?), ?, ?, ?, ?, ?, ?, ?, ?)`)
+	renewalStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_resolutions(transaction_id, transaction_order, resolution_type, renewal_final_renter_output_address, renewal_final_renter_output_value, renewal_final_host_output_address, renewal_final_host_output_value, renewal_renter_rollover, renewal_host_rollover, renewal_renter_signature, renewal_host_signature, parent_contract_id, renewal_new_contract_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT id FROM v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?), (SELECT id FROM v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
 	if err != nil {
 		return fmt.Errorf("addV2FileContractResolutions: failed to prepare renewal statement: %w", err)
 	}
 	defer renewalStmt.Close()
 
-	storageProofStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_resolutions(transaction_id, transaction_order, parent_contract_id, resolution_type, storage_proof_proof_index, storage_proof_leaf, storage_proof_proof) VALUES (?, ?, (SELECT id FROM v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?), ?, ?, ?, ?)`)
+	storageProofStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_resolutions(transaction_id, transaction_order, resolution_type, storage_proof_proof_index, storage_proof_leaf, storage_proof_proof, parent_contract_id) VALUES (?, ?, ?, ?, ?, ?, (SELECT id FROM v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
 	if err != nil {
 		return fmt.Errorf("addV2FileContractResolutions: failed to prepare storage proof statement: %w", err)
 	}
 	defer storageProofStmt.Close()
 
-	expirationStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_resolutions(transaction_id, transaction_order, parent_contract_id, resolution_type) VALUES (?, ?, (SELECT id FROM v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?), ?)`)
+	expirationStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_resolutions(transaction_id, transaction_order, resolution_type, parent_contract_id) VALUES (?, ?, ?, (SELECT id FROM v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
 	if err != nil {
 		return fmt.Errorf("addV2FileContractResolutions: failed to prepare expiration statement: %w", err)
 	}
@@ -409,15 +409,15 @@ func addV2FileContractResolutions(tx *txn, txnID int64, txn types.V2Transaction)
 		resolutionType := explorer.V2ResolutionType(fcr.Resolution)
 		switch v := fcr.Resolution.(type) {
 		case *types.V2FileContractRenewal:
-			if _, err := renewalStmt.Exec(txnID, i, encode(types.FileContractID(fcr.Parent.ID)), encode(fcr.Parent.V2FileContract.RevisionNumber), resolutionType, encode(types.FileContractID(fcr.Parent.ID).V2RenewalID()), encode(v.NewContract.RevisionNumber), encode(v.FinalRenterOutput.Address), encode(v.FinalRenterOutput.Value), encode(v.FinalHostOutput.Address), encode(v.FinalHostOutput.Value), encode(v.RenterRollover), encode(v.HostRollover), encode(v.RenterSignature), encode(v.HostSignature)); err != nil {
+			if _, err := renewalStmt.Exec(txnID, i, resolutionType, encode(v.FinalRenterOutput.Address), encode(v.FinalRenterOutput.Value), encode(v.FinalHostOutput.Address), encode(v.FinalHostOutput.Value), encode(v.RenterRollover), encode(v.HostRollover), encode(v.RenterSignature), encode(v.HostSignature), encode(types.FileContractID(fcr.Parent.ID)), encode(fcr.Parent.V2FileContract.RevisionNumber), encode(types.FileContractID(fcr.Parent.ID).V2RenewalID()), encode(v.NewContract.RevisionNumber)); err != nil {
 				return fmt.Errorf("addV2FileContractResolutions: failed to execute renewal statement: %w", err)
 			}
 		case *types.V2StorageProof:
-			if _, err := storageProofStmt.Exec(txnID, i, encode(types.FileContractID(fcr.Parent.ID)), encode(fcr.Parent.V2FileContract.RevisionNumber), resolutionType, encode(v.ProofIndex), v.Leaf[:], encode(v.Proof)); err != nil {
+			if _, err := storageProofStmt.Exec(txnID, i, resolutionType, encode(v.ProofIndex), v.Leaf[:], encode(v.Proof), encode(types.FileContractID(fcr.Parent.ID)), encode(fcr.Parent.V2FileContract.RevisionNumber)); err != nil {
 				return fmt.Errorf("addV2FileContractResolutions: failed to execute storage proof statement: %w", err)
 			}
 		case *types.V2FileContractExpiration:
-			if _, err := expirationStmt.Exec(txnID, i, encode(types.FileContractID(fcr.Parent.ID)), encode(fcr.Parent.V2FileContract.RevisionNumber), resolutionType); err != nil {
+			if _, err := expirationStmt.Exec(txnID, i, resolutionType, encode(types.FileContractID(fcr.Parent.ID)), encode(fcr.Parent.V2FileContract.RevisionNumber)); err != nil {
 				return fmt.Errorf("addV2FileContractResolutions: failed to execute expiration statement: %w", err)
 			}
 		}

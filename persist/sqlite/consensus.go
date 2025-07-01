@@ -90,14 +90,14 @@ func addSignatures(tx *txn, id int64, txn types.Transaction) error {
 }
 
 func addSiacoinInputs(tx *txn, id int64, txn types.Transaction) error {
-	stmt, err := tx.Prepare(`INSERT INTO transaction_siacoin_inputs(transaction_id, transaction_order, parent_id, unlock_conditions) VALUES (?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?), ?)`)
+	stmt, err := tx.Prepare(`INSERT INTO transaction_siacoin_inputs(transaction_id, transaction_order, unlock_conditions, parent_id) VALUES (?, ?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?))`)
 	if err != nil {
 		return fmt.Errorf("addSiacoinInputs: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i, sci := range txn.SiacoinInputs {
-		if _, err := stmt.Exec(id, i, encode(sci.ParentID), encode(sci.UnlockConditions)); err != nil {
+		if _, err := stmt.Exec(id, i, encode(sci.UnlockConditions), encode(sci.ParentID)); err != nil {
 			return fmt.Errorf("addSiacoinInputs: failed to execute statement: %w", err)
 		}
 	}
@@ -120,14 +120,14 @@ func addSiacoinOutputs(tx *txn, id int64, txn types.Transaction) error {
 }
 
 func addSiafundInputs(tx *txn, id int64, txn types.Transaction) error {
-	stmt, err := tx.Prepare(`INSERT INTO transaction_siafund_inputs(transaction_id, transaction_order, parent_id, unlock_conditions, claim_address) VALUES (?, ?, (SELECT id FROM siafund_elements WHERE output_id = ?), ?, ?)`)
+	stmt, err := tx.Prepare(`INSERT INTO transaction_siafund_inputs(transaction_id, transaction_order, unlock_conditions, claim_address, parent_id) VALUES (?, ?, ?, ?, (SELECT id FROM siafund_elements WHERE output_id = ?))`)
 	if err != nil {
 		return fmt.Errorf("addSiafundInputs: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i, sfi := range txn.SiafundInputs {
-		if _, err := stmt.Exec(id, i, encode(sfi.ParentID), encode(sfi.UnlockConditions), encode(sfi.ClaimAddress)); err != nil {
+		if _, err := stmt.Exec(id, i, encode(sfi.UnlockConditions), encode(sfi.ClaimAddress), encode(sfi.ParentID)); err != nil {
 			return fmt.Errorf("addSiafundInputs: failed to execute statement: %w", err)
 		}
 	}
@@ -619,13 +619,13 @@ func addEvents(tx *txn, bid types.BlockID, txnDBIds map[types.TransactionID]txnD
 	}
 	defer payoutEventStmt.Close()
 
-	v1ContractResolutionEventStmt, err := tx.Prepare(`INSERT INTO v1_contract_resolution_events (event_id, output_id, parent_id, missed) VALUES (?, (SELECT id FROM siacoin_elements WHERE output_id = ?), (SELECT id FROM file_contract_elements WHERE contract_id = ? AND revision_number = ?), ?)`)
+	v1ContractResolutionEventStmt, err := tx.Prepare(`INSERT INTO v1_contract_resolution_events (event_id, missed, output_id, parent_id) VALUES (?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?), (SELECT id FROM file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare v1 contract resolution event statement: %w", err)
 	}
 	defer v1ContractResolutionEventStmt.Close()
 
-	v2ContractResolutionEventStmt, err := tx.Prepare(`INSERT INTO v2_contract_resolution_events (event_id, output_id, parent_id, missed) VALUES (?, (SELECT id FROM siacoin_elements WHERE output_id = ?), (SELECT id from v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?), ?)`)
+	v2ContractResolutionEventStmt, err := tx.Prepare(`INSERT INTO v2_contract_resolution_events (event_id, missed, output_id, parent_id) VALUES (?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?), (SELECT id from v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare v2 contract resolution event statement: %w", err)
 	}
@@ -674,9 +674,9 @@ func addEvents(tx *txn, bid types.BlockID, txnDBIds map[types.TransactionID]txnD
 		case explorer.EventPayout:
 			_, err = payoutEventStmt.Exec(eventID, encode(types.SiacoinOutputID(event.ID)))
 		case explorer.EventV1ContractResolution:
-			_, err = v1ContractResolutionEventStmt.Exec(eventID, encode(v.SiacoinElement.ID), encode(v.Parent.ID), encode(v.Parent.RevisionNumber), v.Missed)
+			_, err = v1ContractResolutionEventStmt.Exec(eventID, v.Missed, encode(v.SiacoinElement.ID), encode(v.Parent.ID), encode(v.Parent.RevisionNumber))
 		case explorer.EventV2ContractResolution:
-			_, err = v2ContractResolutionEventStmt.Exec(eventID, encode(v.SiacoinElement.ID), encode(v.Resolution.Parent.ID), encode(v.Resolution.Parent.V2FileContract.RevisionNumber), v.Missed)
+			_, err = v2ContractResolutionEventStmt.Exec(eventID, v.Missed, encode(v.SiacoinElement.ID), encode(v.Resolution.Parent.ID), encode(v.Resolution.Parent.V2FileContract.RevisionNumber))
 		default:
 			return fmt.Errorf("unknown event type: %T", reflect.TypeOf(event.Data))
 		}
