@@ -245,14 +245,14 @@ func deleteBlock(tx *txn, bid types.BlockID) error {
 func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
 	if err := updateMaturedBalances(ut.tx, true, state.Metrics.Index.Height); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update matured balances: %w", err)
-	} else if _, err := addSiacoinElements(
+	} else if err := addSiacoinElements(
 		ut.tx,
 		state.Metrics.Index,
 		state.SpentSiacoinElements,
 		append(state.NewSiacoinElements, state.EphemeralSiacoinElements...),
 	); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update siacoin output state: %w", err)
-	} else if _, err := addSiafundElements(
+	} else if err := addSiafundElements(
 		ut.tx,
 		state.Metrics.Index,
 		state.SpentSiafundElements,
@@ -261,9 +261,9 @@ func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("RevertIndex: failed to update siafund output state: %w", err)
 	} else if err := updateBalances(ut.tx, state.Metrics.Index.Height, state.SpentSiacoinElements, state.NewSiacoinElements, state.SpentSiafundElements, state.NewSiafundElements); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update balances: %w", err)
-	} else if _, err := updateFileContractElements(ut.tx, true, state.Metrics.Index, state.Block, state.FileContractElements); err != nil {
+	} else if err := updateFileContractElements(ut.tx, true, state.Metrics.Index, state.Block, state.FileContractElements); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update file contract state: %w", err)
-	} else if _, err := updateV2FileContractElements(ut.tx, true, state.Metrics.Index, state.Block, state.V2FileContractElements); err != nil {
+	} else if err := updateV2FileContractElements(ut.tx, true, state.Metrics.Index, state.Block, state.V2FileContractElements); err != nil {
 		return fmt.Errorf("RevertIndex: failed to add v2 file contracts: %w", err)
 	} else if err := updateFileContractIndices(ut.tx, true, state.Metrics.Index, state.FileContractElements); err != nil {
 		return fmt.Errorf("RevertIndex: failed to update file contract element indices: %w", err)

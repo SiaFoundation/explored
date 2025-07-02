@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +16,7 @@ import (
 	"go.sia.tech/coreutils/wallet"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/testutil"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 	"lukechampine.com/frand"
 )
@@ -813,7 +813,9 @@ func BenchmarkAddressEvents(b *testing.B) {
 	}
 }
 
-func BenchmarkRevert(b *testing.B) {
+func BenchmarkApplyRevert(b *testing.B) {
+	const nBlocks = 20_000
+
 	pk1 := types.GeneratePrivateKey()
 	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
 	addr1 := uc1.UnlockHash()
@@ -829,11 +831,7 @@ func BenchmarkRevert(b *testing.B) {
 	val := genesisTxn.SiacoinOutputs[0].Value
 	scID := genesisTxn.SiacoinOutputID(0)
 
-	for i := range 20000 {
-		if i%100 == 0 {
-			b.Logf("Mined %d blocks", i)
-		}
-
+	generateBlock := func() types.Block {
 		// transaction with random arbitrary data
 		data := make([]byte, 16)
 		frand.Read(data)
@@ -882,13 +880,53 @@ func BenchmarkRevert(b *testing.B) {
 		scID = txn3.SiacoinOutputID(txn3.ID(), 0)
 		val = txn3.SiacoinOutputs[0].Value
 
-		block := testutil.MineV2Block(n.tipState(), []types.Transaction{txn1, txn2}, []types.V2Transaction{txn3}, types.VoidAddress)
-		n.applyBlock(b, block)
+		v2FC, payout := prepareV2Contract(pk1, pk1, n.tipState().Index.Height+1)
+		txn4 := types.V2Transaction{
+			SiacoinInputs: []types.V2SiacoinInput{{
+				Parent: types.SiacoinElement{
+					ID: txn3.SiacoinOutputID(txn3.ID(), 0),
+					StateElement: types.StateElement{
+						LeafIndex: types.UnassignedLeafIndex,
+					},
+					SiacoinOutput: txn3.SiacoinOutputs[0],
+				},
+				SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+			}},
+			SiacoinOutputs: []types.SiacoinOutput{{
+				Address: addr1,
+				Value:   val.Sub(payout),
+			}},
+			FileContracts: []types.V2FileContract{v2FC},
+		}
+		testutil.SignV2TransactionWithContracts(n.tipState(), pk1, pk1, pk1, &txn4)
+
+		scID = txn4.SiacoinOutputID(txn4.ID(), 0)
+		val = txn4.SiacoinOutputs[0].Value
+
+		return testutil.MineV2Block(n.tipState(), []types.Transaction{txn1, txn2}, []types.V2Transaction{txn3, txn4}, types.VoidAddress)
 	}
 
-	block := n.blocks[len(n.blocks)-1]
-	bs := n.supplements[len(n.supplements)-1]
-	prevState := n.states[len(n.states)-2]
+	for i := range nBlocks {
+		if i%100 == 0 {
+			b.Logf("Mined %d blocks", i)
+		}
+
+		n.applyBlock(b, generateBlock())
+	}
+
+	block := generateBlock()
+	bs := n.store.SupplementTipBlock(block)
+	prevState := n.states[len(n.states)-1]
+
+	if err := consensus.ValidateBlock(prevState, block, bs); err != nil {
+		b.Fatal(err)
+	}
+	cs, au := consensus.ApplyBlock(prevState, block, bs, time.Time{})
+	caus := []chain.ApplyUpdate{{
+		ApplyUpdate: au,
+		Block:       block,
+		State:       cs,
+	}}
 
 	ru := consensus.RevertBlock(prevState, block, bs)
 	crus := []chain.RevertUpdate{{
@@ -897,25 +935,67 @@ func BenchmarkRevert(b *testing.B) {
 		State:        prevState,
 	}}
 
-	b.ResetTimer()
-	for range b.N {
-		err := n.db.transaction(func(tx *txn) error {
-			defer tx.Rollback()
-			utx := &updateTx{
-				tx: tx,
-			}
-
-			b.StartTimer()
-			err := explorer.UpdateChainState(utx, crus, nil, n.db.log.Named("update"))
-			b.StopTimer()
-
+	b.Run("apply", func(b *testing.B) {
+		log := zap.NewNop()
+		for b.Loop() {
+			err := n.db.transaction(func(tx *txn) error {
+				utx := &updateTx{tx: tx}
+				return explorer.UpdateChainState(utx, nil, caus, log)
+			})
 			if err != nil {
-				return fmt.Errorf("failed to update chain state: %w", err)
+				b.Fatal(err)
 			}
-			return nil
-		})
-		if err != nil && !strings.Contains(err.Error(), "rolled back") {
-			b.Fatal(err)
+
+			b.StopTimer()
+			err = n.db.transaction(func(tx *txn) error {
+				utx := &updateTx{tx: tx}
+				return explorer.UpdateChainState(utx, crus, nil, log)
+			})
+			if err != nil {
+				b.Fatal(err)
+			}
+			b.StartTimer()
 		}
+	})
+
+	block = n.blocks[len(n.blocks)-1]
+	bs = n.supplements[len(n.supplements)-1]
+	prevState = n.states[len(n.states)-2]
+
+	ru = consensus.RevertBlock(prevState, block, bs)
+	crus = []chain.RevertUpdate{{
+		RevertUpdate: ru,
+		Block:        block,
+		State:        prevState,
+	}}
+
+	if err := consensus.ValidateBlock(prevState, block, bs); err != nil {
+		b.Fatal(err)
 	}
+	cs, au = consensus.ApplyBlock(prevState, block, bs, time.Time{})
+	caus = []chain.ApplyUpdate{{
+		ApplyUpdate: au,
+		Block:       block,
+		State:       cs,
+	}}
+
+	b.Run("revert", func(b *testing.B) {
+		log := zap.NewNop()
+		for b.Loop() {
+			err := n.db.transaction(func(tx *txn) error {
+				utx := &updateTx{tx: tx}
+				return explorer.UpdateChainState(utx, crus, nil, log)
+			})
+
+			b.StopTimer()
+			err = n.db.transaction(func(tx *txn) error {
+				utx := &updateTx{tx: tx}
+				return explorer.UpdateChainState(utx, nil, caus, log)
+			})
+			if err != nil {
+				b.Fatal(err)
+			}
+			b.StartTimer()
+		}
+	})
 }
