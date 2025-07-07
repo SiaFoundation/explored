@@ -300,6 +300,10 @@ func getV2TransactionID(tx *txn, txnID types.TransactionID) (result int64, err e
 }
 
 func addV2SiacoinInputs(tx *txn, txnID types.TransactionID, txn types.V2Transaction) error {
+	if len(txn.SiacoinInputs) == 0 {
+		return nil
+	}
+
 	dbID, err := getV2TransactionID(tx, txnID)
 	if err != nil {
 		return fmt.Errorf("failed to get transaction ID: %w", err)
@@ -320,6 +324,10 @@ func addV2SiacoinInputs(tx *txn, txnID types.TransactionID, txn types.V2Transact
 }
 
 func addV2SiacoinOutputs(tx *txn, txnID types.TransactionID, txn types.V2Transaction) error {
+	if len(txn.SiacoinOutputs) == 0 {
+		return nil
+	}
+
 	dbID, err := getV2TransactionID(tx, txnID)
 	if err != nil {
 		return fmt.Errorf("failed to get transaction ID: %w", err)
@@ -341,6 +349,10 @@ func addV2SiacoinOutputs(tx *txn, txnID types.TransactionID, txn types.V2Transac
 }
 
 func addV2SiafundInputs(tx *txn, txnID types.TransactionID, txn types.V2Transaction) error {
+	if len(txn.SiafundInputs) == 0 {
+		return nil
+	}
+
 	dbID, err := getV2TransactionID(tx, txnID)
 	if err != nil {
 		return fmt.Errorf("failed to get transaction ID: %w", err)
@@ -361,6 +373,10 @@ func addV2SiafundInputs(tx *txn, txnID types.TransactionID, txn types.V2Transact
 }
 
 func addV2SiafundOutputs(tx *txn, txnID types.TransactionID, txn types.V2Transaction) error {
+	if len(txn.SiafundOutputs) == 0 {
+		return nil
+	}
+
 	dbID, err := getV2TransactionID(tx, txnID)
 	if err != nil {
 		return fmt.Errorf("failed to get transaction ID: %w", err)
@@ -382,6 +398,10 @@ func addV2SiafundOutputs(tx *txn, txnID types.TransactionID, txn types.V2Transac
 }
 
 func addV2FileContracts(tx *txn, txnID types.TransactionID, txn types.V2Transaction) error {
+	if len(txn.FileContracts) == 0 {
+		return nil
+	}
+
 	dbID, err := getV2TransactionID(tx, txnID)
 	if err != nil {
 		return fmt.Errorf("failed to get transaction ID: %w", err)
@@ -402,6 +422,10 @@ func addV2FileContracts(tx *txn, txnID types.TransactionID, txn types.V2Transact
 }
 
 func addV2FileContractRevisions(tx *txn, txnID types.TransactionID, txn types.V2Transaction) error {
+	if len(txn.FileContractRevisions) == 0 {
+		return nil
+	}
+
 	dbID, err := getV2TransactionID(tx, txnID)
 	if err != nil {
 		return fmt.Errorf("failed to get transaction ID: %w", err)
@@ -422,6 +446,10 @@ func addV2FileContractRevisions(tx *txn, txnID types.TransactionID, txn types.V2
 }
 
 func addV2FileContractResolutions(tx *txn, txnID types.TransactionID, txn types.V2Transaction) error {
+	if len(txn.FileContractResolutions) == 0 {
+		return nil
+	}
+
 	dbID, err := getV2TransactionID(tx, txnID)
 	if err != nil {
 		return fmt.Errorf("failed to get transaction ID: %w", err)
@@ -466,6 +494,10 @@ func addV2FileContractResolutions(tx *txn, txnID types.TransactionID, txn types.
 }
 
 func addV2Attestations(tx *txn, txnID types.TransactionID, txn types.V2Transaction) error {
+	if len(txn.Attestations) == 0 {
+		return nil
+	}
+
 	dbID, err := getV2TransactionID(tx, txnID)
 	if err != nil {
 		return fmt.Errorf("failed to get transaction ID: %w", err)
