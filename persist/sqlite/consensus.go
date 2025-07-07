@@ -297,7 +297,7 @@ type txnDBId struct {
 	exist bool
 }
 
-func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction) (map[types.TransactionID]txnDBId, error) {
+func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction) (map[types.TransactionID]bool, error) {
 	checkTransactionStmt, err := tx.Prepare(`SELECT id FROM transactions WHERE transaction_id = ?`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare check transaction statement: %v", err)
@@ -316,7 +316,7 @@ func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction) (map[
 	}
 	defer blockTransactionsStmt.Close()
 
-	txnDBIds := make(map[types.TransactionID]txnDBId)
+	txnExist := make(map[types.TransactionID]bool)
 	for i, txn := range txns {
 		var exist bool
 		var dbID int64
@@ -342,8 +342,8 @@ func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction) (map[
 		// will be true after the above query after the first time the
 		// transaction is encountered by this loop. So we only set the value in
 		// the map for each transaction once.
-		if _, ok := txnDBIds[txnID]; !ok {
-			txnDBIds[txnID] = txnDBId{id: dbID, exist: exist}
+		if _, ok := txnExist[txnID]; !ok {
+			txnExist[txnID] = exist
 		}
 
 		if _, err := blockTransactionsStmt.Exec(encode(bid), dbID, i); err != nil {
@@ -351,24 +351,24 @@ func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction) (map[
 		}
 	}
 
-	return txnDBIds, nil
+	return txnExist, nil
 }
 
-func addTransactionFields(tx *txn, txns []types.Transaction, txnDBIds map[types.TransactionID]txnDBId) error {
+func addTransactionFields(tx *txn, txns []types.Transaction, txnExist map[types.TransactionID]bool) error {
 	for _, txn := range txns {
 		txnID := txn.ID()
-		dbID, ok := txnDBIds[txnID]
+		exist, ok := txnExist[txnID]
 		if !ok {
-			panic(fmt.Errorf("txn %v should be in txnDBIds", txn.ID()))
+			panic(fmt.Errorf("txn %v should be in txnExist", txn.ID()))
 		}
 
 		// transaction already exists, don't reinsert its fields
-		if dbID.exist {
+		if exist {
 			continue
 		}
 		// set exist = true so we don't re-insert fields in case we have
 		// multiple of the same transaction in a block
-		txnDBIds[txnID] = txnDBId{id: dbID.id, exist: true}
+		txnExist[txnID] = true
 
 		if err := addMinerFees(tx, txn); err != nil {
 			return fmt.Errorf("failed to add miner fees: %w", err)
@@ -673,7 +673,7 @@ func addSiafundElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 	return nil
 }
 
-func addEvents(tx *txn, bid types.BlockID, txnDBIds map[types.TransactionID]txnDBId, v2TxnDBIds map[types.TransactionID]txnDBId, events []explorer.Event) error {
+func addEvents(tx *txn, bid types.BlockID, events []explorer.Event) error {
 	if len(events) == 0 {
 		return nil
 	}
@@ -696,13 +696,13 @@ func addEvents(tx *txn, bid types.BlockID, txnDBIds map[types.TransactionID]txnD
 	}
 	defer relevantAddrStmt.Close()
 
-	v1TransactionEventStmt, err := tx.Prepare(`INSERT INTO v1_transaction_events (event_id, transaction_id) VALUES (?, ?)`)
+	v1TransactionEventStmt, err := tx.Prepare(`INSERT INTO v1_transaction_events (event_id, transaction_id) VALUES (?, (SELECT id FROM transactions WHERE transaction_id = ?))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare v1 transaction event statement: %w", err)
 	}
 	defer v1TransactionEventStmt.Close()
 
-	v2TransactionEventStmt, err := tx.Prepare(`INSERT INTO v2_transaction_events (event_id, transaction_id) VALUES (?, ?)`)
+	v2TransactionEventStmt, err := tx.Prepare(`INSERT INTO v2_transaction_events (event_id, transaction_id) VALUES (?, (SELECT id FROM v2_transactions WHERE transaction_id = ?))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare v2 transaction event statement: %w", err)
 	}
@@ -757,13 +757,11 @@ func addEvents(tx *txn, bid types.BlockID, txnDBIds map[types.TransactionID]txnD
 
 		switch v := event.Data.(type) {
 		case explorer.EventV1Transaction:
-			dbID := txnDBIds[types.TransactionID(event.ID)].id
-			if _, err = v1TransactionEventStmt.Exec(eventID, dbID); err != nil {
+			if _, err = v1TransactionEventStmt.Exec(eventID, encode(types.TransactionID(event.ID))); err != nil {
 				return fmt.Errorf("failed to insert transaction event: %w", err)
 			}
 		case explorer.EventV2Transaction:
-			dbID := v2TxnDBIds[types.TransactionID(event.ID)].id
-			if _, err = v2TransactionEventStmt.Exec(eventID, dbID); err != nil {
+			if _, err = v2TransactionEventStmt.Exec(eventID, encode(types.TransactionID(event.ID))); err != nil {
 				return fmt.Errorf("failed to insert transaction event: %w", err)
 			}
 		case explorer.EventPayout:
@@ -1061,12 +1059,12 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to update matured balances: %w", err)
 	}
 
-	txnDBIds, err := addTransactions(ut.tx, state.Block.ID(), state.Block.Transactions)
+	txnSeen, err := addTransactions(ut.tx, state.Block.ID(), state.Block.Transactions)
 	if err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add transactions: %w", err)
 	}
 
-	v2TxnDBIds, err := addV2Transactions(ut.tx, state.Block.ID(), state.Block.V2Transactions())
+	v2TxnSeen, err := addV2Transactions(ut.tx, state.Block.ID(), state.Block.V2Transactions())
 	if err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add v2 transactions: %w", err)
 	}
@@ -1089,9 +1087,9 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to add file contracts: %w", err)
 	} else if err := updateV2FileContractElements(ut.tx, false, state.Metrics.Index, state.Block, state.V2FileContractElements); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add v2 file contracts: %w", err)
-	} else if err := addTransactionFields(ut.tx, state.Block.Transactions, txnDBIds); err != nil {
+	} else if err := addTransactionFields(ut.tx, state.Block.Transactions, txnSeen); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add transaction fields: %w", err)
-	} else if err := addV2TransactionFields(ut.tx, state.Block.V2Transactions(), v2TxnDBIds); err != nil {
+	} else if err := addV2TransactionFields(ut.tx, state.Block.V2Transactions(), v2TxnSeen); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add v2 transaction fields: %w", err)
 	} else if err := updateBalances(ut.tx, state.Metrics.Index.Height, state.SpentSiacoinElements, state.NewSiacoinElements, state.SpentSiafundElements, state.NewSiafundElements); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update balances: %w", err)
@@ -1107,7 +1105,7 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		return fmt.Errorf("ApplyIndex: failed to update file contract element indices: %w", err)
 	} else if err := updateV2FileContractIndices(ut.tx, false, state.Metrics.Index, state.V2FileContractElements); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to update v2 file contract element indices: %w", err)
-	} else if err := addEvents(ut.tx, state.Block.ID(), txnDBIds, v2TxnDBIds, state.Events); err != nil {
+	} else if err := addEvents(ut.tx, state.Block.ID(), state.Events); err != nil {
 		return fmt.Errorf("ApplyIndex: failed to add events: %w", err)
 	}
 

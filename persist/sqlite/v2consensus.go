@@ -8,7 +8,7 @@ import (
 	"go.sia.tech/explored/explorer"
 )
 
-func addV2Transactions(tx *txn, bid types.BlockID, txns []types.V2Transaction) (map[types.TransactionID]txnDBId, error) {
+func addV2Transactions(tx *txn, bid types.BlockID, txns []types.V2Transaction) (map[types.TransactionID]bool, error) {
 	checkTransactionStmt, err := tx.Prepare(`SELECT id FROM v2_transactions WHERE transaction_id = ?`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare check v2_transaction statement: %v", err)
@@ -27,7 +27,7 @@ func addV2Transactions(tx *txn, bid types.BlockID, txns []types.V2Transaction) (
 	}
 	defer blockTransactionsStmt.Close()
 
-	txnDBIds := make(map[types.TransactionID]txnDBId)
+	txnSeen := make(map[types.TransactionID]bool)
 	for i, txn := range txns {
 		var exist bool
 		var dbID int64
@@ -58,15 +58,15 @@ func addV2Transactions(tx *txn, bid types.BlockID, txns []types.V2Transaction) (
 		// will be true after the above query after the first time the
 		// transaction is encountered by this loop. So we only set the value in
 		// the map for each transaction once.
-		if _, ok := txnDBIds[txnID]; !ok {
-			txnDBIds[txnID] = txnDBId{id: dbID, exist: exist}
+		if _, ok := txnSeen[txnID]; !ok {
+			txnSeen[txnID] = exist
 		}
 
 		if _, err := blockTransactionsStmt.Exec(encode(bid), dbID, i); err != nil {
 			return nil, fmt.Errorf("failed to insert into v2_block_transactions: %w", err)
 		}
 	}
-	return txnDBIds, nil
+	return txnSeen, nil
 }
 
 func updateV2FileContractElements(tx *txn, revert bool, index types.ChainIndex, b types.Block, fces []explorer.V2FileContractUpdate) error {
@@ -518,21 +518,21 @@ func addV2Attestations(tx *txn, txn types.V2Transaction) error {
 	return nil
 }
 
-func addV2TransactionFields(tx *txn, txns []types.V2Transaction, v2TxnDBIds map[types.TransactionID]txnDBId) error {
+func addV2TransactionFields(tx *txn, txns []types.V2Transaction, txnSeen map[types.TransactionID]bool) error {
 	for _, txn := range txns {
 		txnID := txn.ID()
-		dbID, ok := v2TxnDBIds[txnID]
+		exist, ok := txnSeen[txnID]
 		if !ok {
 			panic(fmt.Errorf("txn %v should be in txnDBIds", txn.ID()))
 		}
 
 		// transaction already exists, don't reinsert its fields
-		if dbID.exist {
+		if exist {
 			continue
 		}
 		// set exist = true so we don't re-insert fields in case we have
 		// multiple of the same transaction in a block
-		v2TxnDBIds[txnID] = txnDBId{id: dbID.id, exist: true}
+		txnSeen[txnID] = true
 
 		if err := addV2Attestations(tx, txn); err != nil {
 			return fmt.Errorf("addV2TransactionFields: failed to add attestations: %w", err)
