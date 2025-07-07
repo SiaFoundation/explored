@@ -306,7 +306,7 @@ func addV2SiacoinInputs(tx *txn, txn types.V2Transaction) error {
 
 	dbID, err := getV2TransactionID(tx, txn.ID())
 	if err != nil {
-		return fmt.Errorf("failed to get transaction ID: %w", err)
+		return fmt.Errorf("addV2SiacoinInputs: failed to get transaction ID: %w", err)
 	}
 
 	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_siacoin_inputs(transaction_id, transaction_order, satisfied_policy, parent_id) VALUES (?, ?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?))`)
@@ -331,7 +331,7 @@ func addV2SiacoinOutputs(tx *txn, txn types.V2Transaction) error {
 	txnID := txn.ID()
 	dbID, err := getV2TransactionID(tx, txnID)
 	if err != nil {
-		return fmt.Errorf("failed to get transaction ID: %w", err)
+		return fmt.Errorf("addV2SiacoinOutputs: failed to get transaction ID: %w", err)
 	}
 
 	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_siacoin_outputs(transaction_id, transaction_order, output_id) VALUES (?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?))`)
@@ -355,7 +355,7 @@ func addV2SiafundInputs(tx *txn, txn types.V2Transaction) error {
 
 	dbID, err := getV2TransactionID(tx, txn.ID())
 	if err != nil {
-		return fmt.Errorf("failed to get transaction ID: %w", err)
+		return fmt.Errorf("addV2SiafundInputs: failed to get transaction ID: %w", err)
 	}
 
 	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_siafund_inputs(transaction_id, transaction_order, claim_address, satisfied_policy, parent_id) VALUES (?, ?, ?, ?, (SELECT id FROM siafund_elements WHERE output_id = ?))`)
@@ -380,7 +380,7 @@ func addV2SiafundOutputs(tx *txn, txn types.V2Transaction) error {
 	txnID := txn.ID()
 	dbID, err := getV2TransactionID(tx, txnID)
 	if err != nil {
-		return fmt.Errorf("failed to get transaction ID: %w", err)
+		return fmt.Errorf("addV2SiafundOutputs: failed to get transaction ID: %w", err)
 	}
 
 	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_siafund_outputs(transaction_id, transaction_order, output_id) VALUES (?, ?, (SELECT id FROM siafund_elements WHERE output_id = ?))`)
@@ -405,7 +405,7 @@ func addV2FileContracts(tx *txn, txn types.V2Transaction) error {
 	txnID := txn.ID()
 	dbID, err := getV2TransactionID(tx, txnID)
 	if err != nil {
-		return fmt.Errorf("failed to get transaction ID: %w", err)
+		return fmt.Errorf("addV2FileContracts: failed to get transaction ID: %w", err)
 	}
 
 	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contracts(transaction_id, transaction_order, contract_id) VALUES (?, ?, (SELECT id FROM v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
@@ -429,7 +429,7 @@ func addV2FileContractRevisions(tx *txn, txn types.V2Transaction) error {
 
 	dbID, err := getV2TransactionID(tx, txn.ID())
 	if err != nil {
-		return fmt.Errorf("failed to get transaction ID: %w", err)
+		return fmt.Errorf("addV2FileContractRevisions: failed to get transaction ID: %w", err)
 	}
 
 	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_revisions(transaction_id, transaction_order, parent_contract_id, revision_contract_id) VALUES (?, ?, (SELECT id FROM v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?), (SELECT id FROM v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
@@ -453,7 +453,7 @@ func addV2FileContractResolutions(tx *txn, txn types.V2Transaction) error {
 
 	dbID, err := getV2TransactionID(tx, txn.ID())
 	if err != nil {
-		return fmt.Errorf("failed to get transaction ID: %w", err)
+		return fmt.Errorf("addV2FileContractResolutions: failed to get transaction ID: %w", err)
 	}
 
 	renewalStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_resolutions(transaction_id, transaction_order, resolution_type, renewal_final_renter_output_address, renewal_final_renter_output_value, renewal_final_host_output_address, renewal_final_host_output_value, renewal_renter_rollover, renewal_host_rollover, renewal_renter_signature, renewal_host_signature, parent_contract_id, renewal_new_contract_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT id FROM v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?), (SELECT id FROM v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
@@ -501,7 +501,7 @@ func addV2Attestations(tx *txn, txn types.V2Transaction) error {
 
 	dbID, err := getV2TransactionID(tx, txn.ID())
 	if err != nil {
-		return fmt.Errorf("failed to get transaction ID: %w", err)
+		return fmt.Errorf("addV2Attestations: failed to get transaction ID: %w", err)
 	}
 
 	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_attestations(transaction_id, transaction_order, public_key, key, value, signature) VALUES (?, ?, ?, ?, ?, ?)`)
@@ -535,7 +535,7 @@ func addV2TransactionFields(tx *txn, txns []types.V2Transaction, txnSeen map[typ
 		txnSeen[txnID] = true
 
 		if err := addV2Attestations(tx, txn); err != nil {
-			return fmt.Errorf("addV2TransactionFields: failed to add attestations: %w", err)
+			return fmt.Errorf("failed to add attestations: %w", err)
 		} else if err := addV2SiacoinInputs(tx, txn); err != nil {
 			return fmt.Errorf("failed to add siacoin inputs: %w", err)
 		} else if err := addV2SiacoinOutputs(tx, txn); err != nil {
