@@ -44,8 +44,8 @@ func addMinerPayouts(tx *txn, bid types.BlockID, scos []types.SiacoinOutput) err
 	return nil
 }
 
-func addMinerFees(tx *txn, dbID int64, txn types.Transaction) error {
-	if len(txn.MinerFees) == 0 {
+func addMinerFees(tx *txn, dbID int64, minerFees []types.Currency) error {
+	if len(minerFees) == 0 {
 		return nil
 	}
 
@@ -55,7 +55,7 @@ func addMinerFees(tx *txn, dbID int64, txn types.Transaction) error {
 	}
 	defer stmt.Close()
 
-	for i, fee := range txn.MinerFees {
+	for i, fee := range minerFees {
 		if _, err := stmt.Exec(dbID, i, encode(fee)); err != nil {
 			return fmt.Errorf("addMinerFees: failed to execute statement: %w", err)
 		}
@@ -63,8 +63,8 @@ func addMinerFees(tx *txn, dbID int64, txn types.Transaction) error {
 	return nil
 }
 
-func addArbitraryData(tx *txn, dbID int64, txn types.Transaction) error {
-	if len(txn.ArbitraryData) == 0 {
+func addArbitraryData(tx *txn, dbID int64, arbitraryData [][]byte) error {
+	if len(arbitraryData) == 0 {
 		return nil
 	}
 
@@ -74,16 +74,16 @@ func addArbitraryData(tx *txn, dbID int64, txn types.Transaction) error {
 	}
 	defer stmt.Close()
 
-	for i, arbitraryData := range txn.ArbitraryData {
-		if _, err := stmt.Exec(dbID, i, arbitraryData); err != nil {
+	for i, arb := range arbitraryData {
+		if _, err := stmt.Exec(dbID, i, arb); err != nil {
 			return fmt.Errorf("addArbitraryData: failed to execute statement: %w", err)
 		}
 	}
 	return nil
 }
 
-func addSignatures(tx *txn, dbID int64, txn types.Transaction) error {
-	if len(txn.Signatures) == 0 {
+func addSignatures(tx *txn, dbID int64, signatures []types.TransactionSignature) error {
+	if len(signatures) == 0 {
 		return nil
 	}
 
@@ -93,7 +93,7 @@ func addSignatures(tx *txn, dbID int64, txn types.Transaction) error {
 	}
 	defer stmt.Close()
 
-	for i, sig := range txn.Signatures {
+	for i, sig := range signatures {
 		if _, err := stmt.Exec(dbID, i, encode(sig.ParentID), sig.PublicKeyIndex, encode(sig.Timelock), encode(sig.CoveredFields), sig.Signature); err != nil {
 			return fmt.Errorf("addSignatures: failed to execute statement: %w", err)
 		}
@@ -101,8 +101,8 @@ func addSignatures(tx *txn, dbID int64, txn types.Transaction) error {
 	return nil
 }
 
-func addSiacoinInputs(tx *txn, dbID int64, txn types.Transaction) error {
-	if len(txn.SiacoinInputs) == 0 {
+func addSiacoinInputs(tx *txn, dbID int64, siacoinInputs []types.SiacoinInput) error {
+	if len(siacoinInputs) == 0 {
 		return nil
 	}
 
@@ -112,7 +112,7 @@ func addSiacoinInputs(tx *txn, dbID int64, txn types.Transaction) error {
 	}
 	defer stmt.Close()
 
-	for i, sci := range txn.SiacoinInputs {
+	for i, sci := range siacoinInputs {
 		if _, err := stmt.Exec(dbID, i, encode(sci.UnlockConditions), encode(sci.ParentID)); err != nil {
 			return fmt.Errorf("addSiacoinInputs: failed to execute statement: %w", err)
 		}
@@ -139,8 +139,8 @@ func addSiacoinOutputs(tx *txn, dbID int64, txn types.Transaction) error {
 	return nil
 }
 
-func addSiafundInputs(tx *txn, dbID int64, txn types.Transaction) error {
-	if len(txn.SiafundInputs) == 0 {
+func addSiafundInputs(tx *txn, dbID int64, siafundInputs []types.SiafundInput) error {
+	if len(siafundInputs) == 0 {
 		return nil
 	}
 
@@ -150,7 +150,7 @@ func addSiafundInputs(tx *txn, dbID int64, txn types.Transaction) error {
 	}
 	defer stmt.Close()
 
-	for i, sfi := range txn.SiafundInputs {
+	for i, sfi := range siafundInputs {
 		if _, err := stmt.Exec(dbID, i, encode(sfi.UnlockConditions), encode(sfi.ClaimAddress), encode(sfi.ParentID)); err != nil {
 			return fmt.Errorf("addSiafundInputs: failed to execute statement: %w", err)
 		}
@@ -197,8 +197,8 @@ func addFileContracts(tx *txn, dbID int64, txn types.Transaction) error {
 	return nil
 }
 
-func addFileContractRevisions(tx *txn, dbID int64, txn types.Transaction) error {
-	if len(txn.FileContractRevisions) == 0 {
+func addFileContractRevisions(tx *txn, dbID int64, fileContractRevisions []types.FileContractRevision) error {
+	if len(fileContractRevisions) == 0 {
 		return nil
 	}
 
@@ -208,8 +208,7 @@ func addFileContractRevisions(tx *txn, dbID int64, txn types.Transaction) error 
 	}
 	defer stmt.Close()
 
-	for i := range txn.FileContractRevisions {
-		fcr := &txn.FileContractRevisions[i]
+	for i, fcr := range fileContractRevisions {
 		if _, err := stmt.Exec(dbID, i, encode(fcr.ParentID), encode(fcr.UnlockConditions), encode(fcr.ParentID), encode(fcr.FileContract.RevisionNumber)); err != nil {
 			return fmt.Errorf("addFileContractRevisions: failed to execute statement: %w", err)
 		}
@@ -218,8 +217,8 @@ func addFileContractRevisions(tx *txn, dbID int64, txn types.Transaction) error 
 	return nil
 }
 
-func addStorageProofs(tx *txn, dbID int64, txn types.Transaction) error {
-	if len(txn.StorageProofs) == 0 {
+func addStorageProofs(tx *txn, dbID int64, storageProofs []types.StorageProof) error {
+	if len(storageProofs) == 0 {
 		return nil
 	}
 
@@ -229,7 +228,7 @@ func addStorageProofs(tx *txn, dbID int64, txn types.Transaction) error {
 	}
 	defer stmt.Close()
 
-	for i, proof := range txn.StorageProofs {
+	for i, proof := range storageProofs {
 		if _, err := stmt.Exec(dbID, i, encode(proof.ParentID), proof.Leaf[:], encode(proof.Proof)); err != nil {
 			return fmt.Errorf("addStorageProofs: failed to execute statement: %w", err)
 		}
@@ -325,25 +324,25 @@ func addTransactionFields(tx *txn, txns []types.Transaction, txnExist map[types.
 			return fmt.Errorf("failed to scan for transaction ID: %w", err)
 		}
 
-		if err := addMinerFees(tx, dbID, txn); err != nil {
+		if err := addMinerFees(tx, dbID, txn.MinerFees); err != nil {
 			return fmt.Errorf("failed to add miner fees: %w", err)
-		} else if err := addArbitraryData(tx, dbID, txn); err != nil {
+		} else if err := addArbitraryData(tx, dbID, txn.ArbitraryData); err != nil {
 			return fmt.Errorf("failed to add arbitrary data: %w", err)
-		} else if err := addSignatures(tx, dbID, txn); err != nil {
+		} else if err := addSignatures(tx, dbID, txn.Signatures); err != nil {
 			return fmt.Errorf("failed to add signatures: %w", err)
-		} else if err := addSiacoinInputs(tx, dbID, txn); err != nil {
+		} else if err := addSiacoinInputs(tx, dbID, txn.SiacoinInputs); err != nil {
 			return fmt.Errorf("failed to add siacoin inputs: %w", err)
 		} else if err := addSiacoinOutputs(tx, dbID, txn); err != nil {
 			return fmt.Errorf("failed to add siacoin outputs: %w", err)
-		} else if err := addSiafundInputs(tx, dbID, txn); err != nil {
+		} else if err := addSiafundInputs(tx, dbID, txn.SiafundInputs); err != nil {
 			return fmt.Errorf("failed to add siafund inputs: %w", err)
 		} else if err := addSiafundOutputs(tx, dbID, txn); err != nil {
 			return fmt.Errorf("failed to add siafund outputs: %w", err)
 		} else if err := addFileContracts(tx, dbID, txn); err != nil {
 			return fmt.Errorf("failed to add file contract: %w", err)
-		} else if err := addFileContractRevisions(tx, dbID, txn); err != nil {
+		} else if err := addFileContractRevisions(tx, dbID, txn.FileContractRevisions); err != nil {
 			return fmt.Errorf("failed to add file contract revisions: %w", err)
-		} else if err := addStorageProofs(tx, dbID, txn); err != nil {
+		} else if err := addStorageProofs(tx, dbID, txn.StorageProofs); err != nil {
 			return fmt.Errorf("failed to add storage proofs: %w", err)
 		}
 	}

@@ -294,8 +294,8 @@ func updateV2FileContractIndices(tx *txn, revert bool, index types.ChainIndex, f
 	return nil
 }
 
-func addV2SiacoinInputs(tx *txn, dbID int64, txn types.V2Transaction) error {
-	if len(txn.SiacoinInputs) == 0 {
+func addV2SiacoinInputs(tx *txn, dbID int64, siacoinInputs []types.V2SiacoinInput) error {
+	if len(siacoinInputs) == 0 {
 		return nil
 	}
 
@@ -305,7 +305,7 @@ func addV2SiacoinInputs(tx *txn, dbID int64, txn types.V2Transaction) error {
 	}
 	defer stmt.Close()
 
-	for i, sci := range txn.SiacoinInputs {
+	for i, sci := range siacoinInputs {
 		if _, err := stmt.Exec(dbID, i, encode(sci.SatisfiedPolicy), encode(types.SiacoinOutputID(sci.Parent.ID))); err != nil {
 			return fmt.Errorf("addV2SiacoinInputs: failed to execute statement: %w", err)
 		}
@@ -313,12 +313,11 @@ func addV2SiacoinInputs(tx *txn, dbID int64, txn types.V2Transaction) error {
 	return nil
 }
 
-func addV2SiacoinOutputs(tx *txn, dbID int64, txn types.V2Transaction) error {
+func addV2SiacoinOutputs(tx *txn, dbID int64, txnID types.TransactionID, txn types.V2Transaction) error {
 	if len(txn.SiacoinOutputs) == 0 {
 		return nil
 	}
 
-	txnID := txn.ID()
 	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_siacoin_outputs(transaction_id, transaction_order, output_id) VALUES (?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?))`)
 	if err != nil {
 		return fmt.Errorf("addV2SiacoinOutputs: failed to prepare statement: %w", err)
@@ -333,8 +332,8 @@ func addV2SiacoinOutputs(tx *txn, dbID int64, txn types.V2Transaction) error {
 	return nil
 }
 
-func addV2SiafundInputs(tx *txn, dbID int64, txn types.V2Transaction) error {
-	if len(txn.SiafundInputs) == 0 {
+func addV2SiafundInputs(tx *txn, dbID int64, siafundInputs []types.V2SiafundInput) error {
+	if len(siafundInputs) == 0 {
 		return nil
 	}
 
@@ -344,7 +343,7 @@ func addV2SiafundInputs(tx *txn, dbID int64, txn types.V2Transaction) error {
 	}
 	defer stmt.Close()
 
-	for i, sfi := range txn.SiafundInputs {
+	for i, sfi := range siafundInputs {
 		if _, err := stmt.Exec(dbID, i, encode(sfi.ClaimAddress), encode(sfi.SatisfiedPolicy), encode(types.SiafundOutputID(sfi.Parent.ID))); err != nil {
 			return fmt.Errorf("addV2SiafundInputs: failed to execute statement: %w", err)
 		}
@@ -352,12 +351,10 @@ func addV2SiafundInputs(tx *txn, dbID int64, txn types.V2Transaction) error {
 	return nil
 }
 
-func addV2SiafundOutputs(tx *txn, dbID int64, txn types.V2Transaction) error {
+func addV2SiafundOutputs(tx *txn, dbID int64, txnID types.TransactionID, txn types.V2Transaction) error {
 	if len(txn.SiafundOutputs) == 0 {
 		return nil
 	}
-
-	txnID := txn.ID()
 
 	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_siafund_outputs(transaction_id, transaction_order, output_id) VALUES (?, ?, (SELECT id FROM siafund_elements WHERE output_id = ?))`)
 	if err != nil {
@@ -373,12 +370,11 @@ func addV2SiafundOutputs(tx *txn, dbID int64, txn types.V2Transaction) error {
 	return nil
 }
 
-func addV2FileContracts(tx *txn, dbID int64, txn types.V2Transaction) error {
+func addV2FileContracts(tx *txn, dbID int64, txnID types.TransactionID, txn types.V2Transaction) error {
 	if len(txn.FileContracts) == 0 {
 		return nil
 	}
 
-	txnID := txn.ID()
 	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contracts(transaction_id, transaction_order, contract_id) VALUES (?, ?, (SELECT id FROM v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
 	if err != nil {
 		return fmt.Errorf("addV2FileContracts: failed to prepare statement: %w", err)
@@ -393,8 +389,8 @@ func addV2FileContracts(tx *txn, dbID int64, txn types.V2Transaction) error {
 	return nil
 }
 
-func addV2FileContractRevisions(tx *txn, dbID int64, txn types.V2Transaction) error {
-	if len(txn.FileContractRevisions) == 0 {
+func addV2FileContractRevisions(tx *txn, dbID int64, fileContractRevisions []types.V2FileContractRevision) error {
+	if len(fileContractRevisions) == 0 {
 		return nil
 	}
 
@@ -404,7 +400,7 @@ func addV2FileContractRevisions(tx *txn, dbID int64, txn types.V2Transaction) er
 	}
 	defer stmt.Close()
 
-	for i, fcr := range txn.FileContractRevisions {
+	for i, fcr := range fileContractRevisions {
 		if _, err := stmt.Exec(dbID, i, encode(types.FileContractID(fcr.Parent.ID)), encode(fcr.Parent.V2FileContract.RevisionNumber), encode(types.FileContractID(fcr.Parent.ID)), encode(fcr.Revision.RevisionNumber)); err != nil {
 			return fmt.Errorf("addV2FileContractRevisions: failed to execute statement: %w", err)
 		}
@@ -412,8 +408,8 @@ func addV2FileContractRevisions(tx *txn, dbID int64, txn types.V2Transaction) er
 	return nil
 }
 
-func addV2FileContractResolutions(tx *txn, dbID int64, txn types.V2Transaction) error {
-	if len(txn.FileContractResolutions) == 0 {
+func addV2FileContractResolutions(tx *txn, dbID int64, fileContractResolutions []types.V2FileContractResolution) error {
+	if len(fileContractResolutions) == 0 {
 		return nil
 	}
 
@@ -435,7 +431,7 @@ func addV2FileContractResolutions(tx *txn, dbID int64, txn types.V2Transaction) 
 	}
 	defer expirationStmt.Close()
 
-	for i, fcr := range txn.FileContractResolutions {
+	for i, fcr := range fileContractResolutions {
 		resolutionType := explorer.V2ResolutionType(fcr.Resolution)
 		switch v := fcr.Resolution.(type) {
 		case *types.V2FileContractRenewal:
@@ -455,8 +451,8 @@ func addV2FileContractResolutions(tx *txn, dbID int64, txn types.V2Transaction) 
 	return nil
 }
 
-func addV2Attestations(tx *txn, dbID int64, txn types.V2Transaction) error {
-	if len(txn.Attestations) == 0 {
+func addV2Attestations(tx *txn, dbID int64, attestations []types.Attestation) error {
+	if len(attestations) == 0 {
 		return nil
 	}
 
@@ -466,7 +462,7 @@ func addV2Attestations(tx *txn, dbID int64, txn types.V2Transaction) error {
 	}
 	defer stmt.Close()
 
-	for i, attestation := range txn.Attestations {
+	for i, attestation := range attestations {
 		if _, err := stmt.Exec(dbID, i, encode(attestation.PublicKey), attestation.Key, attestation.Value, encode(attestation.Signature)); err != nil {
 			return fmt.Errorf("addV2Attestations: failed to execute statement: %w", err)
 		}
@@ -500,21 +496,21 @@ func addV2TransactionFields(tx *txn, txns []types.V2Transaction, txnSeen map[typ
 			return fmt.Errorf("failed to scan for transaction ID: %w", err)
 		}
 
-		if err := addV2Attestations(tx, dbID, txn); err != nil {
+		if err := addV2Attestations(tx, dbID, txn.Attestations); err != nil {
 			return fmt.Errorf("failed to add attestations: %w", err)
-		} else if err := addV2SiacoinInputs(tx, dbID, txn); err != nil {
+		} else if err := addV2SiacoinInputs(tx, dbID, txn.SiacoinInputs); err != nil {
 			return fmt.Errorf("failed to add siacoin inputs: %w", err)
-		} else if err := addV2SiacoinOutputs(tx, dbID, txn); err != nil {
+		} else if err := addV2SiacoinOutputs(tx, dbID, txnID, txn); err != nil {
 			return fmt.Errorf("failed to add siacoin outputs: %w", err)
-		} else if err := addV2SiafundInputs(tx, dbID, txn); err != nil {
+		} else if err := addV2SiafundInputs(tx, dbID, txn.SiafundInputs); err != nil {
 			return fmt.Errorf("failed to add siafund inputs: %w", err)
-		} else if err := addV2SiafundOutputs(tx, dbID, txn); err != nil {
+		} else if err := addV2SiafundOutputs(tx, dbID, txnID, txn); err != nil {
 			return fmt.Errorf("failed to add siafund outputs: %w", err)
-		} else if err := addV2FileContracts(tx, dbID, txn); err != nil {
+		} else if err := addV2FileContracts(tx, dbID, txnID, txn); err != nil {
 			return fmt.Errorf("failed to add file contracts: %w", err)
-		} else if err := addV2FileContractRevisions(tx, dbID, txn); err != nil {
+		} else if err := addV2FileContractRevisions(tx, dbID, txn.FileContractRevisions); err != nil {
 			return fmt.Errorf("failed to add file contract revisions: %w", err)
-		} else if err := addV2FileContractResolutions(tx, dbID, txn); err != nil {
+		} else if err := addV2FileContractResolutions(tx, dbID, txn.FileContractResolutions); err != nil {
 			return fmt.Errorf("failed to add file contract resolutions: %w", err)
 		}
 	}
