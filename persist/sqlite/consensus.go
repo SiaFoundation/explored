@@ -44,19 +44,9 @@ func addMinerPayouts(tx *txn, bid types.BlockID, scos []types.SiacoinOutput) err
 	return nil
 }
 
-func getTransactionID(tx *txn, txnID types.TransactionID) (result int64, err error) {
-	err = tx.QueryRow(`SELECT id FROM transactions WHERE transaction_id = ?`, encode(txnID)).Scan(&result)
-	return
-}
-
-func addMinerFees(tx *txn, txn types.Transaction) error {
+func addMinerFees(tx *txn, dbID int64, txn types.Transaction) error {
 	if len(txn.MinerFees) == 0 {
 		return nil
-	}
-
-	dbID, err := getTransactionID(tx, txn.ID())
-	if err != nil {
-		return fmt.Errorf("addMinerFees: failed to get transaction ID: %w", err)
 	}
 
 	stmt, err := tx.Prepare(`INSERT INTO transaction_miner_fees(transaction_id, transaction_order, fee) VALUES (?, ?, ?)`)
@@ -73,14 +63,9 @@ func addMinerFees(tx *txn, txn types.Transaction) error {
 	return nil
 }
 
-func addArbitraryData(tx *txn, txn types.Transaction) error {
+func addArbitraryData(tx *txn, dbID int64, txn types.Transaction) error {
 	if len(txn.ArbitraryData) == 0 {
 		return nil
-	}
-
-	dbID, err := getTransactionID(tx, txn.ID())
-	if err != nil {
-		return fmt.Errorf("addArbitraryData: failed to get transaction ID: %w", err)
 	}
 
 	stmt, err := tx.Prepare(`INSERT INTO transaction_arbitrary_data(transaction_id, transaction_order, data) VALUES (?, ?, ?)`)
@@ -97,14 +82,9 @@ func addArbitraryData(tx *txn, txn types.Transaction) error {
 	return nil
 }
 
-func addSignatures(tx *txn, txn types.Transaction) error {
+func addSignatures(tx *txn, dbID int64, txn types.Transaction) error {
 	if len(txn.Signatures) == 0 {
 		return nil
-	}
-
-	dbID, err := getTransactionID(tx, txn.ID())
-	if err != nil {
-		return fmt.Errorf("addSignatures: failed to get transaction ID: %w", err)
 	}
 
 	stmt, err := tx.Prepare(`INSERT INTO transaction_signatures(transaction_id, transaction_order, parent_id, public_key_index, timelock, covered_fields, signature) VALUES (?, ?, ?, ?, ?, ?, ?)`)
@@ -121,14 +101,9 @@ func addSignatures(tx *txn, txn types.Transaction) error {
 	return nil
 }
 
-func addSiacoinInputs(tx *txn, txn types.Transaction) error {
+func addSiacoinInputs(tx *txn, dbID int64, txn types.Transaction) error {
 	if len(txn.SiacoinInputs) == 0 {
 		return nil
-	}
-
-	dbID, err := getTransactionID(tx, txn.ID())
-	if err != nil {
-		return fmt.Errorf("addSiacoinInputs: failed to get transaction ID: %w", err)
 	}
 
 	stmt, err := tx.Prepare(`INSERT INTO transaction_siacoin_inputs(transaction_id, transaction_order, unlock_conditions, parent_id) VALUES (?, ?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?))`)
@@ -145,14 +120,9 @@ func addSiacoinInputs(tx *txn, txn types.Transaction) error {
 	return nil
 }
 
-func addSiacoinOutputs(tx *txn, txn types.Transaction) error {
+func addSiacoinOutputs(tx *txn, dbID int64, txn types.Transaction) error {
 	if len(txn.SiacoinOutputs) == 0 {
 		return nil
-	}
-
-	dbID, err := getTransactionID(tx, txn.ID())
-	if err != nil {
-		return fmt.Errorf("addSiacoinOutputs: failed to get transaction ID: %w", err)
 	}
 
 	stmt, err := tx.Prepare(`INSERT INTO transaction_siacoin_outputs(transaction_id, transaction_order, output_id) VALUES (?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?))`)
@@ -169,14 +139,9 @@ func addSiacoinOutputs(tx *txn, txn types.Transaction) error {
 	return nil
 }
 
-func addSiafundInputs(tx *txn, txn types.Transaction) error {
+func addSiafundInputs(tx *txn, dbID int64, txn types.Transaction) error {
 	if len(txn.SiafundInputs) == 0 {
 		return nil
-	}
-
-	dbID, err := getTransactionID(tx, txn.ID())
-	if err != nil {
-		return fmt.Errorf("addSiafundInputs: failed to get transaction ID: %w", err)
 	}
 
 	stmt, err := tx.Prepare(`INSERT INTO transaction_siafund_inputs(transaction_id, transaction_order, unlock_conditions, claim_address, parent_id) VALUES (?, ?, ?, ?, (SELECT id FROM siafund_elements WHERE output_id = ?))`)
@@ -194,14 +159,9 @@ func addSiafundInputs(tx *txn, txn types.Transaction) error {
 	return nil
 }
 
-func addSiafundOutputs(tx *txn, txn types.Transaction) error {
+func addSiafundOutputs(tx *txn, dbID int64, txn types.Transaction) error {
 	if len(txn.SiafundOutputs) == 0 {
 		return nil
-	}
-
-	dbID, err := getTransactionID(tx, txn.ID())
-	if err != nil {
-		return fmt.Errorf("addSiafundOutputs: failed to get transaction ID: %w", err)
 	}
 
 	stmt, err := tx.Prepare(`INSERT INTO transaction_siafund_outputs(transaction_id, transaction_order, output_id) VALUES (?, ?, (SELECT id FROM siafund_elements WHERE output_id = ?))`)
@@ -218,14 +178,9 @@ func addSiafundOutputs(tx *txn, txn types.Transaction) error {
 	return nil
 }
 
-func addFileContracts(tx *txn, txn types.Transaction) error {
+func addFileContracts(tx *txn, dbID int64, txn types.Transaction) error {
 	if len(txn.FileContracts) == 0 {
 		return nil
-	}
-
-	dbID, err := getTransactionID(tx, txn.ID())
-	if err != nil {
-		return fmt.Errorf("addFileContracts: failed to get transaction ID: %w", err)
 	}
 
 	stmt, err := tx.Prepare(`INSERT INTO transaction_file_contracts(transaction_id, transaction_order, contract_id) VALUES (?, ?, (SELECT id FROM file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
@@ -242,14 +197,9 @@ func addFileContracts(tx *txn, txn types.Transaction) error {
 	return nil
 }
 
-func addFileContractRevisions(tx *txn, txn types.Transaction) error {
+func addFileContractRevisions(tx *txn, dbID int64, txn types.Transaction) error {
 	if len(txn.FileContractRevisions) == 0 {
 		return nil
-	}
-
-	dbID, err := getTransactionID(tx, txn.ID())
-	if err != nil {
-		return fmt.Errorf("addFileContractRevisions: failed to get transaction ID: %w", err)
 	}
 
 	stmt, err := tx.Prepare(`INSERT INTO transaction_file_contract_revisions(transaction_id, transaction_order, parent_id, unlock_conditions, contract_id) VALUES (?, ?, ?, ?, (SELECT id FROM file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
@@ -268,14 +218,9 @@ func addFileContractRevisions(tx *txn, txn types.Transaction) error {
 	return nil
 }
 
-func addStorageProofs(tx *txn, txn types.Transaction) error {
+func addStorageProofs(tx *txn, dbID int64, txn types.Transaction) error {
 	if len(txn.StorageProofs) == 0 {
 		return nil
-	}
-
-	dbID, err := getTransactionID(tx, txn.ID())
-	if err != nil {
-		return fmt.Errorf("addStorageProofs: failed to get transaction ID: %w", err)
 	}
 
 	stmt, err := tx.Prepare(`INSERT INTO transaction_storage_proofs(transaction_id, transaction_order, parent_id, leaf, proof) VALUES (?, ?, ?, ?, ?)`)
@@ -355,6 +300,11 @@ func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction) (map[
 }
 
 func addTransactionFields(tx *txn, txns []types.Transaction, txnExist map[types.TransactionID]bool) error {
+	stmt, err := tx.Prepare(`SELECT id FROM transactions WHERE transaction_id = ?`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare transaction ID statement: %w", err)
+	}
+
 	for _, txn := range txns {
 		txnID := txn.ID()
 		exist, ok := txnExist[txnID]
@@ -370,25 +320,30 @@ func addTransactionFields(tx *txn, txns []types.Transaction, txnExist map[types.
 		// multiple of the same transaction in a block
 		txnExist[txnID] = true
 
-		if err := addMinerFees(tx, txn); err != nil {
+		var dbID int64
+		if err := stmt.QueryRow(encode(txnID)).Scan(&dbID); err != nil {
+			return fmt.Errorf("failed to scan for transaction ID: %w", err)
+		}
+
+		if err := addMinerFees(tx, dbID, txn); err != nil {
 			return fmt.Errorf("failed to add miner fees: %w", err)
-		} else if err := addArbitraryData(tx, txn); err != nil {
+		} else if err := addArbitraryData(tx, dbID, txn); err != nil {
 			return fmt.Errorf("failed to add arbitrary data: %w", err)
-		} else if err := addSignatures(tx, txn); err != nil {
+		} else if err := addSignatures(tx, dbID, txn); err != nil {
 			return fmt.Errorf("failed to add signatures: %w", err)
-		} else if err := addSiacoinInputs(tx, txn); err != nil {
+		} else if err := addSiacoinInputs(tx, dbID, txn); err != nil {
 			return fmt.Errorf("failed to add siacoin inputs: %w", err)
-		} else if err := addSiacoinOutputs(tx, txn); err != nil {
+		} else if err := addSiacoinOutputs(tx, dbID, txn); err != nil {
 			return fmt.Errorf("failed to add siacoin outputs: %w", err)
-		} else if err := addSiafundInputs(tx, txn); err != nil {
+		} else if err := addSiafundInputs(tx, dbID, txn); err != nil {
 			return fmt.Errorf("failed to add siafund inputs: %w", err)
-		} else if err := addSiafundOutputs(tx, txn); err != nil {
+		} else if err := addSiafundOutputs(tx, dbID, txn); err != nil {
 			return fmt.Errorf("failed to add siafund outputs: %w", err)
-		} else if err := addFileContracts(tx, txn); err != nil {
+		} else if err := addFileContracts(tx, dbID, txn); err != nil {
 			return fmt.Errorf("failed to add file contract: %w", err)
-		} else if err := addFileContractRevisions(tx, txn); err != nil {
+		} else if err := addFileContractRevisions(tx, dbID, txn); err != nil {
 			return fmt.Errorf("failed to add file contract revisions: %w", err)
-		} else if err := addStorageProofs(tx, txn); err != nil {
+		} else if err := addStorageProofs(tx, dbID, txn); err != nil {
 			return fmt.Errorf("failed to add storage proofs: %w", err)
 		}
 	}
