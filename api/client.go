@@ -280,6 +280,12 @@ func (c *Client) HostMetrics() (resp explorer.HostMetrics, err error) {
 	return
 }
 
+// BlockTimeMetrics returns the average block time during various intervals.
+func (c *Client) BlockTimeMetrics() (resp explorer.BlockTimeMetrics, err error) {
+	err = c.c.GET(context.Background(), "/metrics/blocktime", &resp)
+	return
+}
+
 // Search returns what type of object an ID is.
 func (c *Client) Search(id string) (resp explorer.SearchType, err error) {
 	err = c.c.GET(context.Background(), fmt.Sprintf("/search/%s", id), &resp)

@@ -299,6 +299,14 @@ func (s *server) hostMetricsHandler(jc jape.Context) {
 	jc.Encode(metrics)
 }
 
+func (s *server) blockTimeMetricsHandler(jc jape.Context) {
+	metrics, err := s.e.BlockTimeMetricsHandler()
+	if jc.Check("failed to get block time metrics", err) != nil {
+		return
+	}
+	jc.Encode(metrics)
+}
+
 func (s *server) blocksIDHandler(jc jape.Context) {
 	var id types.BlockID
 	if jc.DecodeParam("id", &id) != nil {
@@ -885,6 +893,7 @@ func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.Source, a
 		"GET    /metrics/block":     srv.blocksMetricsHandler,
 		"GET    /metrics/block/:id": srv.blocksMetricsIDHandler,
 		"GET    /metrics/host":      srv.hostMetricsHandler,
+		"GET    /metrics/blocktime": srv.blockTimeMetricsHandler,
 
 		"POST   /hosts": srv.hostsHandler,
 
