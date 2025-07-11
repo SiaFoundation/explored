@@ -456,7 +456,7 @@ func BenchmarkBlockTimeMetrics(b *testing.B) {
 		var parentID types.BlockID
 		nonce, leafIndex := encode(uint64(0)), encode(uint64(0))
 		for i := range 500000 {
-			if i % 10000 == 0 {
+			if i%10000 == 0 {
 				b.Log("Adding block:", i)
 			}
 			id := types.BlockID(frand.Entropy256())

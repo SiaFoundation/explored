@@ -15,6 +15,7 @@ CREATE TABLE blocks (
 	v2_commitment BLOB
 );
 CREATE INDEX blocks_height_index ON blocks(height);
+CREATE INDEX blocks_timestamp_index ON blocks(timestamp);
 
 CREATE TABLE network_metrics (
 	block_id BLOB PRIMARY KEY REFERENCES blocks(id) NOT NULL,

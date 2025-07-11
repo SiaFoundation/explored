@@ -229,15 +229,11 @@ WITH recent_blocks AS (
     SELECT height, timestamp
     FROM blocks
     WHERE timestamp >= strftime('%s', 'now') - ?
-    ORDER BY height
-),
-differences AS (
-    SELECT b2.timestamp - b1.timestamp AS delta
-    FROM recent_blocks b1
-    JOIN recent_blocks b2 ON b2.height = b1.height + 1
 )
-SELECT ROUND(AVG(delta)) AS average_block_time
-FROM differences;`)
+SELECT ROUND(AVG(b2.timestamp - b1.timestamp)) AS average_block_time
+FROM recent_blocks b1
+JOIN recent_blocks b2 ON b2.height = b1.height + 1;
+`)
 		if err != nil {
 			return fmt.Errorf("failed to prepare statement: %w", err)
 		}

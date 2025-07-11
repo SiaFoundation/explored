@@ -36,8 +36,14 @@ func migrateV4(txn *txn, log *zap.Logger) error {
 	return nil
 }
 
+func migrateV5(txn *txn, _ *zap.Logger) error {
+	_, err := txn.Exec(`CREATE INDEX IF NOT EXISTS blocks_timestamp_index ON blocks(timestamp);`)
+	return err
+}
+
 var migrations = []func(tx *txn, log *zap.Logger) error{
 	migrateV2,
 	migrateV3,
 	migrateV4,
+	migrateV5,
 }
