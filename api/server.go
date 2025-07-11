@@ -54,6 +54,7 @@ type (
 		BestTip(height uint64) (types.ChainIndex, error)
 		Metrics(id types.BlockID) (explorer.Metrics, error)
 		HostMetrics() (explorer.HostMetrics, error)
+		BlockTimeMetrics() (explorer.BlockTimeMetrics, error)
 		Transactions(ids []types.TransactionID) ([]explorer.Transaction, error)
 		TransactionChainIndices(id types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error)
 		V2Transactions(ids []types.TransactionID) ([]explorer.V2Transaction, error)
@@ -300,7 +301,7 @@ func (s *server) hostMetricsHandler(jc jape.Context) {
 }
 
 func (s *server) blockTimeMetricsHandler(jc jape.Context) {
-	metrics, err := s.e.BlockTimeMetricsHandler()
+	metrics, err := s.e.BlockTimeMetrics()
 	if jc.Check("failed to get block time metrics", err) != nil {
 		return
 	}
