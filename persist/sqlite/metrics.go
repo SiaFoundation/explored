@@ -221,3 +221,37 @@ func (s *Store) HostMetrics() (result explorer.HostMetrics, err error) {
 	})
 	return
 }
+
+// BlockTimeMetrics implements explorer.Store.
+func (s *Store) BlockTimeMetrics() (result explorer.BlockTimeMetrics, err error) {
+	err = s.transaction(func(tx *txn) error {
+		stmt, err := tx.Prepare(`
+WITH recent_blocks AS (
+    SELECT height, timestamp
+    FROM blocks
+    WHERE timestamp >= strftime('%s', 'now') - ?
+)
+SELECT ROUND(AVG(b2.timestamp - b1.timestamp)) AS average_block_time
+FROM recent_blocks b1
+JOIN recent_blocks b2 ON b2.height = b1.height + 1;
+`)
+		if err != nil {
+			return fmt.Errorf("failed to prepare statement: %w", err)
+		}
+
+		const day = 24 * time.Hour
+		if err := stmt.QueryRow(day.Seconds()).Scan(&result.Day); err != nil {
+			return fmt.Errorf("failed to get past day average: %w", err)
+		} else if err := stmt.QueryRow((7 * day).Seconds()).Scan(&result.Week); err != nil {
+			return fmt.Errorf("failed to get past week average: %w", err)
+		} else if err := stmt.QueryRow((30 * day).Seconds()).Scan(&result.Month); err != nil {
+			return fmt.Errorf("failed to get past month average: %w", err)
+		}
+		result.Day *= time.Second
+		result.Week *= time.Second
+		result.Month *= time.Second
+
+		return nil
+	})
+	return
+}

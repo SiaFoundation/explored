@@ -605,3 +605,10 @@ type HostQuery struct {
 	AcceptContracts      *bool             `json:"acceptContracts,omitempty"`
 	Online               *bool             `json:"online,omitempty"`
 }
+
+// BlockTimeMetrics represents the average block time during various intervals.
+type BlockTimeMetrics struct {
+	Day   time.Duration
+	Week  time.Duration
+	Month time.Duration
+}

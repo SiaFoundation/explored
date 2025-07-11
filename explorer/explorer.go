@@ -89,6 +89,7 @@ type Store interface {
 	Metrics(id types.BlockID) (Metrics, error)
 	LastSuccessScan() (time.Time, error)
 	HostMetrics() (HostMetrics, error)
+	BlockTimeMetrics() (BlockTimeMetrics, error)
 	Transactions(ids []types.TransactionID) ([]Transaction, error)
 	TransactionChainIndices(txid types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error)
 	V2Transactions(ids []types.TransactionID) ([]V2Transaction, error)
@@ -317,6 +318,11 @@ func (e *Explorer) Metrics(id types.BlockID) (Metrics, error) {
 // HostMetrics returns various metrics about currently available hosts.
 func (e *Explorer) HostMetrics() (HostMetrics, error) {
 	return e.s.HostMetrics()
+}
+
+// BlockTimeMetrics returns the average block time during various intervals.
+func (e *Explorer) BlockTimeMetrics() (BlockTimeMetrics, error) {
+	return e.s.BlockTimeMetrics()
 }
 
 // Transactions returns the transactions with the specified IDs.

@@ -54,6 +54,7 @@ type (
 		BestTip(height uint64) (types.ChainIndex, error)
 		Metrics(id types.BlockID) (explorer.Metrics, error)
 		HostMetrics() (explorer.HostMetrics, error)
+		BlockTimeMetrics() (explorer.BlockTimeMetrics, error)
 		Transactions(ids []types.TransactionID) ([]explorer.Transaction, error)
 		TransactionChainIndices(id types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error)
 		V2Transactions(ids []types.TransactionID) ([]explorer.V2Transaction, error)
@@ -294,6 +295,14 @@ func (s *server) blocksMetricsIDHandler(jc jape.Context) {
 func (s *server) hostMetricsHandler(jc jape.Context) {
 	metrics, err := s.e.HostMetrics()
 	if jc.Check("failed to get host metrics", err) != nil {
+		return
+	}
+	jc.Encode(metrics)
+}
+
+func (s *server) blockTimeMetricsHandler(jc jape.Context) {
+	metrics, err := s.e.BlockTimeMetrics()
+	if jc.Check("failed to get block time metrics", err) != nil {
 		return
 	}
 	jc.Encode(metrics)
@@ -885,6 +894,7 @@ func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.Source, a
 		"GET    /metrics/block":     srv.blocksMetricsHandler,
 		"GET    /metrics/block/:id": srv.blocksMetricsIDHandler,
 		"GET    /metrics/host":      srv.hostMetricsHandler,
+		"GET    /metrics/blocktime": srv.blockTimeMetricsHandler,
 
 		"POST   /hosts": srv.hostsHandler,
 
