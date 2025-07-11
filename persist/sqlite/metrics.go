@@ -222,6 +222,7 @@ func (s *Store) HostMetrics() (result explorer.HostMetrics, err error) {
 	return
 }
 
+// BlockTimeMetrics implements explorer.Store.
 func (s *Store) BlockTimeMetrics() (result explorer.BlockTimeMetrics, err error) {
 	err = s.transaction(func(tx *txn) error {
 		stmt, err := tx.Prepare(`
