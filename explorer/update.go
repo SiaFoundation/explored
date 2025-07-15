@@ -325,7 +325,10 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 	state.Metrics.SiafundTaxRevenue = cau.State.SiafundTaxRevenue
 	state.Metrics.NumLeaves = cau.State.Elements.NumLeaves
 
-	return tx.ApplyIndex(state)
+	if err := tx.ApplyIndex(state); err != nil {
+		return fmt.Errorf("failed to apply block: ApplyIndex: %w", err)
+	}
+	return nil
 }
 
 // revertChainUpdate atomically reverts a chain update from a store
@@ -467,7 +470,10 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 	}
 	state.Metrics.Index = revertedIndex
 
-	return tx.RevertIndex(state)
+	if err := tx.RevertIndex(state); err != nil {
+		return fmt.Errorf("failed to revert block: RevertIndex: %w", err)
+	}
+	return nil
 }
 
 func updateMetrics(tx UpdateTx, s UpdateState, metrics Metrics) (Metrics, error) {

@@ -32,13 +32,13 @@ func addBlock(tx *txn, b types.Block, cie types.ChainIndexElement, height uint64
 func addMinerPayouts(tx *txn, bid types.BlockID, scos []types.SiacoinOutput) error {
 	stmt, err := tx.Prepare(`INSERT INTO miner_payouts(block_id, block_order, output_id) VALUES (?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?));`)
 	if err != nil {
-		return fmt.Errorf("addMinerPayouts: failed to prepare statement: %w", err)
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i := range scos {
 		if _, err := stmt.Exec(encode(bid), i, encode(bid.MinerOutputID(i))); err != nil {
-			return fmt.Errorf("addMinerPayouts: failed to execute statement: %w", err)
+			return fmt.Errorf("failed to execute statement: %w", err)
 		}
 	}
 	return nil
@@ -51,13 +51,13 @@ func addMinerFees(tx *txn, dbID int64, minerFees []types.Currency) error {
 
 	stmt, err := tx.Prepare(`INSERT INTO transaction_miner_fees(transaction_id, transaction_order, fee) VALUES (?, ?, ?)`)
 	if err != nil {
-		return fmt.Errorf("addMinerFees: failed to prepare statement: %w", err)
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i, fee := range minerFees {
 		if _, err := stmt.Exec(dbID, i, encode(fee)); err != nil {
-			return fmt.Errorf("addMinerFees: failed to execute statement: %w", err)
+			return fmt.Errorf("failed to execute statement: %w", err)
 		}
 	}
 	return nil
@@ -70,13 +70,13 @@ func addArbitraryData(tx *txn, dbID int64, arbitraryData [][]byte) error {
 
 	stmt, err := tx.Prepare(`INSERT INTO transaction_arbitrary_data(transaction_id, transaction_order, data) VALUES (?, ?, ?)`)
 	if err != nil {
-		return fmt.Errorf("addArbitraryData: failed to prepare statement: %w", err)
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i, arb := range arbitraryData {
 		if _, err := stmt.Exec(dbID, i, arb); err != nil {
-			return fmt.Errorf("addArbitraryData: failed to execute statement: %w", err)
+			return fmt.Errorf("failed to execute statement: %w", err)
 		}
 	}
 	return nil
@@ -89,13 +89,13 @@ func addSignatures(tx *txn, dbID int64, signatures []types.TransactionSignature)
 
 	stmt, err := tx.Prepare(`INSERT INTO transaction_signatures(transaction_id, transaction_order, parent_id, public_key_index, timelock, covered_fields, signature) VALUES (?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
-		return fmt.Errorf("addSignatures: failed to prepare statement: %w", err)
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i, sig := range signatures {
 		if _, err := stmt.Exec(dbID, i, encode(sig.ParentID), sig.PublicKeyIndex, encode(sig.Timelock), encode(sig.CoveredFields), sig.Signature); err != nil {
-			return fmt.Errorf("addSignatures: failed to execute statement: %w", err)
+			return fmt.Errorf("failed to execute statement: %w", err)
 		}
 	}
 	return nil
@@ -108,13 +108,13 @@ func addSiacoinInputs(tx *txn, dbID int64, siacoinInputs []types.SiacoinInput) e
 
 	stmt, err := tx.Prepare(`INSERT INTO transaction_siacoin_inputs(transaction_id, transaction_order, unlock_conditions, parent_id) VALUES (?, ?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?))`)
 	if err != nil {
-		return fmt.Errorf("addSiacoinInputs: failed to prepare statement: %w", err)
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i, sci := range siacoinInputs {
 		if _, err := stmt.Exec(dbID, i, encode(sci.UnlockConditions), encode(sci.ParentID)); err != nil {
-			return fmt.Errorf("addSiacoinInputs: failed to execute statement: %w", err)
+			return fmt.Errorf("failed to execute statement: %w", err)
 		}
 	}
 	return nil
@@ -127,13 +127,13 @@ func addSiacoinOutputs(tx *txn, dbID int64, txn types.Transaction) error {
 
 	stmt, err := tx.Prepare(`INSERT INTO transaction_siacoin_outputs(transaction_id, transaction_order, output_id) VALUES (?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?))`)
 	if err != nil {
-		return fmt.Errorf("addSiacoinOutputs: failed to prepare statement: %w", err)
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i := range txn.SiacoinOutputs {
 		if _, err := stmt.Exec(dbID, i, encode(txn.SiacoinOutputID(i))); err != nil {
-			return fmt.Errorf("addSiacoinOutputs: failed to execute statement: %w", err)
+			return fmt.Errorf("failed to execute statement: %w", err)
 		}
 	}
 	return nil
@@ -146,13 +146,13 @@ func addSiafundInputs(tx *txn, dbID int64, siafundInputs []types.SiafundInput) e
 
 	stmt, err := tx.Prepare(`INSERT INTO transaction_siafund_inputs(transaction_id, transaction_order, unlock_conditions, claim_address, parent_id) VALUES (?, ?, ?, ?, (SELECT id FROM siafund_elements WHERE output_id = ?))`)
 	if err != nil {
-		return fmt.Errorf("addSiafundInputs: failed to prepare statement: %w", err)
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i, sfi := range siafundInputs {
 		if _, err := stmt.Exec(dbID, i, encode(sfi.UnlockConditions), encode(sfi.ClaimAddress), encode(sfi.ParentID)); err != nil {
-			return fmt.Errorf("addSiafundInputs: failed to execute statement: %w", err)
+			return fmt.Errorf("failed to execute statement: %w", err)
 		}
 	}
 
@@ -166,13 +166,13 @@ func addSiafundOutputs(tx *txn, dbID int64, txn types.Transaction) error {
 
 	stmt, err := tx.Prepare(`INSERT INTO transaction_siafund_outputs(transaction_id, transaction_order, output_id) VALUES (?, ?, (SELECT id FROM siafund_elements WHERE output_id = ?))`)
 	if err != nil {
-		return fmt.Errorf("addSiafundOutputs: failed to prepare statement: %w", err)
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i := range txn.SiafundOutputs {
 		if _, err := stmt.Exec(dbID, i, encode(txn.SiafundOutputID(i))); err != nil {
-			return fmt.Errorf("addSiafundOutputs: failed to execute statement: %w", err)
+			return fmt.Errorf("failed to execute statement: %w", err)
 		}
 	}
 	return nil
@@ -185,13 +185,13 @@ func addFileContracts(tx *txn, dbID int64, txn types.Transaction) error {
 
 	stmt, err := tx.Prepare(`INSERT INTO transaction_file_contracts(transaction_id, transaction_order, contract_id) VALUES (?, ?, (SELECT id FROM file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
 	if err != nil {
-		return fmt.Errorf("addFileContracts: failed to prepare statement: %w", err)
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i, fc := range txn.FileContracts {
 		if _, err := stmt.Exec(dbID, i, encode(txn.FileContractID(i)), encode(fc.RevisionNumber)); err != nil {
-			return fmt.Errorf("addFileContracts: failed to execute transaction_file_contracts statement: %w", err)
+			return fmt.Errorf("failed to execute transaction_file_contracts statement: %w", err)
 		}
 	}
 	return nil
@@ -204,13 +204,13 @@ func addFileContractRevisions(tx *txn, dbID int64, fileContractRevisions []types
 
 	stmt, err := tx.Prepare(`INSERT INTO transaction_file_contract_revisions(transaction_id, transaction_order, parent_id, unlock_conditions, contract_id) VALUES (?, ?, ?, ?, (SELECT id FROM file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
 	if err != nil {
-		return fmt.Errorf("addFileContractRevisions: failed to prepare statement: %w", err)
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i, fcr := range fileContractRevisions {
 		if _, err := stmt.Exec(dbID, i, encode(fcr.ParentID), encode(fcr.UnlockConditions), encode(fcr.ParentID), encode(fcr.FileContract.RevisionNumber)); err != nil {
-			return fmt.Errorf("addFileContractRevisions: failed to execute statement: %w", err)
+			return fmt.Errorf("failed to execute statement: %w", err)
 		}
 	}
 
@@ -224,13 +224,13 @@ func addStorageProofs(tx *txn, dbID int64, storageProofs []types.StorageProof) e
 
 	stmt, err := tx.Prepare(`INSERT INTO transaction_storage_proofs(transaction_id, transaction_order, parent_id, leaf, proof) VALUES (?, ?, ?, ?, ?)`)
 	if err != nil {
-		return fmt.Errorf("addStorageProofs: failed to prepare statement: %w", err)
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i, proof := range storageProofs {
 		if _, err := stmt.Exec(dbID, i, encode(proof.ParentID), proof.Leaf[:], encode(proof.Proof)); err != nil {
-			return fmt.Errorf("addStorageProofs: failed to execute statement: %w", err)
+			return fmt.Errorf("failed to execute statement: %w", err)
 		}
 	}
 	return nil
@@ -325,25 +325,25 @@ func addTransactionFields(tx *txn, txns []types.Transaction, txnExist map[types.
 		}
 
 		if err := addMinerFees(tx, dbID, txn.MinerFees); err != nil {
-			return fmt.Errorf("failed to add miner fees: %w", err)
+			return fmt.Errorf("failed to add miner fees: addMinerFees: %w", err)
 		} else if err := addArbitraryData(tx, dbID, txn.ArbitraryData); err != nil {
-			return fmt.Errorf("failed to add arbitrary data: %w", err)
+			return fmt.Errorf("failed to add arbitrary data: addArbitraryData: %w", err)
 		} else if err := addSignatures(tx, dbID, txn.Signatures); err != nil {
-			return fmt.Errorf("failed to add signatures: %w", err)
+			return fmt.Errorf("failed to add signatures: addSignatures: %w", err)
 		} else if err := addSiacoinInputs(tx, dbID, txn.SiacoinInputs); err != nil {
-			return fmt.Errorf("failed to add siacoin inputs: %w", err)
+			return fmt.Errorf("failed to add siacoin inputs: addSiacoinInputs: %w", err)
 		} else if err := addSiacoinOutputs(tx, dbID, txn); err != nil {
-			return fmt.Errorf("failed to add siacoin outputs: %w", err)
+			return fmt.Errorf("failed to add siacoin outputs: addSiacoinOutputs: %w", err)
 		} else if err := addSiafundInputs(tx, dbID, txn.SiafundInputs); err != nil {
-			return fmt.Errorf("failed to add siafund inputs: %w", err)
+			return fmt.Errorf("failed to add siafund inputs: addSiafundInputs: %w", err)
 		} else if err := addSiafundOutputs(tx, dbID, txn); err != nil {
-			return fmt.Errorf("failed to add siafund outputs: %w", err)
+			return fmt.Errorf("failed to add siafund outputs: addSiafundOutputs: %w", err)
 		} else if err := addFileContracts(tx, dbID, txn); err != nil {
-			return fmt.Errorf("failed to add file contract: %w", err)
+			return fmt.Errorf("failed to add file contracts: addFileContracts: %w", err)
 		} else if err := addFileContractRevisions(tx, dbID, txn.FileContractRevisions); err != nil {
-			return fmt.Errorf("failed to add file contract revisions: %w", err)
+			return fmt.Errorf("failed to add file contract revisions: addFileContractRevisions: %w", err)
 		} else if err := addStorageProofs(tx, dbID, txn.StorageProofs); err != nil {
-			return fmt.Errorf("failed to add storage proofs: %w", err)
+			return fmt.Errorf("failed to add storage proofs: addStorageProofs: %w", err)
 		}
 	}
 
@@ -398,14 +398,14 @@ func updateBalances(tx *txn, height uint64, spentSiacoinElements, newSiacoinElem
         FROM address_balance
         WHERE address = ?`)
 	if err != nil {
-		return fmt.Errorf("updateBalances: failed to prepare address_balance statement: %w", err)
+		return fmt.Errorf("failed to prepare address_balance statement: %w", err)
 	}
 	defer balanceRowsStmt.Close()
 
 	for addr := range addresses {
 		var bal balance
 		if err := balanceRowsStmt.QueryRow(encode(addr)).Scan(decode(&bal.sc), decode(&bal.immatureSC), decode(&bal.sf)); err != nil && err != sql.ErrNoRows {
-			return fmt.Errorf("updateBalances: failed to scan balance: %w", err)
+			return fmt.Errorf("failed to scan balance: %w", err)
 		}
 		addresses[addr] = bal
 	}
@@ -448,13 +448,13 @@ func updateBalances(tx *txn, height uint64, spentSiacoinElements, newSiacoinElem
        ON CONFLICT(address)
        DO UPDATE set siacoin_balance = ?, immature_siacoin_balance = ?, siafund_balance = ?`)
 	if err != nil {
-		return fmt.Errorf("updateBalances: failed to prepare statement: %w", err)
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for addr, bal := range addresses {
 		if _, err := stmt.Exec(encode(addr), encode(bal.sc), encode(bal.immatureSC), encode(bal.sf), encode(bal.sc), encode(bal.immatureSC), encode(bal.sf)); err != nil {
-			return fmt.Errorf("updateBalances: failed to exec statement: %w", err)
+			return fmt.Errorf("failed to exec statement: %w", err)
 		}
 		// log.Println(addr, "=", bal.sc)
 	}
@@ -473,7 +473,7 @@ func updateMaturedBalances(tx *txn, revert bool, height uint64) error {
 		        FROM siacoin_elements
 		        WHERE maturity_height = ?`, height)
 	if err != nil {
-		return fmt.Errorf("updateMaturedBalances: failed to query siacoin_elements: %w", err)
+		return fmt.Errorf("failed to query siacoin_elements: %w", err)
 	}
 	defer rows.Close()
 
@@ -482,7 +482,7 @@ func updateMaturedBalances(tx *txn, revert bool, height uint64) error {
 	for rows.Next() {
 		var sco types.SiacoinOutput
 		if err := rows.Scan(decode(&sco.Address), decode(&sco.Value)); err != nil {
-			return fmt.Errorf("updateMaturedBalances: failed to scan maturing outputs: %w", err)
+			return fmt.Errorf("failed to scan maturing outputs: %w", err)
 		}
 		scos = append(scos, sco)
 		addressList[sco.Address] = struct{}{}
@@ -492,7 +492,7 @@ func updateMaturedBalances(tx *txn, revert bool, height uint64) error {
         FROM address_balance
         WHERE address = ?`)
 	if err != nil {
-		return fmt.Errorf("updateMaturedBalances: failed to prepare address_balance statement: %w", err)
+		return fmt.Errorf("failed to prepare address_balance statement: %w", err)
 	}
 	defer balanceRowsStmt.Close()
 
@@ -500,7 +500,7 @@ func updateMaturedBalances(tx *txn, revert bool, height uint64) error {
 	for addr := range addressList {
 		var bal balance
 		if err := balanceRowsStmt.QueryRow(encode(addr)).Scan(decode(&bal.sc), decode(&bal.immatureSC)); err != nil {
-			return fmt.Errorf("updateMaturedBalances: failed to scan balance: %w", err)
+			return fmt.Errorf("failed to scan balance: %w", err)
 		}
 		addresses[addr] = bal
 	}
@@ -524,14 +524,14 @@ func updateMaturedBalances(tx *txn, revert bool, height uint64) error {
     ON CONFLICT(address)
     DO UPDATE set siacoin_balance = ?, immature_siacoin_balance = ?`)
 	if err != nil {
-		return fmt.Errorf("updateMaturedBalances: failed to prepare statement: %w", err)
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	initialSF := encode(uint64(0))
 	for addr, bal := range addresses {
 		if _, err := stmt.Exec(encode(addr), encode(bal.sc), encode(bal.immatureSC), initialSF, encode(bal.sc), encode(bal.immatureSC)); err != nil {
-			return fmt.Errorf("updateMaturedBalances: failed to exec statement: %w", err)
+			return fmt.Errorf("failed to exec statement: %w", err)
 		}
 	}
 
@@ -561,13 +561,13 @@ func addSiacoinElements(tx *txn, index types.ChainIndex, spentElements, newEleme
                 ON CONFLICT (output_id)
                 DO UPDATE SET leaf_index = ?, spent_index = NULL;`)
 		if err != nil {
-			return fmt.Errorf("addSiacoinElements: failed to prepare siacoin_elements statement: %w", err)
+			return fmt.Errorf("failed to prepare siacoin_elements statement: %w", err)
 		}
 		defer stmt.Close()
 
 		for _, sce := range newElements {
 			if _, err := stmt.Exec(encode(sce.ID), encode(index.ID), encode(sce.StateElement.LeafIndex), int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), encode(sce.StateElement.LeafIndex)); err != nil {
-				return fmt.Errorf("addSiacoinElements: failed to execute siacoin_elements statement: %w", err)
+				return fmt.Errorf("failed to execute siacoin_elements statement: %w", err)
 			}
 		}
 	}
@@ -577,13 +577,13 @@ func addSiacoinElements(tx *txn, index types.ChainIndex, spentElements, newEleme
                 ON CONFLICT (output_id)
                 DO UPDATE SET spent_index = ?, leaf_index = ?;`)
 		if err != nil {
-			return fmt.Errorf("addSiacoinElements: failed to prepare siacoin_elements statement: %w", err)
+			return fmt.Errorf("failed to prepare siacoin_elements statement: %w", err)
 		}
 		defer stmt.Close()
 
 		for _, sce := range spentElements {
 			if _, err := stmt.Exec(encode(sce.ID), encode(index.ID), encode(sce.StateElement.LeafIndex), encode(index), int(sce.Source), sce.MaturityHeight, encode(sce.SiacoinOutput.Address), encode(sce.SiacoinOutput.Value), encode(index), encode(sce.StateElement.LeafIndex)); err != nil {
-				return fmt.Errorf("addSiacoinElements: failed to execute siacoin_elements statement: %w", err)
+				return fmt.Errorf("failed to execute siacoin_elements statement: %w", err)
 			}
 		}
 	}
@@ -598,13 +598,13 @@ func addSiafundElements(tx *txn, index types.ChainIndex, spentElements, newEleme
             ON CONFLICT
             DO UPDATE SET leaf_index = ?, spent_index = NULL`)
 		if err != nil {
-			return fmt.Errorf("addSiafundElements: failed to prepare siafund_elements statement: %w", err)
+			return fmt.Errorf("failed to prepare siafund_elements statement: %w", err)
 		}
 		defer stmt.Close()
 
 		for _, sfe := range newElements {
 			if _, err := stmt.Exec(encode(sfe.ID), encode(index.ID), encode(sfe.StateElement.LeafIndex), encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), encode(sfe.StateElement.LeafIndex)); err != nil {
-				return fmt.Errorf("addSiafundElements: failed to execute siafund_elements statement: %w", err)
+				return fmt.Errorf("failed to execute siafund_elements statement: %w", err)
 			}
 		}
 	}
@@ -614,13 +614,13 @@ func addSiafundElements(tx *txn, index types.ChainIndex, spentElements, newEleme
             ON CONFLICT
             DO UPDATE SET leaf_index = ?, spent_index = ?`)
 		if err != nil {
-			return fmt.Errorf("addSiafundElements: failed to prepare siafund_elements statement: %w", err)
+			return fmt.Errorf("failed to prepare siafund_elements statement: %w", err)
 		}
 		defer stmt.Close()
 
 		for _, sfe := range spentElements {
 			if _, err := stmt.Exec(encode(sfe.ID), encode(index.ID), encode(sfe.StateElement.LeafIndex), encode(index), encode(sfe.ClaimStart), encode(sfe.SiafundOutput.Address), encode(sfe.SiafundOutput.Value), encode(sfe.StateElement.LeafIndex), encode(index)); err != nil {
-				return fmt.Errorf("addSiafundElements: failed to execute siafund_elements statement: %w", err)
+				return fmt.Errorf("failed to execute siafund_elements statement: %w", err)
 			}
 		}
 	}
@@ -741,7 +741,7 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
         DO UPDATE SET leaf_index = ?
         RETURNING id;`)
 	if err != nil {
-		return fmt.Errorf("updateFileContractElements: failed to prepare main statement: %w", err)
+		return fmt.Errorf("failed to prepare main statement: %w", err)
 	}
 	defer stmt.Close()
 
@@ -750,19 +750,19 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
     ON CONFLICT (contract_id)
     DO UPDATE SET resolved = EXCLUDED.resolved, valid = EXCLUDED.valid, contract_element_id = ?, ed25519_renter_key = COALESCE(?, ed25519_renter_key), ed25519_host_key = COALESCE(?, ed25519_host_key), confirmation_height = COALESCE(?, confirmation_height), confirmation_block_id = COALESCE(?, confirmation_block_id), confirmation_transaction_id = COALESCE(?, confirmation_transaction_id)`)
 	if err != nil {
-		return fmt.Errorf("updateFileContractElements: failed to prepare last_contract_revision statement: %w", err)
+		return fmt.Errorf("failed to prepare last_contract_revision statement: %w", err)
 	}
 	defer revisionStmt.Close()
 
 	validOutputsStmt, err := tx.Prepare(`INSERT INTO file_contract_valid_proof_outputs(contract_id, contract_order, id, address, value) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`)
 	if err != nil {
-		return fmt.Errorf("addFileContracts: failed to prepare valid proof outputs statement: %w", err)
+		return fmt.Errorf("failed to prepare valid proof outputs statement: %w", err)
 	}
 	defer validOutputsStmt.Close()
 
 	missedOutputsStmt, err := tx.Prepare(`INSERT INTO file_contract_missed_proof_outputs(contract_id, contract_order, id, address, value) VALUES (?, ?, ?, ?, ?)  ON CONFLICT DO NOTHING`)
 	if err != nil {
-		return fmt.Errorf("addFileContracts: failed to prepare missed proof outputs statement: %w", err)
+		return fmt.Errorf("failed to prepare missed proof outputs statement: %w", err)
 	}
 	defer missedOutputsStmt.Close()
 
@@ -826,12 +826,12 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
 
 		for i, sco := range fc.ValidProofOutputs {
 			if _, err := validOutputsStmt.Exec(dbID, i, encode(fcID.ValidOutputID(i)), encode(sco.Address), encode(sco.Value)); err != nil {
-				return fmt.Errorf("updateFileContractElements: failed to execute valid proof outputs statement: %w", err)
+				return fmt.Errorf("failed to execute valid proof outputs statement: %w", err)
 			}
 		}
 		for i, sco := range fc.MissedProofOutputs {
 			if _, err := missedOutputsStmt.Exec(dbID, i, encode(fcID.MissedOutputID(i)), encode(sco.Address), encode(sco.Value)); err != nil {
-				return fmt.Errorf("updateFileContractElements: failed to execute missed proof outputs statement: %w", err)
+				return fmt.Errorf("failed to execute missed proof outputs statement: %w", err)
 			}
 		}
 
@@ -906,7 +906,7 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
 			update.Valid,
 			true,
 		); err != nil {
-			return fmt.Errorf("updateFileContractElements: %w", err)
+			return err
 		}
 	}
 
@@ -925,7 +925,7 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
 			}
 
 			if err := addFC(fcID, 0, fc, nil, false, false, false); err != nil {
-				return fmt.Errorf("updateFileContractElements: %w", err)
+				return fmt.Errorf("failed to add contract revised in same block it was created: %w", err)
 			}
 		}
 		// add in any revisions that are not the latest, i.e. contracts that
@@ -938,7 +938,7 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
 			}
 
 			if err := addFC(fcr.ParentID, 0, fc, nil, false, false, false); err != nil {
-				return fmt.Errorf("updateFileContractElements: %w", err)
+				return fmt.Errorf("failed to add earlier revision of contract in same block: %w", err)
 			}
 		}
 	}
@@ -949,7 +949,7 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
 func updateFileContractIndices(tx *txn, revert bool, index types.ChainIndex, fces []explorer.FileContractUpdate) error {
 	proofIndexStmt, err := tx.Prepare(`UPDATE last_contract_revision SET proof_height = ?, proof_block_id = ?, proof_transaction_id = ? WHERE contract_id = ?`)
 	if err != nil {
-		return fmt.Errorf("updateFileContractIndices: failed to prepare proof index statement: %w", err)
+		return fmt.Errorf("failed to prepare proof index statement: %w", err)
 	}
 	defer proofIndexStmt.Close()
 
@@ -960,13 +960,13 @@ func updateFileContractIndices(tx *txn, revert bool, index types.ChainIndex, fce
 		if revert {
 			if update.ProofTransactionID != nil {
 				if _, err := proofIndexStmt.Exec(nil, nil, nil, encode(fcID)); err != nil {
-					return fmt.Errorf("updateFileContractIndices: failed to update proof index: %w", err)
+					return fmt.Errorf("failed to update proof index: %w", err)
 				}
 			}
 		} else {
 			if update.ProofTransactionID != nil {
 				if _, err := proofIndexStmt.Exec(encode(index.Height), encode(index.ID), encode(update.ProofTransactionID), encode(fcID)); err != nil {
-					return fmt.Errorf("updateFileContractIndices: failed to update proof index: %w", err)
+					return fmt.Errorf("failed to update proof index: %w", err)
 				}
 			}
 		}
@@ -1008,19 +1008,19 @@ func (ut *updateTx) Metrics(height uint64) (explorer.Metrics, error) {
 
 func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 	if err := addBlock(ut.tx, state.Block, state.ChainIndexElement, state.Metrics.Index.Height); err != nil {
-		return fmt.Errorf("ApplyIndex: failed to add block: %w", err)
+		return fmt.Errorf("failed to add block: addBlock: %w", err)
 	} else if err := updateMaturedBalances(ut.tx, false, state.Metrics.Index.Height); err != nil {
-		return fmt.Errorf("ApplyIndex: failed to update matured balances: %w", err)
+		return fmt.Errorf("failed to update matured balances: updateMaturedBalances: %w", err)
 	}
 
 	txnSeen, err := addTransactions(ut.tx, state.Block.ID(), state.Block.Transactions)
 	if err != nil {
-		return fmt.Errorf("ApplyIndex: failed to add transactions: %w", err)
+		return fmt.Errorf("failed to add transactions: addTransactions: %w", err)
 	}
 
 	v2TxnSeen, err := addV2Transactions(ut.tx, state.Block.ID(), state.Block.V2Transactions())
 	if err != nil {
-		return fmt.Errorf("ApplyIndex: failed to add v2 transactions: %w", err)
+		return fmt.Errorf("failed to add v2 transactions: addV2Transactions: %w", err)
 	}
 
 	if err := addSiacoinElements(
@@ -1029,38 +1029,38 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		append(state.SpentSiacoinElements, state.EphemeralSiacoinElements...),
 		state.NewSiacoinElements,
 	); err != nil {
-		return fmt.Errorf("ApplyIndex: failed to add siacoin outputs: %w", err)
+		return fmt.Errorf("failed to add siacoin outputs: addSiacoinElements: %w", err)
 	} else if err := addSiafundElements(
 		ut.tx,
 		state.Metrics.Index,
 		append(state.SpentSiafundElements, state.EphemeralSiafundElements...),
 		state.NewSiafundElements,
 	); err != nil {
-		return fmt.Errorf("ApplyIndex: failed to add siafund outputs: %w", err)
+		return fmt.Errorf("failed to add siafund outputs: addSiafundElements: %w", err)
 	} else if err := updateFileContractElements(ut.tx, false, state.Metrics.Index, state.Block, state.FileContractElements); err != nil {
-		return fmt.Errorf("ApplyIndex: failed to add file contracts: %w", err)
+		return fmt.Errorf("failed to add file contracts: updateFileContractElements: %w", err)
 	} else if err := updateV2FileContractElements(ut.tx, false, state.Metrics.Index, state.Block, state.V2FileContractElements); err != nil {
-		return fmt.Errorf("ApplyIndex: failed to add v2 file contracts: %w", err)
+		return fmt.Errorf("failed to add v2 file contracts: updateV2FileContractElements: %w", err)
 	} else if err := addTransactionFields(ut.tx, state.Block.Transactions, txnSeen); err != nil {
-		return fmt.Errorf("ApplyIndex: failed to add transaction fields: %w", err)
+		return fmt.Errorf("failed to add transaction fields: addTransactionFields: %w", err)
 	} else if err := addV2TransactionFields(ut.tx, state.Block.V2Transactions(), v2TxnSeen); err != nil {
-		return fmt.Errorf("ApplyIndex: failed to add v2 transaction fields: %w", err)
+		return fmt.Errorf("failed to add v2 transaction fields: addV2TransactionFields: %w", err)
 	} else if err := updateBalances(ut.tx, state.Metrics.Index.Height, state.SpentSiacoinElements, state.NewSiacoinElements, state.SpentSiafundElements, state.NewSiafundElements); err != nil {
-		return fmt.Errorf("ApplyIndex: failed to update balances: %w", err)
+		return fmt.Errorf("failed to update balances: updateBalances: %w", err)
 	} else if err := addMinerPayouts(ut.tx, state.Block.ID(), state.Block.MinerPayouts); err != nil {
-		return fmt.Errorf("ApplyIndex: failed to add miner payouts: %w", err)
+		return fmt.Errorf("failed to add miner payouts: addMinerPayouts: %w", err)
 	} else if err := updateStateTree(ut.tx, state.TreeUpdates); err != nil {
-		return fmt.Errorf("ApplyIndex: failed to update state tree: %w", err)
+		return fmt.Errorf("failed to update state tree: updateStateTree: %w", err)
 	} else if err := addMetrics(ut.tx, state); err != nil {
-		return fmt.Errorf("ApplyIndex: failed to update metrics: %w", err)
+		return fmt.Errorf("failed to update metrics: addMetrics: %w", err)
 	} else if err := addHostAnnouncements(ut.tx, state.Block.Timestamp, state.HostAnnouncements, state.V2HostAnnouncements); err != nil {
-		return fmt.Errorf("ApplyIndex: failed to add host announcements: %w", err)
+		return fmt.Errorf("failed to add host announcements: addHostAnnouncements: %w", err)
 	} else if err := updateFileContractIndices(ut.tx, false, state.Metrics.Index, state.FileContractElements); err != nil {
-		return fmt.Errorf("ApplyIndex: failed to update file contract element indices: %w", err)
+		return fmt.Errorf("failed to update file contract element indices: updateFileContractIndices: %w", err)
 	} else if err := updateV2FileContractIndices(ut.tx, false, state.Metrics.Index, state.V2FileContractElements); err != nil {
-		return fmt.Errorf("ApplyIndex: failed to update v2 file contract element indices: %w", err)
+		return fmt.Errorf("failed to update v2 file contract element indices: updateV2FileContractIndices: %w", err)
 	} else if err := addEvents(ut.tx, state.Block.ID(), state.Events); err != nil {
-		return fmt.Errorf("ApplyIndex: failed to add events: %w", err)
+		return fmt.Errorf("failed to add events: addEvents: %w", err)
 	}
 
 	return nil
@@ -1117,13 +1117,13 @@ func (s *Store) AddHostScans(scans ...explorer.HostScan) error {
 	return s.transaction(func(tx *txn) error {
 		unsuccessfulStmt, err := tx.Prepare(`UPDATE host_info SET last_scan = ?, last_scan_successful = 0, last_scan_error = ?, next_scan = ?, total_scans = total_scans + 1, failed_interactions = failed_interactions + 1, failed_interactions_streak = failed_interactions_streak + 1 WHERE public_key = ?`)
 		if err != nil {
-			return fmt.Errorf("addHostScans: failed to prepare unsuccessful statement: %w", err)
+			return fmt.Errorf("failed to prepare unsuccessful statement: %w", err)
 		}
 		defer unsuccessfulStmt.Close()
 
 		successfulStmt, err := tx.Prepare(`UPDATE host_info SET country_code = ?, latitude = ?, longitude = ?, last_scan = ?, last_scan_successful = 1, last_scan_error = "", next_scan = ?, total_scans = total_scans + 1, successful_interactions = successful_interactions + 1, failed_interactions_streak = 0, settings_accepting_contracts = ?, settings_max_download_batch_size = ?, settings_max_duration = ?, settings_max_revise_batch_size = ?, settings_net_address = ?, settings_remaining_storage = ?, settings_sector_size = ?, settings_total_storage = ?, settings_used_storage = ?, settings_address = ?, settings_window_size = ?, settings_collateral = ?, settings_max_collateral = ?, settings_base_rpc_price = ?, settings_contract_price = ?, settings_download_bandwidth_price = ?, settings_sector_access_price = ?, settings_storage_price = ?, settings_upload_bandwidth_price = ?, settings_ephemeral_account_expiry = ?, settings_max_ephemeral_account_balance = ?, settings_revision_number = ?, settings_version = ?, settings_release = ?, settings_sia_mux_port = ?, price_table_uid = ?, price_table_validity = ?, price_table_host_block_height = ?, price_table_update_price_table_cost = ?, price_table_account_balance_cost = ?, price_table_fund_account_cost = ?, price_table_latest_revision_cost = ?, price_table_subscription_memory_cost = ?, price_table_subscription_notification_cost = ?, price_table_init_base_cost = ?, price_table_memory_time_cost = ?, price_table_download_bandwidth_cost = ?, price_table_upload_bandwidth_cost = ?, price_table_drop_sectors_base_cost = ?, price_table_drop_sectors_unit_cost = ?, price_table_has_sector_base_cost = ?, price_table_read_base_cost = ?, price_table_read_length_cost = ?, price_table_renew_contract_cost = ?, price_table_revision_base_cost = ?, price_table_swap_sector_base_cost = ?, price_table_write_base_cost = ?, price_table_write_length_cost = ?, price_table_write_store_cost = ?, price_table_txn_fee_min_recommended = ?, price_table_txn_fee_max_recommended = ?, price_table_contract_price = ?, price_table_collateral_cost = ?, price_table_max_collateral = ?, price_table_max_duration = ?, price_table_window_size = ?, price_table_registry_entries_left = ?, price_table_registry_entries_total = ?, v2_settings_protocol_version = ?, v2_settings_release = ?, v2_settings_wallet_address = ?, v2_settings_accepting_contracts = ?, v2_settings_max_collateral = ?, v2_settings_max_contract_duration = ?, v2_settings_remaining_storage = ?, v2_settings_total_storage = ?, v2_settings_used_storage = ?, v2_prices_contract_price = ?, v2_prices_collateral_price = ?, v2_prices_storage_price = ?, v2_prices_ingress_price = ?, v2_prices_egress_price = ?, v2_prices_free_sector_price = ?, v2_prices_tip_height = ?, v2_prices_valid_until = ?, v2_prices_signature = ? WHERE public_key = ?`)
 		if err != nil {
-			return fmt.Errorf("addHostScans: failed to prepare successful statement: %w", err)
+			return fmt.Errorf("failed to prepare successful statement: %w", err)
 		}
 		defer successfulStmt.Close()
 
@@ -1132,11 +1132,11 @@ func (s *Store) AddHostScans(scans ...explorer.HostScan) error {
 			sV2, pV2 := scan.V2Settings, scan.V2Settings.Prices
 			if scan.Success {
 				if _, err := successfulStmt.Exec(scan.Location.CountryCode, scan.Location.Latitude, scan.Location.Longitude, encode(scan.Timestamp), encode(scan.NextScan), s.AcceptingContracts, encode(s.MaxDownloadBatchSize), encode(s.MaxDuration), encode(s.MaxReviseBatchSize), s.NetAddress, encode(s.RemainingStorage), encode(s.SectorSize), encode(s.TotalStorage), encode(s.TotalStorage-s.RemainingStorage), encode(s.Address), encode(s.WindowSize), encode(s.Collateral), encode(s.MaxCollateral), encode(s.BaseRPCPrice), encode(s.ContractPrice), encode(s.DownloadBandwidthPrice), encode(s.SectorAccessPrice), encode(s.StoragePrice), encode(s.UploadBandwidthPrice), s.EphemeralAccountExpiry, encode(s.MaxEphemeralAccountBalance), encode(s.RevisionNumber), s.Version, s.Release, s.SiaMuxPort, encode(p.UID), p.Validity, encode(p.HostBlockHeight), encode(p.UpdatePriceTableCost), encode(p.AccountBalanceCost), encode(p.FundAccountCost), encode(p.LatestRevisionCost), encode(p.SubscriptionMemoryCost), encode(p.SubscriptionNotificationCost), encode(p.InitBaseCost), encode(p.MemoryTimeCost), encode(p.DownloadBandwidthCost), encode(p.UploadBandwidthCost), encode(p.DropSectorsBaseCost), encode(p.DropSectorsUnitCost), encode(p.HasSectorBaseCost), encode(p.ReadBaseCost), encode(p.ReadLengthCost), encode(p.RenewContractCost), encode(p.RevisionBaseCost), encode(p.SwapSectorBaseCost), encode(p.WriteBaseCost), encode(p.WriteLengthCost), encode(p.WriteStoreCost), encode(p.TxnFeeMinRecommended), encode(p.TxnFeeMaxRecommended), encode(p.ContractPrice), encode(p.CollateralCost), encode(p.MaxCollateral), encode(p.MaxDuration), encode(p.WindowSize), encode(p.RegistryEntriesLeft), encode(p.RegistryEntriesTotal), sV2.ProtocolVersion[:], sV2.Release, encode(sV2.WalletAddress), sV2.AcceptingContracts, encode(sV2.MaxCollateral), encode(sV2.MaxContractDuration), encode(sV2.RemainingStorage), encode(sV2.TotalStorage), encode(sV2.TotalStorage-sV2.RemainingStorage), encode(pV2.ContractPrice), encode(pV2.Collateral), encode(pV2.StoragePrice), encode(pV2.IngressPrice), encode(pV2.EgressPrice), encode(pV2.FreeSectorPrice), encode(pV2.TipHeight), encode(pV2.ValidUntil), encode(pV2.Signature), encode(scan.PublicKey)); err != nil {
-					return fmt.Errorf("addHostScans: failed to execute successful statement: %w", err)
+					return fmt.Errorf("failed to execute successful statement: %w", err)
 				}
 			} else {
 				if _, err := unsuccessfulStmt.Exec(encode(scan.Timestamp), *scan.Error, encode(scan.NextScan), encode(scan.PublicKey)); err != nil {
-					return fmt.Errorf("addHostScans: failed to execute unsuccessful statement: %w", err)
+					return fmt.Errorf("failed to execute unsuccessful statement: %w", err)
 				}
 			}
 		}
@@ -1227,15 +1227,16 @@ func (s *Store) ResetChainState() error {
 	if err := s.transaction(func(tx *txn) error {
 		if _, err := tx.Exec(`PRAGMA defer_foreign_keys=ON`); err != nil {
 			return fmt.Errorf("failed to defer foreign key checks: %w", err)
+		} else if err := resetChainState(tx, s.log, int64(len(migrations)+1)); err != nil {
+			return fmt.Errorf("failed to reset chain state: resetChainState: %w", err)
 		}
-
-		return resetChainState(tx, s.log, int64(len(migrations)+1))
+		return nil
 	}); err != nil {
-		return fmt.Errorf("ResetChainState: failed to delete and reinit database: %w", err)
+		return fmt.Errorf("failed to delete and reinit database: %w", err)
 	}
 
 	if _, err := s.db.Exec(`VACUUM`); err != nil {
-		return fmt.Errorf("ResetChainState: failed to vacuum database: %w", err)
+		return fmt.Errorf("failed to vacuum database: %w", err)
 	}
 
 	return nil
