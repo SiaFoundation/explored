@@ -191,7 +191,7 @@ func addFileContracts(tx *txn, dbID int64, txn types.Transaction) error {
 
 	for i, fc := range txn.FileContracts {
 		if _, err := stmt.Exec(dbID, i, encode(txn.FileContractID(i)), encode(fc.RevisionNumber)); err != nil {
-			return fmt.Errorf("failed to execute transaction_file_contracts statement: %w", err)
+			return fmt.Errorf("failed to execute statement: %w", err)
 		}
 	}
 	return nil
@@ -325,25 +325,25 @@ func addTransactionFields(tx *txn, txns []types.Transaction, txnExist map[types.
 		}
 
 		if err := addMinerFees(tx, dbID, txn.MinerFees); err != nil {
-			return fmt.Errorf("failed to add miner fees: addMinerFees: %w", err)
+			return fmt.Errorf("failed to add miner fees: %w", err)
 		} else if err := addArbitraryData(tx, dbID, txn.ArbitraryData); err != nil {
-			return fmt.Errorf("failed to add arbitrary data: addArbitraryData: %w", err)
+			return fmt.Errorf("failed to add arbitrary data: %w", err)
 		} else if err := addSignatures(tx, dbID, txn.Signatures); err != nil {
-			return fmt.Errorf("failed to add signatures: addSignatures: %w", err)
+			return fmt.Errorf("failed to add signatures: %w", err)
 		} else if err := addSiacoinInputs(tx, dbID, txn.SiacoinInputs); err != nil {
-			return fmt.Errorf("failed to add siacoin inputs: addSiacoinInputs: %w", err)
+			return fmt.Errorf("failed to add siacoin inputs: %w", err)
 		} else if err := addSiacoinOutputs(tx, dbID, txn); err != nil {
-			return fmt.Errorf("failed to add siacoin outputs: addSiacoinOutputs: %w", err)
+			return fmt.Errorf("failed to add siacoin outputs: %w", err)
 		} else if err := addSiafundInputs(tx, dbID, txn.SiafundInputs); err != nil {
-			return fmt.Errorf("failed to add siafund inputs: addSiafundInputs: %w", err)
+			return fmt.Errorf("failed to add siafund inputs: %w", err)
 		} else if err := addSiafundOutputs(tx, dbID, txn); err != nil {
-			return fmt.Errorf("failed to add siafund outputs: addSiafundOutputs: %w", err)
+			return fmt.Errorf("failed to add siafund outputs: %w", err)
 		} else if err := addFileContracts(tx, dbID, txn); err != nil {
-			return fmt.Errorf("failed to add file contracts: addFileContracts: %w", err)
+			return fmt.Errorf("failed to add file contracts: %w", err)
 		} else if err := addFileContractRevisions(tx, dbID, txn.FileContractRevisions); err != nil {
-			return fmt.Errorf("failed to add file contract revisions: addFileContractRevisions: %w", err)
+			return fmt.Errorf("failed to add file contract revisions: %w", err)
 		} else if err := addStorageProofs(tx, dbID, txn.StorageProofs); err != nil {
-			return fmt.Errorf("failed to add storage proofs: addStorageProofs: %w", err)
+			return fmt.Errorf("failed to add storage proofs: %w", err)
 		}
 	}
 
@@ -1008,19 +1008,19 @@ func (ut *updateTx) Metrics(height uint64) (explorer.Metrics, error) {
 
 func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 	if err := addBlock(ut.tx, state.Block, state.ChainIndexElement, state.Metrics.Index.Height); err != nil {
-		return fmt.Errorf("failed to add block: addBlock: %w", err)
+		return fmt.Errorf("failed to add block: %w", err)
 	} else if err := updateMaturedBalances(ut.tx, false, state.Metrics.Index.Height); err != nil {
-		return fmt.Errorf("failed to update matured balances: updateMaturedBalances: %w", err)
+		return fmt.Errorf("failed to update matured balances: %w", err)
 	}
 
 	txnSeen, err := addTransactions(ut.tx, state.Block.ID(), state.Block.Transactions)
 	if err != nil {
-		return fmt.Errorf("failed to add transactions: addTransactions: %w", err)
+		return fmt.Errorf("failed to add transactions: %w", err)
 	}
 
 	v2TxnSeen, err := addV2Transactions(ut.tx, state.Block.ID(), state.Block.V2Transactions())
 	if err != nil {
-		return fmt.Errorf("failed to add v2 transactions: addV2Transactions: %w", err)
+		return fmt.Errorf("failed to add v2 transactions: %w", err)
 	}
 
 	if err := addSiacoinElements(
@@ -1029,38 +1029,38 @@ func (ut *updateTx) ApplyIndex(state explorer.UpdateState) error {
 		append(state.SpentSiacoinElements, state.EphemeralSiacoinElements...),
 		state.NewSiacoinElements,
 	); err != nil {
-		return fmt.Errorf("failed to add siacoin outputs: addSiacoinElements: %w", err)
+		return fmt.Errorf("failed to add siacoin outputs: %w", err)
 	} else if err := addSiafundElements(
 		ut.tx,
 		state.Metrics.Index,
 		append(state.SpentSiafundElements, state.EphemeralSiafundElements...),
 		state.NewSiafundElements,
 	); err != nil {
-		return fmt.Errorf("failed to add siafund outputs: addSiafundElements: %w", err)
+		return fmt.Errorf("failed to add siafund outputs: %w", err)
 	} else if err := updateFileContractElements(ut.tx, false, state.Metrics.Index, state.Block, state.FileContractElements); err != nil {
-		return fmt.Errorf("failed to add file contracts: updateFileContractElements: %w", err)
+		return fmt.Errorf("failed to add file contracts: %w", err)
 	} else if err := updateV2FileContractElements(ut.tx, false, state.Metrics.Index, state.Block, state.V2FileContractElements); err != nil {
-		return fmt.Errorf("failed to add v2 file contracts: updateV2FileContractElements: %w", err)
+		return fmt.Errorf("failed to add v2 file contracts: %w", err)
 	} else if err := addTransactionFields(ut.tx, state.Block.Transactions, txnSeen); err != nil {
-		return fmt.Errorf("failed to add transaction fields: addTransactionFields: %w", err)
+		return fmt.Errorf("failed to add transaction fields: %w", err)
 	} else if err := addV2TransactionFields(ut.tx, state.Block.V2Transactions(), v2TxnSeen); err != nil {
-		return fmt.Errorf("failed to add v2 transaction fields: addV2TransactionFields: %w", err)
+		return fmt.Errorf("failed to add v2 transaction fields: %w", err)
 	} else if err := updateBalances(ut.tx, state.Metrics.Index.Height, state.SpentSiacoinElements, state.NewSiacoinElements, state.SpentSiafundElements, state.NewSiafundElements); err != nil {
-		return fmt.Errorf("failed to update balances: updateBalances: %w", err)
+		return fmt.Errorf("failed to update balances: %w", err)
 	} else if err := addMinerPayouts(ut.tx, state.Block.ID(), state.Block.MinerPayouts); err != nil {
-		return fmt.Errorf("failed to add miner payouts: addMinerPayouts: %w", err)
+		return fmt.Errorf("failed to add miner payouts: %w", err)
 	} else if err := updateStateTree(ut.tx, state.TreeUpdates); err != nil {
-		return fmt.Errorf("failed to update state tree: updateStateTree: %w", err)
+		return fmt.Errorf("failed to update state tree: %w", err)
 	} else if err := addMetrics(ut.tx, state); err != nil {
-		return fmt.Errorf("failed to update metrics: addMetrics: %w", err)
+		return fmt.Errorf("failed to update metrics: %w", err)
 	} else if err := addHostAnnouncements(ut.tx, state.Block.Timestamp, state.HostAnnouncements, state.V2HostAnnouncements); err != nil {
-		return fmt.Errorf("failed to add host announcements: addHostAnnouncements: %w", err)
+		return fmt.Errorf("failed to add host announcements: %w", err)
 	} else if err := updateFileContractIndices(ut.tx, false, state.Metrics.Index, state.FileContractElements); err != nil {
-		return fmt.Errorf("failed to update file contract element indices: updateFileContractIndices: %w", err)
+		return fmt.Errorf("failed to update file contract element indices: %w", err)
 	} else if err := updateV2FileContractIndices(ut.tx, false, state.Metrics.Index, state.V2FileContractElements); err != nil {
 		return fmt.Errorf("failed to update v2 file contract element indices: updateV2FileContractIndices: %w", err)
 	} else if err := addEvents(ut.tx, state.Block.ID(), state.Events); err != nil {
-		return fmt.Errorf("failed to add events: addEvents: %w", err)
+		return fmt.Errorf("failed to add events: %w", err)
 	}
 
 	return nil
@@ -1228,7 +1228,7 @@ func (s *Store) ResetChainState() error {
 		if _, err := tx.Exec(`PRAGMA defer_foreign_keys=ON`); err != nil {
 			return fmt.Errorf("failed to defer foreign key checks: %w", err)
 		} else if err := resetChainState(tx, s.log, int64(len(migrations)+1)); err != nil {
-			return fmt.Errorf("failed to reset chain state: resetChainState: %w", err)
+			return fmt.Errorf("failed to reset chain state: %w", err)
 		}
 		return nil
 	}); err != nil {

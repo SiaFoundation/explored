@@ -497,21 +497,21 @@ func addV2TransactionFields(tx *txn, txns []types.V2Transaction, txnSeen map[typ
 		}
 
 		if err := addV2Attestations(tx, dbID, txn.Attestations); err != nil {
-			return fmt.Errorf("failed to add attestations: addV2Attestations: %w", err)
+			return fmt.Errorf("failed to add attestations: %w", err)
 		} else if err := addV2SiacoinInputs(tx, dbID, txn.SiacoinInputs); err != nil {
-			return fmt.Errorf("failed to add siacoin inputs: addV2SiacoinInputs: %w", err)
+			return fmt.Errorf("failed to add siacoin inputs: %w", err)
 		} else if err := addV2SiacoinOutputs(tx, dbID, txnID, txn); err != nil {
-			return fmt.Errorf("failed to add siacoin outputs: addV2SiacoinOutputs: %w", err)
+			return fmt.Errorf("failed to add siacoin outputs: %w", err)
 		} else if err := addV2SiafundInputs(tx, dbID, txn.SiafundInputs); err != nil {
-			return fmt.Errorf("failed to add siafund inputs: addV2SiafundInputs: %w", err)
+			return fmt.Errorf("failed to add siafund inputs: %w", err)
 		} else if err := addV2SiafundOutputs(tx, dbID, txnID, txn); err != nil {
-			return fmt.Errorf("failed to add siafund outputs: addV2SiafundOutputs: %w", err)
+			return fmt.Errorf("failed to add siafund outputs: %w", err)
 		} else if err := addV2FileContracts(tx, dbID, txnID, txn); err != nil {
-			return fmt.Errorf("failed to add file contracts: addV2FileContracts: %w", err)
+			return fmt.Errorf("failed to add file contracts: %w", err)
 		} else if err := addV2FileContractRevisions(tx, dbID, txn.FileContractRevisions); err != nil {
-			return fmt.Errorf("failed to add file contract revisions: addV2FileContractRevisions: %w", err)
+			return fmt.Errorf("failed to add file contract revisions: %w", err)
 		} else if err := addV2FileContractResolutions(tx, dbID, txn.FileContractResolutions); err != nil {
-			return fmt.Errorf("failed to add file contract resolutions: addV2FileContractResolutions: %w", err)
+			return fmt.Errorf("failed to add file contract resolutions: %w", err)
 		}
 	}
 

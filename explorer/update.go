@@ -318,7 +318,7 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 	}
 	state.Metrics, err = updateMetrics(tx, state, prevMetrics)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to update metrics: %w", err)
 	}
 	state.Metrics.Index = cau.State.Index
 	state.Metrics.Difficulty = cau.State.Difficulty
@@ -326,7 +326,7 @@ func applyChainUpdate(tx UpdateTx, cau chain.ApplyUpdate) error {
 	state.Metrics.NumLeaves = cau.State.Elements.NumLeaves
 
 	if err := tx.ApplyIndex(state); err != nil {
-		return fmt.Errorf("failed to apply block: ApplyIndex: %w", err)
+		return fmt.Errorf("failed to apply block: %w", err)
 	}
 	return nil
 }
@@ -471,7 +471,7 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 	state.Metrics.Index = revertedIndex
 
 	if err := tx.RevertIndex(state); err != nil {
-		return fmt.Errorf("failed to revert block: RevertIndex: %w", err)
+		return fmt.Errorf("failed to revert block: %w", err)
 	}
 	return nil
 }
