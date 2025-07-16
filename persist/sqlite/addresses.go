@@ -19,14 +19,14 @@ LIMIT $2 OFFSET $3;`
 
 	rows, err := tx.Query(query, encode(address), limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query address event IDs: %w", err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to scan address ID: %w", err)
 		}
 		eventIDs = append(eventIDs, id)
 	}
@@ -78,7 +78,7 @@ func (s *Store) AddressEvents(address types.Address, offset, limit uint64) (even
 	err = s.transaction(func(tx *txn) error {
 		dbIDs, err := getAddressEvents(tx, address, offset, limit)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get address event IDs: %w", err)
 		}
 
 		events, err = getEventsByID(tx, dbIDs)

@@ -48,7 +48,7 @@ INNER JOIN v2_file_contract_elements fc ON rev.contract_element_id = fc.id
 WHERE rev.contract_id = ?
 `)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to query file contracts: %w", err)
 		}
 		defer stmt.Close()
 
@@ -88,14 +88,14 @@ ORDER BY fc.revision_number ASC
 `
 		rows, err := tx.Query(query, encode(id))
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to query file contract revisions: %w", err)
 		}
 		defer rows.Close()
 
 		for rows.Next() {
 			fc, err := scanV2FileContract(rows)
 			if err != nil {
-				return fmt.Errorf("failed to scan file contract: %w", err)
+				return fmt.Errorf("failed to scan file contract revision: %w", err)
 			}
 
 			revisions = append(revisions, fc)
@@ -120,7 +120,7 @@ WHERE fc.renter_public_key = ? OR fc.host_public_key = ?
 ORDER BY rev.confirmation_height ASC
 `, encoded, encoded)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to query file contracts using given pubkey: %w", err)
 		}
 		defer rows.Close()
 

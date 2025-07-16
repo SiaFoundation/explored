@@ -205,7 +205,7 @@ func updateV2FileContractElements(tx *txn, revert bool, index types.ChainIndex, 
 			}
 
 			if err := addFC(fcID, 0, fc, nil, false); err != nil {
-				return fmt.Errorf("updateV2FileContractElements: %w", err)
+				return fmt.Errorf("failed to add contract revised in same block it was created: %w", err)
 			}
 		}
 		// add in any revisions that are not the latest, i.e. contracts that
@@ -377,13 +377,13 @@ func addV2FileContracts(tx *txn, dbID int64, txnID types.TransactionID, txn type
 
 	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contracts(transaction_id, transaction_order, contract_id) VALUES (?, ?, (SELECT id FROM v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
 	if err != nil {
-		return fmt.Errorf("addV2FileContracts: failed to prepare statement: %w", err)
+		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for i, fc := range txn.FileContracts {
 		if _, err := stmt.Exec(dbID, i, encode(txn.V2FileContractID(txnID, i)), encode(fc.RevisionNumber)); err != nil {
-			return fmt.Errorf("addV2FileContracts: failed to execute statement: %w", err)
+			return fmt.Errorf("failed to execute statement: %w", err)
 		}
 	}
 	return nil

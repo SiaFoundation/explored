@@ -244,46 +244,46 @@ func deleteBlock(tx *txn, bid types.BlockID) error {
 
 func (ut *updateTx) RevertIndex(state explorer.UpdateState) error {
 	if err := updateMaturedBalances(ut.tx, true, state.Metrics.Index.Height); err != nil {
-		return fmt.Errorf("failed to update matured balances: updateMaturedBalances: %w", err)
+		return fmt.Errorf("failed to update matured balances: %w", err)
 	} else if err := addSiacoinElements(
 		ut.tx,
 		state.Metrics.Index,
 		state.SpentSiacoinElements,
 		append(state.NewSiacoinElements, state.EphemeralSiacoinElements...),
 	); err != nil {
-		return fmt.Errorf("failed to update siacoin output state: addSiacoinElements: %w", err)
+		return fmt.Errorf("failed to update siacoin output state: %w", err)
 	} else if err := addSiafundElements(
 		ut.tx,
 		state.Metrics.Index,
 		state.SpentSiafundElements,
 		append(state.NewSiafundElements, state.EphemeralSiafundElements...),
 	); err != nil {
-		return fmt.Errorf("failed to update siafund output state: addSiafundElements: %w", err)
+		return fmt.Errorf("failed to update siafund output state: %w", err)
 	} else if err := updateBalances(ut.tx, state.Metrics.Index.Height, state.SpentSiacoinElements, state.NewSiacoinElements, state.SpentSiafundElements, state.NewSiafundElements); err != nil {
-		return fmt.Errorf("failed to update balances: updateBalances: %w", err)
+		return fmt.Errorf("failed to update balances: %w", err)
 	} else if err := updateFileContractElements(ut.tx, true, state.Metrics.Index, state.Block, state.FileContractElements); err != nil {
-		return fmt.Errorf("failed to update file contract state: updateFileContractElements: %w", err)
+		return fmt.Errorf("failed to update file contract state: %w", err)
 	} else if err := updateV2FileContractElements(ut.tx, true, state.Metrics.Index, state.Block, state.V2FileContractElements); err != nil {
-		return fmt.Errorf("failed to add v2 file contracts: updateV2FileContractElements: %w", err)
+		return fmt.Errorf("failed to add v2 file contracts: %w", err)
 	} else if err := updateFileContractIndices(ut.tx, true, state.Metrics.Index, state.FileContractElements); err != nil {
-		return fmt.Errorf("failed to update file contract element indices: updateFileContractIndices: %w", err)
+		return fmt.Errorf("failed to update file contract element indices: %w", err)
 	} else if err := updateV2FileContractIndices(ut.tx, true, state.Metrics.Index, state.V2FileContractElements); err != nil {
-		return fmt.Errorf("failed to update v2 file contract element indices: updateV2FileContractIndices: %w", err)
+		return fmt.Errorf("failed to update v2 file contract element indices: %w", err)
 	} else if err := updateStateTree(ut.tx, state.TreeUpdates); err != nil {
-		return fmt.Errorf("failed to update state tree: updateStateTree: %w", err)
+		return fmt.Errorf("failed to update state tree: %w", err)
 	}
 
 	bid := state.Block.ID()
 	if err := deleteEvents(ut.tx, bid); err != nil {
-		return fmt.Errorf("failed to delete events: deleteEvents: %w", err)
+		return fmt.Errorf("failed to delete events: %w", err)
 	} else if err := deleteLastContractRevisions(ut.tx, bid); err != nil {
-		return fmt.Errorf("failed to delete from block transactions tables: deleteLastContractRevisions: %w", err)
+		return fmt.Errorf("failed to delete from block transactions tables: %w", err)
 	} else if err := deleteV1Transactions(ut.tx, bid); err != nil {
-		return fmt.Errorf("failed to delete v1 transactions: deleteV1Transactions: %w", err)
+		return fmt.Errorf("failed to delete v1 transactions: %w", err)
 	} else if err := deleteV2Transactions(ut.tx, bid); err != nil {
-		return fmt.Errorf("failed to delete v2 transactions: deleteV2Transactions: %w", err)
+		return fmt.Errorf("failed to delete v2 transactions: %w", err)
 	} else if err := deleteBlock(ut.tx, bid); err != nil {
-		return fmt.Errorf("failed to delete block: deleteBlock: %w", err)
+		return fmt.Errorf("failed to delete block: %w", err)
 	}
 
 	return nil

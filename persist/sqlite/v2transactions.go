@@ -22,7 +22,7 @@ WHERE t.transaction_id = ?
 ORDER BY b.height DESC 
 LIMIT ? OFFSET ?`, encode(txnID), limit, offset)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to query chain indices: %w", err)
 		}
 		defer rows.Close()
 
@@ -46,7 +46,7 @@ FROM v2_block_transactions bt
 INNER JOIN v2_transactions t ON (t.id = bt.transaction_id)
 WHERE block_id = ? ORDER BY block_order ASC`, encode(blockID))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query block transaction IDs: %w", err)
 	}
 	defer rows.Close()
 
@@ -65,23 +65,23 @@ WHERE block_id = ? ORDER BY block_order ASC`, encode(blockID))
 func getV2Transactions(tx *txn, ids []types.TransactionID) ([]explorer.V2Transaction, error) {
 	dbIDs, txns, err := getV2TransactionBase(tx, ids)
 	if err != nil {
-		return nil, fmt.Errorf("getV2Transactions: failed to get base transactions: %w", err)
+		return nil, fmt.Errorf("failed to get base transactions: %w", err)
 	} else if err := decorateV2Attestations(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getV2Transactions: failed to get attestations: %w", err)
+		return nil, fmt.Errorf("failed to get attestations: %w", err)
 	} else if err := decorateV2SiacoinInputs(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getV2Transactions: failed to get siacoin inputs: %w", err)
+		return nil, fmt.Errorf("failed to get siacoin inputs: %w", err)
 	} else if err := decorateV2SiacoinOutputs(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getV2Transactions: failed to get siacoin outputs: %w", err)
+		return nil, fmt.Errorf("failed to get siacoin outputs: %w", err)
 	} else if err := decorateV2SiafundInputs(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getV2Transactions: failed to get siafund inputs: %w", err)
+		return nil, fmt.Errorf("failed to get siafund inputs: %w", err)
 	} else if err := decorateV2SiafundOutputs(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getV2Transactions: failed to get siafund outputs: %w", err)
+		return nil, fmt.Errorf("failed to get siafund outputs: %w", err)
 	} else if err := decorateV2FileContracts(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getV2Transactions: failed to get file contracts: %w", err)
+		return nil, fmt.Errorf("failed to get file contracts: %w", err)
 	} else if err := decorateV2FileContractRevisions(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getV2Transactions: failed to get file contract revisions: %w", err)
+		return nil, fmt.Errorf("failed to get file contract revisions: %w", err)
 	} else if err := decorateV2FileContractResolutions(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getV2Transactions: failed to get file contract resolutions: %w", err)
+		return nil, fmt.Errorf("failed to get file contract resolutions: %w", err)
 	}
 
 	// add host announcements if we have any
@@ -104,7 +104,7 @@ func getV2Transactions(tx *txn, ids []types.TransactionID) ([]explorer.V2Transac
 func getV2TransactionBase(tx *txn, txnIDs []types.TransactionID) ([]int64, []explorer.V2Transaction, error) {
 	stmt, err := tx.Prepare(`SELECT id, transaction_id, new_foundation_address, miner_fee, arbitrary_data FROM v2_transactions WHERE transaction_id = ?`)
 	if err != nil {
-		return nil, nil, fmt.Errorf("getV2TransactionBase: failed to prepare statement: %w", err)
+		return nil, nil, fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
@@ -401,18 +401,21 @@ ORDER BY ts.transaction_order ASC`)
 			}
 			contracts = append(contracts, fce)
 		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed to retrieve file contract rows: %w", err)
+		}
 		return contracts, nil
 	}
 
 	for i, dbID := range dbIDs {
 		parents, err := collectFileContracts(parentStmt, dbID)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to collect parent contracts: %w", err)
 		}
 
 		revisions, err := collectFileContracts(revisionStmt, dbID)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to collect contract revisions: %w", err)
 		}
 
 		for j := range parents {
@@ -549,7 +552,7 @@ func (s *Store) V2Transactions(ids []types.TransactionID) (results []explorer.V2
 	err = s.transaction(func(tx *txn) error {
 		results, err = getV2Transactions(tx, ids)
 		if err != nil {
-			return fmt.Errorf("failed to get transactions: %w", err)
+			return fmt.Errorf("failed to get v2 transactions: %w", err)
 		}
 		return err
 	})

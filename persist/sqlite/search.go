@@ -55,7 +55,7 @@ func (s *Store) Search(input string) (explorer.SearchType, error) {
 		for _, q := range queries {
 			err := tx.QueryRow(q.query, id).Scan(&exists)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to query %v: %w", q.typ, err)
 			}
 			if exists {
 				result = q.typ

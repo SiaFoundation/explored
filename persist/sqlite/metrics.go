@@ -144,7 +144,7 @@ func (s *Store) HostMetrics() (result explorer.HostMetrics, err error) {
 			count++
 		}
 		if err := rows.Err(); err != nil {
-			return err
+			return fmt.Errorf("failed to retrieve rows: %w", err)
 		}
 
 		if count > 0 {

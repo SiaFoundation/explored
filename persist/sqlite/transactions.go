@@ -22,7 +22,7 @@ WHERE t.transaction_id = ?
 ORDER BY b.height DESC
 LIMIT ? OFFSET ?`, encode(txnID), limit, offset)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to query chain indices: %w", err)
 		}
 		defer rows.Close()
 
@@ -475,7 +475,7 @@ FROM block_transactions bt
 INNER JOIN transactions t ON t.id = bt.transaction_id
 WHERE block_id = ? ORDER BY block_order ASC`, encode(blockID))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query block transaction IDs: %w", err)
 	}
 	defer rows.Close()
 
@@ -545,27 +545,27 @@ func transactionDatabaseIDs(tx *txn, txnIDs []types.TransactionID) (dbIDs []int6
 func getTransactions(tx *txn, ids []types.TransactionID) ([]explorer.Transaction, error) {
 	dbIDs, txns, err := transactionDatabaseIDs(tx, ids)
 	if err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get base transactions: %w", err)
+		return nil, fmt.Errorf("failed to get base transactions: %w", err)
 	} else if err := decorateArbitraryData(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get arbitrary data: %w", err)
+		return nil, fmt.Errorf("failed to get arbitrary data: %w", err)
 	} else if err := decorateMinerFees(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get miner fees: %w", err)
+		return nil, fmt.Errorf("failed to get miner fees: %w", err)
 	} else if err := decorateSignatures(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get signatures: %w", err)
+		return nil, fmt.Errorf("failed to get signatures: %w", err)
 	} else if err := decorateSiacoinInputs(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get siacoin inputs: %w", err)
+		return nil, fmt.Errorf("failed to get siacoin inputs: %w", err)
 	} else if err := decorateSiacoinOutputs(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get siacoin outputs: %w", err)
+		return nil, fmt.Errorf("failed to get siacoin outputs: %w", err)
 	} else if err := decorateSiafundInputs(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get siafund inputs: %w", err)
+		return nil, fmt.Errorf("failed to get siafund inputs: %w", err)
 	} else if err := decorateSiafundOutputs(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get siafund outputs: %w", err)
+		return nil, fmt.Errorf("failed to get siafund outputs: %w", err)
 	} else if err := decorateFileContracts(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get file contracts: %w", err)
+		return nil, fmt.Errorf("failed to get file contracts: %w", err)
 	} else if err := decorateFileContractRevisions(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get file contract revisions: %w", err)
+		return nil, fmt.Errorf("failed to get file contract revisions: %w", err)
 	} else if err := decorateStorageProofs(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get storage proofs: %w", err)
+		return nil, fmt.Errorf("failed to get storage proofs: %w", err)
 	}
 
 	for i := range txns {
