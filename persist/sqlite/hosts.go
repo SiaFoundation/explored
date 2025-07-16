@@ -61,6 +61,9 @@ func (s *Store) HostsForScanning(minLastAnnouncement time.Time, limit uint64) (r
 						}
 						host.V2NetAddresses = append(host.V2NetAddresses, netAddr)
 					}
+					if err := v2AddrRows.Err(); err != nil {
+						return fmt.Errorf("failed to retrieve v2 addr rows: %w", err)
+					}
 					return nil
 				}()
 				if err != nil {
@@ -68,6 +71,9 @@ func (s *Store) HostsForScanning(minLastAnnouncement time.Time, limit uint64) (r
 				}
 			}
 			result = append(result, host)
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed to retrieve host rows: %w", err)
 		}
 		return nil
 	})
@@ -125,7 +131,7 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 					pks = append(pks, encode(pk))
 				}
 				if err := rows.Err(); err != nil {
-					return fmt.Errorf("error retrieving public keys for given net addresses: %w", err)
+					return fmt.Errorf("error retrieving host public keys rows: %w", err)
 				}
 
 				args = append(args, pks...)
@@ -264,6 +270,9 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 						}
 						host.V2NetAddresses = append(host.V2NetAddresses, netAddr)
 					}
+					if err := v2AddrRows.Err(); err != nil {
+						return fmt.Errorf("failed to retrieve v2 addr rows: %w", err)
+					}
 				}
 
 				result = append(result, host)
@@ -272,7 +281,10 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 				return err
 			}
 		}
-		return rows.Err()
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed to retrieve host rows: %w", err)
+		}
+		return nil
 	})
 	return
 }

@@ -33,7 +33,10 @@ LIMIT ? OFFSET ?`, encode(txnID), limit, offset)
 			}
 			indices = append(indices, index)
 		}
-		return rows.Err()
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed to retrieve chain index rows: %w", err)
+		}
+		return nil
 	})
 	return
 }
@@ -56,6 +59,9 @@ WHERE block_id = ? ORDER BY block_order ASC`, encode(blockID))
 			return nil, fmt.Errorf("failed to scan block transaction: %w", err)
 		}
 		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to retrieve chain index rows: %w", err)
 	}
 	return
 }
@@ -153,6 +159,9 @@ func decorateV2Attestations(tx *txn, dbIDs []int64, txns []explorer.V2Transactio
 				}
 				txns[i].Attestations = append(txns[i].Attestations, attestation)
 			}
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve attestation rows: %w", err)
+			}
 			return nil
 		}()
 		if err != nil {
@@ -190,6 +199,9 @@ ORDER BY ts.transaction_order ASC`)
 				}
 
 				txns[i].SiacoinInputs = append(txns[i].SiacoinInputs, sci)
+			}
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve siacoin input rows: %w", err)
 			}
 			return nil
 		}()
@@ -233,6 +245,9 @@ ORDER BY ts.transaction_order ASC`)
 				}
 				txns[i].SiacoinOutputs = append(txns[i].SiacoinOutputs, sco)
 			}
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve siacoin output rows: %w", err)
+			}
 			return nil
 		}()
 		if err != nil {
@@ -270,6 +285,9 @@ ORDER BY ts.transaction_order ASC`)
 				}
 
 				txns[i].SiafundInputs = append(txns[i].SiafundInputs, sfi)
+			}
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve siafund input rows: %w", err)
 			}
 			return nil
 		}()
@@ -313,6 +331,9 @@ ORDER BY ts.transaction_order ASC`)
 
 				txns[i].SiafundOutputs = append(txns[i].SiafundOutputs, sfo)
 			}
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve siafund output rows: %w", err)
+			}
 			return nil
 		}()
 		if err != nil {
@@ -351,6 +372,9 @@ ORDER BY ts.transaction_order ASC`)
 				}
 
 				txns[i].FileContracts = append(txns[i].FileContracts, fce)
+			}
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve file contract rows: %w", err)
 			}
 			return nil
 		}()
@@ -402,7 +426,7 @@ ORDER BY ts.transaction_order ASC`)
 			contracts = append(contracts, fce)
 		}
 		if err := rows.Err(); err != nil {
-			return fmt.Errorf("failed to retrieve file contract rows: %w", err)
+			return nil, fmt.Errorf("failed to retrieve file contract rows: %w", err)
 		}
 		return contracts, nil
 	}
@@ -537,6 +561,9 @@ WHERE fc.id = ?`)
 
 				// Append the resolution to the transaction.
 				txns[i].FileContractResolutions = append(txns[i].FileContractResolutions, fcr)
+			}
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve file contract resolution rows: %w", err)
 			}
 			return nil
 		}()

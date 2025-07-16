@@ -487,6 +487,9 @@ func updateMaturedBalances(tx *txn, revert bool, height uint64) error {
 		scos = append(scos, sco)
 		addressList[sco.Address] = struct{}{}
 	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("failed to retrieve maturing output rows: %w", err)
+	}
 
 	balanceRowsStmt, err := tx.Prepare(`SELECT siacoin_balance, immature_siacoin_balance
         FROM address_balance

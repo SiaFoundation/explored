@@ -33,7 +33,10 @@ LIMIT ? OFFSET ?`, encode(txnID), limit, offset)
 			}
 			indices = append(indices, index)
 		}
-		return rows.Err()
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed to retrieve chain index rows: %w", err)
+		}
+		return nil
 	})
 	return
 }
@@ -64,7 +67,10 @@ ORDER BY transaction_order ASC`)
 				}
 				txns[i].MinerFees = append(txns[i].MinerFees, fee)
 			}
-			return rows.Err()
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve miner fee rows: %w", err)
+			}
+			return nil
 		}()
 		if err != nil {
 			return err
@@ -99,7 +105,10 @@ ORDER BY transaction_order ASC`)
 				}
 				txns[i].ArbitraryData = append(txns[i].ArbitraryData, data)
 			}
-			return rows.Err()
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve arbitrary data rows: %w", err)
+			}
+			return nil
 		}()
 		if err != nil {
 			return err
@@ -134,7 +143,10 @@ ORDER BY transaction_order ASC`)
 				}
 				txns[i].Signatures = append(txns[i].Signatures, sig)
 			}
-			return rows.Err()
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve signature rows: %w", err)
+			}
+			return nil
 		}()
 		if err != nil {
 			return err
@@ -174,7 +186,10 @@ ORDER BY ts.transaction_order ASC`)
 				}
 				txns[i].SiacoinOutputs = append(txns[i].SiacoinOutputs, sco)
 			}
-			return rows.Err()
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve siacoin output rows: %w", err)
+			}
+			return nil
 		}()
 		if err != nil {
 			return err
@@ -211,7 +226,10 @@ ORDER BY ts.transaction_order ASC`)
 				sci.Address = sci.UnlockConditions.UnlockHash()
 				txns[i].SiacoinInputs = append(txns[i].SiacoinInputs, sci)
 			}
-			return rows.Err()
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve siacoin input rows: %w", err)
+			}
+			return nil
 		}()
 		if err != nil {
 			return err
@@ -248,7 +266,10 @@ ORDER BY ts.transaction_order ASC`)
 				sfi.Address = sfi.UnlockConditions.UnlockHash()
 				txns[i].SiafundInputs = append(txns[i].SiafundInputs, sfi)
 			}
-			return rows.Err()
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve siafund input rows: %w", err)
+			}
+			return nil
 		}()
 		if err != nil {
 			return err
@@ -289,7 +310,10 @@ ORDER BY ts.transaction_order ASC`)
 				}
 				txns[i].SiafundOutputs = append(txns[i].SiafundOutputs, sfo)
 			}
-			return rows.Err()
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve siafund output rows: %w", err)
+			}
+			return nil
 		}()
 		if err != nil {
 			return err
@@ -315,6 +339,9 @@ func fileContractOutputs(tx *txn, contractID int64) (valid []explorer.ContractSi
 		}
 		valid = append(valid, sco)
 	}
+	if err := validRows.Err(); err != nil {
+		return nil, nil, fmt.Errorf("failed to get valid contract rows: %w", err)
+	}
 
 	missedRows, err := tx.Query(`SELECT id, address, value
 FROM file_contract_missed_proof_outputs
@@ -332,6 +359,10 @@ ORDER BY contract_order ASC`, contractID)
 		}
 		missed = append(missed, sco)
 	}
+	if err := missedRows.Err(); err != nil {
+		return nil, nil, fmt.Errorf("failed to get missed contract rows: %w", err)
+	}
+
 	return valid, missed, nil
 }
 
@@ -363,7 +394,10 @@ ORDER BY ts.transaction_order ASC`)
 				}
 				txns[i].FileContracts = append(txns[i].FileContracts, fc)
 			}
-			return rows.Err()
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve file contract rows: %w", err)
+			}
+			return nil
 		}()
 		if err != nil {
 			return err
@@ -416,7 +450,10 @@ ORDER BY ts.transaction_order ASC`)
 
 				txns[i].FileContractRevisions = append(txns[i].FileContractRevisions, fc)
 			}
-			return rows.Err()
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve file contract revision rows: %w", err)
+			}
+			return nil
 		}()
 		if err != nil {
 			return err
@@ -453,7 +490,10 @@ ORDER BY transaction_order ASC`)
 				proof.Leaf = [64]byte(leaf)
 				txns[i].StorageProofs = append(txns[i].StorageProofs, proof)
 			}
-			return rows.Err()
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve storage proof rows: %w", err)
+			}
+			return nil
 		}()
 		if err != nil {
 			return err
@@ -486,6 +526,9 @@ WHERE block_id = ? ORDER BY block_order ASC`, encode(blockID))
 		}
 		txnIDs = append(txnIDs, txnID)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed retrieve block transaction ID rows: %w", err)
+	}
 
 	return
 }
@@ -515,7 +558,10 @@ ORDER BY mp.block_order ASC`
 		}
 		result = append(result, output)
 	}
-	return result, nil
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to retrieve miner payout rows: %w", err)
+	}
+	return result, rows.Err()
 }
 
 // transactionDatabaseIDs returns the database ID for each transaction.

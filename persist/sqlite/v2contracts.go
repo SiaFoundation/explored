@@ -100,6 +100,9 @@ ORDER BY fc.revision_number ASC
 
 			revisions = append(revisions, fc)
 		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed to retrieve file contract rows: %w", err)
+		}
 
 		if len(revisions) == 0 {
 			return explorer.ErrContractNotFound
@@ -130,6 +133,9 @@ ORDER BY rev.confirmation_height ASC
 				return fmt.Errorf("failed to scan file contract: %w", err)
 			}
 			result = append(result, fc)
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed to retrieve file contract rows: %w", err)
 		}
 
 		return nil
