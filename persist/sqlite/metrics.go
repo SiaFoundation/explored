@@ -225,31 +225,51 @@ func (s *Store) HostMetrics() (result explorer.HostMetrics, err error) {
 // BlockTimeMetrics implements explorer.Store.
 func (s *Store) BlockTimeMetrics() (result explorer.BlockTimeMetrics, err error) {
 	err = s.transaction(func(tx *txn) error {
-		stmt, err := tx.Prepare(`
-WITH recent_blocks AS (
-    SELECT height, timestamp
-    FROM blocks
-    WHERE timestamp >= strftime('%s', 'now') - ?
-)
-SELECT ROUND(AVG(b2.timestamp - b1.timestamp)) AS average_block_time
-FROM recent_blocks b1
-JOIN recent_blocks b2 ON b2.height = b1.height + 1;
-`)
+		const (
+			day       = 24 * time.Hour
+			blockTime = 10 * time.Minute
+
+			monthBlocks = int64(30*day) / int64(blockTime)
+		)
+
+		rows, err := tx.Query(`SELECT timestamp FROM blocks ORDER BY height DESC LIMIT ?`, monthBlocks)
 		if err != nil {
-			return fmt.Errorf("failed to prepare statement: %w", err)
+			return fmt.Errorf("failed to query block timestamps: %w", err)
+		}
+		defer rows.Close()
+
+		timestamps := make([]time.Time, 0, monthBlocks)
+		for rows.Next() {
+			var timestamp time.Time
+			if err := rows.Scan(decode(&timestamp)); err != nil {
+				return fmt.Errorf("failed to scan block timestamp: %w", err)
+			}
+			timestamps = append(timestamps, timestamp)
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed to retrieve block timestamp rows: %w", err)
 		}
 
-		const day = 24 * time.Hour
-		if err := stmt.QueryRow(day.Seconds()).Scan(&result.Day); err != nil {
-			return fmt.Errorf("failed to get past day average: %w", err)
-		} else if err := stmt.QueryRow((7 * day).Seconds()).Scan(&result.Week); err != nil {
-			return fmt.Errorf("failed to get past week average: %w", err)
-		} else if err := stmt.QueryRow((30 * day).Seconds()).Scan(&result.Month); err != nil {
-			return fmt.Errorf("failed to get past month average: %w", err)
+		now := time.Now()
+		intervals := []time.Time{now.Add(-day), now.Add(-(7 * day)), now.Add(-(30 * day))}
+
+		sums := make([]time.Duration, len(intervals))
+		counts := make([]int64, len(intervals))
+		for i := range len(timestamps) - 1 {
+			timestamp := timestamps[i]
+			// descending order, so larger timestamps is first
+			delta := timestamps[i].Sub(timestamps[i+1])
+
+			for j, interval := range intervals {
+				if timestamp.After(interval) {
+					sums[j] += delta
+					counts[j]++
+				}
+			}
 		}
-		result.Day *= time.Second
-		result.Week *= time.Second
-		result.Month *= time.Second
+		result.Day = sums[0] / time.Duration(max(1, counts[0]))
+		result.Week = sums[1] / time.Duration(max(1, counts[1]))
+		result.Month = sums[2] / time.Duration(max(1, counts[2]))
 
 		return nil
 	})
