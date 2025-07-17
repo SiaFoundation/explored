@@ -19,18 +19,21 @@ LIMIT $2 OFFSET $3;`
 
 	rows, err := tx.Query(query, encode(address), limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query address event IDs: %w", err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to scan event ID: %w", err)
 		}
 		eventIDs = append(eventIDs, id)
 	}
-	return eventIDs, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to retrieve event ID rows: %w", err)
+	}
+	return eventIDs, nil
 }
 
 func getEventsByID(tx *txn, eventIDs []int64) (events []explorer.Event, err error) {
@@ -78,7 +81,7 @@ func (s *Store) AddressEvents(address types.Address, offset, limit uint64) (even
 	err = s.transaction(func(tx *txn) error {
 		dbIDs, err := getAddressEvents(tx, address, offset, limit)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get address event IDs: %w", err)
 		}
 
 		events, err = getEventsByID(tx, dbIDs)
@@ -128,6 +131,9 @@ func (s *Store) UnspentSiacoinOutputs(address types.Address, offset, limit uint6
 			}
 			result = append(result, sco)
 		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed to retrieve siacoin output rows: %w", err)
+		}
 		return nil
 	})
 	return
@@ -148,6 +154,9 @@ func (s *Store) UnspentSiafundOutputs(address types.Address, offset, limit uint6
 				return fmt.Errorf("failed to scan siafund output: %w", err)
 			}
 			result = append(result, sfo)
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed to retrieve siafund output rows: %w", err)
 		}
 		return nil
 	})
@@ -175,6 +184,9 @@ func getSiacoinElements(tx *txn, ids []types.SiacoinOutputID, includeProof bool)
 
 		leafIndices = append(leafIndices, sco.StateElement.LeafIndex)
 		result = append(result, sco)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to retrieve siacoin output rows: %w", err)
 	}
 
 	if includeProof {
@@ -211,6 +223,9 @@ func getSiafundElements(tx *txn, ids []types.SiafundOutputID, includeProof bool)
 
 		leafIndices = append(leafIndices, sfo.StateElement.LeafIndex)
 		result = append(result, sfo)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to retrieve siafund output rows: %w", err)
 	}
 
 	if includeProof {

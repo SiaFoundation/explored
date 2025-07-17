@@ -22,7 +22,7 @@ WHERE t.transaction_id = ?
 ORDER BY b.height DESC
 LIMIT ? OFFSET ?`, encode(txnID), limit, offset)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to query chain indices: %w", err)
 		}
 		defer rows.Close()
 
@@ -33,7 +33,10 @@ LIMIT ? OFFSET ?`, encode(txnID), limit, offset)
 			}
 			indices = append(indices, index)
 		}
-		return rows.Err()
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed to retrieve chain index rows: %w", err)
+		}
+		return nil
 	})
 	return
 }
@@ -64,7 +67,10 @@ ORDER BY transaction_order ASC`)
 				}
 				txns[i].MinerFees = append(txns[i].MinerFees, fee)
 			}
-			return rows.Err()
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve miner fee rows: %w", err)
+			}
+			return nil
 		}()
 		if err != nil {
 			return err
@@ -99,7 +105,10 @@ ORDER BY transaction_order ASC`)
 				}
 				txns[i].ArbitraryData = append(txns[i].ArbitraryData, data)
 			}
-			return rows.Err()
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve arbitrary data rows: %w", err)
+			}
+			return nil
 		}()
 		if err != nil {
 			return err
@@ -134,7 +143,10 @@ ORDER BY transaction_order ASC`)
 				}
 				txns[i].Signatures = append(txns[i].Signatures, sig)
 			}
-			return rows.Err()
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve signature rows: %w", err)
+			}
+			return nil
 		}()
 		if err != nil {
 			return err
@@ -174,7 +186,10 @@ ORDER BY ts.transaction_order ASC`)
 				}
 				txns[i].SiacoinOutputs = append(txns[i].SiacoinOutputs, sco)
 			}
-			return rows.Err()
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve siacoin output rows: %w", err)
+			}
+			return nil
 		}()
 		if err != nil {
 			return err
@@ -211,7 +226,10 @@ ORDER BY ts.transaction_order ASC`)
 				sci.Address = sci.UnlockConditions.UnlockHash()
 				txns[i].SiacoinInputs = append(txns[i].SiacoinInputs, sci)
 			}
-			return rows.Err()
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve siacoin input rows: %w", err)
+			}
+			return nil
 		}()
 		if err != nil {
 			return err
@@ -248,7 +266,10 @@ ORDER BY ts.transaction_order ASC`)
 				sfi.Address = sfi.UnlockConditions.UnlockHash()
 				txns[i].SiafundInputs = append(txns[i].SiafundInputs, sfi)
 			}
-			return rows.Err()
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve siafund input rows: %w", err)
+			}
+			return nil
 		}()
 		if err != nil {
 			return err
@@ -289,7 +310,10 @@ ORDER BY ts.transaction_order ASC`)
 				}
 				txns[i].SiafundOutputs = append(txns[i].SiafundOutputs, sfo)
 			}
-			return rows.Err()
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve siafund output rows: %w", err)
+			}
+			return nil
 		}()
 		if err != nil {
 			return err
@@ -315,6 +339,9 @@ func fileContractOutputs(tx *txn, contractID int64) (valid []explorer.ContractSi
 		}
 		valid = append(valid, sco)
 	}
+	if err := validRows.Err(); err != nil {
+		return nil, nil, fmt.Errorf("failed to get valid contract rows: %w", err)
+	}
 
 	missedRows, err := tx.Query(`SELECT id, address, value
 FROM file_contract_missed_proof_outputs
@@ -332,6 +359,10 @@ ORDER BY contract_order ASC`, contractID)
 		}
 		missed = append(missed, sco)
 	}
+	if err := missedRows.Err(); err != nil {
+		return nil, nil, fmt.Errorf("failed to get missed contract rows: %w", err)
+	}
+
 	return valid, missed, nil
 }
 
@@ -363,7 +394,10 @@ ORDER BY ts.transaction_order ASC`)
 				}
 				txns[i].FileContracts = append(txns[i].FileContracts, fc)
 			}
-			return rows.Err()
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve file contract rows: %w", err)
+			}
+			return nil
 		}()
 		if err != nil {
 			return err
@@ -416,7 +450,10 @@ ORDER BY ts.transaction_order ASC`)
 
 				txns[i].FileContractRevisions = append(txns[i].FileContractRevisions, fc)
 			}
-			return rows.Err()
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve file contract revision rows: %w", err)
+			}
+			return nil
 		}()
 		if err != nil {
 			return err
@@ -453,7 +490,10 @@ ORDER BY transaction_order ASC`)
 				proof.Leaf = [64]byte(leaf)
 				txns[i].StorageProofs = append(txns[i].StorageProofs, proof)
 			}
-			return rows.Err()
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to retrieve storage proof rows: %w", err)
+			}
+			return nil
 		}()
 		if err != nil {
 			return err
@@ -475,7 +515,7 @@ FROM block_transactions bt
 INNER JOIN transactions t ON t.id = bt.transaction_id
 WHERE block_id = ? ORDER BY block_order ASC`, encode(blockID))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query block transaction IDs: %w", err)
 	}
 	defer rows.Close()
 
@@ -485,6 +525,9 @@ WHERE block_id = ? ORDER BY block_order ASC`, encode(blockID))
 			return nil, fmt.Errorf("failed to scan block transaction: %w", err)
 		}
 		txnIDs = append(txnIDs, txnID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed retrieve block transaction ID rows: %w", err)
 	}
 
 	return
@@ -515,7 +558,10 @@ ORDER BY mp.block_order ASC`
 		}
 		result = append(result, output)
 	}
-	return result, nil
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to retrieve miner payout rows: %w", err)
+	}
+	return result, rows.Err()
 }
 
 // transactionDatabaseIDs returns the database ID for each transaction.
@@ -545,27 +591,27 @@ func transactionDatabaseIDs(tx *txn, txnIDs []types.TransactionID) (dbIDs []int6
 func getTransactions(tx *txn, ids []types.TransactionID) ([]explorer.Transaction, error) {
 	dbIDs, txns, err := transactionDatabaseIDs(tx, ids)
 	if err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get base transactions: %w", err)
+		return nil, fmt.Errorf("failed to get base transactions: %w", err)
 	} else if err := decorateArbitraryData(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get arbitrary data: %w", err)
+		return nil, fmt.Errorf("failed to get arbitrary data: %w", err)
 	} else if err := decorateMinerFees(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get miner fees: %w", err)
+		return nil, fmt.Errorf("failed to get miner fees: %w", err)
 	} else if err := decorateSignatures(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get signatures: %w", err)
+		return nil, fmt.Errorf("failed to get signatures: %w", err)
 	} else if err := decorateSiacoinInputs(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get siacoin inputs: %w", err)
+		return nil, fmt.Errorf("failed to get siacoin inputs: %w", err)
 	} else if err := decorateSiacoinOutputs(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get siacoin outputs: %w", err)
+		return nil, fmt.Errorf("failed to get siacoin outputs: %w", err)
 	} else if err := decorateSiafundInputs(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get siafund inputs: %w", err)
+		return nil, fmt.Errorf("failed to get siafund inputs: %w", err)
 	} else if err := decorateSiafundOutputs(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get siafund outputs: %w", err)
+		return nil, fmt.Errorf("failed to get siafund outputs: %w", err)
 	} else if err := decorateFileContracts(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get file contracts: %w", err)
+		return nil, fmt.Errorf("failed to get file contracts: %w", err)
 	} else if err := decorateFileContractRevisions(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get file contract revisions: %w", err)
+		return nil, fmt.Errorf("failed to get file contract revisions: %w", err)
 	} else if err := decorateStorageProofs(tx, dbIDs, txns); err != nil {
-		return nil, fmt.Errorf("getTransactions: failed to get storage proofs: %w", err)
+		return nil, fmt.Errorf("failed to get storage proofs: %w", err)
 	}
 
 	for i := range txns {

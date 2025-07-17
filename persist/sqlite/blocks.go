@@ -33,12 +33,12 @@ func (s *Store) Block(id types.BlockID) (result explorer.Block, err error) {
 			// get block transaction IDs
 			transactionIDs, err := blockV2TransactionIDs(tx, id)
 			if err != nil {
-				return fmt.Errorf("failed to get block transaction IDs: %w", err)
+				return fmt.Errorf("failed to get block v2 transaction IDs: %w", err)
 			}
 
 			result.V2.Transactions, err = getV2Transactions(tx, transactionIDs)
 			if err != nil {
-				return fmt.Errorf("failed to get transactions: %w", err)
+				return fmt.Errorf("failed to get v2 transactions: %w", err)
 			}
 		}
 
