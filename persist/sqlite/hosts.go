@@ -31,13 +31,13 @@ func (s *Store) HostsForScanning(minLastAnnouncement time.Time, limit uint64) (r
 	err = s.transaction(func(tx *txn) error {
 		rows, err := tx.Query(`SELECT public_key, v2, net_address, failed_interactions_streak FROM host_info WHERE next_scan <= ? AND last_announcement >= ? ORDER BY next_scan ASC LIMIT ?`, encode(types.CurrentTimestamp()), encode(minLastAnnouncement), limit)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to query hosts: %w", err)
 		}
 		defer rows.Close()
 
 		v2AddrStmt, err := tx.Prepare(`SELECT protocol,address FROM host_info_v2_netaddresses WHERE public_key = ? ORDER BY netaddress_order`)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to prepare v2 addrs statement: %w", err)
 		}
 		defer v2AddrStmt.Close()
 
@@ -51,15 +51,18 @@ func (s *Store) HostsForScanning(minLastAnnouncement time.Time, limit uint64) (r
 				err := func() error {
 					v2AddrRows, err := v2AddrStmt.Query(encode(host.PublicKey))
 					if err != nil {
-						return err
+						return fmt.Errorf("failed to query v2 addrs: %w", err)
 					}
 					defer v2AddrRows.Close()
 					for v2AddrRows.Next() {
 						var netAddr chain.NetAddress
 						if err := v2AddrRows.Scan(&netAddr.Protocol, &netAddr.Address); err != nil {
-							return err
+							return fmt.Errorf("failed to scan v2 addrs: %w", err)
 						}
 						host.V2NetAddresses = append(host.V2NetAddresses, netAddr)
+					}
+					if err := v2AddrRows.Err(); err != nil {
+						return fmt.Errorf("failed to retrieve v2 addr rows: %w", err)
 					}
 					return nil
 				}()
@@ -68,6 +71,9 @@ func (s *Store) HostsForScanning(minLastAnnouncement time.Time, limit uint64) (r
 				}
 			}
 			result = append(result, host)
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed to retrieve host rows: %w", err)
 		}
 		return nil
 	})
@@ -125,7 +131,7 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 					pks = append(pks, encode(pk))
 				}
 				if err := rows.Err(); err != nil {
-					return fmt.Errorf("error retrieving public keys for given net addresses: %w", err)
+					return fmt.Errorf("error retrieving host public keys rows: %w", err)
 				}
 
 				args = append(args, pks...)
@@ -225,13 +231,13 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 
 		v2AddrStmt, err := tx.Prepare(`SELECT protocol,address FROM host_info_v2_netaddresses WHERE public_key = ? ORDER BY netaddress_order`)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to prepare v2 addrs statement: %w", err)
 		}
 		defer v2AddrStmt.Close()
 
 		rows, err := tx.Query(query, args...)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to query hosts: %w", err)
 		}
 		defer rows.Close()
 
@@ -254,15 +260,18 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 				if host.V2 {
 					v2AddrRows, err := v2AddrStmt.Query(encode(host.PublicKey))
 					if err != nil {
-						return err
+						return fmt.Errorf("failed to query v2 addrs: %w", err)
 					}
 					defer v2AddrRows.Close()
 					for v2AddrRows.Next() {
 						var netAddr chain.NetAddress
 						if err := v2AddrRows.Scan(&netAddr.Protocol, &netAddr.Address); err != nil {
-							return err
+							return fmt.Errorf("failed to scan v2 addr: %w", err)
 						}
 						host.V2NetAddresses = append(host.V2NetAddresses, netAddr)
+					}
+					if err := v2AddrRows.Err(); err != nil {
+						return fmt.Errorf("failed to retrieve v2 addr rows: %w", err)
 					}
 				}
 
@@ -272,7 +281,10 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 				return err
 			}
 		}
-		return rows.Err()
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed to retrieve host rows: %w", err)
+		}
+		return nil
 	})
 	return
 }

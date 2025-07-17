@@ -57,6 +57,10 @@ func getContracts(tx *txn, ids []types.FileContractID) (result []explorer.Extend
 		}
 		result = append(result, fc)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to retrieve file contract rows: %w", err)
+	}
+
 	return
 }
 
@@ -91,6 +95,9 @@ func (s *Store) ContractRevisions(id types.FileContractID) (revisions []explorer
 			}
 			revisions = append(revisions, fc)
 		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed to retrieve file contract rows: %w", err)
+		}
 
 		if len(revisions) == 0 {
 			return explorer.ErrContractNotFound
@@ -119,6 +126,9 @@ func (s *Store) ContractsKey(key types.PublicKey) (result []explorer.ExtendedFil
 				return fmt.Errorf("failed to scan file contract: %w", err)
 			}
 			result = append(result, fc)
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed to retrieve file contract rows: %w", err)
 		}
 
 		return rows.Err()
