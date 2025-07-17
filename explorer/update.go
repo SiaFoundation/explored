@@ -470,10 +470,7 @@ func revertChainUpdate(tx UpdateTx, cru chain.RevertUpdate, revertedIndex types.
 	}
 	state.Metrics.Index = revertedIndex
 
-	if err := tx.RevertIndex(state); err != nil {
-		return fmt.Errorf("failed to revert block: %w", err)
-	}
-	return nil
+	return tx.RevertIndex(state)
 }
 
 func updateMetrics(tx UpdateTx, s UpdateState, metrics Metrics) (Metrics, error) {
