@@ -223,14 +223,10 @@ func (s *Store) HostMetrics() (result explorer.HostMetrics, err error) {
 }
 
 // BlockTimeMetrics implements explorer.Store.
-func (s *Store) BlockTimeMetrics() (result explorer.BlockTimeMetrics, err error) {
+func (s *Store) BlockTimeMetrics(blockTime time.Duration) (result explorer.BlockTimeMetrics, err error) {
 	err = s.transaction(func(tx *txn) error {
-		const (
-			day       = 24 * time.Hour
-			blockTime = 10 * time.Minute
-
-			monthBlocks = int64(30*day) / int64(blockTime)
-		)
+		const day = 24 * time.Hour
+		monthBlocks := int64(30*day) / int64(blockTime)
 
 		rows, err := tx.Query(`SELECT timestamp FROM blocks ORDER BY height DESC LIMIT ?`, monthBlocks)
 		if err != nil {

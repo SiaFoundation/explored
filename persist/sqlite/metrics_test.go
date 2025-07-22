@@ -474,7 +474,7 @@ func BenchmarkBlockTimeMetrics(b *testing.B) {
 	}
 
 	for b.Loop() {
-		blockTimes, err := n.db.BlockTimeMetrics()
+		blockTimes, err := n.db.BlockTimeMetrics(blockTime)
 		if err != nil {
 			b.Fatal(err)
 		}
