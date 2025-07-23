@@ -2,12 +2,14 @@ package sqlite
 
 import (
 	"testing"
+	"time"
 
 	"go.sia.tech/core/consensus"
 	proto4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/testutil"
+	"lukechampine.com/frand"
 )
 
 func TestMetrics(t *testing.T) {
@@ -435,4 +437,53 @@ func TestV2Metrics(t *testing.T) {
 	n.revertBlock(t)
 
 	assertMetrics(metricsGenesis)
+}
+
+func BenchmarkBlockTimeMetrics(b *testing.B) {
+	n := newTestChain(b, false, nil)
+
+	const month = 30 * 24 * time.Hour
+	const blockTime = 10 * time.Minute
+
+	now := time.Now().Add(-month)
+	err := n.db.transaction(func(tx *txn) error {
+		blockStmt, err := tx.Prepare(`INSERT INTO blocks(id, height, parent_id, nonce, timestamp, leaf_index) VALUES (?, ?, ?, ?, ?, ?)`)
+		if err != nil {
+			return err
+		}
+		defer blockStmt.Close()
+
+		var parentID types.BlockID
+		nonce, leafIndex := encode(uint64(0)), encode(uint64(0))
+		for i := range 500000 {
+			if i%10000 == 0 {
+				b.Log("Adding block:", i)
+			}
+			id := types.BlockID(frand.Entropy256())
+			if _, err := blockStmt.Exec(encode(id), i, encode(parentID), nonce, encode(now), leafIndex); err != nil {
+				b.Fatal(err)
+			}
+
+			parentID = id
+			now = now.Add(blockTime)
+		}
+		return nil
+	})
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	for b.Loop() {
+		blockTimes, err := n.db.BlockTimeMetrics(blockTime)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if blockTimes.Day != blockTime {
+			b.Fatalf("expected %v average block time for past day, got %v", blockTime, blockTimes.Day)
+		} else if blockTimes.Week != blockTime {
+			b.Fatalf("expected %v average block time for past week, got %v", blockTime, blockTimes.Week)
+		} else if blockTimes.Month != blockTime {
+			b.Fatalf("expected %v average block time for past month, got %v", blockTime, blockTimes.Month)
+		}
+	}
 }

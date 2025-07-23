@@ -221,3 +221,53 @@ func (s *Store) HostMetrics() (result explorer.HostMetrics, err error) {
 	})
 	return
 }
+
+// BlockTimeMetrics implements explorer.Store.
+func (s *Store) BlockTimeMetrics(blockTime time.Duration) (result explorer.BlockTimeMetrics, err error) {
+	err = s.transaction(func(tx *txn) error {
+		const day = 24 * time.Hour
+		monthBlocks := int64(30*day) / int64(blockTime)
+
+		rows, err := tx.Query(`SELECT timestamp FROM blocks ORDER BY height DESC LIMIT ?`, monthBlocks)
+		if err != nil {
+			return fmt.Errorf("failed to query block timestamps: %w", err)
+		}
+		defer rows.Close()
+
+		timestamps := make([]time.Time, 0, monthBlocks)
+		for rows.Next() {
+			var timestamp time.Time
+			if err := rows.Scan(decode(&timestamp)); err != nil {
+				return fmt.Errorf("failed to scan block timestamp: %w", err)
+			}
+			timestamps = append(timestamps, timestamp)
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed to retrieve block timestamp rows: %w", err)
+		}
+
+		now := time.Now()
+		intervals := []time.Time{now.Add(-day), now.Add(-(7 * day)), now.Add(-(30 * day))}
+
+		sums := make([]time.Duration, len(intervals))
+		counts := make([]int64, len(intervals))
+		for i := range len(timestamps) - 1 {
+			timestamp := timestamps[i]
+			// descending order, so larger timestamps is first
+			delta := timestamps[i].Sub(timestamps[i+1])
+
+			for j, interval := range intervals {
+				if timestamp.After(interval) {
+					sums[j] += delta
+					counts[j]++
+				}
+			}
+		}
+		result.Day = sums[0] / time.Duration(max(1, counts[0]))
+		result.Week = sums[1] / time.Duration(max(1, counts[1]))
+		result.Month = sums[2] / time.Duration(max(1, counts[2]))
+
+		return nil
+	})
+	return
+}
