@@ -39,8 +39,6 @@ type (
 		Addr() string
 		Peers() []*syncer.Peer
 		Connect(ctx context.Context, addr string) (*syncer.Peer, error)
-		BroadcastHeader(bh types.BlockHeader) error
-		BroadcastTransactionSet(txns []types.Transaction) error
 		BroadcastV2TransactionSet(index types.ChainIndex, txns []types.V2Transaction) error
 		BroadcastV2BlockOutline(bo gateway.V2BlockOutline) error
 	}
@@ -177,15 +175,13 @@ func (s *server) syncerBroadcastBlockHandler(jc jape.Context) {
 		return
 	} else if jc.Check("block is invalid", s.cm.AddBlocks([]types.Block{b})) != nil {
 		return
+	} else if b.V2 == nil {
+		jc.Error(errors.New("v1 blocks are not supported"), http.StatusBadRequest)
+		return
 	}
-	if b.V2 == nil {
-		if jc.Check("failed to broadcast header", s.s.BroadcastHeader(b.Header())) != nil {
-			return
-		}
-	} else {
-		if jc.Check("failed to broadcast block outline", s.s.BroadcastV2BlockOutline(gateway.OutlineBlock(b, s.cm.PoolTransactions(), s.cm.V2PoolTransactions()))) != nil {
-			return
-		}
+
+	if jc.Check("failed to broadcast block outline", s.s.BroadcastV2BlockOutline(gateway.OutlineBlock(b, s.cm.PoolTransactions(), s.cm.V2PoolTransactions()))) != nil {
+		return
 	}
 }
 
@@ -211,11 +207,9 @@ func (s *server) txpoolBroadcastHandler(jc jape.Context) {
 		return
 	}
 	if len(tbr.Transactions) != 0 {
+		// TODO: remove support for v1 transactions
 		_, err := s.cm.AddPoolTransactions(tbr.Transactions)
 		if jc.Check("invalid transaction set", err) != nil {
-			return
-		}
-		if jc.Check("failed to broadcast transaction set", s.s.BroadcastTransactionSet(tbr.Transactions)) != nil {
 			return
 		}
 	}
