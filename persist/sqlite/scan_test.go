@@ -16,7 +16,7 @@ import (
 	proto4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
-	crhpv4 "go.sia.tech/coreutils/rhp/v4"
+	rhp4 "go.sia.tech/coreutils/rhp/v4"
 	"go.sia.tech/coreutils/rhp/v4/siamux"
 	"go.sia.tech/coreutils/syncer"
 	ctestutil "go.sia.tech/coreutils/testutil"
@@ -93,8 +93,8 @@ func startTestNode(tb testing.TB, n *consensus.Network, genesis types.Block) (*c
 	return cm, s, w
 }
 
-func testV2Host(tb testing.TB, hostKey types.PrivateKey, cm crhpv4.ChainManager, s crhpv4.Syncer, w crhpv4.Wallet, c crhpv4.Contractor, sr crhpv4.Settings, ss crhpv4.Sectors, log *zap.Logger) (string, crhpv4.TransportClient) {
-	rs := crhpv4.NewServer(hostKey, cm, s, c, w, sr, ss, crhpv4.WithPriceTableValidity(2*time.Minute))
+func testV2Host(tb testing.TB, hostKey types.PrivateKey, cm rhp4.ChainManager, w rhp4.Wallet, c rhp4.Contractor, sr rhp4.Settings, ss rhp4.Sectors, log *zap.Logger) (string, rhp4.TransportClient) {
+	rs := rhp4.NewServer(hostKey, cm, c, w, sr, ss, rhp4.WithPriceTableValidity(2*time.Minute))
 	hostAddr := ctestutil.ServeSiaMux(tb, rs, log.Named("siamux"))
 
 	transport, err := siamux.Dial(context.Background(), hostAddr, hostKey.PublicKey())
@@ -234,7 +234,7 @@ func TestScan(t *testing.T) {
 	network.HardforkV2.AllowHeight = 1
 	network.HardforkV2.RequireHeight = 5
 
-	cm, s, w := startTestNode(t, network, genesisBlock)
+	cm, _, w := startTestNode(t, network, genesisBlock)
 
 	settings := proto2.HostSettings{
 		AcceptingContracts:   true,
@@ -326,7 +326,7 @@ func TestScan(t *testing.T) {
 	}
 
 	rhp2Addr, _ := testV1Host(t, pks[0], &settings, &table)
-	v4Addr, _ := testV2Host(t, pks[2], cm, s, w, c, sr, ss, zap.NewNop())
+	v4Addr, _ := testV2Host(t, pks[2], cm, w, c, sr, ss, zap.NewNop())
 
 	cfg := config.Scanner{
 		NumThreads:          100,

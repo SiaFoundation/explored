@@ -48,7 +48,7 @@ func waitForSync(t testing.TB, cm *chain.Manager, e *explorer.Explorer) {
 
 func testV2Host(tb testing.TB, cm *chain.Manager) rhp4.TransportClient {
 	hostKey := types.GeneratePrivateKey()
-	w, err := wallet.NewSingleAddressWallet(hostKey, cm, ctestutil.NewEphemeralWalletStore(), ctestutil.MockSyncer{})
+	w, err := wallet.NewSingleAddressWallet(hostKey, cm, ctestutil.NewEphemeralWalletStore(), &ctestutil.MockSyncer{})
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func testV2Host(tb testing.TB, cm *chain.Manager) rhp4.TransportClient {
 	}
 	tb.Cleanup(func() { l.Close() })
 
-	rs := rhp4.NewServer(hostKey, cm, s, ctestutil.NewEphemeralContractor(cm), w, ctestutil.NewEphemeralSettingsReporter(), ctestutil.NewEphemeralSectorStore())
+	rs := rhp4.NewServer(hostKey, cm, ctestutil.NewEphemeralContractor(cm), w, ctestutil.NewEphemeralSettingsReporter(), ctestutil.NewEphemeralSectorStore())
 	go siamux.Serve(l, rs, zap.NewNop())
 
 	// announce so the host is discoverable
