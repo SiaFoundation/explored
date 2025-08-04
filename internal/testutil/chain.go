@@ -121,8 +121,8 @@ func MineV2Block(state consensus.State, v1Txns []types.Transaction, v2Txns []typ
 		},
 	}
 	b.V2.Commitment = state.Commitment(b.MinerPayouts[0].Address, b.Transactions, b.V2Transactions())
-	for b.ID().CmpWork(state.ChildTarget) < 0 {
-		b.Nonce += state.NonceFactor()
+	if !coreutils.FindBlockNonce(state, &b, time.Minute) {
+		panic("failed to mine test block quickly enough")
 	}
 	return b
 }

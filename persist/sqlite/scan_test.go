@@ -296,7 +296,7 @@ func TestScan(t *testing.T) {
 		RegistryEntriesTotal: 50,
 	}
 	v2Settings := proto4.HostSettings{
-		ProtocolVersion:     [3]uint8{4, 0, 0},
+		ProtocolVersion:     [3]uint8{5, 0, 0},
 		Release:             "test",
 		AcceptingContracts:  true,
 		WalletAddress:       w.Address(),
