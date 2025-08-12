@@ -103,7 +103,7 @@ type coinGecko struct {
 	refresh time.Duration
 	client  *coinGeckoAPI
 
-	mu    sync.Mutex
+	mu    sync.RWMutex
 	rates map[string]float64 // CoinGecko currency -> rate
 	err   error
 }
@@ -136,8 +136,9 @@ func (c *coinGecko) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
+			rates, err := c.client.tickers(ctx, currencies, c.token)
 			c.mu.Lock()
-			c.rates, c.err = c.client.tickers(ctx, currencies, c.token)
+			c.rates, c.err = rates, err
 			c.mu.Unlock()
 		case <-ctx.Done():
 			c.mu.Lock()
@@ -150,8 +151,8 @@ func (c *coinGecko) Start(ctx context.Context) {
 
 // Last implements Source.
 func (c *coinGecko) Last(currency string) (float64, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
 	coinGeckoCurrency, exists := c.pairMap[currency]
 	if !exists {
