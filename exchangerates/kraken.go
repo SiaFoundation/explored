@@ -74,7 +74,7 @@ type kraken struct {
 	refresh time.Duration
 	client  *krakenAPI
 
-	mu    sync.Mutex
+	mu    sync.RWMutex
 	rates map[string]float64 // Kraken pair -> rate
 	err   error
 }
@@ -106,8 +106,9 @@ func (k *kraken) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
+			rates, err := k.client.tickers(ctx, krakenPairs)
 			k.mu.Lock()
-			k.rates, k.err = k.client.tickers(ctx, krakenPairs)
+			k.rates, k.err = rates, err
 			k.mu.Unlock()
 		case <-ctx.Done():
 			k.mu.Lock()
@@ -120,8 +121,8 @@ func (k *kraken) Start(ctx context.Context) {
 
 // Last implements Source.
 func (k *kraken) Last(currency string) (float64, error) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
+	k.mu.RLock()
+	defer k.mu.RUnlock()
 
 	krakenPair, exists := k.pairMap[currency]
 	if !exists {
