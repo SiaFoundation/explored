@@ -53,6 +53,7 @@ type (
 		Metrics(id types.BlockID) (explorer.Metrics, error)
 		HostMetrics() (explorer.HostMetrics, error)
 		BlockTimeMetrics() (explorer.BlockTimeMetrics, error)
+		DifficultyMetrics(start, end, step uint64) (explorer.DifficultyMetrics, error)
 		Transactions(ids []types.TransactionID) ([]explorer.Transaction, error)
 		TransactionChainIndices(id types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error)
 		V2Transactions(ids []types.TransactionID) ([]explorer.V2Transaction, error)
@@ -297,6 +298,23 @@ func (s *server) hostMetricsHandler(jc jape.Context) {
 func (s *server) blockTimeMetricsHandler(jc jape.Context) {
 	metrics, err := s.e.BlockTimeMetrics()
 	if jc.Check("failed to get block time metrics", err) != nil {
+		return
+	}
+	jc.Encode(metrics)
+}
+
+func (s *server) difficultyMetricsHandler(jc jape.Context) {
+	var start, end uint64
+	if jc.DecodeForm("start", &start) != nil || jc.DecodeForm("end", &end) != nil {
+		return
+	}
+	const targetPoints = 150
+	step := uint64(1)
+	if length := end - start + 1; length > targetPoints {
+		step = length / targetPoints
+	}
+	metrics, err := s.e.DifficultyMetrics(start, end, step)
+	if jc.Check("failed to get difficulty metrics", err) != nil {
 		return
 	}
 	jc.Encode(metrics)
@@ -885,10 +903,11 @@ func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.Source, a
 		"GET    /hosts/:key":      srv.pubkeyHostHandler,
 		"POST   /hosts/:key/scan": srv.pubkeyHostScanHandler,
 
-		"GET    /metrics/block":     srv.blocksMetricsHandler,
-		"GET    /metrics/block/:id": srv.blocksMetricsIDHandler,
-		"GET    /metrics/host":      srv.hostMetricsHandler,
-		"GET    /metrics/blocktime": srv.blockTimeMetricsHandler,
+		"GET    /metrics/block":      srv.blocksMetricsHandler,
+		"GET    /metrics/block/:id":  srv.blocksMetricsIDHandler,
+		"GET    /metrics/host":       srv.hostMetricsHandler,
+		"GET    /metrics/blocktime":  srv.blockTimeMetricsHandler,
+		"GET    /metrics/difficulty": srv.difficultyMetricsHandler,
 
 		"POST   /hosts": srv.hostsHandler,
 

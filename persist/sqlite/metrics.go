@@ -5,6 +5,7 @@ import (
 	"slices"
 	"time"
 
+	"go.sia.tech/core/consensus"
 	proto4 "go.sia.tech/core/rhp/v4"
 
 	"go.sia.tech/core/types"
@@ -267,6 +268,70 @@ func (s *Store) BlockTimeMetrics(blockTime time.Duration) (result explorer.Block
 		result.Week = sums[1] / time.Duration(max(1, counts[1]))
 		result.Month = sums[2] / time.Duration(max(1, counts[2]))
 
+		return nil
+	})
+	return
+}
+
+// DifficultyMetrics implements Store.
+func (s *Store) DifficultyMetrics(start, end, step uint64) (result explorer.DifficultyMetrics, err error) {
+	err = s.transaction(func(tx *txn) error {
+		if start > end {
+			return fmt.Errorf("start height %d cannot be greater than end height %d", start, end)
+		} else if step == 0 {
+			return fmt.Errorf("step must be nonzero")
+		}
+		result.BlocksPerStep = step
+		if start == end {
+			return nil
+		}
+
+		// We need blocktime deltas, so offset the range by 1 (if possible)
+		queryStart := start
+		if start > 0 {
+			queryStart = start - 1
+		}
+		query := `SELECT nm.difficulty, b.timestamp
+				  FROM network_metrics nm
+				  JOIN blocks b ON nm.block_id = b.id
+				  WHERE nm.height >= ? AND nm.height < ?
+				    AND (nm.height - ?) % ? = 0
+				  ORDER BY nm.height`
+		rows, err := tx.Query(query, queryStart, end, start, step)
+		if err != nil {
+			return fmt.Errorf("failed to query difficulty metrics: %w", err)
+		}
+		defer rows.Close()
+
+		maxRows := (end-queryStart)/step + 1
+		difficulties := make([]consensus.Work, 0, maxRows)
+		timestamps := make([]time.Time, 0, maxRows)
+		for rows.Next() {
+			var difficulty consensus.Work
+			var timestamp time.Time
+			if err := rows.Scan(decode(&difficulty), decode(&timestamp)); err != nil {
+				return fmt.Errorf("failed to scan difficulty metrics row: %w", err)
+			}
+			difficulties = append(difficulties, difficulty)
+			timestamps = append(timestamps, timestamp)
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("error iterating difficulty metrics rows: %w", err)
+		}
+
+		result.Difficulties = difficulties
+		result.BlockTimes = make([]time.Duration, len(timestamps))
+		for i := range timestamps {
+			if i > 0 {
+				result.BlockTimes[i] = timestamps[i].Sub(timestamps[i-1]) / time.Duration(step)
+			}
+		}
+
+		// trim if necessary
+		if start > 0 {
+			result.Difficulties = result.Difficulties[1:]
+			result.BlockTimes = result.BlockTimes[1:]
+		}
 		return nil
 	})
 	return

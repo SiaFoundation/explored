@@ -612,3 +612,10 @@ type BlockTimeMetrics struct {
 	Week  time.Duration
 	Month time.Duration
 }
+
+// DifficultyMetrics contains various difficulty-related metrics.
+type DifficultyMetrics struct {
+	BlocksPerStep uint64           `json:"blocksPerStep"`
+	Difficulties  []consensus.Work `json:"difficulties"`
+	BlockTimes    []time.Duration  `json:"blockTimes"`
+}

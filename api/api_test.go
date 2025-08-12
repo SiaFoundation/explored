@@ -385,6 +385,42 @@ func TestAPI(t *testing.T) {
 			testutil.Equal(t, "storage utilization", contractFilesize, resp.StorageUtilization)
 			testutil.Equal(t, "contract revenue", types.ZeroCurrency, resp.ContractRevenue)
 		}},
+		{"DifficultyMetrics", func(t *testing.T) {
+			resp, err := client.DifficultyMetrics(1, 3)
+			if err != nil {
+				t.Fatal(err)
+			}
+			difficulties := make([]consensus.Work, 2)
+			blockTimes := make([]time.Duration, 2)
+			for i, height := range []uint64{1, 2} {
+				index, _ := cm.BestIndex(height)
+				cs, _ := cm.State(index.ID)
+				difficulties[i] = cs.Difficulty
+				blockTimes[i] = cs.PrevTimestamps[0].Sub(cs.PrevTimestamps[1])
+			}
+			testutil.Equal(t, "blocks per step", 1, resp.BlocksPerStep)
+			testutil.Equal(t, "difficulties", difficulties, resp.Difficulties)
+			testutil.Equal(t, "block times", blockTimes, resp.BlockTimes)
+		}},
+		{"DifficultyMetrics2BlocksPerStep", func(t *testing.T) {
+			resp, err := client.DifficultyMetrics(0, 150*2)
+			if err != nil {
+				t.Fatal(err)
+			}
+			difficulties := make([]consensus.Work, 2)
+			blockTimes := make([]time.Duration, 2)
+			for i, height := range []uint64{0, 2} {
+				index, _ := cm.BestIndex(height)
+				cs, _ := cm.State(index.ID)
+				difficulties[i] = cs.Difficulty
+				if i > 0 {
+					blockTimes[i] = cs.PrevTimestamps[0].Sub(cs.PrevTimestamps[2]) / 2
+				}
+			}
+			testutil.Equal(t, "blocks per step", 2, resp.BlocksPerStep)
+			testutil.Equal(t, "difficulties", difficulties, resp.Difficulties)
+			testutil.Equal(t, "block times", blockTimes, resp.BlockTimes)
+		}},
 		{"Block", func(t *testing.T) {
 			tip := cm.Tip()
 			parentIndex, err := e.BestTip(tip.Height - 1)

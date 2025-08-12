@@ -286,6 +286,12 @@ func (c *Client) BlockTimeMetrics() (resp explorer.BlockTimeMetrics, err error) 
 	return
 }
 
+// DifficultyMetrics returns various difficulty-related metrics.
+func (c *Client) DifficultyMetrics(start, end uint64) (resp explorer.DifficultyMetrics, err error) {
+	err = c.c.GET(context.Background(), fmt.Sprintf("/metrics/difficulty?start=%d&end=%d", start, end), &resp)
+	return
+}
+
 // Search returns what type of object an ID is.
 func (c *Client) Search(id string) (resp explorer.SearchType, err error) {
 	err = c.c.GET(context.Background(), fmt.Sprintf("/search/%s", id), &resp)
