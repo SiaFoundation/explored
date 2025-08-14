@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -437,6 +438,81 @@ func TestV2Metrics(t *testing.T) {
 	n.revertBlock(t)
 
 	assertMetrics(metricsGenesis)
+}
+
+func TestDifficultyMetrics(t *testing.T) {
+	n := newTestChain(t, false, nil)
+
+	tests := []struct {
+		name             string
+		start, end, step uint64
+		err              string
+	}{
+		{
+			name:  "Basic range",
+			start: 0, end: 2, step: 1,
+		},
+		{
+			name:  "Step of 2",
+			start: 0, end: 4, step: 2,
+		},
+		{
+			name:  "Empty range",
+			start: 5, end: 5, step: 1,
+		},
+		{
+			name:  "Start equals end",
+			start: 5, end: 5, step: 1,
+		},
+		{
+			name:  "Invalid range",
+			start: 5, end: 3, step: 1,
+			err: "start height 5 cannot be greater than end height 3",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := n.db.DifficultyMetrics(tt.start, tt.end, tt.step)
+			if tt.err != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.err) {
+					t.Fatalf("Expected %v, got %v", tt.err, err)
+				}
+				return
+			} else if err != nil {
+				t.Fatal("Unexpected error:", err)
+			}
+
+			// Basic checks
+			testutil.Equal(t, "BlocksPerStep", tt.step, result.BlocksPerStep)
+			testutil.Equal(t, "Array lengths", len(result.Difficulties), len(result.BlockTimes))
+
+			// For empty range (start == end), expect empty results
+			if tt.start == tt.end {
+				testutil.Equal(t, "Empty difficulties", 0, len(result.Difficulties))
+				testutil.Equal(t, "Empty blocktimes", 0, len(result.BlockTimes))
+				return
+			}
+
+			// Check that we got some data
+			if len(result.Difficulties) == 0 {
+				t.Error("Expected some difficulties data but got none")
+			}
+			if len(result.BlockTimes) == 0 {
+				t.Error("Expected some block time data but got none")
+			}
+
+			// Check that block times are reasonable (between 1 second and 1 hour)
+			for i, blockTime := range result.BlockTimes {
+				if i == 0 && tt.start == 0 {
+					if blockTime != 0 {
+						t.Errorf("BlockTime[0] = %v, expected 0 for genesis block", blockTime)
+					}
+				} else if blockTime < time.Second || blockTime > time.Hour {
+					t.Errorf("BlockTime[%d] = %v, seems unreasonable", i, blockTime)
+				}
+			}
+		})
+	}
 }
 
 func BenchmarkBlockTimeMetrics(b *testing.B) {
