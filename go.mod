@@ -4,9 +4,9 @@ go 1.24.2
 
 require (
 	github.com/google/go-cmp v0.7.0
-	github.com/mattn/go-sqlite3 v1.14.30
+	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/oschwald/geoip2-golang v1.13.0
-	go.sia.tech/core v0.16.0
+	go.sia.tech/core v0.17.0
 	go.sia.tech/coreutils v0.17.0
 	go.sia.tech/jape v0.14.0
 	go.uber.org/zap v1.27.0
