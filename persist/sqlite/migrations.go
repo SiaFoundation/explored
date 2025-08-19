@@ -37,8 +37,8 @@ func migrateV4(txn *txn, log *zap.Logger) error {
 }
 
 func migrateV5(tx *txn, _ *zap.Logger) error {
-	_, err := tx.Exec(`CREATE INDEX address_balance_siacoin_balance_index ON address_balance(siacoin_balance);
-CREATE INDEX address_balance_siafund_balance_index ON address_balance(siafund_balance);`)
+	_, err := tx.Exec(`CREATE INDEX IF NOT EXISTS address_balance_siacoin_balance_index ON address_balance(siacoin_balance);
+CREATE INDEX IF NOT EXISTS address_balance_siafund_balance_index ON address_balance(siafund_balance);`)
 	return err
 }
 
