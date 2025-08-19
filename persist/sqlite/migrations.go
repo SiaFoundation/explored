@@ -36,8 +36,15 @@ func migrateV4(txn *txn, log *zap.Logger) error {
 	return nil
 }
 
+func migrateV5(tx *txn, _ *zap.Logger) error {
+	_, err := tx.Exec(`CREATE INDEX address_balance_siacoin_balance_index ON address_balance(siacoin_balance);
+CREATE INDEX address_balance_siafund_balance_index ON address_balance(siafund_balance);`)
+	return err
+}
+
 var migrations = []func(tx *txn, log *zap.Logger) error{
 	migrateV2,
 	migrateV3,
 	migrateV4,
+	migrateV5,
 }

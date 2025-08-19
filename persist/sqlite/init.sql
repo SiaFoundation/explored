@@ -41,6 +41,8 @@ CREATE TABLE address_balance (
 	siafund_balance BLOB NOT NULL
 );
 CREATE INDEX address_balance_address_index ON address_balance(address);
+CREATE INDEX address_balance_siacoin_balance_index ON address_balance(siacoin_balance);
+CREATE INDEX address_balance_siafund_balance_index ON address_balance(siafund_balance);
 
 CREATE TABLE siacoin_elements (
 	id INTEGER PRIMARY KEY,
