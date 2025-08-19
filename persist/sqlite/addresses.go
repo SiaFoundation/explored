@@ -271,3 +271,53 @@ func (s *Store) Balance(address types.Address) (sc types.Currency, immatureSC ty
 	})
 	return
 }
+
+// TopSiacoinAddresses returns a paginated list of Siacoin addresses ordered
+// by balance.
+func (s *Store) TopSiacoinAddresses(limit, offset int) (result []explorer.TopSiacoin, err error) {
+	err = s.transaction(func(tx *txn) error {
+		rows, err := tx.Query(`SELECT address, siacoin_balance FROM address_balance ORDER BY siacoin_balance DESC LIMIT $1 OFFSET $2`, limit, offset)
+		if err != nil {
+			return fmt.Errorf("failed to query top siacoin addresses: %w", err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var address explorer.TopSiacoin
+			if err := rows.Scan(decode(&address.Address), decode(&address.Amount)); err != nil {
+				return fmt.Errorf("failed to scan top siacoin address: %w", err)
+			}
+			result = append(result, address)
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed to retrieve top siacoin address rows: %w", err)
+		}
+		return nil
+	})
+	return
+}
+
+// TopSiafundAddresses returns a paginated list of Siafund addresses ordered
+// by balance.
+func (s *Store) TopSiafundAddresses(limit, offset int) (result []explorer.TopSiafund, err error) {
+	err = s.transaction(func(tx *txn) error {
+		rows, err := tx.Query(`SELECT address, siafund_balance FROM address_balance ORDER BY siafund_balance DESC LIMIT $1 OFFSET $2`, limit, offset)
+		if err != nil {
+			return fmt.Errorf("failed to query top siafund addresses: %w", err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var address explorer.TopSiafund
+			if err := rows.Scan(decode(&address.Address), decode(&address.Amount)); err != nil {
+				return fmt.Errorf("failed to scan top siafund address: %w", err)
+			}
+			result = append(result, address)
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed to retrieve top siafund address rows: %w", err)
+		}
+		return nil
+	})
+	return
+}

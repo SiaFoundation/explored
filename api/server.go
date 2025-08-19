@@ -59,6 +59,8 @@ type (
 		V2Transactions(ids []types.TransactionID) ([]explorer.V2Transaction, error)
 		V2TransactionChainIndices(id types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error)
 		Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
+		TopSiacoinAddresses(limit, offset int) (result []explorer.TopSiacoin, err error)
+		TopSiafundAddresses(limit, offset int) (result []explorer.TopSiafund, err error)
 		SiacoinElements(ids []types.SiacoinOutputID) (result []explorer.SiacoinOutput, err error)
 		SiafundElements(ids []types.SiafundOutputID) (result []explorer.SiafundOutput, err error)
 		UnspentSiacoinOutputs(address types.Address, offset, limit uint64) ([]explorer.SiacoinOutput, error)
@@ -838,6 +840,39 @@ func (s *server) healthHandler(jc jape.Context) {
 	jc.Encode(nil)
 }
 
+func (s *server) topAddressesSiacoinsHandler(jc jape.Context) {
+	limit := defaultLimit
+	offset := uint64(0)
+	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
+		return
+	}
+	if limit > maxLimit {
+		limit = maxLimit
+	}
+
+	topAddresses, err := s.e.TopSiacoinAddresses(int(limit), int(offset))
+	if jc.Check("failed to get top siacoin addresses", err) != nil {
+		return
+	}
+	jc.Encode(topAddresses)
+}
+func (s *server) topAddressesSiafundsHandler(jc jape.Context) {
+	limit := defaultLimit
+	offset := uint64(0)
+	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
+		return
+	}
+	if limit > maxLimit {
+		limit = maxLimit
+	}
+
+	topAddresses, err := s.e.TopSiafundAddresses(int(limit), int(offset))
+	if jc.Check("failed to get top siacoin addresses", err) != nil {
+		return
+	}
+	jc.Encode(topAddresses)
+}
+
 // NewServer returns an HTTP handler that serves the explored API.
 func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.Source, apiPassword string) http.Handler {
 	srv := server{
@@ -882,6 +917,9 @@ func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.Source, a
 		"GET    /addresses/:address/events":             srv.addressessAddressEventsHandler,
 		"GET    /addresses/:address/events/unconfirmed": srv.addressessAddressEventsUnconfirmedHandler,
 		"GET    /addresses/:address/balance":            srv.addressessAddressBalanceHandler,
+
+		"GET /top/addresses/siacoins": srv.topAddressesSiacoinsHandler,
+		"GET /top/addresses/siafunds": srv.topAddressesSiafundsHandler,
 
 		"GET    /events/:id": srv.eventsIDHandler,
 

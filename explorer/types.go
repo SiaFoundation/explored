@@ -619,3 +619,15 @@ type DifficultyMetrics struct {
 	Difficulties  []consensus.Work `json:"difficulties"`
 	BlockTimes    []time.Duration  `json:"blockTimes"`
 }
+
+// TopSiacoin pairs an address with its Siacoin balance
+type TopSiacoin struct {
+	Address types.Address  `json:"address"`
+	Amount  types.Currency `json:"amount"`
+}
+
+// TopSiafund pairs an address with its Siafund balance
+type TopSiafund struct {
+	Address types.Address `json:"address"`
+	Amount  uint64        `json:"amount"`
+}

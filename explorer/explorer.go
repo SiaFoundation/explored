@@ -113,6 +113,9 @@ type Store interface {
 
 	QueryHosts(params HostQuery, sortBy HostSortColumn, dir HostSortDir, offset, limit uint64) ([]Host, error)
 	HostsForScanning(minLastAnnouncement time.Time, limit uint64) ([]UnscannedHost, error)
+
+	TopSiacoinAddresses(limit, offset int) ([]TopSiacoin, error)
+	TopSiafundAddresses(limit, offset int) ([]TopSiafund, error)
 }
 
 // Explorer implements a Sia explorer.
@@ -160,6 +163,18 @@ func (e *Explorer) syncStore(index types.ChainIndex, batchSize int) error {
 		}
 	}
 	return nil
+}
+
+// TopSiacoinAddresses returns a paginated list of Siacoin addresses ordered
+// by balance.
+func (e *Explorer) TopSiacoinAddresses(limit, offset int) ([]TopSiacoin, error) {
+	return e.s.TopSiacoinAddresses(limit, offset)
+}
+
+// TopSiafundAddresses returns a paginated list of Siafund addresses ordered
+// by balance.
+func (e *Explorer) TopSiafundAddresses(limit, offset int) ([]TopSiafund, error) {
+	return e.s.TopSiafundAddresses(limit, offset)
 }
 
 // NewExplorer returns a Sia explorer.
