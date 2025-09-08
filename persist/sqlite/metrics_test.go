@@ -472,7 +472,7 @@ func TestDifficultyMetrics(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := n.db.DifficultyMetrics(tt.start, tt.end, tt.step)
+			result, err := n.db.DifficultyMetrics(tt.start, tt.end, tt.step, n.tipState().Network)
 			if tt.err != "" {
 				if err == nil || !strings.Contains(err.Error(), tt.err) {
 					t.Fatalf("Expected %v, got %v", tt.err, err)
@@ -500,6 +500,9 @@ func TestDifficultyMetrics(t *testing.T) {
 			if len(result.BlockTimes) == 0 {
 				t.Error("Expected some block time data but got none")
 			}
+			if len(result.Drifts) == 0 {
+				t.Error("Expected some drift data but got none")
+			}
 
 			// Check that block times are reasonable (between 1 second and 1 hour)
 			for i, blockTime := range result.BlockTimes {
@@ -509,6 +512,12 @@ func TestDifficultyMetrics(t *testing.T) {
 					}
 				} else if blockTime < time.Second || blockTime > time.Hour {
 					t.Errorf("BlockTime[%d] = %v, seems unreasonable", i, blockTime)
+				}
+			}
+			// Check that the drifts are reasonable (between -1 hour and +1 hour)
+			for i, drift := range result.Drifts {
+				if drift < -time.Hour || drift > time.Hour {
+					t.Errorf("Drift[%d] = %v, seems unreasonable", i, drift)
 				}
 			}
 		})
