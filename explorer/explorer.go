@@ -90,7 +90,7 @@ type Store interface {
 	LastSuccessScan() (time.Time, error)
 	HostMetrics() (HostMetrics, error)
 	BlockTimeMetrics(blockTime time.Duration) (BlockTimeMetrics, error)
-	DifficultyMetrics(start, end, step uint64) (DifficultyMetrics, error)
+	DifficultyMetrics(start, end, step uint64, n *consensus.Network) (DifficultyMetrics, error)
 	Transactions(ids []types.TransactionID) ([]Transaction, error)
 	TransactionChainIndices(txid types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error)
 	V2Transactions(ids []types.TransactionID) ([]V2Transaction, error)
@@ -343,7 +343,7 @@ func (e *Explorer) BlockTimeMetrics() (BlockTimeMetrics, error) {
 
 // DifficultyMetrics returns various difficulty-related metrics.
 func (e *Explorer) DifficultyMetrics(start, end, step uint64) (DifficultyMetrics, error) {
-	return e.s.DifficultyMetrics(start, end, step)
+	return e.s.DifficultyMetrics(start, end, step, e.cm.TipState().Network)
 }
 
 // Transactions returns the transactions with the specified IDs.

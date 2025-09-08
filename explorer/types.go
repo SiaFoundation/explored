@@ -618,6 +618,7 @@ type DifficultyMetrics struct {
 	BlocksPerStep uint64           `json:"blocksPerStep"`
 	Difficulties  []consensus.Work `json:"difficulties"`
 	BlockTimes    []time.Duration  `json:"blockTimes"`
+	Drifts        []time.Duration  `json:"drifts"`
 }
 
 // TopSiacoin pairs an address with its Siacoin balance

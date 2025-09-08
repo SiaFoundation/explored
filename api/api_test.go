@@ -392,11 +392,13 @@ func TestAPI(t *testing.T) {
 			}
 			difficulties := make([]consensus.Work, 2)
 			blockTimes := make([]time.Duration, 2)
+			drifts := make([]time.Duration, 2)
 			for i, height := range []uint64{1, 2} {
 				index, _ := cm.BestIndex(height)
 				cs, _ := cm.State(index.ID)
 				difficulties[i] = cs.Difficulty
 				blockTimes[i] = cs.PrevTimestamps[0].Sub(cs.PrevTimestamps[1])
+				drifts[i] = cs.PrevTimestamps[0].Sub(network.HardforkOak.GenesisTimestamp.Add(time.Duration(height) * network.BlockInterval))
 			}
 			testutil.Equal(t, "blocks per step", 1, resp.BlocksPerStep)
 			testutil.Equal(t, "difficulties", difficulties, resp.Difficulties)
@@ -409,6 +411,7 @@ func TestAPI(t *testing.T) {
 			}
 			difficulties := make([]consensus.Work, 2)
 			blockTimes := make([]time.Duration, 2)
+			drifts := make([]time.Duration, 2)
 			for i, height := range []uint64{0, 2} {
 				index, _ := cm.BestIndex(height)
 				cs, _ := cm.State(index.ID)
@@ -416,10 +419,12 @@ func TestAPI(t *testing.T) {
 				if i > 0 {
 					blockTimes[i] = cs.PrevTimestamps[0].Sub(cs.PrevTimestamps[2]) / 2
 				}
+				drifts[i] = cs.PrevTimestamps[0].Sub(network.HardforkOak.GenesisTimestamp.Add(time.Duration(height) * network.BlockInterval))
 			}
 			testutil.Equal(t, "blocks per step", 2, resp.BlocksPerStep)
 			testutil.Equal(t, "difficulties", difficulties, resp.Difficulties)
 			testutil.Equal(t, "block times", blockTimes, resp.BlockTimes)
+			testutil.Equal(t, "drifts", drifts, resp.Drifts)
 		}},
 		{"Block", func(t *testing.T) {
 			tip := cm.Tip()

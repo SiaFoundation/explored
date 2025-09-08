@@ -274,7 +274,7 @@ func (s *Store) BlockTimeMetrics(blockTime time.Duration) (result explorer.Block
 }
 
 // DifficultyMetrics implements Store.
-func (s *Store) DifficultyMetrics(start, end, step uint64) (result explorer.DifficultyMetrics, err error) {
+func (s *Store) DifficultyMetrics(start, end, step uint64, n *consensus.Network) (result explorer.DifficultyMetrics, err error) {
 	err = s.transaction(func(tx *txn) error {
 		if start > end {
 			return fmt.Errorf("start height %d cannot be greater than end height %d", start, end)
@@ -326,11 +326,18 @@ func (s *Store) DifficultyMetrics(start, end, step uint64) (result explorer.Diff
 				result.BlockTimes[i] = timestamps[i].Sub(timestamps[i-1]) / time.Duration(step)
 			}
 		}
+		result.Drifts = make([]time.Duration, len(timestamps))
+		for i := range result.Drifts {
+			height := start + uint64(i)*step
+			expected := n.HardforkOak.GenesisTimestamp.Add(time.Duration(height) * n.BlockInterval)
+			result.Drifts[i] = timestamps[i].Sub(expected)
+		}
 
 		// trim if necessary
 		if start > 0 {
 			result.Difficulties = result.Difficulties[1:]
 			result.BlockTimes = result.BlockTimes[1:]
+			result.Drifts = result.Drifts[1:]
 		}
 		return nil
 	})
