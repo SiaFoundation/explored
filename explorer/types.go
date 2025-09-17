@@ -608,9 +608,9 @@ type HostQuery struct {
 
 // BlockTimeMetrics represents the average block time during various intervals.
 type BlockTimeMetrics struct {
-	Day   time.Duration
-	Week  time.Duration
-	Month time.Duration
+	Day   time.Duration `json:"day"`
+	Week  time.Duration `json:"week"`
+	Month time.Duration `json:"month"`
 }
 
 // DifficultyMetrics contains various difficulty-related metrics.
