@@ -286,10 +286,10 @@ func (s *Store) DifficultyMetrics(start, end, step uint64, n *consensus.Network)
 			return nil
 		}
 
-		// We need blocktime deltas, so offset the range by 1 (if possible)
+		// We need blocktime deltas, so offset the range by one step (if possible)
 		queryStart := start
-		if start > 0 {
-			queryStart = start - 1
+		if start >= step {
+			queryStart = start - step
 		}
 		query := `SELECT nm.difficulty, b.timestamp
 				  FROM network_metrics nm
@@ -334,7 +334,7 @@ func (s *Store) DifficultyMetrics(start, end, step uint64, n *consensus.Network)
 		}
 
 		// trim if necessary
-		if start > 0 {
+		if start >= step {
 			result.Difficulties = result.Difficulties[1:]
 			result.BlockTimes = result.BlockTimes[1:]
 			result.Drifts = result.Drifts[1:]
