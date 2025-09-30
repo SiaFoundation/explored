@@ -696,3 +696,71 @@ func TestAPI(t *testing.T) {
 		t.Run(subtest.name, subtest.test)
 	}
 }
+
+func TestDifficultyMetricsOffByOneRegression(t *testing.T) {
+	network, genesisBlock := ctestutil.Network()
+	pk := types.GeneratePrivateKey()
+	addr := types.StandardUnlockHash(pk.PublicKey())
+	genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr
+
+	scanCfg := config.Scanner{
+		NumThreads:          100,
+		ScanTimeout:         30 * time.Second,
+		ScanFrequency:       100 * time.Millisecond,
+		ScanInterval:        3 * time.Hour,
+		MinLastAnnouncement: 90 * 24 * time.Hour,
+	}
+	e, cm, err := newExplorer(t, network, genesisBlock, scanCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	listenAddr := "127.0.0.1:9998"
+	_, err = newServer(t, cm, e, listenAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Mine 450 blocks to ensure we have enough data for our test range (150-450)
+	for range 450 {
+		cs := cm.TipState()
+		b := types.Block{
+			ParentID:     cs.Index.ID,
+			Timestamp:    genesisBlock.Timestamp.Add(time.Duration(cs.Index.Height+1) * network.BlockInterval),
+			MinerPayouts: []types.SiacoinOutput{{Value: cs.BlockReward()}},
+		}
+		if !coreutils.FindBlockNonce(cs, &b, time.Second) {
+			panic("failed to mine test block quickly enough")
+		}
+		if err := cm.AddBlocks([]types.Block{b}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for {
+		tip, _ := e.Tip()
+		if tip.Height == 450 {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	client := api.NewClient("http://"+listenAddr+"/api", testPassword)
+
+	resp, err := client.DifficultyMetrics(150, 450)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testutil.Equal(t, "blocks per step", 2, resp.BlocksPerStep)
+	testutil.Equal(t, "difficulties length", 150, len(resp.Difficulties))
+	testutil.Equal(t, "block times length", 150, len(resp.BlockTimes))
+	testutil.Equal(t, "drifts length", 150, len(resp.Drifts))
+
+	// Verify response starts at height 150
+	index, _ := cm.BestIndex(150)
+	cs, _ := cm.State(index.ID)
+	testutil.Equal(t, "first difficulty is for height 150", cs.Difficulty, resp.Difficulties[0])
+
+	// Verify first block time is calculated from height 148 to 150
+	testutil.Equal(t, "first block time", cs.PrevTimestamps[0].Sub(cs.PrevTimestamps[2])/2, resp.BlockTimes[0])
+}
