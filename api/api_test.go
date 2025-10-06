@@ -697,7 +697,7 @@ func TestAPI(t *testing.T) {
 	}
 }
 
-func TestDifficultyMetricsOffByOneRegression(t *testing.T) {
+func TestDifficultyMetrics(t *testing.T) {
 	network, genesisBlock := ctestutil.Network()
 	pk := types.GeneratePrivateKey()
 	addr := types.StandardUnlockHash(pk.PublicKey())
@@ -746,7 +746,12 @@ func TestDifficultyMetricsOffByOneRegression(t *testing.T) {
 
 	client := api.NewClient("http://"+listenAddr+"/api", testPassword)
 
-	resp, err := client.DifficultyMetrics(150, 450)
+	const (
+		startHeight = 150
+		endHeight   = 450
+	)
+
+	resp, err := client.DifficultyMetrics(startHeight, endHeight)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -757,10 +762,22 @@ func TestDifficultyMetricsOffByOneRegression(t *testing.T) {
 	testutil.Equal(t, "drifts length", 150, len(resp.Drifts))
 
 	// Verify response starts at height 150
-	index, _ := cm.BestIndex(150)
+	index, _ := cm.BestIndex(startHeight)
 	cs, _ := cm.State(index.ID)
 	testutil.Equal(t, "first difficulty is for height 150", cs.Difficulty, resp.Difficulties[0])
 
 	// Verify first block time is calculated from height 148 to 150
 	testutil.Equal(t, "first block time", cs.PrevTimestamps[0].Sub(cs.PrevTimestamps[2])/2, resp.BlockTimes[0])
+
+	expectedDrifts := make([]time.Duration, len(resp.Drifts))
+	step := resp.BlocksPerStep
+	for i := range expectedDrifts {
+		height := startHeight + uint64(i)*step
+		index, _ := cm.BestIndex(height)
+		cs, _ := cm.State(index.ID)
+		timestamp := cs.PrevTimestamps[0]
+		expected := network.HardforkOak.GenesisTimestamp.Add(time.Duration(height) * network.BlockInterval)
+		expectedDrifts[i] = timestamp.Sub(expected)
+	}
+	testutil.Equal(t, "drifts", expectedDrifts, resp.Drifts)
 }
