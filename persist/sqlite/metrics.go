@@ -328,7 +328,7 @@ func (s *Store) DifficultyMetrics(start, end, step uint64, n *consensus.Network)
 		}
 		result.Drifts = make([]time.Duration, len(timestamps))
 		for i := range result.Drifts {
-			height := start + uint64(i)*step
+			height := queryStart + uint64(i)*step
 			expected := n.HardforkOak.GenesisTimestamp.Add(time.Duration(height) * n.BlockInterval)
 			result.Drifts[i] = timestamps[i].Sub(expected)
 		}
