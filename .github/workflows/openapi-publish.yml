@@ -16,6 +16,6 @@ jobs:
     with:
       slug: explored
       spec_path: openapi.yml
-      docs_slug: sia
+      docs_slug: explored
     secrets:
       SCALAR_API_KEY: ${{ secrets.SCALAR_API_KEY }}
