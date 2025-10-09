@@ -27,8 +27,6 @@ tags:
     description: Transaction lookups and chain location helpers.
   - name: addresses
     description: Address balances, UTXOs, and activity.
-  - name: rankings
-    description: Leaderboards for top addresses.
   - name: events
     description: Wallet events and UTXO lookups.
   - name: contracts
