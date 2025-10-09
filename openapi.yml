@@ -1,0 +1,2680 @@
+openapi: "3.0.0"
+info:
+  title: explored API
+  description: >
+    The explored HTTP API surfaces explorer data, txpool access, and host metrics for the Sia
+    network. It is designed for block explorers and monitoring tools that need rich blockchain
+    context and insights into host behavior.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:9980/api
+
+tags:
+  - name: misc
+    description: Health checks and daemon metadata.
+  - name: syncer
+    description: Manage peer connectivity and gossip.
+  - name: txpool
+    description: Inspect and broadcast transaction sets.
+  - name: consensus
+    description: Query consensus state and chain indices.
+  - name: explorer
+    description: Explorer-specific state such as current tips.
+  - name: blocks
+    description: Block details and per-block metrics.
+  - name: transactions
+    description: Transaction lookups and chain location helpers.
+  - name: addresses
+    description: Address balances, UTXOs, and activity.
+  - name: events
+    description: Wallet events and UTXO lookups.
+  - name: contracts
+    description: File contract inspection endpoints.
+  - name: hosts
+    description: Host lookups, scans, and filtering.
+  - name: metrics
+    description: Aggregated explorer metrics.
+  - name: search
+    description: ID and address search helpers.
+  - name: exchange
+    description: Exchange rate lookups.
+
+paths:
+  /health:
+    get:
+      tags:
+        - misc
+      summary: Health probe
+      description: Returns 200 when explored is healthy.
+      operationId: getHealth
+      responses:
+        "200":
+          description: Daemon is healthy.
+          content:
+            application/json:
+              schema:
+                type: object
+                nullable: true
+
+  /state:
+    get:
+      tags:
+        - misc
+      summary: Daemon state
+      description: Returns build metadata and uptime information for the explored instance.
+      operationId: getState
+      responses:
+        "200":
+          description: Current daemon state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StateResponse"
+
+  /syncer/peers:
+    get:
+      tags:
+        - syncer
+      summary: List synced peers
+      description: Returns the current set of peers known to the syncer.
+      operationId: getSyncerPeers
+      responses:
+        "200":
+          description: Peer addresses currently connected.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+  /syncer/connect:
+    post:
+      tags:
+        - syncer
+      summary: Connect to peer
+      description: Attempts to open a new connection to the supplied peer address.
+      operationId: postSyncerConnect
+      security:
+        - basicAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: string
+              description: Peer address in `host:port` form.
+      responses:
+        "200":
+          description: Connection attempt initiated.
+          content:
+            application/json:
+              schema:
+                type: object
+                nullable: true
+        "401":
+          description: Authentication failed.
+
+  /syncer/broadcast/block:
+    post:
+      tags:
+        - syncer
+      summary: Broadcast v2 block outline
+      description: Validates and broadcasts a supplied v2 block outline to connected peers.
+      operationId: postSyncerBroadcastBlock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Block"
+      responses:
+        "200":
+          description: Block accepted and broadcast.
+        "400":
+          description: Submitted block was invalid.
+
+  /txpool/transactions:
+    get:
+      tags:
+        - txpool
+      summary: List txpool transactions
+      operationId: getTxpoolTransactions
+      responses:
+        "200":
+          description: Current contents of the transaction pools.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxpoolTransactionsResponse"
+
+  /txpool/fee:
+    get:
+      tags:
+        - txpool
+      summary: Recommended miner fee
+      operationId: getTxpoolFee
+      responses:
+        "200":
+          description: Recommended fee for timely confirmation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Currency"
+
+  /txpool/broadcast:
+    post:
+      tags:
+        - txpool
+      summary: Broadcast transactions
+      description: Broadcasts v1 or v2 transactions after validating them against the local pool.
+      operationId: postTxpoolBroadcast
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TxpoolBroadcastRequest"
+      responses:
+        "200":
+          description: Transactions accepted (no response body).
+        "400":
+          description: Invalid transaction set.
+
+  /consensus/network:
+    get:
+      tags:
+        - consensus
+      summary: Consensus network parameters
+      operationId: getConsensusNetwork
+      responses:
+        "200":
+          description: Active consensus network definition.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsensusNetwork"
+
+  /consensus/state:
+    get:
+      tags:
+        - consensus
+      summary: Consensus tip state
+      operationId: getConsensusState
+      responses:
+        "200":
+          description: Consensus state at the current tip.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsensusState"
+
+  /consensus/tip:
+    get:
+      tags:
+        - consensus
+      summary: Current chain tip
+      operationId: getConsensusTip
+      responses:
+        "200":
+          description: Chain index of the current tip.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChainIndex"
+
+  /consensus/tip/{height}:
+    get:
+      tags:
+        - consensus
+      summary: Chain index at height
+      operationId: getConsensusTipByHeight
+      parameters:
+        - name: height
+          in: path
+          required: true
+          description: Block height to resolve.
+          schema:
+            type: integer
+            format: uint64
+      responses:
+        "200":
+          description: Chain index best matching the requested height.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChainIndex"
+        "404":
+          description: No block found at the requested height.
+
+  /explorer/tip:
+    get:
+      tags:
+        - explorer
+      summary: Explorer tip
+      operationId: getExplorerTip
+      responses:
+        "200":
+          description: Chain index according to the explorer database.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChainIndex"
+
+  /blocks/{id}:
+    get:
+      tags:
+        - blocks
+      summary: Fetch block
+      operationId: getBlock
+      parameters:
+        - $ref: "#/components/parameters/BlockIDParam"
+      responses:
+        "200":
+          description: Block details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExplorerBlock"
+        "404":
+          description: Block not found.
+
+  /transactions/{id}:
+    get:
+      tags:
+        - transactions
+      summary: Fetch transaction
+      operationId: getTransaction
+      parameters:
+        - $ref: "#/components/parameters/TransactionIDParam"
+      responses:
+        "200":
+          description: Transaction details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExplorerTransaction"
+        "404":
+          description: Transaction not found.
+
+  /transactions:
+    post:
+      tags:
+        - transactions
+      summary: Batch transactions
+      operationId: postTransactions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/components/schemas/TransactionID"
+              maxItems: 5000
+      responses:
+        "200":
+          description: Requested transactions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExplorerTransaction"
+        "400":
+          description: Too many IDs provided.
+
+  /transactions/{id}/indices:
+    get:
+      tags:
+        - transactions
+      summary: Transaction chain indices
+      operationId: getTransactionIndices
+      parameters:
+        - $ref: "#/components/parameters/TransactionIDParam"
+        - $ref: "#/components/parameters/OffsetParam"
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: Chain indices where the transaction appears.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChainIndex"
+
+  /v2/transactions/{id}:
+    get:
+      tags:
+        - transactions
+      summary: Fetch v2 transaction
+      operationId: getV2Transaction
+      parameters:
+        - $ref: "#/components/parameters/TransactionIDParam"
+      responses:
+        "200":
+          description: V2 transaction details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExplorerV2Transaction"
+        "404":
+          description: Transaction not found.
+
+  /v2/transactions:
+    post:
+      tags:
+        - transactions
+      summary: Batch v2 transactions
+      operationId: postV2Transactions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/components/schemas/TransactionID"
+              maxItems: 5000
+      responses:
+        "200":
+          description: Requested v2 transactions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExplorerV2Transaction"
+        "400":
+          description: Too many IDs provided.
+
+  /v2/transactions/{id}/indices:
+    get:
+      tags:
+        - transactions
+      summary: V2 transaction chain indices
+      operationId: getV2TransactionIndices
+      parameters:
+        - $ref: "#/components/parameters/TransactionIDParam"
+        - $ref: "#/components/parameters/OffsetParam"
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: Chain indices where the v2 transaction appears.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChainIndex"
+
+  /addresses/{address}/utxos/siacoin:
+    get:
+      tags:
+        - addresses
+      summary: Address siacoin UTXOs
+      operationId: getAddressSiacoinUtxos
+      parameters:
+        - $ref: "#/components/parameters/AddressParam"
+        - $ref: "#/components/parameters/OffsetParam"
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: Unspent siacoin outputs for the address.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExplorerSiacoinOutput"
+
+  /addresses/{address}/utxos/siafund:
+    get:
+      tags:
+        - addresses
+      summary: Address siafund UTXOs
+      operationId: getAddressSiafundUtxos
+      parameters:
+        - $ref: "#/components/parameters/AddressParam"
+        - $ref: "#/components/parameters/OffsetParam"
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: Unspent siafund outputs for the address.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExplorerSiafundOutput"
+
+  /addresses/{address}/events:
+    get:
+      tags:
+        - addresses
+      summary: Address events
+      operationId: getAddressEvents
+      parameters:
+        - $ref: "#/components/parameters/AddressParam"
+        - $ref: "#/components/parameters/OffsetParam"
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: Confirmed events involving the address.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExplorerEvent"
+
+  /addresses/{address}/events/unconfirmed:
+    get:
+      tags:
+        - addresses
+      summary: Address unconfirmed events
+      operationId: getAddressEventsUnconfirmed
+      parameters:
+        - $ref: "#/components/parameters/AddressParam"
+      responses:
+        "200":
+          description: Unconfirmed events currently in the txpool.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExplorerEvent"
+
+  /addresses/{address}/balance:
+    get:
+      tags:
+        - addresses
+      summary: Address balance
+      operationId: getAddressBalance
+      parameters:
+        - $ref: "#/components/parameters/AddressParam"
+      responses:
+        "200":
+          description: Address balance summary.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddressBalanceResponse"
+
+  /events/{id}:
+    get:
+      tags:
+        - events
+      summary: Fetch event
+      operationId: getEvent
+      parameters:
+        - $ref: "#/components/parameters/EventIDParam"
+      responses:
+        "200":
+          description: Event details (confirmed or annotated from the txpool).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExplorerEvent"
+        "404":
+          description: Event not found.
+
+  /outputs/siacoin/{id}:
+    get:
+      tags:
+        - events
+      summary: Fetch siacoin output
+      operationId: getSiacoinOutput
+      parameters:
+        - $ref: "#/components/parameters/SiacoinOutputIDParam"
+      responses:
+        "200":
+          description: Siacoin output details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExplorerSiacoinOutput"
+        "404":
+          description: Output not found.
+
+  /outputs/siafund/{id}:
+    get:
+      tags:
+        - events
+      summary: Fetch siafund output
+      operationId: getSiafundOutput
+      parameters:
+        - $ref: "#/components/parameters/SiafundOutputIDParam"
+      responses:
+        "200":
+          description: Siafund output details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExplorerSiafundOutput"
+        "404":
+          description: Output not found.
+
+  /contracts/{id}:
+    get:
+      tags:
+        - contracts
+      summary: Fetch contract
+      operationId: getContract
+      parameters:
+        - $ref: "#/components/parameters/FileContractIDParam"
+      responses:
+        "200":
+          description: Contract details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExplorerExtendedContract"
+        "404":
+          description: Contract not found.
+
+  /contracts/{id}/revisions:
+    get:
+      tags:
+        - contracts
+      summary: Contract revisions
+      operationId: getContractRevisions
+      parameters:
+        - $ref: "#/components/parameters/FileContractIDParam"
+      responses:
+        "200":
+          description: Revision history for the contract.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExplorerExtendedContract"
+        "404":
+          description: Contract not found.
+
+  /contracts:
+    post:
+      tags:
+        - contracts
+      summary: Batch contracts
+      operationId: postContracts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/components/schemas/FileContractID"
+              maxItems: 5000
+      responses:
+        "200":
+          description: Requested contracts.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExplorerExtendedContract"
+        "400":
+          description: Too many IDs provided.
+
+  /v2/contracts/{id}:
+    get:
+      tags:
+        - contracts
+      summary: Fetch v2 contract
+      operationId: getV2Contract
+      parameters:
+        - $ref: "#/components/parameters/FileContractIDParam"
+      responses:
+        "200":
+          description: V2 contract details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExplorerV2Contract"
+        "404":
+          description: Contract not found.
+
+  /v2/contracts/{id}/revisions:
+    get:
+      tags:
+        - contracts
+      summary: V2 contract revisions
+      operationId: getV2ContractRevisions
+      parameters:
+        - $ref: "#/components/parameters/FileContractIDParam"
+      responses:
+        "200":
+          description: Revision history for the v2 contract.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExplorerV2Contract"
+        "404":
+          description: Contract not found.
+
+  /v2/contracts:
+    post:
+      tags:
+        - contracts
+      summary: Batch v2 contracts
+      operationId: postV2Contracts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/components/schemas/FileContractID"
+              maxItems: 5000
+      responses:
+        "200":
+          description: Requested v2 contracts.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExplorerV2Contract"
+        "400":
+          description: Too many IDs provided.
+
+  /v2/pubkey/{key}/contracts:
+    get:
+      tags:
+        - contracts
+      summary: Contracts for host key (v2)
+      operationId: getV2ContractsByKey
+      parameters:
+        - $ref: "#/components/parameters/PublicKeyParam"
+      responses:
+        "200":
+          description: Contracts associated with the host key.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExplorerV2Contract"
+        "404":
+          description: No contracts found.
+
+  /pubkey/{key}/contracts:
+    get:
+      tags:
+        - contracts
+      summary: Contracts for host key (v1)
+      operationId: getContractsByKey
+      parameters:
+        - $ref: "#/components/parameters/PublicKeyParam"
+      responses:
+        "200":
+          description: Contracts associated with the host key.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExplorerExtendedContract"
+        "404":
+          description: No contracts found.
+
+  /hosts/{key}:
+    get:
+      tags:
+        - hosts
+      summary: Host details
+      operationId: getHost
+      parameters:
+        - $ref: "#/components/parameters/PublicKeyParam"
+      responses:
+        "200":
+          description: Host information.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExplorerHost"
+        "404":
+          description: Host not found.
+
+  /hosts/{key}/scan:
+    post:
+      tags:
+        - hosts
+      summary: Trigger host scan
+      operationId: postHostScan
+      security:
+        - basicAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PublicKeyParam"
+      responses:
+        "200":
+          description: Host scan result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExplorerHostScan"
+        "401":
+          description: Authentication failed.
+        "404":
+          description: Host not found.
+
+  /hosts:
+    post:
+      tags:
+        - hosts
+      summary: Query hosts
+      description: Filters the host set using the supplied query parameters.
+      operationId: postHosts
+      parameters:
+        - $ref: "#/components/parameters/OffsetParam"
+        - $ref: "#/components/parameters/LimitParam"
+        - name: dir
+          in: query
+          description: Sort direction.
+          schema:
+            type: string
+            enum: [asc, desc]
+        - name: sort
+          in: query
+          description: Column to sort by.
+          schema:
+            type: string
+            enum:
+              - date_created
+              - net_address
+              - public_key
+              - accepting_contracts
+              - uptime
+              - storage_price
+              - contract_price
+              - download_price
+              - upload_price
+              - used_storage
+              - total_storage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HostQuery"
+      responses:
+        "200":
+          description: Hosts matching the query.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExplorerHost"
+        "400":
+          description: Invalid sorting column or parameters.
+
+  /metrics/block:
+    get:
+      tags:
+        - metrics
+      summary: Tip block metrics
+      operationId: getBlockMetrics
+      responses:
+        "200":
+          description: Block metrics for the explorer tip.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlockMetrics"
+
+  /metrics/block/{id}:
+    get:
+      tags:
+        - metrics
+      summary: Block metrics by ID
+      operationId: getBlockMetricsByID
+      parameters:
+        - $ref: "#/components/parameters/BlockIDParam"
+      responses:
+        "200":
+          description: Block metrics for the supplied block.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlockMetrics"
+
+  /metrics/host:
+    get:
+      tags:
+        - metrics
+      summary: Host metrics
+      operationId: getHostMetrics
+      responses:
+        "200":
+          description: Aggregated host metrics.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HostMetrics"
+
+  /metrics/blocktime:
+    get:
+      tags:
+        - metrics
+      summary: Block time metrics
+      operationId: getBlockTimeMetrics
+      responses:
+        "200":
+          description: Average block times over recent intervals.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlockTimeMetrics"
+
+  /metrics/difficulty:
+    get:
+      tags:
+        - metrics
+      summary: Difficulty metrics
+      operationId: getDifficultyMetrics
+      parameters:
+        - name: start
+          in: query
+          required: true
+          description: Starting height for the sample range.
+          schema:
+            type: integer
+            format: uint64
+        - name: end
+          in: query
+          required: true
+          description: Ending height for the sample range.
+          schema:
+            type: integer
+            format: uint64
+      responses:
+        "200":
+          description: Difficulty, block time, and drift metrics.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DifficultyMetrics"
+
+  /search/{id}:
+    get:
+      tags:
+        - search
+      summary: Explorer search
+      operationId: getSearch
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID string to search for.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Search result type.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchType"
+        "400":
+          description: Unable to parse search string.
+        "404":
+          description: No results found.
+
+  /exchange-rate/siacoin/{currency}:
+    get:
+      tags:
+        - exchange
+      summary: Last siacoin exchange rate
+      operationId: getExchangeRate
+      parameters:
+        - name: currency
+          in: path
+          required: true
+          description: Fiat currency code (e.g. USD, EUR).
+          schema:
+            type: string
+            pattern: "^[A-Za-z]{3}$"
+      responses:
+        "200":
+          description: Most recent exchange rate.
+          content:
+            application/json:
+              schema:
+                type: number
+                format: double
+        "404":
+          description: Unsupported currency.
+
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+
+  schemas:
+    Hash256:
+      type: string
+      pattern: ^[0-9a-fA-F]{64}$
+      description: A 256-bit blake2b hash.
+
+    BlockHeight:
+      type: integer
+      format: uint64
+      description: The height of a block.
+      example: 92813
+
+    BlockID:
+      allOf:
+        - $ref: "#/components/schemas/Hash256"
+        - description: A unique identifier for a block.
+
+    Currency:
+      type: string
+      pattern: "^\\d+$"
+      maxLength: 39
+      description: Amount of Hastings (1 Siacoin = 10^24 Hastings).
+
+    Address:
+      allOf:
+        - $ref: "#/components/schemas/Hash256"
+        - description: Hash of a set of unlock conditions.
+
+    TransactionID:
+      allOf:
+        - $ref: "#/components/schemas/Hash256"
+        - description: Unique identifier for a transaction.
+
+    FileContractID:
+      type: string
+      pattern: "^fcid:[0-9a-fA-F]{64}$"
+      description: Unique identifier for a file contract.
+
+    PublicKey:
+      type: string
+      pattern: "^ed25519:[0-9a-fA-F]{64}$"
+      description: Ed25519 public key.
+
+    Signature:
+      type: string
+      pattern: "^[0-9a-fA-F]{128}$"
+      description: Hex-encoded Ed25519 signature.
+
+    SiacoinOutputID:
+      allOf:
+        - $ref: "#/components/schemas/Hash256"
+        - description: Identifier for a siacoin output.
+
+    SiafundOutputID:
+      allOf:
+        - $ref: "#/components/schemas/Hash256"
+        - description: Identifier for a siafund output.
+
+    Work:
+      type: string
+      description: Cumulative work value represented as a base-10 big integer string.
+      example: "115792089237316195423570985008687907853269984665640564039457584007913129639935"
+
+    ElementAccumulator:
+      type: object
+      description: Merkle accumulator state used for UTXO proofs.
+      properties:
+        numLeaves:
+          type: integer
+          format: uint64
+        trees:
+          type: array
+          description: Roots of populated trees within the accumulator.
+          items:
+            $ref: "#/components/schemas/Hash256"
+      required: [numLeaves, trees]
+
+    V2BlockData:
+      type: object
+      description: Additional data present when a block includes v2 transactions.
+      properties:
+        height:
+          type: integer
+          format: uint64
+        commitment:
+          $ref: "#/components/schemas/Hash256"
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/V2Transaction"
+      required: [height, commitment, transactions]
+
+    UnlockKey:
+      type: string
+      description: Unlock key encoded as `<algorithm>:<hex public key>`.
+      example: ed25519:29d666f502bd8e3f83ae599434662d9ef7eed1c61fbfd83bcdca15330434353a
+
+    UnlockConditions:
+      type: object
+      properties:
+        timelock:
+          type: integer
+          format: uint64
+        publicKeys:
+          type: array
+          items:
+            $ref: "#/components/schemas/UnlockKey"
+        signaturesRequired:
+          type: integer
+          format: uint64
+      required: [timelock, publicKeys, signaturesRequired]
+
+    SpendPolicy:
+      type: object
+      description: Polymorphic spend policy describing conditions required to spend a UTXO.
+      properties:
+        type:
+          type: string
+          description: Policy discriminator.
+          enum: [above, after, pk, h, thresh, opaque, uc]
+        policy:
+          description: Policy-specific payload; structure depends on the `type`.
+          nullable: true
+      required: [type]
+
+    ChainIndex:
+      type: object
+      properties:
+        height:
+          allOf:
+            - $ref: "#/components/schemas/BlockHeight"
+            - description: Height of the block.
+        id:
+          allOf:
+            - $ref: "#/components/schemas/BlockID"
+            - description: Block ID.
+      required: [height, id]
+
+    ConsensusNetwork:
+      type: object
+      description: Parameters that define network-wide consensus constants.
+      properties:
+        name:
+          type: string
+        initialCoinbase:
+          $ref: "#/components/schemas/Currency"
+        minimumCoinbase:
+          $ref: "#/components/schemas/Currency"
+        initialTarget:
+          $ref: "#/components/schemas/BlockID"
+        blockInterval:
+          type: string
+          description: Target block interval as a Go duration string (e.g. "600s").
+        maturityDelay:
+          type: integer
+          format: uint64
+        hardforkDevAddr:
+          type: object
+          properties:
+            height:
+              type: integer
+              format: uint64
+            oldAddress:
+              $ref: "#/components/schemas/Address"
+            newAddress:
+              $ref: "#/components/schemas/Address"
+          required: [height, oldAddress, newAddress]
+        hardforkTax:
+          type: object
+          properties:
+            height:
+              type: integer
+              format: uint64
+          required: [height]
+        hardforkStorageProof:
+          type: object
+          properties:
+            height:
+              type: integer
+              format: uint64
+          required: [height]
+        hardforkOak:
+          type: object
+          properties:
+            height:
+              type: integer
+              format: uint64
+            fixHeight:
+              type: integer
+              format: uint64
+            genesisTimestamp:
+              type: string
+              format: date-time
+          required: [height, fixHeight, genesisTimestamp]
+        hardforkASIC:
+          type: object
+          properties:
+            height:
+              type: integer
+              format: uint64
+            oakTime:
+              type: string
+              description: Go duration string.
+            oakTarget:
+              $ref: "#/components/schemas/BlockID"
+            nonceFactor:
+              type: integer
+              format: uint64
+          required: [height, oakTime, oakTarget, nonceFactor]
+        hardforkFoundation:
+          type: object
+          properties:
+            height:
+              type: integer
+              format: uint64
+            primaryAddress:
+              $ref: "#/components/schemas/Address"
+            failsafeAddress:
+              $ref: "#/components/schemas/Address"
+          required: [height, primaryAddress, failsafeAddress]
+        hardforkV2:
+          type: object
+          properties:
+            allowHeight:
+              type: integer
+              format: uint64
+            requireHeight:
+              type: integer
+              format: uint64
+            finalCutHeight:
+              type: integer
+              format: uint64
+          required: [allowHeight, requireHeight, finalCutHeight]
+      required:
+        [
+          name,
+          initialCoinbase,
+          minimumCoinbase,
+          initialTarget,
+          blockInterval,
+          maturityDelay,
+          hardforkDevAddr,
+          hardforkTax,
+          hardforkStorageProof,
+          hardforkOak,
+          hardforkASIC,
+          hardforkFoundation,
+          hardforkV2,
+        ]
+
+    ConsensusState:
+      type: object
+      description: Snapshot of consensus-related state for the current tip.
+      properties:
+        index:
+          $ref: "#/components/schemas/ChainIndex"
+        prevTimestamps:
+          type: array
+          items:
+            type: string
+            format: date-time
+        depth:
+          $ref: "#/components/schemas/BlockID"
+        childTarget:
+          $ref: "#/components/schemas/BlockID"
+        siafundTaxRevenue:
+          $ref: "#/components/schemas/Currency"
+        oakTime:
+          type: string
+        oakTarget:
+          $ref: "#/components/schemas/BlockID"
+        foundationSubsidyAddress:
+          $ref: "#/components/schemas/Address"
+        foundationManagementAddress:
+          $ref: "#/components/schemas/Address"
+        totalWork:
+          $ref: "#/components/schemas/Work"
+        difficulty:
+          $ref: "#/components/schemas/Work"
+        oakWork:
+          $ref: "#/components/schemas/Work"
+        elements:
+          $ref: "#/components/schemas/ElementAccumulator"
+        attestations:
+          type: integer
+          format: uint64
+      required:
+        [
+          index,
+          prevTimestamps,
+          depth,
+          childTarget,
+          siafundTaxRevenue,
+          oakTime,
+          oakTarget,
+          foundationSubsidyAddress,
+          foundationManagementAddress,
+          totalWork,
+          difficulty,
+          oakWork,
+          elements,
+          attestations,
+        ]
+
+    Block:
+      type: object
+      description: Block including v1 and optional v2 payloads.
+      properties:
+        parentID:
+          $ref: "#/components/schemas/BlockID"
+        nonce:
+          type: integer
+          format: uint64
+        timestamp:
+          type: string
+          format: date-time
+        minerPayouts:
+          type: array
+          items:
+            $ref: "#/components/schemas/SiacoinOutput"
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transaction"
+        v2:
+          $ref: "#/components/schemas/V2BlockData"
+      required: [parentID, nonce, timestamp, minerPayouts, transactions]
+
+    ExplorerBlock:
+      type: object
+      properties:
+        height:
+          type: integer
+          format: uint64
+        parentID:
+          $ref: "#/components/schemas/BlockID"
+        nonce:
+          type: integer
+          format: uint64
+        timestamp:
+          type: string
+          format: date-time
+        leafIndex:
+          type: integer
+          format: uint64
+        minerPayouts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerSiacoinOutput"
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerTransaction"
+        v2:
+          allOf:
+            - $ref: "#/components/schemas/ExplorerV2BlockData"
+            - nullable: true
+      required: [height, parentID, nonce, timestamp, leafIndex, minerPayouts, transactions]
+
+    ExplorerV2BlockData:
+      type: object
+      properties:
+        height:
+          type: integer
+          format: uint64
+        commitment:
+          $ref: "#/components/schemas/Hash256"
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerV2Transaction"
+      required: [height, commitment, transactions]
+
+    ExplorerTransaction:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/TransactionID"
+        siacoinInputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerSiacoinInput"
+        siacoinOutputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerSiacoinOutput"
+        siafundInputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerSiafundInput"
+        siafundOutputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerSiafundOutput"
+        fileContracts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerExtendedContract"
+        fileContractRevisions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerFileContractRevision"
+        storageProofs:
+          type: array
+          items:
+            $ref: "#/components/schemas/StorageProof"
+        minerFees:
+          type: array
+          items:
+            $ref: "#/components/schemas/Currency"
+        arbitraryData:
+          type: array
+          items:
+            type: string
+            format: byte
+        signatures:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionSignature"
+        hostAnnouncements:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerHostAnnouncement"
+      required: [id]
+
+    ExplorerV2Transaction:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/TransactionID"
+        siacoinInputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/V2SiacoinInput"
+        siacoinOutputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerSiacoinOutput"
+        siafundInputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/V2SiafundInput"
+        siafundOutputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerSiafundOutput"
+        fileContracts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerV2Contract"
+        fileContractRevisions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerV2FileContractRevision"
+        fileContractResolutions:
+          type: array
+          items:
+            $ref: "#/components/schemas/V2FileContractResolution"
+        attestations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Attestation"
+        arbitraryData:
+          type: string
+          format: byte
+        newFoundationAddress:
+          allOf:
+            - $ref: "#/components/schemas/Address"
+            - nullable: true
+        minerFee:
+          $ref: "#/components/schemas/Currency"
+        hostAnnouncements:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerV2HostAnnouncement"
+      required: [id, minerFee]
+
+    ExplorerSiacoinOutput:
+      allOf:
+        - $ref: "#/components/schemas/SiacoinElement"
+        - type: object
+          properties:
+            source:
+              type: string
+              enum: [invalid, miner_payout, transaction, valid_proof_output, missed_proof_output]
+            spentIndex:
+              allOf:
+                - $ref: "#/components/schemas/ChainIndex"
+                - nullable: true
+          required: [source]
+
+    ExplorerSiafundOutput:
+      allOf:
+        - $ref: "#/components/schemas/SiafundElement"
+        - type: object
+          properties:
+            spentIndex:
+              allOf:
+                - $ref: "#/components/schemas/ChainIndex"
+                - nullable: true
+
+    ExplorerEvent:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/Hash256"
+        index:
+          $ref: "#/components/schemas/ChainIndex"
+        confirmations:
+          type: integer
+          format: uint64
+        type:
+          type: string
+          enum: [miner, foundation, siafundClaim, v1Transaction, v1ContractResolution, v2Transaction, v2ContractResolution]
+        data:
+          type: object
+        maturityHeight:
+          type: integer
+          format: uint64
+        timestamp:
+          type: string
+          format: date-time
+        relevant:
+          type: array
+          items:
+            $ref: "#/components/schemas/Address"
+      required: [id, index, confirmations, type, data, maturityHeight, timestamp]
+
+    ExplorerExtendedContract:
+      type: object
+      properties:
+        resolved:
+          type: boolean
+        valid:
+          type: boolean
+        transactionID:
+          $ref: "#/components/schemas/TransactionID"
+        confirmationIndex:
+          $ref: "#/components/schemas/ChainIndex"
+        confirmationTransactionID:
+          $ref: "#/components/schemas/TransactionID"
+        proofIndex:
+          allOf:
+            - $ref: "#/components/schemas/ChainIndex"
+            - nullable: true
+        proofTransactionID:
+          allOf:
+            - $ref: "#/components/schemas/TransactionID"
+            - nullable: true
+        id:
+          $ref: "#/components/schemas/FileContractID"
+        filesize:
+          type: integer
+          format: uint64
+        fileMerkleRoot:
+          $ref: "#/components/schemas/Hash256"
+        windowStart:
+          type: integer
+          format: uint64
+        windowEnd:
+          type: integer
+          format: uint64
+        payout:
+          $ref: "#/components/schemas/Currency"
+        validProofOutputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerContractSiacoinOutput"
+        missedProofOutputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerContractSiacoinOutput"
+        unlockHash:
+          $ref: "#/components/schemas/Address"
+        revisionNumber:
+          type: integer
+          format: uint64
+      required:
+        [
+          resolved,
+          valid,
+          transactionID,
+          confirmationIndex,
+          confirmationTransactionID,
+          id,
+          filesize,
+          fileMerkleRoot,
+          windowStart,
+          windowEnd,
+          payout,
+          validProofOutputs,
+          missedProofOutputs,
+          unlockHash,
+          revisionNumber,
+        ]
+
+    ExplorerFileContractRevision:
+      allOf:
+        - $ref: "#/components/schemas/ExplorerExtendedContract"
+        - type: object
+          properties:
+            parentID:
+              $ref: "#/components/schemas/FileContractID"
+            unlockConditions:
+              $ref: "#/components/schemas/UnlockConditions"
+          required: [parentID, unlockConditions]
+
+    ExplorerV2Contract:
+      allOf:
+        - $ref: "#/components/schemas/V2FileContractElement"
+        - type: object
+          properties:
+            transactionID:
+              $ref: "#/components/schemas/TransactionID"
+            renewedFrom:
+              allOf:
+                - $ref: "#/components/schemas/FileContractID"
+                - nullable: true
+            renewedTo:
+              allOf:
+                - $ref: "#/components/schemas/FileContractID"
+                - nullable: true
+            confirmationIndex:
+              $ref: "#/components/schemas/ChainIndex"
+            confirmationTransactionID:
+              $ref: "#/components/schemas/TransactionID"
+            resolutionType:
+              allOf:
+                - $ref: "#/components/schemas/ExplorerV2Resolution"
+                - nullable: true
+            resolutionIndex:
+              allOf:
+                - $ref: "#/components/schemas/ChainIndex"
+                - nullable: true
+            resolutionTransactionID:
+              allOf:
+                - $ref: "#/components/schemas/TransactionID"
+                - nullable: true
+          required:
+            [
+              transactionID,
+              confirmationIndex,
+              confirmationTransactionID,
+            ]
+
+    ExplorerV2FileContractRevision:
+      type: object
+      properties:
+        parent:
+          $ref: "#/components/schemas/ExplorerV2Contract"
+        revision:
+          $ref: "#/components/schemas/ExplorerV2Contract"
+      required: [parent, revision]
+
+    ExplorerHost:
+      type: object
+      properties:
+        publicKey:
+          $ref: "#/components/schemas/PublicKey"
+        v2:
+          type: boolean
+        netAddress:
+          type: string
+        v2NetAddresses:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerNetAddress"
+        location:
+          $ref: "#/components/schemas/ExplorerLocation"
+        knownSince:
+          type: string
+          format: date-time
+        lastScan:
+          type: string
+          format: date-time
+        lastScanSuccessful:
+          type: boolean
+        lastScanError:
+          type: string
+          nullable: true
+        lastAnnouncement:
+          type: string
+          format: date-time
+        nextScan:
+          type: string
+          format: date-time
+        totalScans:
+          type: integer
+          format: uint64
+        successfulInteractions:
+          type: integer
+          format: uint64
+        failedInteractions:
+          type: integer
+          format: uint64
+        settings:
+          type: object
+        priceTable:
+          type: object
+        v2Settings:
+          type: object
+      required:
+        [
+          publicKey,
+          v2,
+          netAddress,
+          location,
+          knownSince,
+          lastScan,
+          lastScanSuccessful,
+          lastAnnouncement,
+          nextScan,
+          totalScans,
+          successfulInteractions,
+          failedInteractions,
+          settings,
+          priceTable,
+          v2Settings,
+        ]
+
+    ExplorerHostScan:
+      type: object
+      properties:
+        publicKey:
+          $ref: "#/components/schemas/PublicKey"
+        location:
+          $ref: "#/components/schemas/ExplorerLocation"
+        success:
+          type: boolean
+        error:
+          type: string
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+        nextScan:
+          type: string
+          format: date-time
+        settings:
+          type: object
+        priceTable:
+          type: object
+        v2Settings:
+          type: object
+      required:
+        [
+          publicKey,
+          location,
+          success,
+          timestamp,
+          nextScan,
+          settings,
+          priceTable,
+          v2Settings,
+        ]
+
+    ExplorerLocation:
+      type: object
+      properties:
+        countryCode:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+      required: [countryCode, latitude, longitude]
+
+    ExplorerNetAddress:
+      type: object
+      properties:
+        protocol:
+          type: string
+        address:
+          type: string
+      required: [protocol, address]
+
+    ExplorerHostAnnouncement:
+      type: object
+      properties:
+        publicKey:
+          $ref: "#/components/schemas/PublicKey"
+        netAddress:
+          type: string
+      required: [publicKey, netAddress]
+
+    ExplorerV2HostAnnouncement:
+      type: object
+      properties:
+        publicKey:
+          $ref: "#/components/schemas/PublicKey"
+        V2HostAnnouncement:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerNetAddress"
+      required: [publicKey, V2HostAnnouncement]
+
+    ExplorerSiacoinInput:
+      type: object
+      properties:
+        address:
+          $ref: "#/components/schemas/Address"
+        value:
+          $ref: "#/components/schemas/Currency"
+        parentID:
+          $ref: "#/components/schemas/SiacoinOutputID"
+        unlockConditions:
+          $ref: "#/components/schemas/UnlockConditions"
+      required: [address, value, parentID, unlockConditions]
+
+    ExplorerSiafundInput:
+      type: object
+      properties:
+        address:
+          $ref: "#/components/schemas/Address"
+        value:
+          type: integer
+          format: uint64
+        parentID:
+          $ref: "#/components/schemas/SiafundOutputID"
+        unlockConditions:
+          $ref: "#/components/schemas/UnlockConditions"
+        claimAddress:
+          $ref: "#/components/schemas/Address"
+      required: [address, value, parentID, unlockConditions, claimAddress]
+
+    ExplorerContractSiacoinOutput:
+      allOf:
+        - $ref: "#/components/schemas/SiacoinOutput"
+        - type: object
+          properties:
+            id:
+              $ref: "#/components/schemas/SiacoinOutputID"
+          required: [id]
+
+    ExplorerV2Resolution:
+      type: string
+      enum: [invalid, renewal, storage_proof, expiration]
+
+    BlockMetrics:
+      type: object
+      properties:
+        index:
+          $ref: "#/components/schemas/ChainIndex"
+        difficulty:
+          $ref: "#/components/schemas/Work"
+        siafundTaxRevenue:
+          $ref: "#/components/schemas/Currency"
+        totalHosts:
+          type: integer
+          format: uint64
+        numLeaves:
+          type: integer
+          format: uint64
+        activeContracts:
+          type: integer
+          format: uint64
+        failedContracts:
+          type: integer
+          format: uint64
+        successfulContracts:
+          type: integer
+          format: uint64
+        storageUtilization:
+          type: integer
+          format: uint64
+        circulatingSupply:
+          $ref: "#/components/schemas/Currency"
+        contractRevenue:
+          $ref: "#/components/schemas/Currency"
+      required:
+        [
+          index,
+          difficulty,
+          siafundTaxRevenue,
+          totalHosts,
+          numLeaves,
+          activeContracts,
+          failedContracts,
+          successfulContracts,
+          storageUtilization,
+          circulatingSupply,
+          contractRevenue,
+        ]
+
+    HostMetrics:
+      type: object
+      properties:
+        activeHosts:
+          type: integer
+          format: uint64
+        totalStorage:
+          type: integer
+          format: uint64
+        remainingStorage:
+          type: integer
+          format: uint64
+        settings:
+          type: object
+        priceTable:
+          type: object
+        v2Settings:
+          type: object
+      required:
+        [activeHosts, totalStorage, remainingStorage, settings, priceTable, v2Settings]
+
+    BlockTimeMetrics:
+      type: object
+      properties:
+        day:
+          type: string
+        week:
+          type: string
+        month:
+          type: string
+      required: [day, week, month]
+
+    DifficultyMetrics:
+      type: object
+      properties:
+        blocksPerStep:
+          type: integer
+          format: uint64
+        difficulties:
+          type: array
+          items:
+            $ref: "#/components/schemas/Work"
+        blockTimes:
+          type: array
+          items:
+            type: string
+        drifts:
+          type: array
+          items:
+            type: string
+      required: [blocksPerStep, difficulties, blockTimes, drifts]
+
+    TopSiacoin:
+      type: object
+      properties:
+        address:
+          $ref: "#/components/schemas/Address"
+        amount:
+          $ref: "#/components/schemas/Currency"
+      required: [address, amount]
+
+    TopSiafund:
+      type: object
+      properties:
+        address:
+          $ref: "#/components/schemas/Address"
+        amount:
+          type: integer
+          format: uint64
+      required: [address, amount]
+
+    SiacoinOutput:
+      type: object
+      properties:
+        value:
+          $ref: "#/components/schemas/Currency"
+        address:
+          $ref: "#/components/schemas/Address"
+      required: [value, address]
+
+    SiafundOutput:
+      type: object
+      properties:
+        value:
+          type: integer
+          format: uint64
+        address:
+          $ref: "#/components/schemas/Address"
+      required: [value, address]
+
+    SiacoinOutputWithID:
+      allOf:
+        - $ref: "#/components/schemas/SiacoinOutput"
+        - type: object
+          properties:
+            id:
+              $ref: "#/components/schemas/SiacoinOutputID"
+          required: [id]
+
+    SiafundOutputWithID:
+      allOf:
+        - $ref: "#/components/schemas/SiafundOutput"
+        - type: object
+          properties:
+            id:
+              $ref: "#/components/schemas/SiafundOutputID"
+          required: [id]
+
+    CoveredFields:
+      type: object
+      properties:
+        wholeTransaction:
+          type: boolean
+        siacoinInputs:
+          type: array
+          items:
+            type: integer
+            format: uint64
+        siacoinOutputs:
+          type: array
+          items:
+            type: integer
+            format: uint64
+        fileContracts:
+          type: array
+          items:
+            type: integer
+            format: uint64
+        fileContractRevisions:
+          type: array
+          items:
+            type: integer
+            format: uint64
+        storageProofs:
+          type: array
+          items:
+            type: integer
+            format: uint64
+        siafundInputs:
+          type: array
+          items:
+            type: integer
+            format: uint64
+        siafundOutputs:
+          type: array
+          items:
+            type: integer
+            format: uint64
+        minerFees:
+          type: array
+          items:
+            type: integer
+            format: uint64
+        arbitraryData:
+          type: array
+          items:
+            type: integer
+            format: uint64
+        signatures:
+          type: array
+          items:
+            type: integer
+            format: uint64
+
+    TransactionSignature:
+      type: object
+      properties:
+        parentID:
+          $ref: "#/components/schemas/Hash256"
+        publicKeyIndex:
+          type: integer
+          format: uint64
+        timelock:
+          type: integer
+          format: uint64
+        coveredFields:
+          $ref: "#/components/schemas/CoveredFields"
+        signature:
+          type: string
+          description: Hex-encoded signature.
+      required: [parentID, publicKeyIndex, coveredFields, signature]
+
+    SiacoinInput:
+      type: object
+      properties:
+        parentID:
+          $ref: "#/components/schemas/SiacoinOutputID"
+        unlockConditions:
+          $ref: "#/components/schemas/UnlockConditions"
+        address:
+          $ref: "#/components/schemas/Address"
+      required: [parentID, unlockConditions, address]
+
+    SiafundInput:
+      type: object
+      properties:
+        parentID:
+          $ref: "#/components/schemas/SiafundOutputID"
+        unlockConditions:
+          $ref: "#/components/schemas/UnlockConditions"
+        claimAddress:
+          $ref: "#/components/schemas/Address"
+        address:
+          $ref: "#/components/schemas/Address"
+      required: [parentID, unlockConditions, claimAddress, address]
+
+    SatisfiedPolicy:
+      type: object
+      properties:
+        policy:
+          $ref: "#/components/schemas/SpendPolicy"
+        signatures:
+          type: array
+          items:
+            $ref: "#/components/schemas/Signature"
+        preimages:
+          type: array
+          items:
+            type: string
+            pattern: "^[0-9a-fA-F]{64}$"
+      required: [policy]
+
+    Attestation:
+      type: object
+      properties:
+        publicKey:
+          $ref: "#/components/schemas/PublicKey"
+        key:
+          type: string
+        value:
+          type: string
+          format: byte
+        signature:
+          $ref: "#/components/schemas/Signature"
+      required: [publicKey, key, value, signature]
+
+    V2SiacoinInput:
+      type: object
+      properties:
+        parent:
+          $ref: "#/components/schemas/SiacoinElement"
+        satisfiedPolicy:
+          $ref: "#/components/schemas/SatisfiedPolicy"
+      required: [parent, satisfiedPolicy]
+
+    V2SiafundInput:
+      type: object
+      properties:
+        parent:
+          $ref: "#/components/schemas/SiafundElement"
+        claimAddress:
+          $ref: "#/components/schemas/Address"
+        satisfiedPolicy:
+          $ref: "#/components/schemas/SatisfiedPolicy"
+      required: [parent, claimAddress, satisfiedPolicy]
+
+    FileContract:
+      type: object
+      properties:
+        filesize:
+          type: integer
+          format: uint64
+        fileMerkleRoot:
+          $ref: "#/components/schemas/Hash256"
+        windowStart:
+          type: integer
+          format: uint64
+        windowEnd:
+          type: integer
+          format: uint64
+        payout:
+          $ref: "#/components/schemas/Currency"
+        validProofOutputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/SiacoinOutput"
+        missedProofOutputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/SiacoinOutput"
+        unlockHash:
+          $ref: "#/components/schemas/Address"
+        revisionNumber:
+          type: integer
+          format: uint64
+      required:
+        [
+          filesize,
+          fileMerkleRoot,
+          windowStart,
+          windowEnd,
+          payout,
+          validProofOutputs,
+          missedProofOutputs,
+          unlockHash,
+          revisionNumber,
+        ]
+
+    FileContractRevision:
+      type: object
+      properties:
+        parentID:
+          $ref: "#/components/schemas/FileContractID"
+        unlockConditions:
+          $ref: "#/components/schemas/UnlockConditions"
+        filesize:
+          type: integer
+          format: uint64
+        fileMerkleRoot:
+          $ref: "#/components/schemas/Hash256"
+        windowStart:
+          type: integer
+          format: uint64
+        windowEnd:
+          type: integer
+          format: uint64
+        validProofOutputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/SiacoinOutput"
+        missedProofOutputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/SiacoinOutput"
+        unlockHash:
+          $ref: "#/components/schemas/Address"
+        revisionNumber:
+          type: integer
+          format: uint64
+      required:
+        [
+          parentID,
+          unlockConditions,
+          filesize,
+          fileMerkleRoot,
+          windowStart,
+          windowEnd,
+          validProofOutputs,
+          missedProofOutputs,
+          unlockHash,
+          revisionNumber,
+        ]
+
+    StorageProof:
+      type: object
+      properties:
+        parentID:
+          $ref: "#/components/schemas/FileContractID"
+        leaf:
+          type: string
+          description: Hex-encoded 64 byte leaf.
+        proof:
+          type: array
+          items:
+            $ref: "#/components/schemas/Hash256"
+      required: [parentID, leaf, proof]
+
+    V2FileContract:
+      type: object
+      properties:
+        capacity:
+          type: integer
+          format: uint64
+        filesize:
+          type: integer
+          format: uint64
+        fileMerkleRoot:
+          $ref: "#/components/schemas/Hash256"
+        proofHeight:
+          type: integer
+          format: uint64
+        expirationHeight:
+          type: integer
+          format: uint64
+        renterOutput:
+          $ref: "#/components/schemas/SiacoinOutput"
+        hostOutput:
+          $ref: "#/components/schemas/SiacoinOutput"
+        missedHostValue:
+          $ref: "#/components/schemas/Currency"
+        totalCollateral:
+          $ref: "#/components/schemas/Currency"
+        renterPublicKey:
+          $ref: "#/components/schemas/PublicKey"
+        hostPublicKey:
+          $ref: "#/components/schemas/PublicKey"
+        revisionNumber:
+          type: integer
+          format: uint64
+        renterSignature:
+          $ref: "#/components/schemas/Signature"
+        hostSignature:
+          $ref: "#/components/schemas/Signature"
+      required:
+        [
+          capacity,
+          filesize,
+          fileMerkleRoot,
+          proofHeight,
+          expirationHeight,
+          renterOutput,
+          hostOutput,
+          missedHostValue,
+          totalCollateral,
+          renterPublicKey,
+          hostPublicKey,
+          revisionNumber,
+          renterSignature,
+          hostSignature,
+        ]
+
+    FileContractElement:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/FileContractID"
+        stateElement:
+          $ref: "#/components/schemas/StateElement"
+        fileContract:
+          $ref: "#/components/schemas/FileContract"
+      required: [id, stateElement, fileContract]
+
+    V2FileContractElement:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/FileContractID"
+        stateElement:
+          $ref: "#/components/schemas/StateElement"
+        v2FileContract:
+          $ref: "#/components/schemas/V2FileContract"
+      required: [id, stateElement, v2FileContract]
+
+    SiacoinElement:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/SiacoinOutputID"
+        stateElement:
+          $ref: "#/components/schemas/StateElement"
+        siacoinOutput:
+          $ref: "#/components/schemas/SiacoinOutput"
+        maturityHeight:
+          type: integer
+          format: uint64
+      required: [id, stateElement, siacoinOutput, maturityHeight]
+
+    SiafundElement:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/SiafundOutputID"
+        stateElement:
+          $ref: "#/components/schemas/StateElement"
+        siafundOutput:
+          $ref: "#/components/schemas/SiafundOutput"
+        claimStart:
+          $ref: "#/components/schemas/Currency"
+      required: [id, stateElement, siafundOutput, claimStart]
+
+    StateElement:
+      type: object
+      properties:
+        leafIndex:
+          type: integer
+          format: uint64
+        merkleProof:
+          type: array
+          items:
+            $ref: "#/components/schemas/Hash256"
+      required: [leafIndex]
+
+    V2FileContractRevision:
+      type: object
+      properties:
+        parent:
+          $ref: "#/components/schemas/V2FileContractElement"
+        revision:
+          $ref: "#/components/schemas/V2FileContract"
+      required: [parent, revision]
+
+    V2FileContractRenewal:
+      type: object
+      properties:
+        finalRenterOutput:
+          $ref: "#/components/schemas/SiacoinOutput"
+        finalHostOutput:
+          $ref: "#/components/schemas/SiacoinOutput"
+        renterRollover:
+          $ref: "#/components/schemas/Currency"
+        hostRollover:
+          $ref: "#/components/schemas/Currency"
+        newContract:
+          $ref: "#/components/schemas/V2FileContract"
+        renterSignature:
+          $ref: "#/components/schemas/Signature"
+        hostSignature:
+          $ref: "#/components/schemas/Signature"
+      required:
+        [
+          finalRenterOutput,
+          finalHostOutput,
+          renterRollover,
+          hostRollover,
+          newContract,
+          renterSignature,
+          hostSignature,
+        ]
+
+    V2StorageProof:
+      type: object
+      properties:
+        proofIndex:
+          type: object
+        leaf:
+          type: string
+          description: Hex-encoded 64 byte leaf.
+        proof:
+          type: array
+          items:
+            $ref: "#/components/schemas/Hash256"
+      required: [proofIndex, leaf, proof]
+
+    V2FileContractExpiration:
+      type: object
+      description: Empty object used to signal a contract expiration event.
+
+    V2FileContractResolution:
+      type: object
+      properties:
+        parent:
+          $ref: "#/components/schemas/ExplorerV2Contract"
+        type:
+          $ref: "#/components/schemas/ExplorerV2Resolution"
+        resolution:
+          oneOf:
+            - $ref: "#/components/schemas/V2FileContractRenewal"
+            - $ref: "#/components/schemas/V2StorageProof"
+            - $ref: "#/components/schemas/V2FileContractExpiration"
+      required: [parent, type, resolution]
+
+    StateResponse:
+      type: object
+      properties:
+        version:
+          type: string
+        commit:
+          type: string
+        os:
+          type: string
+        buildTime:
+          type: string
+          format: date-time
+        startTime:
+          type: string
+          format: date-time
+      required: [version, commit, os, buildTime, startTime]
+
+    Transaction:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/TransactionID"
+        siacoinInputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/SiacoinInput"
+        siacoinOutputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/SiacoinOutputWithID"
+        fileContracts:
+          type: array
+          items:
+            $ref: "#/components/schemas/FileContract"
+        fileContractRevisions:
+          type: array
+          items:
+            $ref: "#/components/schemas/FileContractRevision"
+        storageProofs:
+          type: array
+          items:
+            $ref: "#/components/schemas/StorageProof"
+        siafundInputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/SiafundInput"
+        siafundOutputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/SiafundOutputWithID"
+        minerFees:
+          type: array
+          items:
+            $ref: "#/components/schemas/Currency"
+        arbitraryData:
+          type: array
+          items:
+            type: string
+            format: byte
+        signatures:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionSignature"
+      required: [id]
+
+    V2Transaction:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/TransactionID"
+        minerFee:
+          $ref: "#/components/schemas/Currency"
+        siacoinInputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/V2SiacoinInput"
+        siacoinOutputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/SiacoinOutputWithID"
+        siafundInputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/V2SiafundInput"
+        siafundOutputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/SiafundOutputWithID"
+        fileContracts:
+          type: array
+          items:
+            $ref: "#/components/schemas/V2FileContract"
+        fileContractRevisions:
+          type: array
+          items:
+            $ref: "#/components/schemas/V2FileContractRevision"
+        fileContractResolutions:
+          type: array
+          items:
+            $ref: "#/components/schemas/V2FileContractResolution"
+        attestations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Attestation"
+        arbitraryData:
+          type: string
+          format: byte
+        newFoundationAddress:
+          allOf:
+            - $ref: "#/components/schemas/Address"
+            - nullable: true
+      required: [id, minerFee]
+
+    TxpoolBroadcastRequest:
+      type: object
+      properties:
+        transactions:
+          type: array
+          description: V1 transactions to broadcast.
+          items:
+            $ref: "#/components/schemas/Transaction"
+        v2transactions:
+          type: array
+          description: V2 transactions to broadcast.
+          items:
+            $ref: "#/components/schemas/V2Transaction"
+
+    TxpoolTransactionsResponse:
+      type: object
+      properties:
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transaction"
+        v2transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/V2Transaction"
+      required: [transactions, v2transactions]
+
+    AddressBalanceResponse:
+      type: object
+      properties:
+        unspentSiacoins:
+          $ref: "#/components/schemas/Currency"
+        immatureSiacoins:
+          $ref: "#/components/schemas/Currency"
+        unspentSiafunds:
+          type: integer
+          format: uint64
+      required: [unspentSiacoins, immatureSiacoins, unspentSiafunds]
+
+    HostQuery:
+      type: object
+      properties:
+        v2:
+          type: boolean
+          description: Filter hosts that support v2 when true.
+        publicKeys:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicKey"
+        netAddresses:
+          type: array
+          items:
+            type: string
+        minUptime:
+          type: number
+          format: float
+        minDuration:
+          type: integer
+          format: uint64
+        maxStoragePrice:
+          $ref: "#/components/schemas/Currency"
+        maxContractPrice:
+          $ref: "#/components/schemas/Currency"
+        maxUploadPrice:
+          $ref: "#/components/schemas/Currency"
+        maxDownloadPrice:
+          $ref: "#/components/schemas/Currency"
+        maxBaseRPCPrice:
+          $ref: "#/components/schemas/Currency"
+        maxSectorAccessPrice:
+          $ref: "#/components/schemas/Currency"
+        acceptContracts:
+          type: boolean
+        online:
+          type: boolean
+
+    SearchType:
+      type: string
+      description: Result classification returned by the search endpoint.
+      enum:
+        - invalid
+        - address
+        - block
+        - transaction
+        - v2Transaction
+        - siacoinElement
+        - siafundElement
+        - contract
+        - v2Contract
+        - host
+
+  parameters:
+    OffsetParam:
+      name: offset
+      in: query
+      required: false
+      description: Number of records to skip.
+      schema:
+        type: integer
+        format: uint64
+        minimum: 0
+        default: 0
+
+    LimitParam:
+      name: limit
+      in: query
+      required: false
+      description: Maximum number of records to return (default 100, max 500).
+      schema:
+        type: integer
+        format: uint64
+        minimum: 1
+        maximum: 500
+        default: 100
+
+    BlockIDParam:
+      name: id
+      in: path
+      required: true
+      description: Block ID to fetch.
+      schema:
+        $ref: "#/components/schemas/BlockID"
+
+    TransactionIDParam:
+      name: id
+      in: path
+      required: true
+      description: Transaction ID to fetch.
+      schema:
+        $ref: "#/components/schemas/TransactionID"
+
+    EventIDParam:
+      name: id
+      in: path
+      required: true
+      description: Event identifier.
+      schema:
+        $ref: "#/components/schemas/Hash256"
+
+    AddressParam:
+      name: address
+      in: path
+      required: true
+      description: Address (unlock hash) to inspect.
+      schema:
+        $ref: "#/components/schemas/Address"
+
+    FileContractIDParam:
+      name: id
+      in: path
+      required: true
+      description: File contract ID.
+      schema:
+        $ref: "#/components/schemas/FileContractID"
+
+    PublicKeyParam:
+      name: key
+      in: path
+      required: true
+      description: Host public key.
+      schema:
+        $ref: "#/components/schemas/PublicKey"
+
+    SiacoinOutputIDParam:
+      name: id
+      in: path
+      required: true
+      description: Siacoin output ID.
+      schema:
+        $ref: "#/components/schemas/SiacoinOutputID"
+
+    SiafundOutputIDParam:
+      name: id
+      in: path
+      required: true
+      description: Siafund output ID.
+      schema:
+        $ref: "#/components/schemas/SiafundOutputID"
