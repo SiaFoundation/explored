@@ -506,44 +506,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/AddressBalanceResponse"
 
-  /top/addresses/siacoins:
-    get:
-      tags:
-        - rankings
-      summary: Top siacoin addresses
-      operationId: getTopSiacoinAddresses
-      parameters:
-        - $ref: "#/components/parameters/OffsetParam"
-        - $ref: "#/components/parameters/LimitParam"
-      responses:
-        "200":
-          description: Ranked siacoin balances.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/TopSiacoin"
-
-  /top/addresses/siafunds:
-    get:
-      tags:
-        - rankings
-      summary: Top siafund addresses
-      operationId: getTopSiafundAddresses
-      parameters:
-        - $ref: "#/components/parameters/OffsetParam"
-        - $ref: "#/components/parameters/LimitParam"
-      responses:
-        "200":
-          description: Ranked siafund balances.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/TopSiafund"
-
   /events/{id}:
     get:
       tags:
@@ -838,6 +800,9 @@ paths:
               - storage_price
               - contract_price
               - download_price
+              - upload_price
+              - used_storage
+              - total_storage
       requestBody:
         required: true
         content:
@@ -1329,143 +1294,329 @@ components:
 
     ExplorerBlock:
       type: object
-      description: Block data as returned by explored explorer endpoints.
       properties:
-        block:
-          $ref: "#/components/schemas/Block"
-        metrics:
-          $ref: "#/components/schemas/BlockMetrics"
-      additionalProperties: true
+        height:
+          type: integer
+          format: uint64
+        parentID:
+          $ref: "#/components/schemas/BlockID"
+        nonce:
+          type: integer
+          format: uint64
+        timestamp:
+          type: string
+          format: date-time
+        leafIndex:
+          type: integer
+          format: uint64
+        minerPayouts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerSiacoinOutput"
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerTransaction"
+        v2:
+          allOf:
+            - $ref: "#/components/schemas/ExplorerV2BlockData"
+            - nullable: true
+      required: [height, parentID, nonce, timestamp, leafIndex, minerPayouts, transactions]
+
+    ExplorerV2BlockData:
+      type: object
+      properties:
+        height:
+          type: integer
+          format: uint64
+        commitment:
+          $ref: "#/components/schemas/Hash256"
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerV2Transaction"
+      required: [height, commitment, transactions]
 
     ExplorerTransaction:
       type: object
-      description: Transaction enriched with explorer-specific metadata.
       properties:
-        transaction:
-          $ref: "#/components/schemas/Transaction"
-        height:
-          type: integer
-          format: uint64
-        index:
-          $ref: "#/components/schemas/ChainIndex"
-        confirmations:
-          type: integer
-          format: uint64
-        blockTimestamp:
-          type: string
-          format: date-time
-      additionalProperties: true
+        id:
+          $ref: "#/components/schemas/TransactionID"
+        siacoinInputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerSiacoinInput"
+        siacoinOutputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerSiacoinOutput"
+        siafundInputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerSiafundInput"
+        siafundOutputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerSiafundOutput"
+        fileContracts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerExtendedContract"
+        fileContractRevisions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerFileContractRevision"
+        storageProofs:
+          type: array
+          items:
+            $ref: "#/components/schemas/StorageProof"
+        minerFees:
+          type: array
+          items:
+            $ref: "#/components/schemas/Currency"
+        arbitraryData:
+          type: array
+          items:
+            type: string
+            format: byte
+        signatures:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionSignature"
+        hostAnnouncements:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerHostAnnouncement"
+      required: [id]
 
     ExplorerV2Transaction:
       type: object
-      description: V2 transaction enriched with explorer-specific metadata.
       properties:
-        transaction:
-          $ref: "#/components/schemas/V2Transaction"
-        height:
-          type: integer
-          format: uint64
-        index:
-          $ref: "#/components/schemas/ChainIndex"
-        confirmations:
-          type: integer
-          format: uint64
-        blockTimestamp:
+        id:
+          $ref: "#/components/schemas/TransactionID"
+        siacoinInputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/V2SiacoinInput"
+        siacoinOutputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerSiacoinOutput"
+        siafundInputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/V2SiafundInput"
+        siafundOutputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerSiafundOutput"
+        fileContracts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerV2Contract"
+        fileContractRevisions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerV2FileContractRevision"
+        fileContractResolutions:
+          type: array
+          items:
+            $ref: "#/components/schemas/V2FileContractResolution"
+        attestations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Attestation"
+        arbitraryData:
           type: string
-          format: date-time
-      additionalProperties: true
+          format: byte
+        newFoundationAddress:
+          allOf:
+            - $ref: "#/components/schemas/Address"
+            - nullable: true
+        minerFee:
+          $ref: "#/components/schemas/Currency"
+        hostAnnouncements:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerV2HostAnnouncement"
+      required: [id, minerFee]
 
     ExplorerSiacoinOutput:
-      type: object
-      properties:
-        id:
-          $ref: "#/components/schemas/SiacoinOutputID"
-        value:
-          $ref: "#/components/schemas/Currency"
-        address:
-          $ref: "#/components/schemas/Address"
-        spent:
-          type: boolean
-        spentTransactionID:
-          allOf:
-            - $ref: "#/components/schemas/TransactionID"
-            - nullable: true
-        source:
-          type: string
-          description: Originating source (transaction, miner payout, etc.).
-      additionalProperties: true
+      allOf:
+        - $ref: "#/components/schemas/SiacoinElement"
+        - type: object
+          properties:
+            source:
+              type: string
+              enum: [invalid, miner_payout, transaction, valid_proof_output, missed_proof_output]
+            spentIndex:
+              allOf:
+                - $ref: "#/components/schemas/ChainIndex"
+                - nullable: true
+          required: [source]
 
     ExplorerSiafundOutput:
-      type: object
-      properties:
-        id:
-          $ref: "#/components/schemas/SiafundOutputID"
-        value:
-          type: integer
-          format: uint64
-        address:
-          $ref: "#/components/schemas/Address"
-        spent:
-          type: boolean
-        spentTransactionID:
-          allOf:
-            - $ref: "#/components/schemas/TransactionID"
-            - nullable: true
-      additionalProperties: true
+      allOf:
+        - $ref: "#/components/schemas/SiafundElement"
+        - type: object
+          properties:
+            spentIndex:
+              allOf:
+                - $ref: "#/components/schemas/ChainIndex"
+                - nullable: true
 
     ExplorerEvent:
       type: object
       properties:
         id:
           $ref: "#/components/schemas/Hash256"
+        index:
+          $ref: "#/components/schemas/ChainIndex"
+        confirmations:
+          type: integer
+          format: uint64
         type:
           type: string
+          enum: [miner, foundation, siafundClaim, v1Transaction, v1ContractResolution, v2Transaction, v2ContractResolution]
+        data:
+          type: object
+        maturityHeight:
+          type: integer
+          format: uint64
         timestamp:
           type: string
           format: date-time
-        chainIndex:
-          $ref: "#/components/schemas/ChainIndex"
-        payload:
-          type: object
-      additionalProperties: true
+        relevant:
+          type: array
+          items:
+            $ref: "#/components/schemas/Address"
+      required: [id, index, confirmations, type, data, maturityHeight, timestamp]
 
     ExplorerExtendedContract:
       type: object
       properties:
-        contract:
-          $ref: "#/components/schemas/FileContract"
-        element:
-          $ref: "#/components/schemas/FileContractElement"
-        revisionHeight:
+        resolved:
+          type: boolean
+        valid:
+          type: boolean
+        transactionID:
+          $ref: "#/components/schemas/TransactionID"
+        confirmationIndex:
+          $ref: "#/components/schemas/ChainIndex"
+        confirmationTransactionID:
+          $ref: "#/components/schemas/TransactionID"
+        proofIndex:
+          allOf:
+            - $ref: "#/components/schemas/ChainIndex"
+            - nullable: true
+        proofTransactionID:
+          allOf:
+            - $ref: "#/components/schemas/TransactionID"
+            - nullable: true
+        id:
+          $ref: "#/components/schemas/FileContractID"
+        filesize:
           type: integer
           format: uint64
+        fileMerkleRoot:
+          $ref: "#/components/schemas/Hash256"
+        windowStart:
+          type: integer
+          format: uint64
+        windowEnd:
+          type: integer
+          format: uint64
+        payout:
+          $ref: "#/components/schemas/Currency"
+        validProofOutputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerContractSiacoinOutput"
+        missedProofOutputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerContractSiacoinOutput"
+        unlockHash:
+          $ref: "#/components/schemas/Address"
         revisionNumber:
           type: integer
           format: uint64
-        resolution:
-          allOf:
-            - $ref: "#/components/schemas/V2FileContractResolution"
-            - nullable: true
-      additionalProperties: true
+      required:
+        [
+          resolved,
+          valid,
+          transactionID,
+          confirmationIndex,
+          confirmationTransactionID,
+          id,
+          filesize,
+          fileMerkleRoot,
+          windowStart,
+          windowEnd,
+          payout,
+          validProofOutputs,
+          missedProofOutputs,
+          unlockHash,
+          revisionNumber,
+        ]
+
+    ExplorerFileContractRevision:
+      allOf:
+        - $ref: "#/components/schemas/ExplorerExtendedContract"
+        - type: object
+          properties:
+            parentID:
+              $ref: "#/components/schemas/FileContractID"
+            unlockConditions:
+              $ref: "#/components/schemas/UnlockConditions"
+          required: [parentID, unlockConditions]
 
     ExplorerV2Contract:
+      allOf:
+        - $ref: "#/components/schemas/V2FileContractElement"
+        - type: object
+          properties:
+            transactionID:
+              $ref: "#/components/schemas/TransactionID"
+            renewedFrom:
+              allOf:
+                - $ref: "#/components/schemas/FileContractID"
+                - nullable: true
+            renewedTo:
+              allOf:
+                - $ref: "#/components/schemas/FileContractID"
+                - nullable: true
+            confirmationIndex:
+              $ref: "#/components/schemas/ChainIndex"
+            confirmationTransactionID:
+              $ref: "#/components/schemas/TransactionID"
+            resolutionType:
+              allOf:
+                - $ref: "#/components/schemas/ExplorerV2Resolution"
+                - nullable: true
+            resolutionIndex:
+              allOf:
+                - $ref: "#/components/schemas/ChainIndex"
+                - nullable: true
+            resolutionTransactionID:
+              allOf:
+                - $ref: "#/components/schemas/TransactionID"
+                - nullable: true
+          required:
+            [
+              transactionID,
+              confirmationIndex,
+              confirmationTransactionID,
+            ]
+
+    ExplorerV2FileContractRevision:
       type: object
       properties:
-        contract:
-          $ref: "#/components/schemas/V2FileContract"
-        element:
-          $ref: "#/components/schemas/V2FileContractElement"
-        revisionHeight:
-          type: integer
-          format: uint64
-        revisionNumber:
-          type: integer
-          format: uint64
-        resolution:
-          allOf:
-            - $ref: "#/components/schemas/V2FileContractResolution"
-            - nullable: true
-      additionalProperties: true
+        parent:
+          $ref: "#/components/schemas/ExplorerV2Contract"
+        revision:
+          $ref: "#/components/schemas/ExplorerV2Contract"
+      required: [parent, revision]
 
     ExplorerHost:
       type: object
@@ -1479,20 +1630,9 @@ components:
         v2NetAddresses:
           type: array
           items:
-            type: string
+            $ref: "#/components/schemas/ExplorerNetAddress"
         location:
-          type: object
-          properties:
-            country:
-              type: string
-            region:
-              type: string
-            city:
-              type: string
-            latitude:
-              type: number
-            longitude:
-              type: number
+          $ref: "#/components/schemas/ExplorerLocation"
         knownSince:
           type: string
           format: date-time
@@ -1504,6 +1644,61 @@ components:
         lastScanError:
           type: string
           nullable: true
+        lastAnnouncement:
+          type: string
+          format: date-time
+        nextScan:
+          type: string
+          format: date-time
+        totalScans:
+          type: integer
+          format: uint64
+        successfulInteractions:
+          type: integer
+          format: uint64
+        failedInteractions:
+          type: integer
+          format: uint64
+        settings:
+          type: object
+        priceTable:
+          type: object
+        v2Settings:
+          type: object
+      required:
+        [
+          publicKey,
+          v2,
+          netAddress,
+          location,
+          knownSince,
+          lastScan,
+          lastScanSuccessful,
+          lastAnnouncement,
+          nextScan,
+          totalScans,
+          successfulInteractions,
+          failedInteractions,
+          settings,
+          priceTable,
+          v2Settings,
+        ]
+
+    ExplorerHostScan:
+      type: object
+      properties:
+        publicKey:
+          $ref: "#/components/schemas/PublicKey"
+        location:
+          $ref: "#/components/schemas/ExplorerLocation"
+        success:
+          type: boolean
+        error:
+          type: string
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
         nextScan:
           type: string
           format: date-time
@@ -1513,45 +1708,145 @@ components:
           type: object
         v2Settings:
           type: object
-      additionalProperties: true
+      required:
+        [
+          publicKey,
+          location,
+          success,
+          timestamp,
+          nextScan,
+          settings,
+          priceTable,
+          v2Settings,
+        ]
 
-    ExplorerHostScan:
+    ExplorerLocation:
+      type: object
+      properties:
+        countryCode:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+      required: [countryCode, latitude, longitude]
+
+    ExplorerNetAddress:
+      type: object
+      properties:
+        protocol:
+          type: string
+        address:
+          type: string
+      required: [protocol, address]
+
+    ExplorerHostAnnouncement:
       type: object
       properties:
         publicKey:
           $ref: "#/components/schemas/PublicKey"
-        timestamp:
+        netAddress:
           type: string
-          format: date-time
-        settings:
-          type: object
-        priceTable:
-          type: object
-        success:
-          type: boolean
-        error:
-          type: string
-          nullable: true
-      additionalProperties: true
+      required: [publicKey, netAddress]
+
+    ExplorerV2HostAnnouncement:
+      type: object
+      properties:
+        publicKey:
+          $ref: "#/components/schemas/PublicKey"
+        V2HostAnnouncement:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExplorerNetAddress"
+      required: [publicKey, V2HostAnnouncement]
+
+    ExplorerSiacoinInput:
+      type: object
+      properties:
+        address:
+          $ref: "#/components/schemas/Address"
+        value:
+          $ref: "#/components/schemas/Currency"
+        parentID:
+          $ref: "#/components/schemas/SiacoinOutputID"
+        unlockConditions:
+          $ref: "#/components/schemas/UnlockConditions"
+      required: [address, value, parentID, unlockConditions]
+
+    ExplorerSiafundInput:
+      type: object
+      properties:
+        address:
+          $ref: "#/components/schemas/Address"
+        value:
+          type: integer
+          format: uint64
+        parentID:
+          $ref: "#/components/schemas/SiafundOutputID"
+        unlockConditions:
+          $ref: "#/components/schemas/UnlockConditions"
+        claimAddress:
+          $ref: "#/components/schemas/Address"
+      required: [address, value, parentID, unlockConditions, claimAddress]
+
+    ExplorerContractSiacoinOutput:
+      allOf:
+        - $ref: "#/components/schemas/SiacoinOutput"
+        - type: object
+          properties:
+            id:
+              $ref: "#/components/schemas/SiacoinOutputID"
+          required: [id]
+
+    ExplorerV2Resolution:
+      type: string
+      enum: [invalid, renewal, storage_proof, expiration]
 
     BlockMetrics:
       type: object
       properties:
-        height:
-          type: integer
-          format: uint64
-        totalTxns:
-          type: integer
-          format: uint64
-        sizeBytes:
-          type: integer
-          format: uint64
+        index:
+          $ref: "#/components/schemas/ChainIndex"
         difficulty:
           $ref: "#/components/schemas/Work"
-        timestamp:
-          type: string
-          format: date-time
-      additionalProperties: true
+        siafundTaxRevenue:
+          $ref: "#/components/schemas/Currency"
+        totalHosts:
+          type: integer
+          format: uint64
+        numLeaves:
+          type: integer
+          format: uint64
+        activeContracts:
+          type: integer
+          format: uint64
+        failedContracts:
+          type: integer
+          format: uint64
+        successfulContracts:
+          type: integer
+          format: uint64
+        storageUtilization:
+          type: integer
+          format: uint64
+        circulatingSupply:
+          $ref: "#/components/schemas/Currency"
+        contractRevenue:
+          $ref: "#/components/schemas/Currency"
+      required:
+        [
+          index,
+          difficulty,
+          siafundTaxRevenue,
+          totalHosts,
+          numLeaves,
+          activeContracts,
+          failedContracts,
+          successfulContracts,
+          storageUtilization,
+          circulatingSupply,
+          contractRevenue,
+        ]
 
     HostMetrics:
       type: object
@@ -1571,7 +1866,8 @@ components:
           type: object
         v2Settings:
           type: object
-      additionalProperties: true
+      required:
+        [activeHosts, totalStorage, remainingStorage, settings, priceTable, v2Settings]
 
     BlockTimeMetrics:
       type: object
@@ -2066,7 +2362,6 @@ components:
       properties:
         proofIndex:
           type: object
-          additionalProperties: true
         leaf:
           type: string
           description: Hex-encoded 64 byte leaf.
@@ -2084,11 +2379,9 @@ components:
       type: object
       properties:
         parent:
-          type: object
-          additionalProperties: true
+          $ref: "#/components/schemas/ExplorerV2Contract"
         type:
-          type: string
-          enum: [renewal, storageProof, expiration]
+          $ref: "#/components/schemas/ExplorerV2Resolution"
         resolution:
           oneOf:
             - $ref: "#/components/schemas/V2FileContractRenewal"
