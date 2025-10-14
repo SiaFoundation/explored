@@ -6,7 +6,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/oschwald/geoip2-golang v1.13.0
-	go.sia.tech/core v0.17.5
+	go.sia.tech/core v0.18.0
 	go.sia.tech/coreutils v0.18.5
 	go.sia.tech/jape v0.14.1
 	go.uber.org/zap v1.27.0
