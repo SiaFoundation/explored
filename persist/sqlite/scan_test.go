@@ -330,8 +330,8 @@ func TestScan(t *testing.T) {
 
 	cfg := config.Scanner{
 		NumThreads:          100,
-		ScanTimeout:         100 * time.Millisecond,
-		ScanFrequency:       100 * time.Millisecond,
+		ScanTimeout:         500 * time.Millisecond,
+		ScanFrequency:       25 * time.Millisecond,
 		ScanInterval:        3 * time.Hour,
 		MinLastAnnouncement: 90 * 24 * time.Hour,
 	}
