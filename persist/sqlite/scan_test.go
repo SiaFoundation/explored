@@ -233,6 +233,7 @@ func TestScan(t *testing.T) {
 	network, genesisBlock := ctestutil.V2Network()
 	network.HardforkV2.AllowHeight = 1
 	network.HardforkV2.RequireHeight = 5
+	network.HardforkV2.FinalCutHeight = 6
 
 	cm, _, w := startTestNode(t, network, genesisBlock)
 
@@ -296,7 +297,7 @@ func TestScan(t *testing.T) {
 		RegistryEntriesTotal: 50,
 	}
 	v2Settings := proto4.HostSettings{
-		ProtocolVersion:     [3]uint8{5, 0, 1},
+		ProtocolVersion:     [3]uint8{5, 0, 2},
 		Release:             "test",
 		AcceptingContracts:  true,
 		WalletAddress:       w.Address(),

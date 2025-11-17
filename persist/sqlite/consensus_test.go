@@ -53,6 +53,7 @@ func newTestChain(t testing.TB, v2 bool, modifyGenesis func(*consensus.Network, 
 	if v2 {
 		network.HardforkV2.AllowHeight = 1
 		network.HardforkV2.RequireHeight = 2
+		network.HardforkV2.FinalCutHeight = 3
 	}
 	if modifyGenesis != nil {
 		modifyGenesis(network, genesisBlock)
@@ -824,6 +825,7 @@ func BenchmarkApplyRevert(b *testing.B) {
 	n := newTestChain(b, false, func(network *consensus.Network, genesisBlock types.Block) {
 		network.HardforkV2.AllowHeight = 1
 		network.HardforkV2.RequireHeight = 1_000_000
+		network.HardforkV2.FinalCutHeight = 1_000_001
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
 	genesisTxn := n.genesis().Transactions[0]
