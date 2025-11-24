@@ -9,7 +9,7 @@ require (
 	go.sia.tech/core v0.18.1
 	go.sia.tech/coreutils v0.18.7
 	go.sia.tech/jape v0.14.1
-	go.uber.org/zap v1.27.0
+	go.uber.org/zap v1.27.1
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842
 	gopkg.in/yaml.v3 v3.0.1
 	lukechampine.com/frand v1.5.1
