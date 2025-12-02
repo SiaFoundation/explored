@@ -99,6 +99,7 @@ type Store interface {
 	UnspentSiafundOutputs(address types.Address, offset, limit uint64) ([]SiafundOutput, error)
 	UnconfirmedEvents(index types.ChainIndex, timestamp time.Time, v1 []types.Transaction, v2 []types.V2Transaction) (annotated []Event, err error)
 	AddressEvents(address types.Address, offset, limit uint64) (events []Event, err error)
+	AddressCheckpoint(address types.Address) (checkpoint types.ChainIndex, err error)
 	Events([]types.Hash256) ([]Event, error)
 	Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 	Contracts(ids []types.FileContractID) (result []ExtendedFileContract, err error)
@@ -467,6 +468,22 @@ func (e *Explorer) AddressUnconfirmedEvents(address types.Address) ([]Event, err
 // UnconfirmedEvents annotates a list of unconfirmed transactions.
 func (e *Explorer) UnconfirmedEvents(index types.ChainIndex, timestamp time.Time, v1 []types.Transaction, v2 []types.V2Transaction) ([]Event, error) {
 	return e.s.UnconfirmedEvents(index, timestamp, v1, v2)
+}
+
+// AddressCheckpoint returns the first chain index the address was seen on-chain.
+// If the address has never been seen on-chain, it returns the last indexed block.
+func (e *Explorer) AddressCheckpoint(address types.Address) (types.ChainIndex, error) {
+	checkpoint, err := e.s.AddressCheckpoint(address)
+	if err != nil {
+		return types.ChainIndex{}, err
+	} else if checkpoint == (types.ChainIndex{}) {
+		// If the address has never been seen on-chain, return the current tip.
+		checkpoint, err = e.s.Tip()
+		if err != nil {
+			return types.ChainIndex{}, fmt.Errorf("failed to get tip: %w", err)
+		}
+	}
+	return checkpoint, nil
 }
 
 // AddressEvents returns the events of a single address.
