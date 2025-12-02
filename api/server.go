@@ -66,6 +66,7 @@ type (
 		UnspentSiacoinOutputs(address types.Address, offset, limit uint64) ([]explorer.SiacoinOutput, error)
 		UnspentSiafundOutputs(address types.Address, offset, limit uint64) ([]explorer.SiafundOutput, error)
 		AddressEvents(address types.Address, offset, limit uint64) (events []explorer.Event, err error)
+		AddressCheckpoint(types.Address) (types.ChainIndex, error)
 		AddressUnconfirmedEvents(address types.Address) ([]explorer.Event, error)
 		Events(ids []types.Hash256) ([]explorer.Event, error)
 		UnconfirmedEvents(index types.ChainIndex, timestamp time.Time, v1 []types.Transaction, v2 []types.V2Transaction) ([]explorer.Event, error)
@@ -542,6 +543,19 @@ func (s *server) addressessAddressEventsUnconfirmedHandler(jc jape.Context) {
 	jc.Encode(events)
 }
 
+func (s *server) addressessAddressCheckpointHandler(jc jape.Context) {
+	var address types.Address
+	if jc.DecodeParam("address", &address) != nil {
+		return
+	}
+
+	checkpoint, err := s.e.AddressCheckpoint(address)
+	if jc.Check("failed to get address checkpoint", err) != nil {
+		return
+	}
+	jc.Encode(checkpoint)
+}
+
 func (s *server) eventsIDHandler(jc jape.Context) {
 	var id types.Hash256
 	if jc.DecodeParam("id", &id) != nil {
@@ -917,6 +931,7 @@ func NewServer(e Explorer, cm ChainManager, s Syncer, ex exchangerates.Source, a
 		"GET    /addresses/:address/events":             srv.addressessAddressEventsHandler,
 		"GET    /addresses/:address/events/unconfirmed": srv.addressessAddressEventsUnconfirmedHandler,
 		"GET    /addresses/:address/balance":            srv.addressessAddressBalanceHandler,
+		"GET /addresses/:address/checkpoint":            srv.addressessAddressCheckpointHandler,
 
 		"GET /top/addresses/siacoins": srv.topAddressesSiacoinsHandler,
 		"GET /top/addresses/siafunds": srv.topAddressesSiafundsHandler,

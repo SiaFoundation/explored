@@ -76,6 +76,26 @@ WHERE ev.id=$2`)
 	return
 }
 
+// AddressCheckpoint returns the first chain index the address was seen on-chain.
+// If the address has never been seen on-chain, it returns an empty ChainIndex.
+func (s *Store) AddressCheckpoint(address types.Address) (checkpoint types.ChainIndex, err error) {
+	err = s.transaction(func(tx *txn) error {
+		const query = `SELECT b.id, b.height
+FROM blocks b 
+WHERE b.height = (
+    SELECT MAX(MIN(ea.event_maturity_height) - 144, 0) -- subtract 1 day for maturity delay
+    FROM event_addresses ea
+    INNER JOIN address_balance ab ON ab.id = ea.address_id
+    WHERE ab.address=$1
+);`
+		return tx.QueryRow(query, encode(address)).Scan(decode(&checkpoint.ID), decode(&checkpoint.Height))
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return types.ChainIndex{}, nil
+	}
+	return
+}
+
 // AddressEvents returns the events of a single address.
 func (s *Store) AddressEvents(address types.Address, offset, limit uint64) (events []explorer.Event, err error) {
 	err = s.transaction(func(tx *txn) error {

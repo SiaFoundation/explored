@@ -319,3 +319,10 @@ func (c *Client) ExchangeRate(currency string) (resp float64, err error) {
 func (c *Client) Health() error {
 	return c.c.GET(context.Background(), "/health", nil)
 }
+
+// AddressCheckpoint returns the first chain index the address was seen on-chain.
+// If the address has never been seen on-chain, it returns the current tip.
+func (c *Client) AddressCheckpoint(address types.Address) (checkpoint types.ChainIndex, err error) {
+	err = c.c.GET(context.Background(), fmt.Sprintf("/addresses/%s/checkpoint", address), &checkpoint)
+	return
+}

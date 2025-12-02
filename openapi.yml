@@ -488,6 +488,22 @@ paths:
                 items:
                   $ref: "#/components/schemas/ExplorerEvent"
 
+  /addresses/{address}/checkpoint:
+    get:
+      tags:
+        - addresses
+      summary: Address checkpoint
+      operationId: getAddressCheckpoint
+      parameters:
+        - $ref: "#/components/parameters/AddressParam"
+      responses:
+        "200":
+          description: Returns the first chain index where the address was seen. If the address has not been seen, returns the current tip.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChainIndex"
+
   /addresses/{address}/balance:
     get:
       tags:
