@@ -11,10 +11,11 @@ type (
 
 	// Syncer contains the configuration for the syncer.
 	Syncer struct {
-		Address    string   `yaml:"address,omitempty"`
-		Bootstrap  bool     `yaml:"bootstrap,omitempty"`
-		EnableUPNP bool     `yaml:"enableUPnP,omitempty"`
-		Peers      []string `yaml:"peers,omitempty"`
+		Address         string   `yaml:"address,omitempty"`
+		Bootstrap       bool     `yaml:"bootstrap,omitempty"`
+		EnableUPNP      bool     `yaml:"enableUPnP,omitempty"`
+		MaxInboundPeers int      `yaml:"maxInboundPeers,omitempty"`
+		Peers           []string `yaml:"peers,omitempty"`
 	}
 
 	// Scanner contains the configuration for the host scanner.
