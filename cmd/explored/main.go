@@ -41,9 +41,10 @@ var cfg = config.Config{
 		Password: os.Getenv("EXPLORED_API_PASSWORD"),
 	},
 	Syncer: config.Syncer{
-		Address:    ":9981",
-		Bootstrap:  true,
-		EnableUPNP: false,
+		Address:         ":9981",
+		Bootstrap:       true,
+		EnableUPNP:      false,
+		MaxInboundPeers: 1024,
 	},
 	Scanner: config.Scanner{
 		NumThreads:          100,
@@ -248,14 +249,19 @@ func runRootCmd(ctx context.Context, log *zap.Logger) error {
 		ps.AddPeer(peer)
 	}
 
+	if cfg.Syncer.MaxInboundPeers <= 0 {
+		return errors.New("max inbound peers must be greater than zero")
+	}
+
 	header := gateway.Header{
 		GenesisID:  genesisBlock.ID(),
 		UniqueID:   gateway.GenerateUniqueID(),
 		NetAddress: syncerAddr,
 	}
 	s := syncer.New(syncerListener, cm, ps, header, syncer.WithLogger(log.Named("syncer")),
-		syncer.WithMaxInboundPeers(256),
-		syncer.WithMaxInflightRPCs(1024))
+		syncer.WithMaxInboundPeers(cfg.Syncer.MaxInboundPeers),
+		syncer.WithMaxOutboundPeers(32),
+		syncer.WithMaxInflightRPCs(3*cfg.Syncer.MaxInboundPeers))
 	defer s.Close()
 	go s.Run()
 
