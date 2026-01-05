@@ -1,3 +1,10 @@
+## 0.1.3 (2026-01-05)
+
+### Features
+
+- Add `[GET] /addresses/:address/checkpoint` to return the first chain index an address was seen on chain.
+- Made syncer peer cap configurable
+
 ## 0.1.2 (2025-11-18)
 
 ### Fixes
