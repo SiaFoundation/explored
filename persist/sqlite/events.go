@@ -233,6 +233,7 @@ func (s *Store) UnconfirmedEvents(index types.ChainIndex, timestamp time.Time, v
 	for _, txn := range v1 {
 		id := txn.ID()
 		evTxn := explorer.CoreToExplorerV1Transaction(txn)
+		evTxn.Unconfirmed = true
 		for i := range evTxn.SiacoinInputs {
 			sci := &evTxn.SiacoinInputs[i]
 			sce, ok := sceCache[sci.ParentID]
@@ -278,6 +279,7 @@ func (s *Store) UnconfirmedEvents(index types.ChainIndex, timestamp time.Time, v
 	for _, txn := range v2 {
 		id := txn.ID()
 		evTxn := explorer.CoreToExplorerV2Transaction(txn)
+		evTxn.Unconfirmed = true
 		for i := range evTxn.FileContracts {
 			fc := &evTxn.FileContracts[i]
 			fc.ConfirmationIndex = index
