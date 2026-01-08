@@ -257,7 +257,8 @@ type FileContractRevision struct {
 
 // A Transaction is a transaction that uses the wrapped types above.
 type Transaction struct {
-	ID types.TransactionID `json:"id"`
+	ID          types.TransactionID `json:"id"`
+	Unconfirmed bool                `json:"unconfirmed,omitempty"`
 
 	SiacoinInputs         []SiacoinInput               `json:"siacoinInputs,omitempty"`
 	SiacoinOutputs        []SiacoinOutput              `json:"siacoinOutputs,omitempty"`
@@ -328,7 +329,8 @@ type V2FileContractResolution struct {
 
 // A V2Transaction is a V2 transaction that uses the wrapped types above.
 type V2Transaction struct {
-	ID types.TransactionID `json:"id"`
+	ID          types.TransactionID `json:"id"`
+	Unconfirmed bool                `json:"unconfirmed,omitempty"`
 
 	SiacoinInputs  []types.V2SiacoinInput `json:"siacoinInputs,omitempty"`
 	SiacoinOutputs []SiacoinOutput        `json:"siacoinOutputs,omitempty"`

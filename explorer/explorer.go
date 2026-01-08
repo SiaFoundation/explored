@@ -470,6 +470,32 @@ func (e *Explorer) UnconfirmedEvents(index types.ChainIndex, timestamp time.Time
 	return e.s.UnconfirmedEvents(index, timestamp, v1, v2)
 }
 
+// UnconfirmedTransaction looks up an unconfirmed V1 transaction by ID in the
+// transaction pool.
+func (e *Explorer) UnconfirmedTransaction(id types.TransactionID) (Transaction, bool) {
+	for _, txn := range e.cm.PoolTransactions() {
+		if txn.ID() == id {
+			result := CoreToExplorerV1Transaction(txn)
+			result.Unconfirmed = true
+			return result, true
+		}
+	}
+	return Transaction{}, false
+}
+
+// UnconfirmedV2Transaction looks up an unconfirmed V2 transaction by ID in the
+// transaction pool.
+func (e *Explorer) UnconfirmedV2Transaction(id types.TransactionID) (V2Transaction, bool) {
+	for _, txn := range e.cm.V2PoolTransactions() {
+		if txn.ID() == id {
+			result := CoreToExplorerV2Transaction(txn)
+			result.Unconfirmed = true
+			return result, true
+		}
+	}
+	return V2Transaction{}, false
+}
+
 // AddressCheckpoint returns the first chain index the address was seen on-chain.
 // If the address has never been seen on-chain, it returns the last indexed block.
 func (e *Explorer) AddressCheckpoint(address types.Address) (types.ChainIndex, error) {
