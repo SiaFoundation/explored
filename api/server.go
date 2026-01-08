@@ -56,8 +56,10 @@ type (
 		DifficultyMetrics(start, end, step uint64) (explorer.DifficultyMetrics, error)
 		Transactions(ids []types.TransactionID) ([]explorer.Transaction, error)
 		TransactionChainIndices(id types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error)
+		UnconfirmedTransaction(id types.TransactionID) (explorer.Transaction, bool)
 		V2Transactions(ids []types.TransactionID) ([]explorer.V2Transaction, error)
 		V2TransactionChainIndices(id types.TransactionID, offset, limit uint64) ([]types.ChainIndex, error)
+		UnconfirmedV2Transaction(id types.TransactionID) (explorer.V2Transaction, bool)
 		Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 		TopSiacoinAddresses(limit, offset int) (result []explorer.TopSiacoin, err error)
 		TopSiafundAddresses(limit, offset int) (result []explorer.TopSiafund, err error)
@@ -346,11 +348,18 @@ func (s *server) transactionsIDHandler(jc jape.Context) {
 	txns, err := s.e.Transactions([]types.TransactionID{id})
 	if jc.Check("failed to get transaction", err) != nil {
 		return
-	} else if len(txns) == 0 {
-		jc.Error(ErrTransactionNotFound, http.StatusNotFound)
+	} else if len(txns) > 0 {
+		jc.Encode(txns[0])
 		return
 	}
-	jc.Encode(txns[0])
+
+	// check unconfirmed transaction pool
+	if txn, ok := s.e.UnconfirmedTransaction(id); ok {
+		jc.Encode(txn)
+		return
+	}
+
+	jc.Error(ErrTransactionNotFound, http.StatusNotFound)
 }
 
 func (s *server) transactionsIDIndicesHandler(jc jape.Context) {
@@ -399,11 +408,18 @@ func (s *server) v2TransactionsIDHandler(jc jape.Context) {
 	txns, err := s.e.V2Transactions([]types.TransactionID{id})
 	if jc.Check("failed to get transaction", err) != nil {
 		return
-	} else if len(txns) == 0 {
-		jc.Error(ErrTransactionNotFound, http.StatusNotFound)
+	} else if len(txns) > 0 {
+		jc.Encode(txns[0])
 		return
 	}
-	jc.Encode(txns[0])
+
+	// check unconfirmed transaction pool
+	if txn, ok := s.e.UnconfirmedV2Transaction(id); ok {
+		jc.Encode(txn)
+		return
+	}
+
+	jc.Error(ErrTransactionNotFound, http.StatusNotFound)
 }
 
 func (s *server) v2TransactionsIDIndicesHandler(jc jape.Context) {

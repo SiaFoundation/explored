@@ -465,6 +465,21 @@ func TestAPI(t *testing.T) {
 			}
 			testutil.CheckTransaction(t, txn2, resp[0])
 		}},
+		{"TransactionConfirmed", func(t *testing.T) {
+			resp, err := client.Transaction(txn1.ID())
+			if err != nil {
+				t.Fatal(err)
+			}
+			testutil.Equal(t, "unconfirmed", false, resp.Unconfirmed)
+		}},
+		{"TransactionUnconfirmed", func(t *testing.T) {
+			resp, err := client.Transaction(txn3.ID())
+			if err != nil {
+				t.Fatal(err)
+			}
+			testutil.Equal(t, "unconfirmed", true, resp.Unconfirmed)
+			testutil.Equal(t, "id", txn3.ID(), resp.ID)
+		}},
 		{"TransactionChainIndices", func(t *testing.T) {
 			resp, err := client.TransactionChainIndices(txn2.ID(), 0, 500)
 			if err != nil {
