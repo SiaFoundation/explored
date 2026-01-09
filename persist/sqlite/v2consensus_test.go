@@ -300,6 +300,88 @@ func TestV2Attestations(t *testing.T) {
 	n.revertBlock(t)
 }
 
+func TestUnconfirmedEvents(t *testing.T) {
+	pk1 := types.GeneratePrivateKey()
+	uc1 := types.StandardUnlockConditions(pk1.PublicKey())
+	addr1 := uc1.UnlockHash()
+	addr1Policy := types.SpendPolicy{Type: types.PolicyTypeUnlockConditions(uc1)}
+
+	pk2 := types.GeneratePrivateKey()
+	addr2 := types.StandardUnlockHash(pk2.PublicKey())
+
+	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
+		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
+	})
+	genesisTxn := n.genesis().Transactions[0]
+
+	// get the siacoin element from genesis
+	sce := getSCE(t, n.db, genesisTxn.SiacoinOutputID(0))
+
+	// create a V1 unconfirmed transaction
+	v1Txn := types.Transaction{
+		SiacoinInputs: []types.SiacoinInput{{
+			ParentID:         genesisTxn.SiacoinOutputID(0),
+			UnlockConditions: uc1,
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{
+			{Address: addr2, Value: types.Siacoins(50)},
+			{Address: addr1, Value: sce.SiacoinOutput.Value.Sub(types.Siacoins(50))},
+		},
+	}
+	testutil.SignTransaction(n.tipState(), pk1, &v1Txn)
+
+	// mine the V1 transaction so we have a fresh utxo for V2
+	n.mineTransactions(t, v1Txn)
+
+	// get the new siacoin element
+	sce2 := getSCE(t, n.db, v1Txn.SiacoinOutputID(1))
+
+	// create a V2 unconfirmed transaction
+	v2Txn := types.V2Transaction{
+		SiacoinInputs: []types.V2SiacoinInput{{
+			Parent:          sce2,
+			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
+		}},
+		SiacoinOutputs: []types.SiacoinOutput{
+			{Address: addr2, Value: types.Siacoins(10)},
+			{Address: addr1, Value: sce2.SiacoinOutput.Value.Sub(types.Siacoins(10))},
+		},
+	}
+	testutil.SignV2Transaction(n.tipState(), pk1, &v2Txn)
+
+	// test both V1 and V2 together
+	index := n.tipState().Index
+	timestamp := types.CurrentTimestamp()
+	events, err := n.db.UnconfirmedEvents(index, timestamp, []types.Transaction{v1Txn}, []types.V2Transaction{v2Txn})
+	if err != nil {
+		t.Fatal(err)
+	}
+	testutil.Equal(t, "len(events)", 2, len(events))
+
+	// first event should be V1
+	ev1 := events[0]
+	testutil.Equal(t, "event ID", types.Hash256(v1Txn.ID()), ev1.ID)
+	testutil.Equal(t, "event type", wallet.EventTypeV1Transaction, ev1.Type)
+	testutil.Equal(t, "event index", index, ev1.Index)
+	testutil.Equal(t, "maturity height", index.Height, ev1.MaturityHeight)
+	evTxn1 := ev1.Data.(explorer.EventV1Transaction).Transaction
+	testutil.Equal(t, "unconfirmed", true, evTxn1.Unconfirmed)
+	testutil.Equal(t, "txn ID", v1Txn.ID(), evTxn1.ID)
+	// verify siacoin input has address and value filled in from database
+	testutil.Equal(t, "sci address", addr1, evTxn1.SiacoinInputs[0].Address)
+	testutil.Equal(t, "sci value", sce.SiacoinOutput.Value, evTxn1.SiacoinInputs[0].Value)
+
+	// second event should be V2
+	ev2 := events[1]
+	testutil.Equal(t, "event ID", types.Hash256(v2Txn.ID()), ev2.ID)
+	testutil.Equal(t, "event type", wallet.EventTypeV2Transaction, ev2.Type)
+	testutil.Equal(t, "event index", index, ev2.Index)
+	testutil.Equal(t, "maturity height", index.Height, ev2.MaturityHeight)
+	evTxn2 := explorer.V2Transaction(ev2.Data.(explorer.EventV2Transaction))
+	testutil.Equal(t, "unconfirmed", true, evTxn2.Unconfirmed)
+	testutil.Equal(t, "txn ID", v2Txn.ID(), evTxn2.ID)
+}
+
 func BenchmarkV2Transactions(b *testing.B) {
 	const nTransactions = 1_000_000
 
