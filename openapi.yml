@@ -1356,6 +1356,8 @@ components:
       properties:
         id:
           $ref: "#/components/schemas/TransactionID"
+        unconfirmed:
+          type: boolean
         siacoinInputs:
           type: array
           items:
@@ -1408,6 +1410,8 @@ components:
       properties:
         id:
           $ref: "#/components/schemas/TransactionID"
+        unconfirmed:
+          type: boolean
         siacoinInputs:
           type: array
           items:
