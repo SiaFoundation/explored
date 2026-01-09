@@ -29,9 +29,14 @@ func Equal[T any](t testing.TB, desc string, expected, got T) {
 }
 
 // CheckTransaction checks the inputs and outputs of the retrieved transaction
-// with the source transaction.
-func CheckTransaction(t testing.TB, expectTxn types.Transaction, gotTxn explorer.Transaction) {
+// with the source transaction. If expectUnconfirmed is provided, it also checks
+// the Unconfirmed field.
+func CheckTransaction(t testing.TB, expectTxn types.Transaction, gotTxn explorer.Transaction, expectUnconfirmed ...bool) {
 	t.Helper()
+
+	if len(expectUnconfirmed) > 0 {
+		Equal(t, "unconfirmed", expectUnconfirmed[0], gotTxn.Unconfirmed)
+	}
 
 	Equal(t, "siacoin inputs", len(expectTxn.SiacoinInputs), len(gotTxn.SiacoinInputs))
 	for i := range expectTxn.SiacoinInputs {
@@ -133,9 +138,14 @@ func CheckTransaction(t testing.TB, expectTxn types.Transaction, gotTxn explorer
 }
 
 // CheckV2Transaction checks the inputs and outputs of the retrieved transaction
-// with the source transaction.
-func CheckV2Transaction(t testing.TB, expectTxn types.V2Transaction, gotTxn explorer.V2Transaction) {
+// with the source transaction. If expectUnconfirmed is provided, it also checks
+// the Unconfirmed field.
+func CheckV2Transaction(t testing.TB, expectTxn types.V2Transaction, gotTxn explorer.V2Transaction, expectUnconfirmed ...bool) {
 	t.Helper()
+
+	if len(expectUnconfirmed) > 0 {
+		Equal(t, "unconfirmed", expectUnconfirmed[0], gotTxn.Unconfirmed)
+	}
 
 	// checkV2FC checks the retrieved file contract with the source file contract
 	// in addition to checking the resolved and valid fields.
