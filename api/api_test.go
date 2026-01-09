@@ -565,7 +565,7 @@ func TestAPI(t *testing.T) {
 
 			ev := resp.Data.(explorer.EventV1Transaction)
 			ev.Transaction.SiacoinOutputs[0].Source = explorer.SourceTransaction
-			testutil.CheckTransaction(t, txn3, ev.Transaction)
+			testutil.CheckTransaction(t, txn3, ev.Transaction, true)
 		}},
 		{"Address event unconfirmed", func(t *testing.T) {
 			resp, err := client.AddressUnconfirmedEvents(addr1)
@@ -576,7 +576,7 @@ func TestAPI(t *testing.T) {
 
 			ev := resp[0].Data.(explorer.EventV1Transaction)
 			ev.Transaction.SiacoinOutputs[0].Source = explorer.SourceTransaction
-			testutil.CheckTransaction(t, txn3, ev.Transaction)
+			testutil.CheckTransaction(t, txn3, ev.Transaction, true)
 		}},
 		{"Contract", func(t *testing.T) {
 			resp, err := client.Contract(txn1.FileContractID(0))
