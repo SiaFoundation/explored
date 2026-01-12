@@ -1,4 +1,4 @@
-module go.sia.tech/explored // v0.1.3
+module go.sia.tech/explored // v0.1.4
 
 go 1.24.2
 
