@@ -1,3 +1,9 @@
+## 0.1.4 (2026-01-12)
+
+### Features
+
+- Support unconfirmed transactions lookup
+
 ## 0.1.3 (2026-01-05)
 
 ### Features
