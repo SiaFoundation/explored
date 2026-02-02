@@ -644,6 +644,13 @@ func TestAPI(t *testing.T) {
 			}
 			testutil.Equal(t, "search type", explorer.SearchTypeHost, resp)
 		}},
+		{"Search unconfirmed transaction", func(t *testing.T) {
+			resp, err := client.Search(txn3.ID().String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			testutil.Equal(t, "search type", explorer.SearchTypeTransaction, resp)
+		}},
 		{"Exchange rate", func(t *testing.T) {
 			resp, err := client.ExchangeRate("USD")
 			if err != nil {
