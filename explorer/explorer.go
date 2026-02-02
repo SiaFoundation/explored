@@ -646,5 +646,19 @@ func (e *Explorer) ScanHosts(ctx context.Context, pks ...types.PublicKey) ([]Hos
 // Search returns the type of an element (siacoin element, siafund element,
 // contract, v2 contract, transaction, v2 transaction, block, or host).
 func (e *Explorer) Search(id string) (SearchType, error) {
-	return e.s.Search(id)
+	result, err := e.s.Search(id)
+	if err == nil || !errors.Is(err, ErrNoSearchResults) {
+		return result, err
+	}
+
+	// check unconfirmed transaction pool
+	var txnID types.TransactionID
+	if err := txnID.UnmarshalText([]byte(id)); err != nil {
+		return SearchTypeInvalid, err
+	} else if _, ok := e.UnconfirmedTransaction(txnID); ok {
+		return SearchTypeTransaction, nil
+	} else if _, ok := e.UnconfirmedV2Transaction(txnID); ok {
+		return SearchTypeV2Transaction, nil
+	}
+	return SearchTypeInvalid, ErrNoSearchResults
 }
