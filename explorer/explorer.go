@@ -655,12 +655,12 @@ func (e *Explorer) Search(id string) (SearchType, error) {
 
 	// check unconfirmed transaction pool
 	var txnID types.TransactionID
-	if err := txnID.UnmarshalText([]byte(id)); err != nil {
-		return SearchTypeInvalid, err
-	} else if _, ok := e.UnconfirmedTransaction(txnID); ok {
-		return SearchTypeTransaction, nil
-	} else if _, ok := e.UnconfirmedV2Transaction(txnID); ok {
-		return SearchTypeV2Transaction, nil
+	if err := txnID.UnmarshalText([]byte(id)); err == nil {
+		if _, ok := e.UnconfirmedTransaction(txnID); ok {
+			return SearchTypeTransaction, nil
+		} else if _, ok := e.UnconfirmedV2Transaction(txnID); ok {
+			return SearchTypeV2Transaction, nil
+		}
 	}
 	return SearchTypeInvalid, ErrNoSearchResults
 }
