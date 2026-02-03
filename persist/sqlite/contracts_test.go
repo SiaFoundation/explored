@@ -555,7 +555,7 @@ func TestFileContractsKey(t *testing.T) {
 	assertContractsKey := func(pk types.PublicKey, expected ...explorer.ExtendedFileContract) {
 		t.Helper()
 
-		fces, err := n.db.ContractsKey(pk)
+		fces, err := n.db.ContractsKey(pk, 0, 100)
 		if err != nil {
 			t.Fatal(err)
 		}

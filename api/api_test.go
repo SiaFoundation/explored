@@ -594,7 +594,7 @@ func TestAPI(t *testing.T) {
 			checkFC(t, true, false, false, revFC, resp[0])
 		}},
 		{"ContractsKey", func(t *testing.T) {
-			resp, err := client.ContractsKey(renterPublicKey)
+			resp, err := client.ContractsKey(renterPublicKey, 0, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
