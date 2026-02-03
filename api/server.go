@@ -73,10 +73,10 @@ type (
 		Events(ids []types.Hash256) ([]explorer.Event, error)
 		UnconfirmedEvents(index types.ChainIndex, timestamp time.Time, v1 []types.Transaction, v2 []types.V2Transaction) ([]explorer.Event, error)
 		Contracts(ids []types.FileContractID) (result []explorer.ExtendedFileContract, err error)
-		ContractsKey(key types.PublicKey) (result []explorer.ExtendedFileContract, err error)
+		ContractsKey(key types.PublicKey, offset, limit uint64) (result []explorer.ExtendedFileContract, err error)
 		ContractRevisions(id types.FileContractID) (result []explorer.ExtendedFileContract, err error)
 		V2Contracts(ids []types.FileContractID) (result []explorer.V2FileContract, err error)
-		V2ContractsKey(key types.PublicKey) (result []explorer.V2FileContract, err error)
+		V2ContractsKey(key types.PublicKey, offset, limit uint64) (result []explorer.V2FileContract, err error)
 		V2ContractRevisions(id types.FileContractID) (result []explorer.V2FileContract, err error)
 		Search(id string) (explorer.SearchType, error)
 
@@ -734,7 +734,17 @@ func (s *server) v2PubkeyContractsHandler(jc jape.Context) {
 	if jc.DecodeParam("key", &key) != nil {
 		return
 	}
-	fcs, err := s.e.V2ContractsKey(key)
+
+	limit := defaultLimit
+	offset := uint64(0)
+	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
+		return
+	}
+	if limit > maxLimit {
+		limit = maxLimit
+	}
+
+	fcs, err := s.e.V2ContractsKey(key, offset, limit)
 	if jc.Check("failed to get contracts", err) != nil {
 		return
 	} else if len(fcs) == 0 {
@@ -749,7 +759,17 @@ func (s *server) pubkeyContractsHandler(jc jape.Context) {
 	if jc.DecodeParam("key", &key) != nil {
 		return
 	}
-	fcs, err := s.e.ContractsKey(key)
+
+	limit := defaultLimit
+	offset := uint64(0)
+	if jc.DecodeForm("limit", &limit) != nil || jc.DecodeForm("offset", &offset) != nil {
+		return
+	}
+	if limit > maxLimit {
+		limit = maxLimit
+	}
+
+	fcs, err := s.e.ContractsKey(key, offset, limit)
 	if jc.Check("failed to get contracts", err) != nil {
 		return
 	} else if len(fcs) == 0 {

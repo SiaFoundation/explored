@@ -103,10 +103,10 @@ type Store interface {
 	Events([]types.Hash256) ([]Event, error)
 	Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error)
 	Contracts(ids []types.FileContractID) (result []ExtendedFileContract, err error)
-	ContractsKey(key types.PublicKey) (result []ExtendedFileContract, err error)
+	ContractsKey(key types.PublicKey, offset, limit uint64) (result []ExtendedFileContract, err error)
 	ContractRevisions(id types.FileContractID) (result []ExtendedFileContract, err error)
 	V2Contracts(ids []types.FileContractID) (result []V2FileContract, err error)
-	V2ContractsKey(key types.PublicKey) (result []V2FileContract, err error)
+	V2ContractsKey(key types.PublicKey, offset, limit uint64) (result []V2FileContract, err error)
 	V2ContractRevisions(id types.FileContractID) (result []V2FileContract, err error)
 	SiacoinElements(ids []types.SiacoinOutputID) (result []SiacoinOutput, err error)
 	SiafundElements(ids []types.SiafundOutputID) (result []SiafundOutput, err error)
@@ -533,8 +533,8 @@ func (e *Explorer) Contracts(ids []types.FileContractID) (result []ExtendedFileC
 }
 
 // ContractsKey returns the contracts for a particular ed25519 key.
-func (e *Explorer) ContractsKey(key types.PublicKey) (result []ExtendedFileContract, err error) {
-	return e.s.ContractsKey(key)
+func (e *Explorer) ContractsKey(key types.PublicKey, offset, limit uint64) (result []ExtendedFileContract, err error) {
+	return e.s.ContractsKey(key, offset, limit)
 }
 
 // ContractRevisions returns all the revisions of the contract with the
@@ -549,8 +549,8 @@ func (e *Explorer) V2Contracts(ids []types.FileContractID) (result []V2FileContr
 }
 
 // V2ContractsKey returns the v2 contracts for a particular ed25519 key.
-func (e *Explorer) V2ContractsKey(key types.PublicKey) (result []V2FileContract, err error) {
-	return e.s.V2ContractsKey(key)
+func (e *Explorer) V2ContractsKey(key types.PublicKey, offset, limit uint64) (result []V2FileContract, err error) {
+	return e.s.V2ContractsKey(key, offset, limit)
 }
 
 // V2ContractRevisions returns all the revisions of the v2 contract with the

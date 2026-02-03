@@ -113,7 +113,7 @@ ORDER BY fc.revision_number ASC
 }
 
 // V2ContractsKey implements explorer.Store.
-func (s *Store) V2ContractsKey(key types.PublicKey) (result []explorer.V2FileContract, err error) {
+func (s *Store) V2ContractsKey(key types.PublicKey, offset, limit uint64) (result []explorer.V2FileContract, err error) {
 	err = s.transaction(func(tx *txn) error {
 		encoded := encode(key)
 		rows, err := tx.Query(`SELECT fc.transaction_id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.resolution_type, rev.resolution_height, rev.resolution_block_id, rev.resolution_transaction_id, rev.renewed_from, rev.renewed_to, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
@@ -121,7 +121,8 @@ FROM v2_last_contract_revision rev
 INNER JOIN v2_file_contract_elements fc ON rev.contract_element_id = fc.id
 WHERE fc.renter_public_key = ? OR fc.host_public_key = ?
 ORDER BY rev.confirmation_height ASC
-`, encoded, encoded)
+LIMIT ? OFFSET ?
+`, encoded, encoded, limit, offset)
 		if err != nil {
 			return fmt.Errorf("failed to query file contracts using given pubkey: %w", err)
 		}

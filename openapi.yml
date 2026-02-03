@@ -712,6 +712,8 @@ paths:
       operationId: getV2ContractsByKey
       parameters:
         - $ref: "#/components/parameters/PublicKeyParam"
+        - $ref: "#/components/parameters/OffsetParam"
+        - $ref: "#/components/parameters/LimitParam"
       responses:
         "200":
           description: Contracts associated with the host key.
@@ -732,6 +734,8 @@ paths:
       operationId: getContractsByKey
       parameters:
         - $ref: "#/components/parameters/PublicKeyParam"
+        - $ref: "#/components/parameters/OffsetParam"
+        - $ref: "#/components/parameters/LimitParam"
       responses:
         "200":
           description: Contracts associated with the host key.

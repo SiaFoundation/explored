@@ -213,8 +213,8 @@ func (c *Client) Contracts(ids []types.FileContractID) (resp []explorer.Extended
 }
 
 // ContractsKey returns the contracts for a particular ed25519 key.
-func (c *Client) ContractsKey(key types.PublicKey) (resp []explorer.ExtendedFileContract, err error) {
-	err = c.c.GET(context.Background(), fmt.Sprintf("/pubkey/%s/contracts", key), &resp)
+func (c *Client) ContractsKey(key types.PublicKey, offset, limit uint64) (resp []explorer.ExtendedFileContract, err error) {
+	err = c.c.GET(context.Background(), fmt.Sprintf("/pubkey/%s/contracts?offset=%d&limit=%d", key, offset, limit), &resp)
 	return
 }
 
@@ -245,8 +245,8 @@ func (c *Client) V2ContractRevisions(id types.FileContractID) (resp []explorer.V
 }
 
 // V2ContractsKey returns the v2 contracts for a particular ed25519 key.
-func (c *Client) V2ContractsKey(key types.PublicKey) (resp []explorer.V2FileContract, err error) {
-	err = c.c.GET(context.Background(), fmt.Sprintf("/v2/pubkey/%s/contracts", key), &resp)
+func (c *Client) V2ContractsKey(key types.PublicKey, offset, limit uint64) (resp []explorer.V2FileContract, err error) {
+	err = c.c.GET(context.Background(), fmt.Sprintf("/v2/pubkey/%s/contracts?offset=%d&limit=%d", key, offset, limit), &resp)
 	return
 }
 
