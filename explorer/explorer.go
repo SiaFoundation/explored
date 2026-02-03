@@ -647,8 +647,10 @@ func (e *Explorer) ScanHosts(ctx context.Context, pks ...types.PublicKey) ([]Hos
 // contract, v2 contract, transaction, v2 transaction, block, or host).
 func (e *Explorer) Search(id string) (SearchType, error) {
 	result, err := e.s.Search(id)
-	if err == nil || !errors.Is(err, ErrNoSearchResults) {
+	if err != nil && !errors.Is(err, ErrNoSearchResults) {
 		return result, err
+	} else if err == nil {
+		return result, nil
 	}
 
 	// check unconfirmed transaction pool
