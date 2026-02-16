@@ -309,7 +309,11 @@ func runRootCmd(ctx context.Context, log *zap.Logger) error {
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasPrefix(r.URL.Path, "/api") {
 				r.URL.Path = strings.TrimPrefix(r.URL.Path, "/api")
+				start := time.Now()
 				api.ServeHTTP(w, r)
+				if dur := time.Since(start); dur >= 10*time.Second {
+					log.Warn("slow API request", zap.String("method", r.Method), zap.String("path", r.URL.Path), zap.Duration("elapsed", dur))
+				}
 				return
 			}
 			http.NotFound(w, r)
