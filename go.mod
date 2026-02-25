@@ -1,6 +1,6 @@
 module go.sia.tech/explored // v0.1.3
 
-go 1.24.2
+go 1.26.0
 
 require (
 	github.com/google/go-cmp v0.7.0
