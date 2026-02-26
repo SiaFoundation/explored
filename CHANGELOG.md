@@ -1,3 +1,20 @@
+## 0.2.0 (2026-02-26)
+
+### Breaking Changes
+
+- Add offset and limit to `ContractsKey` and `V2ContractsKey`
+
+### Features
+
+- Add ability to search unconfirmed transactions
+- Support unconfirmed transactions lookup
+- Update Go to 1.26.0.
+
+### Fixes
+
+- Log warning when API response time exceeds 10 seconds
+- Update coreutils from v0.21.0 to v0.21.1
+
 ## 0.1.3 (2026-01-05)
 
 ### Features
