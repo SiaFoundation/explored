@@ -4,10 +4,10 @@ go 1.26.0
 
 require (
 	github.com/google/go-cmp v0.7.0
-	github.com/mattn/go-sqlite3 v1.14.40
+	github.com/mattn/go-sqlite3 v1.14.42
 	github.com/oschwald/geoip2-golang v1.13.0
-	go.sia.tech/core v0.19.0
-	go.sia.tech/coreutils v0.21.1
+	go.sia.tech/core v0.19.1
+	go.sia.tech/coreutils v0.21.2
 	go.sia.tech/jape v0.14.1
 	go.uber.org/zap v1.27.1
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842
@@ -24,11 +24,11 @@ require (
 	github.com/quic-go/quic-go v0.59.0 // indirect
 	github.com/quic-go/webtransport-go v0.10.0 // indirect
 	go.etcd.io/bbolt v1.4.3 // indirect
-	go.sia.tech/mux v1.4.0 // indirect
+	go.sia.tech/mux v1.5.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.48.0 // indirect
-	golang.org/x/net v0.49.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
-	golang.org/x/text v0.34.0 // indirect
-	golang.org/x/tools v0.41.0 // indirect
+	golang.org/x/crypto v0.50.0 // indirect
+	golang.org/x/net v0.52.0 // indirect
+	golang.org/x/sys v0.43.0 // indirect
+	golang.org/x/text v0.36.0 // indirect
+	golang.org/x/tools v0.43.0 // indirect
 )
