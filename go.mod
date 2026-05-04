@@ -4,12 +4,12 @@ go 1.26.0
 
 require (
 	github.com/google/go-cmp v0.7.0
-	github.com/mattn/go-sqlite3 v1.14.42
+	github.com/mattn/go-sqlite3 v1.14.44
 	github.com/oschwald/geoip2-golang v1.13.0
 	go.sia.tech/core v0.20.0
 	go.sia.tech/coreutils v0.21.3
 	go.sia.tech/jape v0.14.1
-	go.uber.org/zap v1.27.1
+	go.uber.org/zap v1.28.0
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842
 	gopkg.in/yaml.v3 v3.0.1
 	lukechampine.com/frand v1.5.1
