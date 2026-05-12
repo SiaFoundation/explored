@@ -134,7 +134,7 @@ type Explorer struct {
 
 	mu              sync.Mutex // protects the fields below
 	lastSuccessScan time.Time
-	hostMetrics     HostMetrics
+	hostMetrics     *HostMetrics
 }
 
 func (e *Explorer) syncStore(index types.ChainIndex, batchSize int) error {
@@ -339,17 +339,23 @@ func (e *Explorer) Metrics(id types.BlockID) (Metrics, error) {
 // (see invalidateHostMetrics).
 func (e *Explorer) HostMetrics() (HostMetrics, error) {
 	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	if e.hostMetrics != (HostMetrics{}) {
-		return e.hostMetrics, nil
+	if e.hostMetrics != nil {
+		m := *e.hostMetrics
+		e.mu.Unlock()
+		return m, nil
 	}
+	e.mu.Unlock()
+
 	metrics, err := e.s.HostMetrics()
 	if err != nil {
 		return HostMetrics{}, err
 	}
-	e.hostMetrics = metrics
-	return e.hostMetrics, nil
+
+	e.mu.Lock()
+	e.hostMetrics = &metrics
+	e.mu.Unlock()
+
+	return metrics, nil
 }
 
 // invalidateHostMetrics clears the cached hostMetrics result so the next
@@ -357,7 +363,7 @@ func (e *Explorer) HostMetrics() (HostMetrics, error) {
 // are persisted.
 func (e *Explorer) invalidateHostMetrics() {
 	e.mu.Lock()
-	e.hostMetrics = HostMetrics{}
+	e.hostMetrics = nil
 	e.mu.Unlock()
 }
 
