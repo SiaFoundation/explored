@@ -134,6 +134,7 @@ type Explorer struct {
 
 	mu              sync.Mutex // protects the fields below
 	lastSuccessScan time.Time
+	hostMetrics     HostMetrics
 }
 
 func (e *Explorer) syncStore(index types.ChainIndex, batchSize int) error {
@@ -332,9 +333,32 @@ func (e *Explorer) Metrics(id types.BlockID) (Metrics, error) {
 	return e.s.Metrics(id)
 }
 
-// HostMetrics returns various metrics about currently available hosts.
+// HostMetrics returns various metrics about currently available hosts. The
+// underlying query is expensive because it computes medians over every host,
+// so the result is cached and only recomputed after we store host scan results
+// (see invalidateHostMetrics).
 func (e *Explorer) HostMetrics() (HostMetrics, error) {
-	return e.s.HostMetrics()
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.hostMetrics != (HostMetrics{}) {
+		return e.hostMetrics, nil
+	}
+	metrics, err := e.s.HostMetrics()
+	if err != nil {
+		return HostMetrics{}, err
+	}
+	e.hostMetrics = metrics
+	return e.hostMetrics, nil
+}
+
+// invalidateHostMetrics clears the cached hostMetrics result so the next
+// caller of HostMetrics recomputes it. Called after host scans
+// are persisted.
+func (e *Explorer) invalidateHostMetrics() {
+	e.mu.Lock()
+	e.hostMetrics = HostMetrics{}
+	e.mu.Unlock()
 }
 
 // BlockTimeMetrics returns the average block time during various intervals.
@@ -640,6 +664,7 @@ func (e *Explorer) ScanHosts(ctx context.Context, pks ...types.PublicKey) ([]Hos
 	if err := e.s.AddHostScans(scans...); err != nil {
 		return nil, fmt.Errorf("failed to add host scans to DB: %w", err)
 	}
+	e.invalidateHostMetrics()
 	return scans, nil
 }
 
