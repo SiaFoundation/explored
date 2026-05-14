@@ -11,6 +11,8 @@ env:
 jobs:
   test:
     uses: SiaFoundation/workflows/.github/workflows/go-test.yml@master
+    with:
+      go-test-args: "-tags=testing"
 
   postgres:
     name: Test (postgres)
@@ -45,4 +47,4 @@ jobs:
       - name: Test
         uses: n8maninger/action-golang-test@v2
         with:
-          args: -race;-failfast;-tags=postgres
+          args: -race;-failfast;-tags=postgres,testing

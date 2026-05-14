@@ -85,13 +85,6 @@ func updateV2FileContractElements(tx *txn, revert bool, index types.ChainIndex, 
 	}
 	defer revisionStmt.Close()
 
-	// so we can get the ids of revision parents to add to the DB
-	parentStmt, err := tx.Prepare(`SELECT id FROM v2_file_contract_elements WHERE contract_id = $1 AND revision_number = $2`)
-	if err != nil {
-		return fmt.Errorf("failed to prepare parent statement: %w", err)
-	}
-	defer parentStmt.Close()
-
 	fcTxns := make(map[explorer.DBFileContract]types.TransactionID)
 	for _, txn := range b.V2Transactions() {
 		id := txn.ID()

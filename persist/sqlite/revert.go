@@ -200,10 +200,8 @@ WHERE
 
 	if _, err := tx.Exec(`DELETE FROM v2_transaction_siacoin_inputs WHERE transaction_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from v2_transaction_siacoin_inputs: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM v2_transaction_siacoin_inputs WHERE transaction_id IN` + clause); err != nil {
-		return fmt.Errorf("failed to delete from v2_transaction_siacoin_outputs: %w", err)
 	} else if _, err := tx.Exec(`DELETE FROM v2_transaction_siacoin_outputs WHERE transaction_id IN` + clause); err != nil {
-		return fmt.Errorf("failed to delete from v2_transaction_siacoin_inputs: %w", err)
+		return fmt.Errorf("failed to delete from v2_transaction_siacoin_outputs: %w", err)
 	} else if _, err := tx.Exec(`DELETE FROM v2_transaction_siafund_inputs WHERE transaction_id IN` + clause); err != nil {
 		return fmt.Errorf("failed to delete from v2_transaction_siafund_inputs: %w", err)
 	} else if _, err := tx.Exec(`DELETE FROM v2_transaction_siafund_outputs WHERE transaction_id IN` + clause); err != nil {

@@ -1,3 +1,5 @@
+//go:build testing
+
 package sqlite
 
 import "go.sia.tech/explored/explorer"

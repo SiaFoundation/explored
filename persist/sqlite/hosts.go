@@ -83,6 +83,9 @@ func (s *Store) HostsForScanning(minLastAnnouncement time.Time, limit uint64) (r
 // QueryHosts returns the hosts matching the query parameters in the order
 // specified by dir.
 func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortColumn, dir explorer.HostSortDir, offset, limit uint64) (result []explorer.Host, err error) {
+	if dir != explorer.HostSortAsc && dir != explorer.HostSortDesc {
+		return nil, fmt.Errorf("invalid HostSortDir: %s", dir)
+	}
 	err = st.transaction(func(tx *txn) error {
 		var args []any
 		var filters []string

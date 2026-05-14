@@ -93,7 +93,6 @@ func (r *row) Scan(dest ...any) error {
 
 // Exec executes a query without returning any rows.
 func (tx *txn) Exec(query string, args ...any) (pgconn.CommandTag, error) {
-	args = normalizeArgs(args)
 	start := time.Now()
 	result, err := tx.Tx.Exec(tx.ctx, query, args...)
 	if dur := time.Since(start); dur > longQueryDuration {
@@ -104,7 +103,6 @@ func (tx *txn) Exec(query string, args ...any) (pgconn.CommandTag, error) {
 
 // Query executes a query that returns rows, typically a SELECT.
 func (tx *txn) Query(query string, args ...any) (*rows, error) {
-	args = normalizeArgs(args)
 	start := time.Now()
 	r, err := tx.Tx.Query(tx.ctx, query, args...)
 	if dur := time.Since(start); dur > longQueryDuration {
@@ -116,7 +114,6 @@ func (tx *txn) Query(query string, args ...any) (*rows, error) {
 // QueryRow executes a query that is expected to return at most one row.
 // Errors are deferred until row's Scan method is called.
 func (tx *txn) QueryRow(query string, args ...any) *row {
-	args = normalizeArgs(args)
 	start := time.Now()
 	r := tx.Tx.QueryRow(tx.ctx, query, args...)
 	if dur := time.Since(start); dur > longQueryDuration {
@@ -141,7 +138,6 @@ func (s *stmt) Close() error { return nil }
 
 // Exec executes the prepared statement with the given args.
 func (s *stmt) Exec(args ...any) (pgconn.CommandTag, error) {
-	args = normalizeArgs(args)
 	start := time.Now()
 	result, err := s.tx.Tx.Exec(s.tx.ctx, s.query, args...)
 	if dur := time.Since(start); dur > longQueryDuration {
@@ -152,7 +148,6 @@ func (s *stmt) Exec(args ...any) (pgconn.CommandTag, error) {
 
 // Query executes the prepared statement, returning rows.
 func (s *stmt) Query(args ...any) (*rows, error) {
-	args = normalizeArgs(args)
 	start := time.Now()
 	r, err := s.tx.Tx.Query(s.tx.ctx, s.query, args...)
 	if dur := time.Since(start); dur > longQueryDuration {
@@ -163,27 +158,12 @@ func (s *stmt) Query(args ...any) (*rows, error) {
 
 // QueryRow executes the prepared statement, returning a single row.
 func (s *stmt) QueryRow(args ...any) *row {
-	args = normalizeArgs(args)
 	start := time.Now()
 	r := s.tx.Tx.QueryRow(s.tx.ctx, s.query, args...)
 	if dur := time.Since(start); dur > longQueryDuration {
 		s.log.Debug("slow query row", zap.String("query", s.query), zap.Duration("elapsed", dur), zap.Stack("stack"))
 	}
 	return &row{r, s.log.Named("row")}
-}
-
-// normalizeArgs widens Go integer types that pgx cannot directly encode into
-// int64 so callers can pass `int`, `uint64`, etc. through transparently.
-func normalizeArgs(args []any) []any {
-	for i, a := range args {
-		switch v := a.(type) {
-		case int:
-			args[i] = int64(v)
-		case uint64:
-			args[i] = int64(v)
-		}
-	}
-	return args
 }
 
 // queryPlaceHolders builds a comma-separated list of n `$N` placeholders

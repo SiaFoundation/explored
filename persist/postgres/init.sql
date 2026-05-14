@@ -11,7 +11,7 @@ CREATE TABLE blocks (
 	timestamp BIGINT NOT NULL,
 	leaf_index BYTEA NOT NULL,
 
-	v2_height BYTEA,
+	v2_height BIGINT,
 	v2_commitment BYTEA
 );
 CREATE INDEX blocks_height_index ON blocks(height);

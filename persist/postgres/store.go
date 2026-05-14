@@ -133,8 +133,8 @@ func (s *Store) Close() error {
 }
 
 // NewStore creates a new Store instance, initializing the database if
-// necessary. The passed in context determines the lifecycle of necessary
-// migrations.
+// necessary. ctx is used only for the initial connection; migrations run on
+// context.Background.
 func NewStore(ctx context.Context, ci ConnectionInfo, log *zap.Logger) (*Store, error) {
 	if err := ensureDatabase(ctx, ci); err != nil {
 		return nil, fmt.Errorf("failed to ensure database %q exists: %w", ci.Database, err)

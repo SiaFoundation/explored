@@ -11,6 +11,9 @@ import (
 )
 
 func getAddressEvents(tx *txn, address types.Address, offset, limit uint64) (eventIDs []int64, err error) {
+	// event_addresses is keyed by (event_id, address_id), so filtering by a
+	// single address already yields distinct event_ids; no DISTINCT needed
+	// (postgres would also reject it with this ORDER BY).
 	const query = `SELECT ea.event_id
 FROM event_addresses ea
 INNER JOIN address_balance sa ON ea.address_id = sa.id
@@ -84,7 +87,7 @@ func (s *Store) AddressCheckpoint(address types.Address) (checkpoint types.Chain
 		const query = `SELECT b.id, b.height
 FROM blocks b 
 WHERE b.height = (
-    SELECT MAX(MIN(ea.event_maturity_height) - 144, 0) -- subtract 1 day for maturity delay
+    SELECT GREATEST(MIN(ea.event_maturity_height) - 144, 0) -- subtract 1 day for maturity delay
     FROM event_addresses ea
     INNER JOIN address_balance ab ON ab.id = ea.address_id
     WHERE ab.address=$1

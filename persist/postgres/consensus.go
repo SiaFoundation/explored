@@ -24,7 +24,7 @@ func addBlock(tx *txn, b types.Block, cie types.ChainIndexElement, height uint64
 	var v2Height any
 	var v2Commitment any
 	if b.V2 != nil {
-		v2Height = encode(b.V2.Height)
+		v2Height = b.V2.Height
 		v2Commitment = encode(b.V2.Commitment)
 	}
 	_, err := tx.Exec("INSERT INTO blocks(id, height, parent_id, nonce, timestamp, leaf_index, v2_height, v2_commitment) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);", encode(b.ID()), height, encode(b.ParentID), encode(b.Nonce), encode(b.Timestamp), encode(cie.StateElement.LeafIndex), v2Height, v2Commitment)
