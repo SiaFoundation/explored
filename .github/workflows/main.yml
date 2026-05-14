@@ -11,3 +11,38 @@ env:
 jobs:
   test:
     uses: SiaFoundation/workflows/.github/workflows/go-test.yml@master
+
+  postgres:
+    name: Test (postgres)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      POSTGRES_USER: explored_test
+      POSTGRES_PASSWORD: explored_test
+      POSTGRES_DB: explored_test
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_USER: explored_test
+          POSTGRES_PASSWORD: explored_test
+          POSTGRES_DB: explored_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - name: Test
+        uses: n8maninger/action-golang-test@v2
+        with:
+          args: -race;-failfast;-tags=postgres
