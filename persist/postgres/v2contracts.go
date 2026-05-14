@@ -46,7 +46,7 @@ func (s *Store) V2Contracts(ids []types.FileContractID) (result []explorer.V2Fil
 		stmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.resolution_type, rev.resolution_height, rev.resolution_block_id, rev.resolution_transaction_id, rev.renewed_from, rev.renewed_to, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
 FROM v2_last_contract_revision rev
 INNER JOIN v2_file_contract_elements fc ON rev.contract_element_id = fc.id
-WHERE rev.contract_id = ?
+WHERE rev.contract_id = $1
 `)
 		if err != nil {
 			return fmt.Errorf("failed to query file contracts: %w", err)
@@ -84,7 +84,7 @@ func (s *Store) V2ContractRevisions(id types.FileContractID) (revisions []explor
 		query := `SELECT fc.transaction_id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.resolution_type, rev.resolution_height, rev.resolution_block_id, rev.resolution_transaction_id, rev.renewed_from, rev.renewed_to, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
 FROM v2_file_contract_elements fc
 INNER JOIN v2_last_contract_revision rev ON rev.contract_id = fc.contract_id
-WHERE fc.contract_id = ?
+WHERE fc.contract_id = $1
 ORDER BY fc.revision_number ASC
 `
 		rows, err := tx.Query(query, encode(id))
@@ -120,9 +120,9 @@ func (s *Store) V2ContractsKey(key types.PublicKey, offset, limit uint64) (resul
 		rows, err := tx.Query(`SELECT fc.transaction_id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.resolution_type, rev.resolution_height, rev.resolution_block_id, rev.resolution_transaction_id, rev.renewed_from, rev.renewed_to, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
 FROM v2_last_contract_revision rev
 INNER JOIN v2_file_contract_elements fc ON rev.contract_element_id = fc.id
-WHERE fc.renter_public_key = ? OR fc.host_public_key = ?
+WHERE fc.renter_public_key = $1 OR fc.host_public_key = $2
 ORDER BY rev.confirmation_height ASC
-LIMIT ? OFFSET ?
+LIMIT $3 OFFSET $4
 `, encoded, encoded, limit, offset)
 		if err != nil {
 			return fmt.Errorf("failed to query file contracts using given pubkey: %w", err)

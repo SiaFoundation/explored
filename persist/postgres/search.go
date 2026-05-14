@@ -41,15 +41,15 @@ func (s *Store) Search(input string) (explorer.SearchType, error) {
 			query string
 			typ   explorer.SearchType
 		}{
-			{`SELECT EXISTS(SELECT 1 FROM address_balance WHERE address=?)`, explorer.SearchTypeAddress},
-			{`SELECT EXISTS(SELECT 1 FROM blocks WHERE id=?)`, explorer.SearchTypeBlock},
-			{`SELECT EXISTS(SELECT 1 FROM transactions WHERE transaction_id=?)`, explorer.SearchTypeTransaction},
-			{`SELECT EXISTS(SELECT 1 FROM v2_transactions WHERE transaction_id=?)`, explorer.SearchTypeV2Transaction},
-			{`SELECT EXISTS(SELECT 1 FROM siacoin_elements WHERE output_id=?)`, explorer.SearchTypeSiacoinElement},
-			{`SELECT EXISTS(SELECT 1 FROM siafund_elements WHERE output_id=?)`, explorer.SearchTypeSiafundElement},
-			{`SELECT EXISTS(SELECT 1 FROM last_contract_revision WHERE contract_id=?)`, explorer.SearchTypeContract},
-			{`SELECT EXISTS(SELECT 1 FROM v2_last_contract_revision WHERE contract_id=?)`, explorer.SearchTypeV2Contract},
-			{`SELECT EXISTS(SELECT 1 FROM host_info WHERE public_key=?)`, explorer.SearchTypeHost},
+			{`SELECT EXISTS(SELECT 1 FROM address_balance WHERE address=$1)`, explorer.SearchTypeAddress},
+			{`SELECT EXISTS(SELECT 1 FROM blocks WHERE id=$1)`, explorer.SearchTypeBlock},
+			{`SELECT EXISTS(SELECT 1 FROM transactions WHERE transaction_id=$1)`, explorer.SearchTypeTransaction},
+			{`SELECT EXISTS(SELECT 1 FROM v2_transactions WHERE transaction_id=$1)`, explorer.SearchTypeV2Transaction},
+			{`SELECT EXISTS(SELECT 1 FROM siacoin_elements WHERE output_id=$1)`, explorer.SearchTypeSiacoinElement},
+			{`SELECT EXISTS(SELECT 1 FROM siafund_elements WHERE output_id=$1)`, explorer.SearchTypeSiafundElement},
+			{`SELECT EXISTS(SELECT 1 FROM last_contract_revision WHERE contract_id=$1)`, explorer.SearchTypeContract},
+			{`SELECT EXISTS(SELECT 1 FROM v2_last_contract_revision WHERE contract_id=$1)`, explorer.SearchTypeV2Contract},
+			{`SELECT EXISTS(SELECT 1 FROM host_info WHERE public_key=$1)`, explorer.SearchTypeHost},
 		}
 
 		for _, q := range queries {

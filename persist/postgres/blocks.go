@@ -15,7 +15,7 @@ func (s *Store) Block(id types.BlockID) (result explorer.Block, err error) {
 	err = s.transaction(func(tx *txn) error {
 		var v2Height uint64
 		var v2Commitment types.Hash256
-		err := tx.QueryRow(`SELECT parent_id, nonce, timestamp, height, leaf_index, v2_height, v2_commitment FROM blocks WHERE id = ?`, encode(id)).Scan(decode(&result.ParentID), decode(&result.Nonce), decode(&result.Timestamp), &result.Height, decode(&result.LeafIndex), decodeNull(&v2Height), decodeNull(&v2Commitment))
+		err := tx.QueryRow(`SELECT parent_id, nonce, timestamp, height, leaf_index, v2_height, v2_commitment FROM blocks WHERE id = $1`, encode(id)).Scan(decode(&result.ParentID), decode(&result.Nonce), decode(&result.Timestamp), &result.Height, decode(&result.LeafIndex), decodeNull(&v2Height), decodeNull(&v2Commitment))
 		if errors.Is(err, pgx.ErrNoRows) {
 			return explorer.ErrNoBlock
 		} else if err != nil {
@@ -77,7 +77,7 @@ func (s *Store) Tip() (result types.ChainIndex, err error) {
 // BestTip implements explorer.Store.
 func (s *Store) BestTip(height uint64) (result types.ChainIndex, err error) {
 	err = s.transaction(func(tx *txn) error {
-		err = tx.QueryRow(`SELECT id, height FROM blocks WHERE height=?`, height).Scan(decode(&result.ID), decode(&result.Height))
+		err = tx.QueryRow(`SELECT id, height FROM blocks WHERE height=$1`, height).Scan(decode(&result.ID), decode(&result.Height))
 		if errors.Is(err, pgx.ErrNoRows) {
 			return explorer.ErrNoTip
 		} else if err != nil {

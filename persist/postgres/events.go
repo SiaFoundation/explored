@@ -90,7 +90,7 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 		err := tx.QueryRow(`SELECT ev.missed, fc.contract_id
 			FROM v1_contract_resolution_events ev
 			INNER JOIN file_contract_elements fc ON ev.parent_id = fc.id
-			WHERE ev.event_id = ?`, eventID).Scan(&missed, decode(&fcID))
+			WHERE ev.event_id = $1`, eventID).Scan(&missed, decode(&fcID))
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v1 resolution event: %w", err)
 		}
@@ -123,7 +123,7 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
             FROM v2_contract_resolution_events ev
             INNER JOIN v2_file_contract_elements fc ON ev.parent_id = fc.id
             INNER JOIN v2_last_contract_revision rev ON fc.contract_id = rev.contract_id
-            WHERE ev.event_id = ?`, eventID).Scan(&resolution.Missed, decode(&fcID), decode(&resolutionTransactionID))
+            WHERE ev.event_id = $1`, eventID).Scan(&resolution.Missed, decode(&fcID), decode(&resolutionTransactionID))
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v2 resolution event: %w", err)
 		}

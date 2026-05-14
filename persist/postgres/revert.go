@@ -32,7 +32,7 @@ func deleteIn(tx *txn, prefix string, ids []int64) error {
 }
 
 func deleteEvents(tx *txn, bid types.BlockID) error {
-	rows, err := tx.Query(`SELECT id FROM events WHERE block_id = ?`, encode(bid))
+	rows, err := tx.Query(`SELECT id FROM events WHERE block_id = $1`, encode(bid))
 	if err != nil {
 		return fmt.Errorf("failed to query event IDs: %w", err)
 	}
@@ -69,9 +69,9 @@ func deleteEvents(tx *txn, bid types.BlockID) error {
 }
 
 func deleteLastContractRevisions(tx *txn, bid types.BlockID) error {
-	if _, err := tx.Exec(`DELETE FROM last_contract_revision WHERE confirmation_block_id = ?;`, encode(bid)); err != nil {
+	if _, err := tx.Exec(`DELETE FROM last_contract_revision WHERE confirmation_block_id = $1;`, encode(bid)); err != nil {
 		return fmt.Errorf("failed to delete from last_contract_revision: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM v2_last_contract_revision WHERE confirmation_block_id = ?;`, encode(bid)); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM v2_last_contract_revision WHERE confirmation_block_id = $1;`, encode(bid)); err != nil {
 		return fmt.Errorf("failed to delete from v2_last_contract_revision: %w", err)
 	}
 	return nil
@@ -84,11 +84,11 @@ func deleteV1Transactions(tx *txn, bid types.BlockID) error {
 FROM
 	block_transactions
 WHERE
-	block_id = ?
+	block_id = $1
 	AND transaction_id NOT IN (
       SELECT transaction_id
       FROM block_transactions
-      WHERE block_id != ?
+      WHERE block_id != $2
 );`, encode(bid), encode(bid))
 	if err != nil {
 		return fmt.Errorf("failed to query orphaned transaction IDs: %w", err)
@@ -107,7 +107,7 @@ WHERE
 		return fmt.Errorf("failed to get transaction ID rows: %w", err)
 	}
 
-	if _, err := tx.Exec(`DELETE FROM block_transactions WHERE block_id = ?;`, encode(bid)); err != nil {
+	if _, err := tx.Exec(`DELETE FROM block_transactions WHERE block_id = $1;`, encode(bid)); err != nil {
 		return fmt.Errorf("failed to delete from block_transactions: %w", err)
 	}
 
@@ -137,7 +137,7 @@ WHERE
 	rows, err = tx.Query(`SELECT fce.id
 FROM
     file_contract_elements AS fce
-WHERE fce.block_id = ?`, encode(bid))
+WHERE fce.block_id = $1`, encode(bid))
 	if err != nil {
 		return fmt.Errorf("failed to query file contract element IDs: %w", err)
 	}
@@ -177,11 +177,11 @@ func deleteV2Transactions(tx *txn, bid types.BlockID) error {
 FROM
     v2_block_transactions
 WHERE
-    block_id = ?
+    block_id = $1
     AND transaction_id NOT IN (
       SELECT transaction_id
       FROM v2_block_transactions
-      WHERE block_id != ?
+      WHERE block_id != $2
 );`, encode(bid), encode(bid))
 	if err != nil {
 		return fmt.Errorf("failed to query orphaned v2 transaction IDs: %w", err)
@@ -200,7 +200,7 @@ WHERE
 		return fmt.Errorf("failed to get v2 transaction ID rows: %w", err)
 	}
 
-	if _, err := tx.Exec(`DELETE FROM v2_block_transactions WHERE block_id = ?;`, encode(bid)); err != nil {
+	if _, err := tx.Exec(`DELETE FROM v2_block_transactions WHERE block_id = $1;`, encode(bid)); err != nil {
 		return fmt.Errorf("failed to delete from v2_block_transactions: %w", err)
 	}
 
@@ -220,7 +220,7 @@ WHERE
 		return fmt.Errorf("failed to delete from v2_transaction_file_contract_resolutions: %w", err)
 	} else if err := deleteIn(tx, `DELETE FROM v2_transaction_attestations WHERE transaction_id IN`, ids); err != nil {
 		return fmt.Errorf("failed to delete from v2_transaction_attestations: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM v2_file_contract_elements WHERE block_id = ?;`, encode(bid)); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM v2_file_contract_elements WHERE block_id = $1;`, encode(bid)); err != nil {
 		// have to remove file contract elements because it depends on transactions table
 		return fmt.Errorf("failed to delete from v2_file_contract_elements: %w", err)
 	} else if err := deleteIn(tx, `DELETE FROM v2_transactions WHERE id IN`, ids); err != nil {
@@ -232,15 +232,15 @@ WHERE
 
 func deleteBlock(tx *txn, bid types.BlockID) error {
 	encoded := encode(bid)
-	if _, err := tx.Exec(`DELETE FROM network_metrics WHERE block_id = ?;`, encoded); err != nil {
+	if _, err := tx.Exec(`DELETE FROM network_metrics WHERE block_id = $1;`, encoded); err != nil {
 		return fmt.Errorf("failed to delete from network_metrics: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM miner_payouts WHERE block_id = ?;`, encoded); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM miner_payouts WHERE block_id = $1;`, encoded); err != nil {
 		return fmt.Errorf("failed to delete from miner_payouts: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM siacoin_elements WHERE block_id = ?;`, encoded); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM siacoin_elements WHERE block_id = $1;`, encoded); err != nil {
 		return fmt.Errorf("failed to delete from siacoin_elements: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM siafund_elements WHERE block_id = ?;`, encoded); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM siafund_elements WHERE block_id = $1;`, encoded); err != nil {
 		return fmt.Errorf("failed to delete from siafund_elements: %w", err)
-	} else if _, err := tx.Exec(`DELETE FROM blocks WHERE id = ?;`, encoded); err != nil {
+	} else if _, err := tx.Exec(`DELETE FROM blocks WHERE id = $1;`, encoded); err != nil {
 		return fmt.Errorf("failed to delete from blocks: %w", err)
 	}
 	return nil

@@ -17,7 +17,7 @@ func fillElementProofs(tx *txn, indices []uint64) (proofs [][]types.Hash256, _ e
 		return nil, fmt.Errorf("failed to query state tree leaves: %w", err)
 	}
 
-	stmt, err := tx.Prepare(`SELECT value FROM state_tree WHERE row_id=? AND col_id=?`)
+	stmt, err := tx.Prepare(`SELECT value FROM state_tree WHERE row_id=$1 AND col_id=$2`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare statement: %w", err)
 	}

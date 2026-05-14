@@ -29,7 +29,7 @@ func (s *Store) LastSuccessScan() (lastScan time.Time, err error) {
 // FailedInteractionsStreak fields are populated.
 func (s *Store) HostsForScanning(minLastAnnouncement time.Time, limit uint64) (result []explorer.UnscannedHost, err error) {
 	err = s.transaction(func(tx *txn) error {
-		rows, err := tx.Query(`SELECT public_key, v2, net_address, failed_interactions_streak FROM host_info WHERE next_scan <= ? AND last_announcement >= ? ORDER BY next_scan ASC LIMIT ?`, encode(types.CurrentTimestamp()), encode(minLastAnnouncement), limit)
+		rows, err := tx.Query(`SELECT public_key, v2, net_address, failed_interactions_streak FROM host_info WHERE next_scan <= $1 AND last_announcement >= $2 ORDER BY next_scan ASC LIMIT $3`, encode(types.CurrentTimestamp()), encode(minLastAnnouncement), limit)
 		if err != nil {
 			return fmt.Errorf("failed to query hosts: %w", err)
 		}
@@ -49,7 +49,7 @@ func (s *Store) HostsForScanning(minLastAnnouncement time.Time, limit uint64) (r
 			return fmt.Errorf("failed to retrieve host rows: %w", err)
 		}
 
-		v2AddrStmt, err := tx.Prepare(`SELECT protocol,address FROM host_info_v2_netaddresses WHERE public_key = ? ORDER BY netaddress_order`)
+		v2AddrStmt, err := tx.Prepare(`SELECT protocol,address FROM host_info_v2_netaddresses WHERE public_key = $1 ORDER BY netaddress_order`)
 		if err != nil {
 			return fmt.Errorf("failed to prepare v2 addrs statement: %w", err)
 		}
@@ -102,7 +102,7 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 		}
 
 		if len(params.PublicKeys) > 0 {
-			filter := `public_key IN (` + queryPlaceHolders(len(params.PublicKeys)) + `)`
+			filter := `public_key IN (` + queryPlaceHolders(len(args)+1, len(params.PublicKeys)) + `)`
 			for _, pk := range params.PublicKeys {
 				args = append(args, encode(pk))
 			}
@@ -112,17 +112,18 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 		if len(params.NetAddresses) > 0 {
 			var addrFilters []string
 			if params.V2 == nil || !*params.V2 {
+				addrFilter := `net_address IN (` + queryPlaceHolders(len(args)+1, len(params.NetAddresses)) + `)`
 				for _, netAddress := range params.NetAddresses {
 					args = append(args, any(netAddress))
 				}
-				addrFilters = append(addrFilters, `net_address IN (`+queryPlaceHolders(len(params.NetAddresses))+`)`)
+				addrFilters = append(addrFilters, addrFilter)
 			}
 			if params.V2 == nil || *params.V2 {
 				netAddresses := make([]any, 0, len(params.NetAddresses))
 				for _, netAddress := range params.NetAddresses {
 					netAddresses = append(netAddresses, any(netAddress))
 				}
-				rows, err := tx.Query(`SELECT public_key FROM host_info_v2_netaddresses WHERE address IN (`+queryPlaceHolders(len(params.NetAddresses))+`)`, netAddresses...)
+				rows, err := tx.Query(`SELECT public_key FROM host_info_v2_netaddresses WHERE address IN (`+queryPlaceHolders(1, len(params.NetAddresses))+`)`, netAddresses...)
 				if err != nil {
 					return fmt.Errorf("failed to get query public keys for given net addresses: %w", err)
 				}
@@ -143,8 +144,9 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 				// postgres rejects `IN ()`, so only contribute the v2 filter
 				// when we actually have matching public keys.
 				if len(pks) > 0 {
+					addrFilter := `public_key IN (` + queryPlaceHolders(len(args)+1, len(pks)) + `)`
 					args = append(args, pks...)
-					addrFilters = append(addrFilters, `public_key IN (`+queryPlaceHolders(len(pks))+`)`)
+					addrFilters = append(addrFilters, addrFilter)
 				}
 			}
 			if len(addrFilters) == 0 {
@@ -159,35 +161,40 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 
 		const uptimeValue = `(successful_interactions * 1.0 / GREATEST(1, total_scans))`
 		if params.MinUptime != nil {
-			filters = append(filters, uptimeValue+` >= ?`)
+			filters = append(filters, fmt.Sprintf(`%s >= $%d`, uptimeValue, len(args)+1))
 			args = append(args, *params.MinUptime/100.0)
 		}
 		if params.MinDuration != nil {
-			filters = append(filters, `CASE WHEN v2=true THEN v2_settings_max_contract_duration >= ? ELSE settings_max_duration >= ? END`)
+			n := len(args)
+			filters = append(filters, fmt.Sprintf(`CASE WHEN v2=true THEN v2_settings_max_contract_duration >= $%d ELSE settings_max_duration >= $%d END`, n+1, n+2))
 			args = append(args, encode(*params.MinDuration), encode(*params.MinDuration))
 		}
 		if params.MaxStoragePrice != nil {
-			filters = append(filters, `CASE WHEN v2=true THEN v2_prices_storage_price <= ? ELSE settings_storage_price <= ? END`)
+			n := len(args)
+			filters = append(filters, fmt.Sprintf(`CASE WHEN v2=true THEN v2_prices_storage_price <= $%d ELSE settings_storage_price <= $%d END`, n+1, n+2))
 			args = append(args, encode(*params.MaxStoragePrice), encode(*params.MaxStoragePrice))
 		}
 		if params.MaxContractPrice != nil {
-			filters = append(filters, `CASE WHEN v2=true THEN v2_prices_contract_price <= ? ELSE settings_contract_price <= ? END`)
+			n := len(args)
+			filters = append(filters, fmt.Sprintf(`CASE WHEN v2=true THEN v2_prices_contract_price <= $%d ELSE settings_contract_price <= $%d END`, n+1, n+2))
 			args = append(args, encode(*params.MaxContractPrice), encode(*params.MaxContractPrice))
 		}
 		if params.MaxUploadPrice != nil {
-			filters = append(filters, `CASE WHEN v2=true THEN v2_prices_ingress_price <= ? ELSE settings_upload_bandwidth_price <= ? END`)
+			n := len(args)
+			filters = append(filters, fmt.Sprintf(`CASE WHEN v2=true THEN v2_prices_ingress_price <= $%d ELSE settings_upload_bandwidth_price <= $%d END`, n+1, n+2))
 			args = append(args, encode(*params.MaxUploadPrice), encode(*params.MaxUploadPrice))
 		}
 		if params.MaxDownloadPrice != nil {
-			filters = append(filters, `CASE WHEN v2=true THEN v2_prices_egress_price <= ? ELSE settings_download_bandwidth_price <= ? END`)
+			n := len(args)
+			filters = append(filters, fmt.Sprintf(`CASE WHEN v2=true THEN v2_prices_egress_price <= $%d ELSE settings_download_bandwidth_price <= $%d END`, n+1, n+2))
 			args = append(args, encode(*params.MaxDownloadPrice), encode(*params.MaxDownloadPrice))
 		}
 		if params.MaxBaseRPCPrice != nil {
-			filters = append(filters, `settings_base_rpc_price <= ?`)
+			filters = append(filters, fmt.Sprintf(`settings_base_rpc_price <= $%d`, len(args)+1))
 			args = append(args, encode(*params.MaxBaseRPCPrice))
 		}
 		if params.MaxSectorAccessPrice != nil {
-			filters = append(filters, `settings_sector_access_price <= ?`)
+			filters = append(filters, fmt.Sprintf(`settings_sector_access_price <= $%d`, len(args)+1))
 			args = append(args, encode(*params.MaxSectorAccessPrice))
 		}
 		if params.AcceptContracts != nil {
@@ -204,6 +211,8 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 			}
 			filters = append(filters, fmt.Sprintf(`last_scan_successful = %s`, v))
 		}
+		limitPos := len(args) + 1
+		offsetPos := len(args) + 2
 		args = append(args, limit, offset)
 
 		var sortColumn string
@@ -242,8 +251,8 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
         SELECT public_key,v2,net_address,country_code,latitude,longitude,known_since,last_scan,last_scan_successful,last_scan_error,last_announcement,next_scan,total_scans,successful_interactions,failed_interactions_streak,settings_accepting_contracts,settings_max_download_batch_size,settings_max_duration,settings_max_revise_batch_size,settings_net_address,settings_remaining_storage,settings_sector_size,settings_total_storage,settings_address,settings_window_size,settings_collateral,settings_max_collateral,settings_base_rpc_price,settings_contract_price,settings_download_bandwidth_price,settings_sector_access_price,settings_storage_price,settings_upload_bandwidth_price,settings_ephemeral_account_expiry,settings_max_ephemeral_account_balance,settings_revision_number,settings_version,settings_release,settings_sia_mux_port,price_table_uid,price_table_validity,price_table_host_block_height,price_table_update_price_table_cost,price_table_account_balance_cost,price_table_fund_account_cost,price_table_latest_revision_cost,price_table_subscription_memory_cost,price_table_subscription_notification_cost,price_table_init_base_cost,price_table_memory_time_cost,price_table_download_bandwidth_cost,price_table_upload_bandwidth_cost,price_table_drop_sectors_base_cost,price_table_drop_sectors_unit_cost,price_table_has_sector_base_cost,price_table_read_base_cost,price_table_read_length_cost,price_table_renew_contract_cost,price_table_revision_base_cost,price_table_swap_sector_base_cost,price_table_write_base_cost,price_table_write_length_cost,price_table_write_store_cost,price_table_txn_fee_min_recommended,price_table_txn_fee_max_recommended,price_table_contract_price,price_table_collateral_cost,price_table_max_collateral,price_table_max_duration,price_table_window_size,price_table_registry_entries_left,price_table_registry_entries_total,v2_settings_protocol_version,v2_settings_release,v2_settings_wallet_address,v2_settings_accepting_contracts,v2_settings_max_collateral,v2_settings_max_contract_duration,v2_settings_remaining_storage,v2_settings_total_storage,v2_prices_contract_price,v2_prices_collateral_price,v2_prices_storage_price,v2_prices_ingress_price,v2_prices_egress_price,v2_prices_free_sector_price,v2_prices_tip_height,v2_prices_valid_until,v2_prices_signature FROM host_info
         %s
         ORDER BY (%s) %s
-        LIMIT ? OFFSET ?`,
-			whereClause, sortColumn, dir,
+        LIMIT $%d OFFSET $%d`,
+			whereClause, sortColumn, dir, limitPos, offsetPos,
 		)
 
 		rows, err := tx.Query(query, args...)
@@ -275,7 +284,7 @@ func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortC
 			return fmt.Errorf("failed to retrieve host rows: %w", err)
 		}
 
-		v2AddrStmt, err := tx.Prepare(`SELECT protocol,address FROM host_info_v2_netaddresses WHERE public_key = ? ORDER BY netaddress_order`)
+		v2AddrStmt, err := tx.Prepare(`SELECT protocol,address FROM host_info_v2_netaddresses WHERE public_key = $1 ORDER BY netaddress_order`)
 		if err != nil {
 			return fmt.Errorf("failed to prepare v2 addrs statement: %w", err)
 		}

@@ -27,12 +27,12 @@ func addBlock(tx *txn, b types.Block, cie types.ChainIndexElement, height uint64
 		v2Height = encode(b.V2.Height)
 		v2Commitment = encode(b.V2.Commitment)
 	}
-	_, err := tx.Exec("INSERT INTO blocks(id, height, parent_id, nonce, timestamp, leaf_index, v2_height, v2_commitment) VALUES (?, ?, ?, ?, ?, ?, ?, ?);", encode(b.ID()), height, encode(b.ParentID), encode(b.Nonce), encode(b.Timestamp), encode(cie.StateElement.LeafIndex), v2Height, v2Commitment)
+	_, err := tx.Exec("INSERT INTO blocks(id, height, parent_id, nonce, timestamp, leaf_index, v2_height, v2_commitment) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);", encode(b.ID()), height, encode(b.ParentID), encode(b.Nonce), encode(b.Timestamp), encode(cie.StateElement.LeafIndex), v2Height, v2Commitment)
 	return err
 }
 
 func addMinerPayouts(tx *txn, bid types.BlockID, scos []types.SiacoinOutput) error {
-	stmt, err := tx.Prepare(`INSERT INTO miner_payouts(block_id, block_order, output_id) VALUES (?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?));`)
+	stmt, err := tx.Prepare(`INSERT INTO miner_payouts(block_id, block_order, output_id) VALUES ($1, $2, (SELECT id FROM siacoin_elements WHERE output_id = $3));`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -51,7 +51,7 @@ func addMinerFees(tx *txn, dbID int64, minerFees []types.Currency) error {
 		return nil
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO transaction_miner_fees(transaction_id, transaction_order, fee) VALUES (?, ?, ?)`)
+	stmt, err := tx.Prepare(`INSERT INTO transaction_miner_fees(transaction_id, transaction_order, fee) VALUES ($1, $2, $3)`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -70,7 +70,7 @@ func addArbitraryData(tx *txn, dbID int64, arbitraryData [][]byte) error {
 		return nil
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO transaction_arbitrary_data(transaction_id, transaction_order, data) VALUES (?, ?, ?)`)
+	stmt, err := tx.Prepare(`INSERT INTO transaction_arbitrary_data(transaction_id, transaction_order, data) VALUES ($1, $2, $3)`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -89,7 +89,7 @@ func addSignatures(tx *txn, dbID int64, signatures []types.TransactionSignature)
 		return nil
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO transaction_signatures(transaction_id, transaction_order, parent_id, public_key_index, timelock, covered_fields, signature) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+	stmt, err := tx.Prepare(`INSERT INTO transaction_signatures(transaction_id, transaction_order, parent_id, public_key_index, timelock, covered_fields, signature) VALUES ($1, $2, $3, $4, $5, $6, $7)`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -108,7 +108,7 @@ func addSiacoinInputs(tx *txn, dbID int64, siacoinInputs []types.SiacoinInput) e
 		return nil
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO transaction_siacoin_inputs(transaction_id, transaction_order, unlock_conditions, parent_id) VALUES (?, ?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?))`)
+	stmt, err := tx.Prepare(`INSERT INTO transaction_siacoin_inputs(transaction_id, transaction_order, unlock_conditions, parent_id) VALUES ($1, $2, $3, (SELECT id FROM siacoin_elements WHERE output_id = $4))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -127,7 +127,7 @@ func addSiacoinOutputs(tx *txn, dbID int64, txn types.Transaction) error {
 		return nil
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO transaction_siacoin_outputs(transaction_id, transaction_order, output_id) VALUES (?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?))`)
+	stmt, err := tx.Prepare(`INSERT INTO transaction_siacoin_outputs(transaction_id, transaction_order, output_id) VALUES ($1, $2, (SELECT id FROM siacoin_elements WHERE output_id = $3))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -146,7 +146,7 @@ func addSiafundInputs(tx *txn, dbID int64, siafundInputs []types.SiafundInput) e
 		return nil
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO transaction_siafund_inputs(transaction_id, transaction_order, unlock_conditions, claim_address, parent_id) VALUES (?, ?, ?, ?, (SELECT id FROM siafund_elements WHERE output_id = ?))`)
+	stmt, err := tx.Prepare(`INSERT INTO transaction_siafund_inputs(transaction_id, transaction_order, unlock_conditions, claim_address, parent_id) VALUES ($1, $2, $3, $4, (SELECT id FROM siafund_elements WHERE output_id = $5))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -166,7 +166,7 @@ func addSiafundOutputs(tx *txn, dbID int64, txn types.Transaction) error {
 		return nil
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO transaction_siafund_outputs(transaction_id, transaction_order, output_id) VALUES (?, ?, (SELECT id FROM siafund_elements WHERE output_id = ?))`)
+	stmt, err := tx.Prepare(`INSERT INTO transaction_siafund_outputs(transaction_id, transaction_order, output_id) VALUES ($1, $2, (SELECT id FROM siafund_elements WHERE output_id = $3))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -185,7 +185,7 @@ func addFileContracts(tx *txn, dbID int64, txn types.Transaction) error {
 		return nil
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO transaction_file_contracts(transaction_id, transaction_order, contract_id) VALUES (?, ?, (SELECT id FROM file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
+	stmt, err := tx.Prepare(`INSERT INTO transaction_file_contracts(transaction_id, transaction_order, contract_id) VALUES ($1, $2, (SELECT id FROM file_contract_elements WHERE contract_id = $3 AND revision_number = $4))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -204,7 +204,7 @@ func addFileContractRevisions(tx *txn, dbID int64, fileContractRevisions []types
 		return nil
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO transaction_file_contract_revisions(transaction_id, transaction_order, parent_id, unlock_conditions, contract_id) VALUES (?, ?, ?, ?, (SELECT id FROM file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
+	stmt, err := tx.Prepare(`INSERT INTO transaction_file_contract_revisions(transaction_id, transaction_order, parent_id, unlock_conditions, contract_id) VALUES ($1, $2, $3, $4, (SELECT id FROM file_contract_elements WHERE contract_id = $5 AND revision_number = $6))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -224,7 +224,7 @@ func addStorageProofs(tx *txn, dbID int64, storageProofs []types.StorageProof) e
 		return nil
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO transaction_storage_proofs(transaction_id, transaction_order, parent_id, leaf, proof) VALUES (?, ?, ?, ?, ?)`)
+	stmt, err := tx.Prepare(`INSERT INTO transaction_storage_proofs(transaction_id, transaction_order, parent_id, leaf, proof) VALUES ($1, $2, $3, $4, $5)`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -244,19 +244,19 @@ type txnDBId struct {
 }
 
 func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction) (map[types.TransactionID]bool, error) {
-	checkTransactionStmt, err := tx.Prepare(`SELECT id FROM transactions WHERE transaction_id = ?`)
+	checkTransactionStmt, err := tx.Prepare(`SELECT id FROM transactions WHERE transaction_id = $1`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare check transaction statement: %v", err)
 	}
 	defer checkTransactionStmt.Close()
 
-	insertTransactionStmt, err := tx.Prepare(`INSERT INTO transactions (transaction_id) VALUES (?) RETURNING id`)
+	insertTransactionStmt, err := tx.Prepare(`INSERT INTO transactions (transaction_id) VALUES ($1) RETURNING id`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare insert transaction statement: %v", err)
 	}
 	defer insertTransactionStmt.Close()
 
-	blockTransactionsStmt, err := tx.Prepare(`INSERT INTO block_transactions(block_id, transaction_id, block_order) VALUES (?, ?, ?);`)
+	blockTransactionsStmt, err := tx.Prepare(`INSERT INTO block_transactions(block_id, transaction_id, block_order) VALUES ($1, $2, $3);`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare block_transactions statement: %w", err)
 	}
@@ -296,7 +296,7 @@ func addTransactions(tx *txn, bid types.BlockID, txns []types.Transaction) (map[
 }
 
 func addTransactionFields(tx *txn, txns []types.Transaction, txnExist map[types.TransactionID]bool) error {
-	stmt, err := tx.Prepare(`SELECT id FROM transactions WHERE transaction_id = ?`)
+	stmt, err := tx.Prepare(`SELECT id FROM transactions WHERE transaction_id = $1`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare transaction ID statement: %w", err)
 	}
@@ -393,7 +393,7 @@ func updateBalances(tx *txn, height uint64, spentSiacoinElements, newSiacoinElem
 
 	balanceRowsStmt, err := tx.Prepare(`SELECT siacoin_balance, immature_siacoin_balance, siafund_balance
         FROM address_balance
-        WHERE address = ?`)
+        WHERE address = $1`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare address_balance statement: %w", err)
 	}
@@ -441,9 +441,9 @@ func updateBalances(tx *txn, height uint64, spentSiacoinElements, newSiacoinElem
 	}
 
 	stmt, err := tx.Prepare(`INSERT INTO address_balance(address, siacoin_balance, immature_siacoin_balance, siafund_balance)
-       VALUES (?, ?, ?, ?)
+       VALUES ($1, $2, $3, $4)
        ON CONFLICT(address)
-       DO UPDATE set siacoin_balance = ?, immature_siacoin_balance = ?, siafund_balance = ?`)
+       DO UPDATE set siacoin_balance = $5, immature_siacoin_balance = $6, siafund_balance = $7`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -468,7 +468,7 @@ func updateMaturedBalances(tx *txn, revert bool, height uint64) error {
 
 	rows, err := tx.Query(`SELECT address, value
 		        FROM siacoin_elements
-		        WHERE maturity_height = ?`, height)
+		        WHERE maturity_height = $1`, height)
 	if err != nil {
 		return fmt.Errorf("failed to query siacoin_elements: %w", err)
 	}
@@ -490,7 +490,7 @@ func updateMaturedBalances(tx *txn, revert bool, height uint64) error {
 
 	balanceRowsStmt, err := tx.Prepare(`SELECT siacoin_balance, immature_siacoin_balance
         FROM address_balance
-        WHERE address = ?`)
+        WHERE address = $1`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare address_balance statement: %w", err)
 	}
@@ -520,9 +520,9 @@ func updateMaturedBalances(tx *txn, revert bool, height uint64) error {
 	}
 
 	stmt, err := tx.Prepare(`INSERT INTO address_balance(address, siacoin_balance, immature_siacoin_balance, siafund_balance)
-    VALUES (?, ?, ?, ?)
+    VALUES ($1, $2, $3, $4)
     ON CONFLICT(address)
-    DO UPDATE set siacoin_balance = ?, immature_siacoin_balance = ?`)
+    DO UPDATE set siacoin_balance = $5, immature_siacoin_balance = $6`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -557,9 +557,9 @@ func updateStateTree(tx *txn, changes []explorer.TreeNodeUpdate) error {
 func addSiacoinElements(tx *txn, index types.ChainIndex, spentElements, newElements []explorer.SiacoinOutput) error {
 	if len(newElements) > 0 {
 		stmt, err := tx.Prepare(`INSERT INTO siacoin_elements(output_id, block_id, leaf_index, source, maturity_height, address, value)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
                 ON CONFLICT (output_id)
-                DO UPDATE SET leaf_index = ?, spent_index = NULL;`)
+                DO UPDATE SET leaf_index = $8, spent_index = NULL;`)
 		if err != nil {
 			return fmt.Errorf("failed to prepare siacoin_elements statement: %w", err)
 		}
@@ -573,9 +573,9 @@ func addSiacoinElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 	}
 	if len(spentElements) > 0 {
 		stmt, err := tx.Prepare(`INSERT INTO siacoin_elements(output_id, block_id, leaf_index, spent_index, source, maturity_height, address, value)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 ON CONFLICT (output_id)
-                DO UPDATE SET spent_index = ?, leaf_index = ?;`)
+                DO UPDATE SET spent_index = $9, leaf_index = $10;`)
 		if err != nil {
 			return fmt.Errorf("failed to prepare siacoin_elements statement: %w", err)
 		}
@@ -594,9 +594,9 @@ func addSiacoinElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 func addSiafundElements(tx *txn, index types.ChainIndex, spentElements, newElements []types.SiafundElement) error {
 	if len(newElements) > 0 {
 		stmt, err := tx.Prepare(`INSERT INTO siafund_elements(output_id, block_id, leaf_index, claim_start, address, value)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (output_id)
-            DO UPDATE SET leaf_index = ?, spent_index = NULL`)
+            DO UPDATE SET leaf_index = $7, spent_index = NULL`)
 		if err != nil {
 			return fmt.Errorf("failed to prepare siafund_elements statement: %w", err)
 		}
@@ -610,9 +610,9 @@ func addSiafundElements(tx *txn, index types.ChainIndex, spentElements, newEleme
 	}
 	if len(spentElements) > 0 {
 		stmt, err := tx.Prepare(`INSERT INTO siafund_elements(output_id, block_id, leaf_index, spent_index, claim_start, address, value)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT (output_id)
-            DO UPDATE SET leaf_index = ?, spent_index = ?`)
+            DO UPDATE SET leaf_index = $8, spent_index = $9`)
 		if err != nil {
 			return fmt.Errorf("failed to prepare siafund_elements statement: %w", err)
 		}
@@ -650,31 +650,31 @@ func addEvents(tx *txn, bid types.BlockID, events []explorer.Event) error {
 	}
 	defer relevantAddrStmt.Close()
 
-	v1TransactionEventStmt, err := tx.Prepare(`INSERT INTO v1_transaction_events (event_id, transaction_id) VALUES (?, (SELECT id FROM transactions WHERE transaction_id = ?))`)
+	v1TransactionEventStmt, err := tx.Prepare(`INSERT INTO v1_transaction_events (event_id, transaction_id) VALUES ($1, (SELECT id FROM transactions WHERE transaction_id = $2))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare v1 transaction event statement: %w", err)
 	}
 	defer v1TransactionEventStmt.Close()
 
-	v2TransactionEventStmt, err := tx.Prepare(`INSERT INTO v2_transaction_events (event_id, transaction_id) VALUES (?, (SELECT id FROM v2_transactions WHERE transaction_id = ?))`)
+	v2TransactionEventStmt, err := tx.Prepare(`INSERT INTO v2_transaction_events (event_id, transaction_id) VALUES ($1, (SELECT id FROM v2_transactions WHERE transaction_id = $2))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare v2 transaction event statement: %w", err)
 	}
 	defer v2TransactionEventStmt.Close()
 
-	payoutEventStmt, err := tx.Prepare(`INSERT INTO payout_events (event_id, output_id) VALUES (?, (SELECT id FROM siacoin_elements WHERE output_id = ?))`)
+	payoutEventStmt, err := tx.Prepare(`INSERT INTO payout_events (event_id, output_id) VALUES ($1, (SELECT id FROM siacoin_elements WHERE output_id = $2))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare minerpayout event statement: %w", err)
 	}
 	defer payoutEventStmt.Close()
 
-	v1ContractResolutionEventStmt, err := tx.Prepare(`INSERT INTO v1_contract_resolution_events (event_id, missed, output_id, parent_id) VALUES (?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?), (SELECT id FROM file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
+	v1ContractResolutionEventStmt, err := tx.Prepare(`INSERT INTO v1_contract_resolution_events (event_id, missed, output_id, parent_id) VALUES ($1, $2, (SELECT id FROM siacoin_elements WHERE output_id = $3), (SELECT id FROM file_contract_elements WHERE contract_id = $4 AND revision_number = $5))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare v1 contract resolution event statement: %w", err)
 	}
 	defer v1ContractResolutionEventStmt.Close()
 
-	v2ContractResolutionEventStmt, err := tx.Prepare(`INSERT INTO v2_contract_resolution_events (event_id, missed, output_id, parent_id) VALUES (?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?), (SELECT id from v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
+	v2ContractResolutionEventStmt, err := tx.Prepare(`INSERT INTO v2_contract_resolution_events (event_id, missed, output_id, parent_id) VALUES ($1, $2, (SELECT id FROM siacoin_elements WHERE output_id = $3), (SELECT id from v2_file_contract_elements WHERE contract_id = $4 AND revision_number = $5))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare v2 contract resolution event statement: %w", err)
 	}
@@ -736,9 +736,9 @@ func addEvents(tx *txn, bid types.BlockID, events []explorer.Event) error {
 
 func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b types.Block, fces []explorer.FileContractUpdate) error {
 	stmt, err := tx.Prepare(`INSERT INTO file_contract_elements(contract_id, block_id, transaction_id, leaf_index, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         ON CONFLICT (contract_id, revision_number)
-        DO UPDATE SET leaf_index = ?
+        DO UPDATE SET leaf_index = $12
         RETURNING id;`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare main statement: %w", err)
@@ -746,21 +746,21 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
 	defer stmt.Close()
 
 	revisionStmt, err := tx.Prepare(`INSERT INTO last_contract_revision(contract_id, contract_element_id, resolved, valid, ed25519_renter_key, ed25519_host_key, confirmation_height, confirmation_block_id, confirmation_transaction_id)
-    VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, ''::bytea), COALESCE(?, ''::bytea), COALESCE(?, ''::bytea))
+    VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, ''::bytea), COALESCE($8, ''::bytea), COALESCE($9, ''::bytea))
     ON CONFLICT (contract_id)
-    DO UPDATE SET resolved = EXCLUDED.resolved, valid = EXCLUDED.valid, contract_element_id = ?, ed25519_renter_key = COALESCE(?, last_contract_revision.ed25519_renter_key), ed25519_host_key = COALESCE(?, last_contract_revision.ed25519_host_key), confirmation_height = COALESCE(?, last_contract_revision.confirmation_height), confirmation_block_id = COALESCE(?, last_contract_revision.confirmation_block_id), confirmation_transaction_id = COALESCE(?, last_contract_revision.confirmation_transaction_id)`)
+    DO UPDATE SET resolved = EXCLUDED.resolved, valid = EXCLUDED.valid, contract_element_id = $10, ed25519_renter_key = COALESCE($11, last_contract_revision.ed25519_renter_key), ed25519_host_key = COALESCE($12, last_contract_revision.ed25519_host_key), confirmation_height = COALESCE($13, last_contract_revision.confirmation_height), confirmation_block_id = COALESCE($14, last_contract_revision.confirmation_block_id), confirmation_transaction_id = COALESCE($15, last_contract_revision.confirmation_transaction_id)`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare last_contract_revision statement: %w", err)
 	}
 	defer revisionStmt.Close()
 
-	validOutputsStmt, err := tx.Prepare(`INSERT INTO file_contract_valid_proof_outputs(contract_id, contract_order, id, address, value) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`)
+	validOutputsStmt, err := tx.Prepare(`INSERT INTO file_contract_valid_proof_outputs(contract_id, contract_order, id, address, value) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare valid proof outputs statement: %w", err)
 	}
 	defer validOutputsStmt.Close()
 
-	missedOutputsStmt, err := tx.Prepare(`INSERT INTO file_contract_missed_proof_outputs(contract_id, contract_order, id, address, value) VALUES (?, ?, ?, ?, ?)  ON CONFLICT DO NOTHING`)
+	missedOutputsStmt, err := tx.Prepare(`INSERT INTO file_contract_missed_proof_outputs(contract_id, contract_order, id, address, value) VALUES ($1, $2, $3, $4, $5)  ON CONFLICT DO NOTHING`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare missed proof outputs statement: %w", err)
 	}
@@ -947,7 +947,7 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
 }
 
 func updateFileContractIndices(tx *txn, revert bool, index types.ChainIndex, fces []explorer.FileContractUpdate) error {
-	proofIndexStmt, err := tx.Prepare(`UPDATE last_contract_revision SET proof_height = ?, proof_block_id = ?, proof_transaction_id = ? WHERE contract_id = ?`)
+	proofIndexStmt, err := tx.Prepare(`UPDATE last_contract_revision SET proof_height = $1, proof_block_id = $2, proof_transaction_id = $3 WHERE contract_id = $4`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare proof index statement: %w", err)
 	}
@@ -976,7 +976,7 @@ func updateFileContractIndices(tx *txn, revert bool, index types.ChainIndex, fce
 }
 
 func addMetrics(tx *txn, s explorer.UpdateState) error {
-	_, err := tx.Exec(`INSERT INTO network_metrics(block_id, height, difficulty, siafund_tax_revenue, num_leaves, total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	_, err := tx.Exec(`INSERT INTO network_metrics(block_id, height, difficulty, siafund_tax_revenue, num_leaves, total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
 		encode(s.Metrics.Index.ID),
 		s.Metrics.Index.Height,
 		encode(s.Metrics.Difficulty),
@@ -994,13 +994,13 @@ func addMetrics(tx *txn, s explorer.UpdateState) error {
 }
 
 func (ut *updateTx) HostExists(pubkey types.PublicKey) (exists bool, err error) {
-	err = ut.tx.QueryRow(`SELECT EXISTS(SELECT public_key FROM host_info WHERE public_key = ?)`, encode(pubkey)).Scan(&exists)
+	err = ut.tx.QueryRow(`SELECT EXISTS(SELECT public_key FROM host_info WHERE public_key = $1)`, encode(pubkey)).Scan(&exists)
 	return
 }
 
 func (ut *updateTx) Metrics(height uint64) (explorer.Metrics, error) {
 	var metrics explorer.Metrics
-	if err := ut.tx.QueryRow("SELECT total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue from network_metrics WHERE height = ?", height).Scan(&metrics.TotalHosts, &metrics.ActiveContracts, &metrics.FailedContracts, &metrics.SuccessfulContracts, &metrics.StorageUtilization, decode(&metrics.CirculatingSupply), decode(&metrics.ContractRevenue)); err != nil && err != pgx.ErrNoRows {
+	if err := ut.tx.QueryRow("SELECT total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue from network_metrics WHERE height = $1", height).Scan(&metrics.TotalHosts, &metrics.ActiveContracts, &metrics.FailedContracts, &metrics.SuccessfulContracts, &metrics.StorageUtilization, decode(&metrics.CirculatingSupply), decode(&metrics.ContractRevenue)); err != nil && err != pgx.ErrNoRows {
 		return explorer.Metrics{}, err
 	}
 	return metrics, nil
@@ -1077,13 +1077,13 @@ func addHosts(tx *txn, hosts []explorer.Host) error {
 	}
 	defer stmt.Close()
 
-	deleteV2AddrStmt, err := tx.Prepare(`DELETE FROM host_info_v2_netaddresses WHERE public_key = ?`)
+	deleteV2AddrStmt, err := tx.Prepare(`DELETE FROM host_info_v2_netaddresses WHERE public_key = $1`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare delete v2 net address stmt: %w", err)
 	}
 	defer deleteV2AddrStmt.Close()
 
-	addV2AddrStmt, err := tx.Prepare(`INSERT INTO host_info_v2_netaddresses(public_key, netaddress_order, protocol, address) VALUES (?, ?, ?, ?)`)
+	addV2AddrStmt, err := tx.Prepare(`INSERT INTO host_info_v2_netaddresses(public_key, netaddress_order, protocol, address) VALUES ($1, $2, $3, $4)`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare add v2 net address stmt: %w", err)
 	}
@@ -1115,13 +1115,13 @@ func addHosts(tx *txn, hosts []explorer.Host) error {
 // AddHostScans implements explorer.Store
 func (s *Store) AddHostScans(scans ...explorer.HostScan) error {
 	return s.transaction(func(tx *txn) error {
-		unsuccessfulStmt, err := tx.Prepare(`UPDATE host_info SET last_scan = ?, last_scan_successful = false, last_scan_error = ?, next_scan = ?, total_scans = total_scans + 1, failed_interactions = failed_interactions + 1, failed_interactions_streak = failed_interactions_streak + 1 WHERE public_key = ?`)
+		unsuccessfulStmt, err := tx.Prepare(`UPDATE host_info SET last_scan = $1, last_scan_successful = false, last_scan_error = $2, next_scan = $3, total_scans = total_scans + 1, failed_interactions = failed_interactions + 1, failed_interactions_streak = failed_interactions_streak + 1 WHERE public_key = $4`)
 		if err != nil {
 			return fmt.Errorf("failed to prepare unsuccessful statement: %w", err)
 		}
 		defer unsuccessfulStmt.Close()
 
-		successfulStmt, err := tx.Prepare(`UPDATE host_info SET country_code = ?, latitude = ?, longitude = ?, last_scan = ?, last_scan_successful = true, last_scan_error = '', next_scan = ?, total_scans = total_scans + 1, successful_interactions = successful_interactions + 1, failed_interactions_streak = 0, settings_accepting_contracts = ?, settings_max_download_batch_size = ?, settings_max_duration = ?, settings_max_revise_batch_size = ?, settings_net_address = ?, settings_remaining_storage = ?, settings_sector_size = ?, settings_total_storage = ?, settings_used_storage = ?, settings_address = ?, settings_window_size = ?, settings_collateral = ?, settings_max_collateral = ?, settings_base_rpc_price = ?, settings_contract_price = ?, settings_download_bandwidth_price = ?, settings_sector_access_price = ?, settings_storage_price = ?, settings_upload_bandwidth_price = ?, settings_ephemeral_account_expiry = ?, settings_max_ephemeral_account_balance = ?, settings_revision_number = ?, settings_version = ?, settings_release = ?, settings_sia_mux_port = ?, price_table_uid = ?, price_table_validity = ?, price_table_host_block_height = ?, price_table_update_price_table_cost = ?, price_table_account_balance_cost = ?, price_table_fund_account_cost = ?, price_table_latest_revision_cost = ?, price_table_subscription_memory_cost = ?, price_table_subscription_notification_cost = ?, price_table_init_base_cost = ?, price_table_memory_time_cost = ?, price_table_download_bandwidth_cost = ?, price_table_upload_bandwidth_cost = ?, price_table_drop_sectors_base_cost = ?, price_table_drop_sectors_unit_cost = ?, price_table_has_sector_base_cost = ?, price_table_read_base_cost = ?, price_table_read_length_cost = ?, price_table_renew_contract_cost = ?, price_table_revision_base_cost = ?, price_table_swap_sector_base_cost = ?, price_table_write_base_cost = ?, price_table_write_length_cost = ?, price_table_write_store_cost = ?, price_table_txn_fee_min_recommended = ?, price_table_txn_fee_max_recommended = ?, price_table_contract_price = ?, price_table_collateral_cost = ?, price_table_max_collateral = ?, price_table_max_duration = ?, price_table_window_size = ?, price_table_registry_entries_left = ?, price_table_registry_entries_total = ?, v2_settings_protocol_version = ?, v2_settings_release = ?, v2_settings_wallet_address = ?, v2_settings_accepting_contracts = ?, v2_settings_max_collateral = ?, v2_settings_max_contract_duration = ?, v2_settings_remaining_storage = ?, v2_settings_total_storage = ?, v2_settings_used_storage = ?, v2_prices_contract_price = ?, v2_prices_collateral_price = ?, v2_prices_storage_price = ?, v2_prices_ingress_price = ?, v2_prices_egress_price = ?, v2_prices_free_sector_price = ?, v2_prices_tip_height = ?, v2_prices_valid_until = ?, v2_prices_signature = ? WHERE public_key = ?`)
+		successfulStmt, err := tx.Prepare(`UPDATE host_info SET country_code = $1, latitude = $2, longitude = $3, last_scan = $4, last_scan_successful = true, last_scan_error = '', next_scan = $5, total_scans = total_scans + 1, successful_interactions = successful_interactions + 1, failed_interactions_streak = 0, settings_accepting_contracts = $6, settings_max_download_batch_size = $7, settings_max_duration = $8, settings_max_revise_batch_size = $9, settings_net_address = $10, settings_remaining_storage = $11, settings_sector_size = $12, settings_total_storage = $13, settings_used_storage = $14, settings_address = $15, settings_window_size = $16, settings_collateral = $17, settings_max_collateral = $18, settings_base_rpc_price = $19, settings_contract_price = $20, settings_download_bandwidth_price = $21, settings_sector_access_price = $22, settings_storage_price = $23, settings_upload_bandwidth_price = $24, settings_ephemeral_account_expiry = $25, settings_max_ephemeral_account_balance = $26, settings_revision_number = $27, settings_version = $28, settings_release = $29, settings_sia_mux_port = $30, price_table_uid = $31, price_table_validity = $32, price_table_host_block_height = $33, price_table_update_price_table_cost = $34, price_table_account_balance_cost = $35, price_table_fund_account_cost = $36, price_table_latest_revision_cost = $37, price_table_subscription_memory_cost = $38, price_table_subscription_notification_cost = $39, price_table_init_base_cost = $40, price_table_memory_time_cost = $41, price_table_download_bandwidth_cost = $42, price_table_upload_bandwidth_cost = $43, price_table_drop_sectors_base_cost = $44, price_table_drop_sectors_unit_cost = $45, price_table_has_sector_base_cost = $46, price_table_read_base_cost = $47, price_table_read_length_cost = $48, price_table_renew_contract_cost = $49, price_table_revision_base_cost = $50, price_table_swap_sector_base_cost = $51, price_table_write_base_cost = $52, price_table_write_length_cost = $53, price_table_write_store_cost = $54, price_table_txn_fee_min_recommended = $55, price_table_txn_fee_max_recommended = $56, price_table_contract_price = $57, price_table_collateral_cost = $58, price_table_max_collateral = $59, price_table_max_duration = $60, price_table_window_size = $61, price_table_registry_entries_left = $62, price_table_registry_entries_total = $63, v2_settings_protocol_version = $64, v2_settings_release = $65, v2_settings_wallet_address = $66, v2_settings_accepting_contracts = $67, v2_settings_max_collateral = $68, v2_settings_max_contract_duration = $69, v2_settings_remaining_storage = $70, v2_settings_total_storage = $71, v2_settings_used_storage = $72, v2_prices_contract_price = $73, v2_prices_collateral_price = $74, v2_prices_storage_price = $75, v2_prices_ingress_price = $76, v2_prices_egress_price = $77, v2_prices_free_sector_price = $78, v2_prices_tip_height = $79, v2_prices_valid_until = $80, v2_prices_signature = $81 WHERE public_key = $82`)
 		if err != nil {
 			return fmt.Errorf("failed to prepare successful statement: %w", err)
 		}

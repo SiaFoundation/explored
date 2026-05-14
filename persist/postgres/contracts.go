@@ -47,7 +47,7 @@ func getContracts(tx *txn, ids []types.FileContractID) (result []explorer.Extend
 	query := `SELECT fc1.id, fc1.contract_id, rev.resolved, rev.valid, fc1.transaction_id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.proof_height, rev.proof_block_id, rev.proof_transaction_id, fc1.filesize, fc1.file_merkle_root, fc1.window_start, fc1.window_end, fc1.payout, fc1.unlock_hash, fc1.revision_number
 			FROM file_contract_elements fc1
 			INNER JOIN last_contract_revision rev ON rev.contract_element_id = fc1.id
-			WHERE rev.contract_id IN (` + queryPlaceHolders(len(ids)) + `)`
+			WHERE rev.contract_id IN (` + queryPlaceHolders(1, len(ids)) + `)`
 	contractIDs, result, err := scanFileContracts(tx, query, encodedIDs(ids)...)
 	if err != nil {
 		return nil, err
@@ -106,7 +106,7 @@ func (s *Store) ContractRevisions(id types.FileContractID) (revisions []explorer
 		query := `SELECT fc.id, fc.contract_id, rev.resolved, rev.valid, fc.transaction_id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.proof_height, rev.proof_block_id, rev.proof_transaction_id, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
 			FROM file_contract_elements fc
 			JOIN last_contract_revision rev ON rev.contract_id = fc.contract_id
-			WHERE fc.contract_id = ?
+			WHERE fc.contract_id = $1
 			ORDER BY fc.revision_number ASC`
 		contractIDs, fcs, err := scanFileContracts(tx, query, encode(id))
 		if err != nil {
@@ -127,9 +127,9 @@ func (s *Store) ContractsKey(key types.PublicKey, offset, limit uint64) (result 
 		query := `SELECT fc1.id, fc1.contract_id, rev.resolved, rev.valid, fc1.transaction_id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.proof_height, rev.proof_block_id, rev.proof_transaction_id, fc1.filesize, fc1.file_merkle_root, fc1.window_start, fc1.window_end, fc1.payout, fc1.unlock_hash, fc1.revision_number
 			FROM file_contract_elements fc1
 			INNER JOIN last_contract_revision rev ON rev.contract_element_id = fc1.id
-			WHERE rev.ed25519_renter_key = ? OR rev.ed25519_host_key = ?
+			WHERE rev.ed25519_renter_key = $1 OR rev.ed25519_host_key = $2
 			ORDER BY rev.confirmation_height ASC
-			LIMIT ? OFFSET ?`
+			LIMIT $3 OFFSET $4`
 		contractIDs, fcs, err := scanFileContracts(tx, query, encode(key), encode(key), limit, offset)
 		if err != nil {
 			return err

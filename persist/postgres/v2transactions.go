@@ -19,9 +19,9 @@ func (s *Store) V2TransactionChainIndices(txnID types.TransactionID, offset, lim
 		rows, err := tx.Query(`SELECT DISTINCT b.id, b.height FROM blocks b
 INNER JOIN v2_block_transactions bt ON (bt.block_id = b.id)
 INNER JOIN v2_transactions t ON (t.id = bt.transaction_id)
-WHERE t.transaction_id = ?
+WHERE t.transaction_id = $1
 ORDER BY b.height DESC 
-LIMIT ? OFFSET ?`, encode(txnID), limit, offset)
+LIMIT $2 OFFSET $3`, encode(txnID), limit, offset)
 		if err != nil {
 			return fmt.Errorf("failed to query chain indices: %w", err)
 		}
@@ -48,7 +48,7 @@ func blockV2TransactionIDs(tx *txn, blockID types.BlockID) (ids []types.Transact
 	rows, err := tx.Query(`SELECT t.transaction_id
 FROM v2_block_transactions bt
 INNER JOIN v2_transactions t ON (t.id = bt.transaction_id)
-WHERE block_id = ? ORDER BY block_order ASC`, encode(blockID))
+WHERE block_id = $1 ORDER BY block_order ASC`, encode(blockID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query block transaction IDs: %w", err)
 	}
@@ -109,7 +109,7 @@ func getV2Transactions(tx *txn, ids []types.TransactionID) ([]explorer.V2Transac
 // getV2TransactionBase fetches the base transaction data for a given list of
 // transaction IDs.
 func getV2TransactionBase(tx *txn, txnIDs []types.TransactionID) ([]int64, []explorer.V2Transaction, error) {
-	stmt, err := tx.Prepare(`SELECT id, transaction_id, new_foundation_address, miner_fee, arbitrary_data FROM v2_transactions WHERE transaction_id = ?`)
+	stmt, err := tx.Prepare(`SELECT id, transaction_id, new_foundation_address, miner_fee, arbitrary_data FROM v2_transactions WHERE transaction_id = $1`)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -139,7 +139,7 @@ func getV2TransactionBase(tx *txn, txnIDs []types.TransactionID) ([]int64, []exp
 // decorateV2Attestations fills in the attestations for each
 // transaction.
 func decorateV2Attestations(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
-	stmt, err := tx.Prepare(`SELECT public_key, key, value, signature FROM v2_transaction_attestations WHERE transaction_id = ? ORDER BY transaction_order`)
+	stmt, err := tx.Prepare(`SELECT public_key, key, value, signature FROM v2_transaction_attestations WHERE transaction_id = $1 ORDER BY transaction_order`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare attestations statement: %w", err)
 	}
@@ -178,7 +178,7 @@ func decorateV2SiacoinInputs(tx *txn, dbIDs []int64, txns []explorer.V2Transacti
 	stmt, err := tx.Prepare(`SELECT ts.satisfied_policy, sc.output_id, sc.leaf_index, sc.maturity_height, sc.address, sc.value
 FROM siacoin_elements sc
 INNER JOIN v2_transaction_siacoin_inputs ts ON (ts.parent_id = sc.id)
-WHERE ts.transaction_id = ?
+WHERE ts.transaction_id = $1
 ORDER BY ts.transaction_order ASC`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare siacoin inputs statement: %w", err)
@@ -219,7 +219,7 @@ func decorateV2SiacoinOutputs(tx *txn, dbIDs []int64, txns []explorer.V2Transact
 	stmt, err := tx.Prepare(`SELECT sc.output_id, sc.leaf_index, sc.spent_index, sc.source, sc.maturity_height, sc.address, sc.value
 FROM siacoin_elements sc
 INNER JOIN v2_transaction_siacoin_outputs ts ON (ts.output_id = sc.id)
-WHERE ts.transaction_id = ?
+WHERE ts.transaction_id = $1
 ORDER BY ts.transaction_order ASC`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare siacoin outputs statement: %w", err)
@@ -264,7 +264,7 @@ func decorateV2SiafundInputs(tx *txn, dbIDs []int64, txns []explorer.V2Transacti
 	stmt, err := tx.Prepare(`SELECT ts.satisfied_policy, ts.claim_address, sf.output_id, sf.leaf_index, sf.address, sf.value
 FROM siafund_elements sf
 INNER JOIN v2_transaction_siafund_inputs ts ON (ts.parent_id = sf.id)
-WHERE ts.transaction_id = ?
+WHERE ts.transaction_id = $1
 ORDER BY ts.transaction_order ASC`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare siacoin inputs statement: %w", err)
@@ -305,7 +305,7 @@ func decorateV2SiafundOutputs(tx *txn, dbIDs []int64, txns []explorer.V2Transact
 	stmt, err := tx.Prepare(`SELECT sf.output_id, sf.leaf_index, sf.spent_index, sf.claim_start, sf.address, sf.value
 FROM siafund_elements sf
 INNER JOIN v2_transaction_siafund_outputs ts ON (ts.output_id = sf.id)
-WHERE ts.transaction_id = ?
+WHERE ts.transaction_id = $1
 ORDER BY ts.transaction_order ASC`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare siafund outputs statement: %w", err)
@@ -351,7 +351,7 @@ func decorateV2FileContracts(tx *txn, dbIDs []int64, txns []explorer.V2Transacti
 FROM v2_file_contract_elements fc
 INNER JOIN v2_transaction_file_contracts ts ON (ts.contract_id = fc.id)
 INNER JOIN v2_last_contract_revision rev ON (rev.contract_id = fc.contract_id)
-WHERE ts.transaction_id = ?
+WHERE ts.transaction_id = $1
 ORDER BY ts.transaction_order ASC`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare file contracts statement: %w", err)
@@ -393,7 +393,7 @@ func decorateV2FileContractRevisions(tx *txn, dbIDs []int64, txns []explorer.V2T
 FROM v2_file_contract_elements fc
 INNER JOIN v2_transaction_file_contract_revisions ts ON (ts.parent_contract_id = fc.id)
 INNER JOIN v2_last_contract_revision rev ON (rev.contract_id = fc.contract_id)
-WHERE ts.transaction_id = ?
+WHERE ts.transaction_id = $1
 ORDER BY ts.transaction_order ASC`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare file contracts parent statement: %w", err)
@@ -404,7 +404,7 @@ ORDER BY ts.transaction_order ASC`)
 FROM v2_file_contract_elements fc
 INNER JOIN v2_transaction_file_contract_revisions ts ON (ts.revision_contract_id = fc.id)
 INNER JOIN v2_last_contract_revision rev ON (rev.contract_id = fc.contract_id)
-WHERE ts.transaction_id = ?
+WHERE ts.transaction_id = $1
 ORDER BY ts.transaction_order ASC`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare file contracts revision statement: %w", err)
@@ -471,7 +471,7 @@ func decorateV2FileContractResolutions(tx *txn, dbIDs []int64, txns []explorer.V
             renewal_renter_signature, renewal_host_signature,
             storage_proof_proof_index, storage_proof_leaf, storage_proof_proof
         FROM v2_transaction_file_contract_resolutions
-        WHERE transaction_id = ?
+        WHERE transaction_id = $1
         ORDER BY transaction_order
     `)
 	if err != nil {
@@ -483,7 +483,7 @@ func decorateV2FileContractResolutions(tx *txn, dbIDs []int64, txns []explorer.V
 	fcStmt, err := tx.Prepare(`SELECT fc.transaction_id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.resolution_type, rev.resolution_height, rev.resolution_block_id, rev.resolution_transaction_id, rev.renewed_from, rev.renewed_to, fc.contract_id, fc.leaf_index, fc.capacity, fc.filesize, fc.file_merkle_root, fc.proof_height, fc.expiration_height, fc.renter_output_address, fc.renter_output_value, fc.host_output_address, fc.host_output_value, fc.missed_host_value, fc.total_collateral, fc.renter_public_key, fc.host_public_key, fc.revision_number, fc.renter_signature, fc.host_signature
 FROM v2_file_contract_elements fc
 INNER JOIN v2_last_contract_revision rev ON (rev.contract_id = fc.contract_id)
-WHERE fc.id = ?`)
+WHERE fc.id = $1`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare file contracts statement: %w", err)
 	}

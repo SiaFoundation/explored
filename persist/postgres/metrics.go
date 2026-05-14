@@ -15,7 +15,7 @@ import (
 // Metrics implements explorer.Store
 func (s *Store) Metrics(id types.BlockID) (result explorer.Metrics, err error) {
 	err = s.transaction(func(tx *txn) error {
-		err = tx.QueryRow(`SELECT block_id, height, difficulty, siafund_tax_revenue, num_leaves, total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue FROM network_metrics WHERE block_id = ?`, encode(id)).Scan(decode(&result.Index.ID), &result.Index.Height, decode(&result.Difficulty), decode(&result.SiafundTaxRevenue), decode(&result.NumLeaves), &result.TotalHosts, &result.ActiveContracts, &result.FailedContracts, &result.SuccessfulContracts, &result.StorageUtilization, decode(&result.CirculatingSupply), decode(&result.ContractRevenue))
+		err = tx.QueryRow(`SELECT block_id, height, difficulty, siafund_tax_revenue, num_leaves, total_hosts, active_contracts, failed_contracts, successful_contracts, storage_utilization, circulating_supply, contract_revenue FROM network_metrics WHERE block_id = $1`, encode(id)).Scan(decode(&result.Index.ID), &result.Index.Height, decode(&result.Difficulty), decode(&result.SiafundTaxRevenue), decode(&result.NumLeaves), &result.TotalHosts, &result.ActiveContracts, &result.FailedContracts, &result.SuccessfulContracts, &result.StorageUtilization, decode(&result.CirculatingSupply), decode(&result.ContractRevenue))
 		if err != nil {
 			return fmt.Errorf("failed to get metrics: %w", err)
 		}
@@ -229,7 +229,7 @@ func (s *Store) BlockTimeMetrics(blockTime time.Duration) (result explorer.Block
 		const day = 24 * time.Hour
 		monthBlocks := int64(30*day) / int64(blockTime)
 
-		rows, err := tx.Query(`SELECT timestamp FROM blocks ORDER BY height DESC LIMIT ?`, monthBlocks)
+		rows, err := tx.Query(`SELECT timestamp FROM blocks ORDER BY height DESC LIMIT $1`, monthBlocks)
 		if err != nil {
 			return fmt.Errorf("failed to query block timestamps: %w", err)
 		}
@@ -294,8 +294,8 @@ func (s *Store) DifficultyMetrics(start, end, step uint64, n *consensus.Network)
 		query := `SELECT nm.difficulty, b.timestamp
 				  FROM network_metrics nm
 				  JOIN blocks b ON nm.block_id = b.id
-				  WHERE nm.height >= ? AND nm.height < ?
-				    AND (nm.height - ?) % ? = 0
+				  WHERE nm.height >= $1 AND nm.height < $2
+				    AND (nm.height - $3) % $4 = 0
 				  ORDER BY nm.height`
 		rows, err := tx.Query(query, queryStart, end, start, step)
 		if err != nil {
