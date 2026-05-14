@@ -1,4 +1,4 @@
-package sqlite
+package storetest
 
 import (
 	"errors"

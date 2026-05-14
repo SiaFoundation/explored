@@ -1,8 +1,7 @@
-package sqlite
+package storetest
 
 import (
 	"math"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -19,6 +18,12 @@ import (
 	"go.sia.tech/explored/internal/testutil"
 	"go.uber.org/zap/zaptest"
 )
+
+// hostSeeder is implemented by every backend store and is used to seed hosts
+// directly for tests that need a specific pre-existing host_info row.
+type hostSeeder interface {
+	SeedHosts(hosts []explorer.Host) error
+}
 
 func TestHostScan(t *testing.T) {
 	pk1 := types.GeneratePrivateKey()
@@ -216,11 +221,7 @@ func TestV2HostScan(t *testing.T) {
 }
 
 func TestLastSuccessScan(t *testing.T) {
-	db, err := OpenDatabase(filepath.Join(t.TempDir(), "explored.sqlite3"), zaptest.NewLogger(t).Named("sqlite3"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := openStore(t, zaptest.NewLogger(t).Named("store"))
 
 	ts, err := db.LastSuccessScan()
 	if err != nil {
@@ -259,9 +260,7 @@ func TestLastSuccessScan(t *testing.T) {
 			},
 		},
 	}
-	if err := db.transaction(func(tx *txn) error {
-		return addHosts(tx, hosts)
-	}); err != nil {
+	if err := db.(hostSeeder).SeedHosts(hosts); err != nil {
 		t.Fatal(err)
 	}
 
@@ -290,13 +289,8 @@ func TestLastSuccessScan(t *testing.T) {
 
 func TestQueryHosts(t *testing.T) {
 	log := zaptest.NewLogger(t)
-	dir := t.TempDir()
 
-	db, err := OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := openStore(t, log.Named("store"))
 
 	const (
 		netAddr1 = "host1.com:9982"
@@ -423,9 +417,7 @@ func TestQueryHosts(t *testing.T) {
 	}
 
 	// Add hosts to database
-	if err := db.transaction(func(tx *txn) error {
-		return addHosts(tx, hosts)
-	}); err != nil {
+	if err := db.(hostSeeder).SeedHosts(hosts); err != nil {
 		t.Fatal(err)
 	}
 

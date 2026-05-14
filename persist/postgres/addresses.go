@@ -1,0 +1,350 @@
+package postgres
+
+import (
+	"errors"
+	"fmt"
+
+	"github.com/jackc/pgx/v5"
+
+	"go.sia.tech/core/types"
+	"go.sia.tech/explored/explorer"
+)
+
+func getAddressEvents(tx *txn, address types.Address, offset, limit uint64) (eventIDs []int64, err error) {
+	const query = `SELECT ea.event_id
+FROM event_addresses ea
+INNER JOIN address_balance sa ON ea.address_id = sa.id
+WHERE sa.address = $1
+ORDER BY ea.event_maturity_height DESC, ea.event_id DESC
+LIMIT $2 OFFSET $3;`
+
+	rows, err := tx.Query(query, encode(address), limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query address event IDs: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("failed to scan event ID: %w", err)
+		}
+		eventIDs = append(eventIDs, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to retrieve event ID rows: %w", err)
+	}
+	return eventIDs, nil
+}
+
+func getEventsByID(tx *txn, eventIDs []int64) (events []explorer.Event, err error) {
+	var scanHeight uint64
+	err = tx.QueryRow(`SELECT COALESCE(MAX(height), 0) FROM blocks`).Scan(&scanHeight)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get last indexed height: %w", err)
+	}
+
+	stmt, err := tx.Prepare(`SELECT
+	ev.id,
+	ev.event_id,
+	ev.maturity_height,
+	ev.date_created,
+	b.height,
+	b.id,
+	CASE
+		WHEN $1 < b.height THEN 0
+		ELSE $1 - b.height
+	END AS confirmations,
+	ev.event_type
+FROM events ev
+INNER JOIN blocks b ON (ev.block_id = b.id)
+WHERE ev.id=$2`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	events = make([]explorer.Event, 0, len(eventIDs))
+	for i, id := range eventIDs {
+		event, _, err := scanEvent(tx, stmt.QueryRow(scanHeight, id))
+		if errors.Is(err, pgx.ErrNoRows) {
+			continue
+		} else if err != nil {
+			return nil, fmt.Errorf("failed to query event %d: %w", i, err)
+		}
+		events = append(events, event)
+	}
+	return
+}
+
+// AddressCheckpoint returns the first chain index the address was seen on-chain.
+// If the address has never been seen on-chain, it returns an empty ChainIndex.
+func (s *Store) AddressCheckpoint(address types.Address) (checkpoint types.ChainIndex, err error) {
+	err = s.transaction(func(tx *txn) error {
+		const query = `SELECT b.id, b.height
+FROM blocks b 
+WHERE b.height = (
+    SELECT MAX(MIN(ea.event_maturity_height) - 144, 0) -- subtract 1 day for maturity delay
+    FROM event_addresses ea
+    INNER JOIN address_balance ab ON ab.id = ea.address_id
+    WHERE ab.address=$1
+);`
+		return tx.QueryRow(query, encode(address)).Scan(decode(&checkpoint.ID), decode(&checkpoint.Height))
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return types.ChainIndex{}, nil
+	}
+	return
+}
+
+// AddressEvents returns the events of a single address.
+func (s *Store) AddressEvents(address types.Address, offset, limit uint64) (events []explorer.Event, err error) {
+	err = s.transaction(func(tx *txn) error {
+		dbIDs, err := getAddressEvents(tx, address, offset, limit)
+		if err != nil {
+			return fmt.Errorf("failed to get address event IDs: %w", err)
+		}
+
+		events, err = getEventsByID(tx, dbIDs)
+		if err != nil {
+			return fmt.Errorf("failed to get events by ID: %w", err)
+		}
+
+		for i := range events {
+			events[i].Relevant = []types.Address{address}
+		}
+		return nil
+	})
+	return
+}
+
+func scanSiacoinOutput(s scanner) (sco explorer.SiacoinOutput, err error) {
+	var spentIndex types.ChainIndex
+	err = s.Scan(decode(&sco.ID), decode(&sco.StateElement.LeafIndex), &sco.Source, decodeNull(&spentIndex), &sco.MaturityHeight, decode(&sco.SiacoinOutput.Address), decode(&sco.SiacoinOutput.Value))
+	if spentIndex != (types.ChainIndex{}) {
+		sco.SpentIndex = &spentIndex
+	}
+	return
+}
+
+func scanSiafundOutput(s scanner) (sfo explorer.SiafundOutput, err error) {
+	var spentIndex types.ChainIndex
+	err = s.Scan(decode(&sfo.ID), decode(&sfo.StateElement.LeafIndex), decodeNull(&spentIndex), decode(&sfo.ClaimStart), decode(&sfo.SiafundOutput.Address), decode(&sfo.SiafundOutput.Value))
+	if spentIndex != (types.ChainIndex{}) {
+		sfo.SpentIndex = &spentIndex
+	}
+	return
+}
+
+// UnspentSiacoinOutputs implements explorer.Store.
+func (s *Store) UnspentSiacoinOutputs(address types.Address, offset, limit uint64) (result []explorer.SiacoinOutput, err error) {
+	err = s.transaction(func(tx *txn) error {
+		rows, err := tx.Query(`SELECT output_id, leaf_index, source, spent_index, maturity_height, address, value FROM siacoin_elements WHERE address = ? AND spent_index IS NULL LIMIT ? OFFSET ?`, encode(address), limit, offset)
+		if err != nil {
+			return fmt.Errorf("failed to query siacoin outputs: %w", err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			sco, err := scanSiacoinOutput(rows)
+			if err != nil {
+				return fmt.Errorf("failed to scan siacoin output: %w", err)
+			}
+			result = append(result, sco)
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed to retrieve siacoin output rows: %w", err)
+		}
+		return nil
+	})
+	return
+}
+
+// UnspentSiafundOutputs implements explorer.Store.
+func (s *Store) UnspentSiafundOutputs(address types.Address, offset, limit uint64) (result []explorer.SiafundOutput, err error) {
+	err = s.transaction(func(tx *txn) error {
+		rows, err := tx.Query(`SELECT output_id, leaf_index, spent_index, claim_start, address, value FROM siafund_elements WHERE address = ? AND spent_index IS NULL LIMIT ? OFFSET ?`, encode(address), limit, offset)
+		if err != nil {
+			return fmt.Errorf("failed to query siafund outputs: %w", err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			sfo, err := scanSiafundOutput(rows)
+			if err != nil {
+				return fmt.Errorf("failed to scan siafund output: %w", err)
+			}
+			result = append(result, sfo)
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed to retrieve siafund output rows: %w", err)
+		}
+		return nil
+	})
+	return
+}
+
+func getSiacoinElements(tx *txn, ids []types.SiacoinOutputID, includeProof bool) (result []explorer.SiacoinOutput, err error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var encoded []any
+	for _, id := range ids {
+		encoded = append(encoded, encode(id))
+	}
+
+	rows, err := tx.Query(`SELECT output_id, leaf_index, source, spent_index, maturity_height, address, value FROM siacoin_elements WHERE output_id IN (`+queryPlaceHolders(len(encoded))+`)`, encoded...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query siacoin outputs: %w", err)
+	}
+	defer rows.Close()
+
+	var leafIndices []uint64
+	for rows.Next() {
+		sco, err := scanSiacoinOutput(rows)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan siacoin output: %w", err)
+		}
+
+		leafIndices = append(leafIndices, sco.StateElement.LeafIndex)
+		result = append(result, sco)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to retrieve siacoin output rows: %w", err)
+	}
+
+	if includeProof {
+		proofs, err := fillElementProofs(tx, leafIndices)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fill siacoin output proofs: %w", err)
+		}
+		for i := range result {
+			result[i].StateElement.MerkleProof = proofs[i]
+		}
+	}
+
+	return
+}
+
+func getSiafundElements(tx *txn, ids []types.SiafundOutputID, includeProof bool) (result []explorer.SiafundOutput, err error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var encoded []any
+	for _, id := range ids {
+		encoded = append(encoded, encode(id))
+	}
+
+	rows, err := tx.Query(`SELECT output_id, leaf_index, spent_index, claim_start, address, value FROM siafund_elements WHERE output_id IN (`+queryPlaceHolders(len(encoded))+`)`, encoded...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query siafund outputs: %w", err)
+	}
+	defer rows.Close()
+
+	var leafIndices []uint64
+	for rows.Next() {
+		sfo, err := scanSiafundOutput(rows)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan siafund output: %w", err)
+		}
+
+		leafIndices = append(leafIndices, sfo.StateElement.LeafIndex)
+		result = append(result, sfo)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to retrieve siafund output rows: %w", err)
+	}
+
+	if includeProof {
+		proofs, err := fillElementProofs(tx, leafIndices)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fill siafund output proofs: %w", err)
+		}
+		for i := range result {
+			result[i].StateElement.MerkleProof = proofs[i]
+		}
+	}
+	return
+}
+
+// SiacoinElements implements explorer.Store.
+func (s *Store) SiacoinElements(ids []types.SiacoinOutputID) (result []explorer.SiacoinOutput, err error) {
+	err = s.transaction(func(tx *txn) error {
+		result, err = getSiacoinElements(tx, ids, true)
+		return err
+	})
+	return
+}
+
+// SiafundElements implements explorer.Store.
+func (s *Store) SiafundElements(ids []types.SiafundOutputID) (result []explorer.SiafundOutput, err error) {
+	err = s.transaction(func(tx *txn) error {
+		result, err = getSiafundElements(tx, ids, true)
+		return err
+	})
+	return
+}
+
+// Balance implements explorer.Store.
+func (s *Store) Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error) {
+	err = s.transaction(func(tx *txn) error {
+		err = tx.QueryRow(`SELECT siacoin_balance, immature_siacoin_balance, siafund_balance FROM address_balance WHERE address = ?`, encode(address)).Scan(decode(&sc), decode(&immatureSC), decode(&sf))
+		if err == pgx.ErrNoRows {
+			return nil
+		} else if err != nil {
+			return fmt.Errorf("failed to query balances: %w", err)
+		}
+		return nil
+	})
+	return
+}
+
+// TopSiacoinAddresses returns a paginated list of Siacoin addresses ordered
+// by balance.
+func (s *Store) TopSiacoinAddresses(limit, offset int) (result []explorer.TopSiacoin, err error) {
+	err = s.transaction(func(tx *txn) error {
+		rows, err := tx.Query(`SELECT address, siacoin_balance FROM address_balance ORDER BY siacoin_balance DESC LIMIT $1 OFFSET $2`, limit, offset)
+		if err != nil {
+			return fmt.Errorf("failed to query top siacoin addresses: %w", err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var address explorer.TopSiacoin
+			if err := rows.Scan(decode(&address.Address), decode(&address.Amount)); err != nil {
+				return fmt.Errorf("failed to scan top siacoin address: %w", err)
+			}
+			result = append(result, address)
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed to retrieve top siacoin address rows: %w", err)
+		}
+		return nil
+	})
+	return
+}
+
+// TopSiafundAddresses returns a paginated list of Siafund addresses ordered
+// by balance.
+func (s *Store) TopSiafundAddresses(limit, offset int) (result []explorer.TopSiafund, err error) {
+	err = s.transaction(func(tx *txn) error {
+		rows, err := tx.Query(`SELECT address, siafund_balance FROM address_balance ORDER BY siafund_balance DESC LIMIT $1 OFFSET $2`, limit, offset)
+		if err != nil {
+			return fmt.Errorf("failed to query top siafund addresses: %w", err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var address explorer.TopSiafund
+			if err := rows.Scan(decode(&address.Address), decode(&address.Amount)); err != nil {
+				return fmt.Errorf("failed to scan top siafund address: %w", err)
+			}
+			result = append(result, address)
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed to retrieve top siafund address rows: %w", err)
+		}
+		return nil
+	})
+	return
+}
