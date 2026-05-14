@@ -335,8 +335,7 @@ func (e *Explorer) Metrics(id types.BlockID) (Metrics, error) {
 
 // HostMetrics returns various metrics about currently available hosts. The
 // underlying query is expensive because it computes medians over every host,
-// so the result is cached and only recomputed after we store host scan results
-// (see invalidateHostMetrics).
+// so the result is cached and only recomputed after we store host scan results.
 func (e *Explorer) HostMetrics() (HostMetrics, error) {
 	e.mu.Lock()
 	if e.hostMetrics != nil {
@@ -352,7 +351,9 @@ func (e *Explorer) HostMetrics() (HostMetrics, error) {
 	}
 
 	e.mu.Lock()
-	e.hostMetrics = &metrics
+	if e.hostMetrics == nil {
+		e.hostMetrics = &metrics
+	}
 	e.mu.Unlock()
 
 	return metrics, nil
