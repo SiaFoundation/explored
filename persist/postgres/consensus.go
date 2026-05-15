@@ -415,9 +415,9 @@ func updateBalances(tx *txn, height uint64, spentSiacoinElements, newSiacoinElem
 	}
 
 	stmt, err := tx.Prepare(`INSERT INTO address_balance(address, siacoin_balance, immature_siacoin_balance, siafund_balance)
-       VALUES ($1, $2 - $3, $4 - $5, $6 - $7)
+       VALUES ($1, $2::NUMERIC(50,0) - $3::NUMERIC(50,0), $4::NUMERIC(50,0) - $5::NUMERIC(50,0), $6::BIGINT - $7::BIGINT)
        ON CONFLICT(address)
-       DO UPDATE SET siacoin_balance = address_balance.siacoin_balance + $2 - $3, immature_siacoin_balance = address_balance.immature_siacoin_balance + $4 - $5, siafund_balance = address_balance.siafund_balance + $6 - $7`)
+       DO UPDATE SET siacoin_balance = address_balance.siacoin_balance + $2::NUMERIC(50,0) - $3::NUMERIC(50,0), immature_siacoin_balance = address_balance.immature_siacoin_balance + $4::NUMERIC(50,0) - $5::NUMERIC(50,0), siafund_balance = address_balance.siafund_balance + $6::BIGINT - $7::BIGINT`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}

@@ -4,11 +4,13 @@ package storetest
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strconv"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/persist/postgres"
 	"go.uber.org/zap"
@@ -39,25 +41,32 @@ func connectionInfoFromEnv() postgres.ConnectionInfo {
 	}
 }
 
-// openStore opens a backend store backed by PostgreSQL. The test schema is
-// dropped and recreated at the end of each test.
+// openStore opens a backend store backed by PostgreSQL. Each test gets its own
+// database so test packages can run in parallel.
 func openStore(t testing.TB, log *zap.Logger) explorer.Store {
+	ci := connectionInfoFromEnv()
+
+	dbName := t.Name()
+	pool, err := pgxpool.New(t.Context(), ci.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(t.Context(), fmt.Sprintf("DROP DATABASE IF EXISTS %q", dbName)); err != nil {
+		t.Fatal(err)
+	} else if _, err := pool.Exec(t.Context(), fmt.Sprintf("CREATE DATABASE %q", dbName)); err != nil {
+		t.Fatal(err)
+	}
+	pool.Close()
+	ci.Database = dbName
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	db, err := postgres.NewStore(ctx, connectionInfoFromEnv(), log)
+	db, err := postgres.NewStore(ctx, ci, log)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		// Reset the schema so subsequent tests start clean. If this fails the
-		// next test will see polluted state, so surface it as a test failure
-		// rather than just logging it.
-		dropCtx, dropCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer dropCancel()
-		if err := db.ResetForTesting(dropCtx); err != nil {
-			t.Errorf("failed to reset schema: %v", err)
-		}
 		db.Close()
 	})
 	return db
