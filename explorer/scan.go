@@ -271,5 +271,6 @@ func (e *Explorer) scanLoop() {
 			e.log.Info("failed to add host scans to DB:", zap.Error(err))
 			return
 		}
+		e.invalidateHostMetrics()
 	}
 }
