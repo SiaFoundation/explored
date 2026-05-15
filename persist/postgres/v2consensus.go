@@ -77,7 +77,7 @@ func updateV2FileContractElements(tx *txn, revert bool, index types.ChainIndex, 
 	defer stmt.Close()
 
 	revisionStmt, err := tx.Prepare(`INSERT INTO v2_last_contract_revision(contract_id, contract_element_id, confirmation_height, confirmation_block_id, confirmation_transaction_id)
-    VALUES ($1, $2, COALESCE($3, ''::bytea), COALESCE($4, ''::bytea), COALESCE($5, ''::bytea))
+    VALUES ($1, $2, COALESCE($3, 0), COALESCE($4, ''::bytea), COALESCE($5, ''::bytea))
     ON CONFLICT (contract_id)
     DO UPDATE SET contract_element_id = $6, confirmation_height = COALESCE($7, v2_last_contract_revision.confirmation_height), confirmation_block_id = COALESCE($8, v2_last_contract_revision.confirmation_block_id), confirmation_transaction_id = COALESCE($9, v2_last_contract_revision.confirmation_transaction_id)`)
 	if err != nil {
@@ -123,9 +123,10 @@ func updateV2FileContractElements(tx *txn, revert bool, index types.ChainIndex, 
 		// only update if it's the most recent revision which will come from
 		// running ForEachFileContractElement on the update
 		if lastRevision {
-			var encodedHeight, encodedBlockID, encodedConfirmationTransactionID []byte
+			var encodedHeight any
+			var encodedBlockID, encodedConfirmationTransactionID []byte
 			if confirmationTransactionID != nil {
-				encodedHeight = encode(index.Height).([]byte)
+				encodedHeight = encode(index.Height)
 				encodedBlockID = encode(index.ID).([]byte)
 				encodedConfirmationTransactionID = encode(*confirmationTransactionID).([]byte)
 			}

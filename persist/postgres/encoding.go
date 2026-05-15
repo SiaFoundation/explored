@@ -3,7 +3,6 @@ package postgres
 import (
 	"bytes"
 	"database/sql"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"time"
@@ -16,11 +15,7 @@ import (
 func encode(obj any) any {
 	switch obj := obj.(type) {
 	case types.Currency:
-		// Currency is encoded as two 64-bit big-endian integers for sorting
-		buf := make([]byte, 16)
-		binary.BigEndian.PutUint64(buf, obj.Hi)
-		binary.BigEndian.PutUint64(buf[8:], obj.Lo)
-		return buf
+		return obj.ExactString()
 	case types.EncoderTo:
 		var buf bytes.Buffer
 		e := types.NewEncoder(&buf)
@@ -42,9 +37,7 @@ func encode(obj any) any {
 		e.Flush()
 		return buf.Bytes()
 	case uint64:
-		b := make([]byte, 8)
-		binary.BigEndian.PutUint64(b, obj)
-		return b
+		return int64(obj)
 	case time.Time:
 		return obj.Unix()
 	default:
@@ -65,12 +58,6 @@ func (d *decodable) Scan(src any) error {
 	switch src := src.(type) {
 	case []byte:
 		switch v := d.v.(type) {
-		case *types.Currency:
-			if len(src) != 16 {
-				return fmt.Errorf("cannot scan %d bytes into Currency", len(src))
-			}
-			v.Hi = binary.BigEndian.Uint64(src)
-			v.Lo = binary.BigEndian.Uint64(src[8:])
 		case *rhp.SettingsID:
 			*v = rhp.SettingsID(src)
 		case types.DecoderFrom:
@@ -85,12 +72,17 @@ func (d *decodable) Scan(src any) error {
 			dec := types.NewBufDecoder(src)
 			types.DecodeSlice(dec, v)
 			return dec.Err()
-		case *uint64:
-			*v = binary.BigEndian.Uint64(src)
 		default:
 			return fmt.Errorf("cannot scan %T to %T", src, d.v)
 		}
 		return nil
+	case string:
+		switch v := d.v.(type) {
+		case *types.Currency:
+			return v.UnmarshalText([]byte(src))
+		default:
+			return fmt.Errorf("cannot scan %T to %T", src, d.v)
+		}
 	case int64:
 		switch v := d.v.(type) {
 		case *uint64:

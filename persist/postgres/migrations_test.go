@@ -1,3 +1,19 @@
+//go:build postgres
+
+package postgres
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"testing"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap/zaptest"
+)
+
+// nolint:misspell
+const initialSchema = `
 CREATE TABLE global_settings (
 	id INTEGER PRIMARY KEY NOT NULL DEFAULT 0 CHECK (id = 0), -- enforce a single row
 	db_version BIGINT NOT NULL -- used for migrations
@@ -619,3 +635,311 @@ CREATE TABLE host_info_v2_netaddresses(
 
 CREATE INDEX host_info_v2_netaddresses_public_key ON host_info_v2_netaddresses(public_key);
 CREATE INDEX host_info_v2_netaddresses_address ON host_info_v2_netaddresses(address);
+`
+
+func TestMigrationConsistency(t *testing.T) {
+	// prepare 2 databases
+	ci := connectionInfoFromEnv()
+	ci2 := ci
+	ci2.Database = "explored2"
+
+	// cleanup
+	ctx := context.Background()
+	t.Cleanup(func() {
+		pool, err := pgxpool.New(ctx, ci.String())
+		if err != nil {
+			t.Fatal(err)
+		} else if _, err := pool.Exec(ctx, `DROP SCHEMA public CASCADE;CREATE SCHEMA public;`); err != nil {
+			t.Fatal(err)
+		}
+		pool.Close()
+
+		pool, err = pgxpool.New(ctx, ci2.String())
+		if err != nil {
+			t.Fatal(err)
+		} else if _, err := pool.Exec(ctx, `DROP SCHEMA public CASCADE;CREATE SCHEMA public;`); err != nil {
+			t.Fatal(err)
+		}
+		pool.Close()
+	})
+
+	// init db
+	ensureDatabase(ctx, ci)
+	pool, err := pgxpool.New(ctx, ci.String())
+	if err != nil {
+		t.Fatal(err)
+	} else if _, err := pool.Exec(ctx, initialSchema); err != nil {
+		t.Fatal(err)
+	} else if _, err := pool.Exec(ctx, "INSERT INTO global_settings(id, db_version) VALUES (0, 1);"); err != nil {
+		t.Fatal(err)
+	}
+	pool.Close()
+
+	expectedVersion := int64(len(migrations) + 1)
+	log := zaptest.NewLogger(t)
+	store, err := NewStore(ctx, ci, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	v := getDBVersion(ctx, store.pool)
+	if v != expectedVersion {
+		t.Fatalf("expected version %d, got %d", expectedVersion, v)
+	} else if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// ensure the database does not change version when opened again
+	store, err = NewStore(ctx, ci, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	v = getDBVersion(ctx, store.pool)
+	if v != expectedVersion {
+		t.Fatalf("expected version %d, got %d", expectedVersion, v)
+	}
+
+	// prepare the baseline database
+	baseline, err := NewStore(ctx, ci2, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer baseline.Close()
+
+	getTableIndices := func(db *pgxpool.Pool) (map[string]bool, error) {
+		// https://www.postgresql.org/docs/current/view-pg-indexes.html
+		const query = `SELECT schemaname, tablename, indexname, tablespace, indexdef FROM pg_indexes`
+		rows, err := db.Query(ctx, query)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		indices := make(map[string]bool)
+		for rows.Next() {
+			var schema, table, index, def string
+			var tablespaceStr sql.NullString // tablespace is null if default for database
+			if err := rows.Scan(&schema, &table, &index, &tablespaceStr, &def); err != nil {
+				return nil, err
+			}
+			indices[fmt.Sprintf("%s.%s.%s.%s.%s", schema, table, index, tablespaceStr.String, def)] = true
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		return indices, nil
+	}
+
+	// ensure the migrated database has the same indices as the baseline
+	baselineIndices, err := getTableIndices(baseline.pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	migratedIndices, err := getTableIndices(store.pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for k := range baselineIndices {
+		if !migratedIndices[k] {
+			t.Errorf("missing index %s", k)
+		}
+	}
+
+	for k := range migratedIndices {
+		if !baselineIndices[k] {
+			t.Errorf("unexpected index %s", k)
+		}
+	}
+
+	getTables := func(db *pgxpool.Pool) (map[string]bool, error) {
+		// https://www.postgresql.org/docs/current/infoschema-tables.html
+		const query = `SELECT table_name FROM information_schema.tables`
+		rows, err := db.Query(ctx, query)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		tables := make(map[string]bool)
+		for rows.Next() {
+			var name string
+			if err := rows.Scan(&name); err != nil {
+				return nil, err
+			}
+			tables[name] = true
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		return tables, nil
+	}
+
+	// ensure the migrated database has the same tables as the baseline
+	baselineTables, err := getTables(baseline.pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	migratedTables, err := getTables(store.pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for k := range baselineTables {
+		if !migratedTables[k] {
+			t.Errorf("missing table %s", k)
+		}
+	}
+	for k := range migratedTables {
+		if !baselineTables[k] {
+			t.Errorf("unexpected table %s", k)
+		}
+	}
+
+	getTableColumns := func(db *pgxpool.Pool, table string) (map[string]bool, error) {
+		// https://www.postgresql.org/docs/current/infoschema-columns.html
+		const query = `SELECT column_name, data_type, column_default, is_nullable FROM information_schema.columns WHERE table_name = $1`
+		rows, err := db.Query(ctx, query, table)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		columns := make(map[string]bool)
+		for rows.Next() {
+			var name, colType, nullable string
+			var colDefaultStr sql.NullString
+			if err := rows.Scan(&name, &colType, &colDefaultStr, &nullable); err != nil {
+				return nil, err
+			}
+			key := fmt.Sprintf("%s.%s.%s.%s", name, colType, colDefaultStr.String, nullable)
+			columns[key] = true
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		return columns, nil
+	}
+
+	for k := range baselineTables {
+		baselineColumns, err := getTableColumns(baseline.pool, k)
+		if err != nil {
+			t.Fatal(err)
+		}
+		migratedColumns, err := getTableColumns(store.pool, k)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for c := range baselineColumns {
+			if !migratedColumns[c] {
+				t.Errorf("missing column %s.%s", k, c)
+			}
+		}
+
+		for c := range migratedColumns {
+			if !baselineColumns[c] {
+				t.Errorf("unexpected column %s.%s", k, c)
+			}
+		}
+	}
+
+	getKeyConstraints := func(db *pgxpool.Pool) (map[string]bool, error) {
+		// https://www.postgresql.org/docs/current/infoschema-key-column-usage.html
+		const query = `SELECT constraint_schema, constraint_name, table_name, column_name FROM information_schema.key_column_usage`
+		rows, err := db.Query(ctx, query)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		constraints := make(map[string]bool)
+		for rows.Next() {
+			var schema, name, table, column string
+			if err := rows.Scan(&schema, &name, &table, &column); err != nil {
+				return nil, err
+			}
+			key := fmt.Sprintf("%s.%s.%s.%s", schema, name, table, column)
+			constraints[key] = true
+		}
+
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		return constraints, nil
+	}
+
+	// ensure the migrated database has the same key constraints as the baseline
+	baselineKeyConstraints, err := getKeyConstraints(baseline.pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	migratedKeyConstraints, err := getKeyConstraints(store.pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for kc := range baselineKeyConstraints {
+		if !migratedKeyConstraints[kc] {
+			t.Errorf("missing key constraint %s", kc)
+		}
+	}
+
+	for kc := range migratedKeyConstraints {
+		if !baselineKeyConstraints[kc] {
+			t.Errorf("unexpected key constraint %s", kc)
+		}
+	}
+
+	getCheckConstraints := func(db *pgxpool.Pool) (map[string]bool, error) {
+		// https://www.postgresql.org/docs/current/infoschema-check-constraints.html
+		const query = `SELECT constraint_schema, constraint_name, check_clause FROM information_schema.check_constraints`
+		rows, err := db.Query(ctx, query)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		constraints := make(map[string]bool)
+		for rows.Next() {
+			var schema, name, clause string
+			if err := rows.Scan(&schema, &name, &clause); err != nil {
+				return nil, err
+			}
+			// ignoring the name since it doesn't match between databases
+			key := fmt.Sprintf("%s.%s", schema, clause)
+			constraints[key] = true
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		return constraints, nil
+	}
+
+	// ensure the migrated database has the same check constraints as the baseline
+	baselineCheckConstraints, err := getCheckConstraints(baseline.pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	migratedCheckConstraints, err := getCheckConstraints(store.pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for cc := range baselineCheckConstraints {
+		if !migratedCheckConstraints[cc] {
+			t.Errorf("missing check constraint %s", cc)
+		}
+	}
+
+	for cc := range migratedCheckConstraints {
+		if !baselineCheckConstraints[cc] {
+			t.Errorf("unexpected check constraint %s", cc)
+		}
+	}
+}

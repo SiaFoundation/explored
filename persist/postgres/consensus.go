@@ -370,90 +370,63 @@ func addHostAnnouncements(tx *txn, timestamp time.Time, hostAnnouncements []chai
 	return addHosts(tx, hosts)
 }
 
-type balance struct {
-	sc         types.Currency
-	immatureSC types.Currency
-	sf         uint64
+type balanceDelta struct {
+	scAdd         types.Currency
+	scSub         types.Currency
+	immatureSCAdd types.Currency
+	immatureSCSub types.Currency
+	sfAdd         uint64
+	sfSub         uint64
 }
 
 func updateBalances(tx *txn, height uint64, spentSiacoinElements, newSiacoinElements []explorer.SiacoinOutput, spentSiafundElements, newSiafundElements []types.SiafundElement) error {
-	addresses := make(map[types.Address]balance)
-	for _, sce := range spentSiacoinElements {
-		addresses[sce.SiacoinOutput.Address] = balance{}
-	}
-	for _, sce := range newSiacoinElements {
-		addresses[sce.SiacoinOutput.Address] = balance{}
-	}
-	for _, sfe := range spentSiafundElements {
-		addresses[sfe.SiafundOutput.Address] = balance{}
-	}
-	for _, sfe := range newSiafundElements {
-		addresses[sfe.SiafundOutput.Address] = balance{}
-	}
-
-	balanceRowsStmt, err := tx.Prepare(`SELECT siacoin_balance, immature_siacoin_balance, siafund_balance
-        FROM address_balance
-        WHERE address = $1`)
-	if err != nil {
-		return fmt.Errorf("failed to prepare address_balance statement: %w", err)
-	}
-	defer balanceRowsStmt.Close()
-
-	for addr := range addresses {
-		var bal balance
-		if err := balanceRowsStmt.QueryRow(encode(addr)).Scan(decode(&bal.sc), decode(&bal.immatureSC), decode(&bal.sf)); err != nil && err != pgx.ErrNoRows {
-			return fmt.Errorf("failed to scan balance: %w", err)
+	addresses := make(map[types.Address]*balanceDelta)
+	delta := func(addr types.Address) *balanceDelta {
+		d, ok := addresses[addr]
+		if !ok {
+			d = new(balanceDelta)
+			addresses[addr] = d
 		}
-		addresses[addr] = bal
+		return d
 	}
 
 	for _, sce := range newSiacoinElements {
-		bal := addresses[sce.SiacoinOutput.Address]
+		d := delta(sce.SiacoinOutput.Address)
 		if sce.MaturityHeight <= height {
-			bal.sc = bal.sc.Add(sce.SiacoinOutput.Value)
+			d.scAdd = d.scAdd.Add(sce.SiacoinOutput.Value)
 		} else {
-			bal.immatureSC = bal.immatureSC.Add(sce.SiacoinOutput.Value)
+			d.immatureSCAdd = d.immatureSCAdd.Add(sce.SiacoinOutput.Value)
 		}
-		addresses[sce.SiacoinOutput.Address] = bal
 	}
 	for _, sce := range spentSiacoinElements {
-		bal := addresses[sce.SiacoinOutput.Address]
+		d := delta(sce.SiacoinOutput.Address)
 		if sce.MaturityHeight < height {
-			bal.sc = bal.sc.Sub(sce.SiacoinOutput.Value)
+			d.scSub = d.scSub.Add(sce.SiacoinOutput.Value)
 		} else {
-			bal.immatureSC = bal.immatureSC.Sub(sce.SiacoinOutput.Value)
+			d.immatureSCSub = d.immatureSCSub.Add(sce.SiacoinOutput.Value)
 		}
-		addresses[sce.SiacoinOutput.Address] = bal
 	}
 
 	for _, sfe := range newSiafundElements {
-		bal := addresses[sfe.SiafundOutput.Address]
-		bal.sf += sfe.SiafundOutput.Value
-		addresses[sfe.SiafundOutput.Address] = bal
+		delta(sfe.SiafundOutput.Address).sfAdd += sfe.SiafundOutput.Value
 	}
 	for _, sfe := range spentSiafundElements {
-		bal := addresses[sfe.SiafundOutput.Address]
-		if bal.sf < sfe.SiafundOutput.Value {
-			panic("sf underflow")
-		}
-		bal.sf -= sfe.SiafundOutput.Value
-		addresses[sfe.SiafundOutput.Address] = bal
+		delta(sfe.SiafundOutput.Address).sfSub += sfe.SiafundOutput.Value
 	}
 
 	stmt, err := tx.Prepare(`INSERT INTO address_balance(address, siacoin_balance, immature_siacoin_balance, siafund_balance)
-       VALUES ($1, $2, $3, $4)
+       VALUES ($1, $2 - $3, $4 - $5, $6 - $7)
        ON CONFLICT(address)
-       DO UPDATE set siacoin_balance = $5, immature_siacoin_balance = $6, siafund_balance = $7`)
+       DO UPDATE SET siacoin_balance = address_balance.siacoin_balance + $2 - $3, immature_siacoin_balance = address_balance.immature_siacoin_balance + $4 - $5, siafund_balance = address_balance.siafund_balance + $6 - $7`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
-	for addr, bal := range addresses {
-		if _, err := stmt.Exec(encode(addr), encode(bal.sc), encode(bal.immatureSC), encode(bal.sf), encode(bal.sc), encode(bal.immatureSC), encode(bal.sf)); err != nil {
+	for addr, d := range addresses {
+		if _, err := stmt.Exec(encode(addr), encode(d.scAdd), encode(d.scSub), encode(d.immatureSCAdd), encode(d.immatureSCSub), encode(d.sfAdd), encode(d.sfSub)); err != nil {
 			return fmt.Errorf("failed to exec statement: %w", err)
 		}
-		// log.Println(addr, "=", bal.sc)
 	}
 
 	return nil
@@ -474,63 +447,31 @@ func updateMaturedBalances(tx *txn, revert bool, height uint64) error {
 	}
 	defer rows.Close()
 
-	var scos []types.SiacoinOutput
-	addressList := make(map[types.Address]struct{})
+	deltas := make(map[types.Address]types.Currency)
 	for rows.Next() {
 		var sco types.SiacoinOutput
 		if err := rows.Scan(decode(&sco.Address), decode(&sco.Value)); err != nil {
 			return fmt.Errorf("failed to scan maturing outputs: %w", err)
 		}
-		scos = append(scos, sco)
-		addressList[sco.Address] = struct{}{}
+		deltas[sco.Address] = deltas[sco.Address].Add(sco.Value)
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("failed to retrieve maturing output rows: %w", err)
 	}
 
-	balanceRowsStmt, err := tx.Prepare(`SELECT siacoin_balance, immature_siacoin_balance
-        FROM address_balance
-        WHERE address = $1`)
-	if err != nil {
-		return fmt.Errorf("failed to prepare address_balance statement: %w", err)
+	var stmt *stmt
+	if revert {
+		stmt, err = tx.Prepare(`UPDATE address_balance SET siacoin_balance = siacoin_balance - $2, immature_siacoin_balance = immature_siacoin_balance + $2 WHERE address = $1`)
+	} else {
+		stmt, err = tx.Prepare(`UPDATE address_balance SET siacoin_balance = siacoin_balance + $2, immature_siacoin_balance = immature_siacoin_balance - $2 WHERE address = $1`)
 	}
-	defer balanceRowsStmt.Close()
-
-	addresses := make(map[types.Address]balance)
-	for addr := range addressList {
-		var bal balance
-		if err := balanceRowsStmt.QueryRow(encode(addr)).Scan(decode(&bal.sc), decode(&bal.immatureSC)); err != nil {
-			return fmt.Errorf("failed to scan balance: %w", err)
-		}
-		addresses[addr] = bal
-	}
-
-	// If the update is an apply update then we add the amounts.
-	// If we are reverting then we subtract them.
-	for _, sco := range scos {
-		bal := addresses[sco.Address]
-		if revert {
-			bal.sc = bal.sc.Sub(sco.Value)
-			bal.immatureSC = bal.immatureSC.Add(sco.Value)
-		} else {
-			bal.sc = bal.sc.Add(sco.Value)
-			bal.immatureSC = bal.immatureSC.Sub(sco.Value)
-		}
-		addresses[sco.Address] = bal
-	}
-
-	stmt, err := tx.Prepare(`INSERT INTO address_balance(address, siacoin_balance, immature_siacoin_balance, siafund_balance)
-    VALUES ($1, $2, $3, $4)
-    ON CONFLICT(address)
-    DO UPDATE set siacoin_balance = $5, immature_siacoin_balance = $6`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 
-	initialSF := encode(uint64(0))
-	for addr, bal := range addresses {
-		if _, err := stmt.Exec(encode(addr), encode(bal.sc), encode(bal.immatureSC), initialSF, encode(bal.sc), encode(bal.immatureSC)); err != nil {
+	for addr, delta := range deltas {
+		if _, err := stmt.Exec(encode(addr), encode(delta)); err != nil {
 			return fmt.Errorf("failed to exec statement: %w", err)
 		}
 	}
@@ -638,7 +579,7 @@ func addEvents(tx *txn, bid types.BlockID, events []explorer.Event) error {
 	}
 	defer insertEventStmt.Close()
 
-	addrStmt, err := tx.Prepare(`INSERT INTO address_balance (address, siacoin_balance, immature_siacoin_balance, siafund_balance) VALUES ($1, $2, $2, '\x0000000000000000'::bytea) ON CONFLICT (address) DO UPDATE SET address=EXCLUDED.address RETURNING id`)
+	addrStmt, err := tx.Prepare(`INSERT INTO address_balance (address, siacoin_balance, immature_siacoin_balance, siafund_balance) VALUES ($1, $2, $2, 0) ON CONFLICT (address) DO UPDATE SET address=EXCLUDED.address RETURNING id`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare address statement: %w", err)
 	}
@@ -746,7 +687,7 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
 	defer stmt.Close()
 
 	revisionStmt, err := tx.Prepare(`INSERT INTO last_contract_revision(contract_id, contract_element_id, resolved, valid, ed25519_renter_key, ed25519_host_key, confirmation_height, confirmation_block_id, confirmation_transaction_id)
-    VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, ''::bytea), COALESCE($8, ''::bytea), COALESCE($9, ''::bytea))
+    VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, 0), COALESCE($8, ''::bytea), COALESCE($9, ''::bytea))
     ON CONFLICT (contract_id)
     DO UPDATE SET resolved = EXCLUDED.resolved, valid = EXCLUDED.valid, contract_element_id = $10, ed25519_renter_key = COALESCE($11, last_contract_revision.ed25519_renter_key), ed25519_host_key = COALESCE($12, last_contract_revision.ed25519_host_key), confirmation_height = COALESCE($13, last_contract_revision.confirmation_height), confirmation_block_id = COALESCE($14, last_contract_revision.confirmation_block_id), confirmation_transaction_id = COALESCE($15, last_contract_revision.confirmation_transaction_id)`)
 	if err != nil {
@@ -844,9 +785,10 @@ func updateFileContractElements(tx *txn, revert bool, index types.ChainIndex, b 
 				encodedHostKey = encode(keys[1]).([]byte)
 			}
 
-			var encodedHeight, encodedBlockID, encodedConfirmationTransactionID []byte
+			var encodedHeight any
+			var encodedBlockID, encodedConfirmationTransactionID []byte
 			if confirmationTransactionID != nil {
-				encodedHeight = encode(index.Height).([]byte)
+				encodedHeight = encode(index.Height)
 				encodedBlockID = encode(index.ID).([]byte)
 				encodedConfirmationTransactionID = encode(*confirmationTransactionID).([]byte)
 			}
