@@ -51,7 +51,7 @@ WHERE ev.event_id = $1`
 			if errors.Is(err, sql.ErrNoRows) {
 				continue
 			} else if err != nil {
-				return fmt.Errorf("failed to query transaction %q: %w", id, err)
+				return fmt.Errorf("failed to query event %q: %w", id, err)
 			}
 			events = append(events, event)
 		}
@@ -132,9 +132,9 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 
 		sces, err := getSiacoinElements(tx, []types.SiacoinOutputID{scID}, false)
 		if err != nil {
-			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v1 proof output: %w", err)
+			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v2 resolution proof output: %w", err)
 		} else if len(sces) == 0 {
-			return explorer.Event{}, 0, fmt.Errorf("v1 proof output not found")
+			return explorer.Event{}, 0, fmt.Errorf("v2 resolution proof output not found")
 		}
 		resolution.SiacoinElement = sces[0]
 

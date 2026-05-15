@@ -61,7 +61,7 @@ WHERE block_id = ? ORDER BY block_order ASC`, encode(blockID))
 		ids = append(ids, id)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to retrieve chain index rows: %w", err)
+		return nil, fmt.Errorf("failed to retrieve block transaction ID rows: %w", err)
 	}
 	return
 }
@@ -257,7 +257,7 @@ ORDER BY ts.transaction_order ASC`)
 	return nil
 }
 
-// decorateV2SiafundInputs fills in the siacoin inputs for each
+// decorateV2SiafundInputs fills in the siafund inputs for each
 // transaction.
 func decorateV2SiafundInputs(tx *txn, dbIDs []int64, txns []explorer.V2Transaction) error {
 	stmt, err := tx.Prepare(`SELECT ts.satisfied_policy, ts.claim_address, sf.output_id, sf.leaf_index, sf.address, sf.value
@@ -266,7 +266,7 @@ INNER JOIN v2_transaction_siafund_inputs ts ON (ts.parent_id = sf.id)
 WHERE ts.transaction_id = ?
 ORDER BY ts.transaction_order ASC`)
 	if err != nil {
-		return fmt.Errorf("failed to prepare siacoin inputs statement: %w", err)
+		return fmt.Errorf("failed to prepare siafund inputs statement: %w", err)
 	}
 	defer stmt.Close()
 
@@ -274,14 +274,14 @@ ORDER BY ts.transaction_order ASC`)
 		err := func() error {
 			rows, err := stmt.Query(dbID)
 			if err != nil {
-				return fmt.Errorf("failed to query siacoin inputs: %w", err)
+				return fmt.Errorf("failed to query siafund inputs: %w", err)
 			}
 			defer rows.Close()
 
 			for rows.Next() {
 				var sfi types.V2SiafundInput
 				if err := rows.Scan(decode(&sfi.SatisfiedPolicy), decode(&sfi.ClaimAddress), decode(&sfi.Parent.ID), decode(&sfi.Parent.StateElement.LeafIndex), decode(&sfi.Parent.SiafundOutput.Address), decode(&sfi.Parent.SiafundOutput.Value)); err != nil {
-					return fmt.Errorf("failed to scan siacoin inputs: %w", err)
+					return fmt.Errorf("failed to scan siafund inputs: %w", err)
 				}
 
 				txns[i].SiafundInputs = append(txns[i].SiafundInputs, sfi)

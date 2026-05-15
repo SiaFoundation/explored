@@ -66,7 +66,7 @@ WHERE rev.contract_id = $1
 
 		proofs, err := fillElementProofs(tx, leafIndices)
 		if err != nil {
-			return fmt.Errorf("failed to fill siafund output proofs: %w", err)
+			return fmt.Errorf("failed to fill v2 file contract element proofs: %w", err)
 		}
 		for i := range result {
 			result[i].V2FileContractElement.StateElement.MerkleProof = proofs[i]

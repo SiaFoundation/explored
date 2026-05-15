@@ -355,7 +355,7 @@ ORDER BY contract_order ASC`, contractID)
 	for missedRows.Next() {
 		var sco explorer.ContractSiacoinOutput
 		if err := missedRows.Scan(decode(&sco.ID), decode(&sco.Address), decode(&sco.Value)); err != nil {
-			return nil, nil, fmt.Errorf("failed to scan valid proof output: %w", err)
+			return nil, nil, fmt.Errorf("failed to scan missed proof output: %w", err)
 		}
 		missed = append(missed, sco)
 	}
