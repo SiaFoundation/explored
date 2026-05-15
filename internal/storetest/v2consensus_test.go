@@ -71,73 +71,27 @@ func getCIE(t testing.TB, db explorer.Store, bid types.BlockID) types.ChainIndex
 	}
 }
 
-func (n *testChain) mineV2Transactions(t testing.TB, txns ...types.V2Transaction) {
-	t.Helper()
-
-	b := testutil.MineV2Block(n.tipState(), nil, txns, types.VoidAddress)
-	n.applyBlock(t, b)
-}
-
-func (n *testChain) assertV2Transactions(t testing.TB, expected ...types.V2Transaction) {
-	t.Helper()
-
-	for _, txn := range expected {
-		txns, err := n.db.V2Transactions([]types.TransactionID{txn.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "len(txns)", 1, len(txns))
-
-		testutil.CheckV2Transaction(t, txn, txns[0])
-	}
-}
-
-func (n *testChain) getV2FCE(t testing.TB, fcID types.FileContractID) explorer.V2FileContract {
-	t.Helper()
-
-	fces, err := n.db.V2Contracts([]types.FileContractID{fcID})
-	if err != nil {
-		t.Fatal(err)
-	} else if len(fces) == 0 {
-		t.Fatal("can't find fce")
-	}
-	fces[0].V2FileContractElement.StateElement.MerkleProof = nil
-	return fces[0]
-}
-
-func (n *testChain) getV2Txn(t testing.TB, txnID types.TransactionID) explorer.V2Transaction {
-	t.Helper()
-
-	txns, err := n.db.V2Transactions([]types.TransactionID{txnID})
-	if err != nil {
-		t.Fatal(err)
-	} else if len(txns) == 0 {
-		t.Fatal("can't find txn")
-	}
-	return txns[0]
-}
-
 func TestV2Block(t *testing.T) {
 	n := newTestChain(t, true, nil)
 
 	checkBlocks := func(count int) {
 		t.Helper()
 
-		testutil.Equal(t, "blocks", count, len(n.blocks))
-		for i := range n.blocks {
-			testutil.Equal(t, "block height", uint64(i), n.states[i].Index.Height)
-			testutil.Equal(t, "block ID", n.blocks[i].ID(), n.states[i].Index.ID)
-			n.assertBlock(t, n.states[i], n.blocks[i])
+		testutil.Equal(t, "blocks", count, len(n.Blocks))
+		for i := range n.Blocks {
+			testutil.Equal(t, "block height", uint64(i), n.States[i].Index.Height)
+			testutil.Equal(t, "block ID", n.Blocks[i].ID(), n.States[i].Index.ID)
+			n.AssertBlock(t, n.States[i], n.Blocks[i])
 		}
 	}
 
 	checkBlocks(1)
 
-	n.mineV2Transactions(t, types.V2Transaction{ArbitraryData: []byte{0}})
+	n.MineV2Transactions(t, types.V2Transaction{ArbitraryData: []byte{0}})
 
 	checkBlocks(2)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	checkBlocks(1)
 }
@@ -153,19 +107,19 @@ func TestV2ArbitraryData(t *testing.T) {
 		ArbitraryData: []byte("world"),
 	}
 
-	n.mineV2Transactions(t, txn1, txn2)
+	n.MineV2Transactions(t, txn1, txn2)
 
-	n.assertV2Transactions(t, txn1, txn2)
+	n.AssertV2Transactions(t, txn1, txn2)
 
 	txn3 := types.V2Transaction{
 		ArbitraryData: []byte("12345"),
 	}
 
-	n.mineV2Transactions(t, txn3)
+	n.MineV2Transactions(t, txn3)
 
-	n.assertV2Transactions(t, txn1, txn2, txn3)
+	n.AssertV2Transactions(t, txn1, txn2, txn3)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 }
 
 func TestV2MinerFee(t *testing.T) {
@@ -177,22 +131,22 @@ func TestV2MinerFee(t *testing.T) {
 	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
-	genesisTxn := n.genesis().Transactions[0]
+	genesisTxn := n.Genesis().Transactions[0]
 
 	txn1 := types.V2Transaction{
 		MinerFee: genesisTxn.SiacoinOutputs[0].Value,
 		SiacoinInputs: []types.V2SiacoinInput{{
-			Parent:          getSCE(t, n.db, genesisTxn.SiacoinOutputID(0)),
+			Parent:          getSCE(t, n.DB, genesisTxn.SiacoinOutputID(0)),
 			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
 		}},
 	}
-	testutil.SignV2Transaction(n.tipState(), pk1, &txn1)
+	testutil.SignV2Transaction(n.TipState(), pk1, &txn1)
 
-	n.mineV2Transactions(t, txn1)
+	n.MineV2Transactions(t, txn1)
 
-	n.assertV2Transactions(t, txn1)
+	n.AssertV2Transactions(t, txn1)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 }
 
 func TestV2FoundationAddress(t *testing.T) {
@@ -208,58 +162,58 @@ func TestV2FoundationAddress(t *testing.T) {
 		network.HardforkFoundation.PrimaryAddress = addr1
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
-	genesisTxn := n.genesis().Transactions[0]
+	genesisTxn := n.Genesis().Transactions[0]
 
 	// event for transaction in genesis block
 	ev0 := explorer.Event{
 		ID:             types.Hash256(genesisTxn.ID()),
-		Index:          n.tipState().Index,
+		Index:          n.TipState().Index,
 		Type:           wallet.EventTypeV1Transaction,
-		MaturityHeight: n.tipState().Index.Height,
-		Timestamp:      n.tipBlock().Timestamp,
+		MaturityHeight: n.TipState().Index.Height,
+		Timestamp:      n.TipBlock().Timestamp,
 	}
 
 	// we have to spend an output beloning to foundation address to change it
 	txn1 := types.V2Transaction{
 		SiacoinInputs: []types.V2SiacoinInput{{
-			Parent:          getSCE(t, n.db, genesisTxn.SiacoinOutputID(0)),
+			Parent:          getSCE(t, n.DB, genesisTxn.SiacoinOutputID(0)),
 			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
 		}},
 		MinerFee:             genesisTxn.SiacoinOutputs[0].Value,
 		NewFoundationAddress: &addr2,
 	}
-	testutil.SignV2Transaction(n.tipState(), pk1, &txn1)
+	testutil.SignV2Transaction(n.TipState(), pk1, &txn1)
 
-	n.mineV2Transactions(t, txn1)
+	n.MineV2Transactions(t, txn1)
 
-	n.assertV2Transactions(t, txn1)
+	n.AssertV2Transactions(t, txn1)
 
-	ev0.Data = explorer.EventV1Transaction{Transaction: n.getTxn(t, genesisTxn.ID())}
+	ev0.Data = explorer.EventV1Transaction{Transaction: n.GetTxn(t, genesisTxn.ID())}
 	// event for txn1
 	ev1 := explorer.Event{
 		ID:             types.Hash256(txn1.ID()),
-		Index:          n.tipState().Index,
+		Index:          n.TipState().Index,
 		Type:           wallet.EventTypeV2Transaction,
-		Data:           explorer.EventV2Transaction(n.getV2Txn(t, txn1.ID())),
-		MaturityHeight: n.tipState().Index.Height,
-		Timestamp:      n.tipBlock().Timestamp,
+		Data:           explorer.EventV2Transaction(n.GetV2Txn(t, txn1.ID())),
+		MaturityHeight: n.TipState().Index.Height,
+		Timestamp:      n.TipBlock().Timestamp,
 	}
 
 	// event for foundation payout
-	scID := n.tipState().Index.ID.FoundationOutputID()
+	scID := n.TipState().Index.ID.FoundationOutputID()
 
 	ev2 := explorer.Event{
 		ID:             types.Hash256(scID),
-		Index:          n.tipState().Index,
+		Index:          n.TipState().Index,
 		Type:           wallet.EventTypeFoundationSubsidy,
-		Data:           explorer.EventPayout{SiacoinElement: n.getSCE(t, scID)},
-		MaturityHeight: n.tipState().MaturityHeight() - 1,
-		Timestamp:      n.tipBlock().Timestamp,
+		Data:           explorer.EventPayout{SiacoinElement: n.GetSCE(t, scID)},
+		MaturityHeight: n.TipState().MaturityHeight() - 1,
+		Timestamp:      n.TipBlock().Timestamp,
 	}
 
-	n.assertEvents(t, addr1, ev2, ev1, ev0)
+	n.AssertEvents(t, addr1, ev2, ev1, ev0)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 }
 
 func TestV2Attestations(t *testing.T) {
@@ -282,22 +236,22 @@ func TestV2Attestations(t *testing.T) {
 		Key:       "hello",
 		Value:     []byte("world"),
 	}
-	otherAttestation.Signature = pk1.SignHash(n.tipState().AttestationSigHash(otherAttestation))
+	otherAttestation.Signature = pk1.SignHash(n.TipState().AttestationSigHash(otherAttestation))
 
 	txn1 := types.V2Transaction{
-		Attestations: []types.Attestation{ha1.ToAttestation(n.tipState(), pk1), otherAttestation},
+		Attestations: []types.Attestation{ha1.ToAttestation(n.TipState(), pk1), otherAttestation},
 	}
-	testutil.SignV2Transaction(n.tipState(), pk1, &txn1)
+	testutil.SignV2Transaction(n.TipState(), pk1, &txn1)
 	txn2 := types.V2Transaction{
-		Attestations: []types.Attestation{ha2.ToAttestation(n.tipState(), pk2)},
+		Attestations: []types.Attestation{ha2.ToAttestation(n.TipState(), pk2)},
 	}
-	testutil.SignV2Transaction(n.tipState(), pk1, &txn2)
+	testutil.SignV2Transaction(n.TipState(), pk1, &txn2)
 
-	n.mineV2Transactions(t, txn1, txn2)
+	n.MineV2Transactions(t, txn1, txn2)
 
-	n.assertV2Transactions(t, txn1, txn2)
+	n.AssertV2Transactions(t, txn1, txn2)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 }
 
 func TestUnconfirmedEvents(t *testing.T) {
@@ -312,10 +266,10 @@ func TestUnconfirmedEvents(t *testing.T) {
 	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
-	genesisTxn := n.genesis().Transactions[0]
+	genesisTxn := n.Genesis().Transactions[0]
 
 	// get the siacoin element from genesis
-	sce := getSCE(t, n.db, genesisTxn.SiacoinOutputID(0))
+	sce := getSCE(t, n.DB, genesisTxn.SiacoinOutputID(0))
 
 	// create a V1 unconfirmed transaction
 	v1Txn := types.Transaction{
@@ -328,13 +282,13 @@ func TestUnconfirmedEvents(t *testing.T) {
 			{Address: addr1, Value: sce.SiacoinOutput.Value.Sub(types.Siacoins(50))},
 		},
 	}
-	testutil.SignTransaction(n.tipState(), pk1, &v1Txn)
+	testutil.SignTransaction(n.TipState(), pk1, &v1Txn)
 
 	// mine the V1 transaction so we have a fresh utxo for V2
-	n.mineTransactions(t, v1Txn)
+	n.MineTransactions(t, v1Txn)
 
 	// get the new siacoin element
-	sce2 := getSCE(t, n.db, v1Txn.SiacoinOutputID(1))
+	sce2 := getSCE(t, n.DB, v1Txn.SiacoinOutputID(1))
 
 	// create a V2 unconfirmed transaction
 	v2Txn := types.V2Transaction{
@@ -347,12 +301,12 @@ func TestUnconfirmedEvents(t *testing.T) {
 			{Address: addr1, Value: sce2.SiacoinOutput.Value.Sub(types.Siacoins(10))},
 		},
 	}
-	testutil.SignV2Transaction(n.tipState(), pk1, &v2Txn)
+	testutil.SignV2Transaction(n.TipState(), pk1, &v2Txn)
 
 	// test both V1 and V2 together
-	index := n.tipState().Index
+	index := n.TipState().Index
 	timestamp := types.CurrentTimestamp()
-	events, err := n.db.UnconfirmedEvents(index, timestamp, []types.Transaction{v1Txn}, []types.V2Transaction{v2Txn})
+	events, err := n.DB.UnconfirmedEvents(index, timestamp, []types.Transaction{v1Txn}, []types.V2Transaction{v2Txn})
 	if err != nil {
 		t.Fatal(err)
 	}

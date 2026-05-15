@@ -11,6 +11,7 @@ import (
 	proto4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
 	"go.sia.tech/explored/explorer"
+	"go.sia.tech/explored/internal/testchain"
 	"go.sia.tech/explored/internal/testutil"
 )
 
@@ -22,17 +23,17 @@ func TestMetrics(t *testing.T) {
 	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
-	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+	val := n.Genesis().Transactions[0].SiacoinOutputs[0].Value
 
 	assertMetrics := func(expected explorer.Metrics) {
 		t.Helper()
 
-		got, err := n.db.Metrics(n.tipState().Index.ID)
+		got, err := n.DB.Metrics(n.TipState().Index.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		cs := n.tipState()
+		cs := n.TipState()
 		testutil.Equal(t, "Index", cs.Index, got.Index)
 		testutil.Equal(t, "Difficulty", cs.Difficulty, got.Difficulty)
 		testutil.Equal(t, "SiafundTaxRevenue", cs.SiafundTaxRevenue, got.SiafundTaxRevenue)
@@ -47,7 +48,7 @@ func TestMetrics(t *testing.T) {
 	}
 
 	var circulatingSupply types.Currency
-	for _, txn := range n.genesis().Transactions {
+	for _, txn := range n.Genesis().Transactions {
 		for _, sco := range txn.SiacoinOutputs {
 			circulatingSupply = circulatingSupply.Add(sco.Value)
 		}
@@ -57,22 +58,22 @@ func TestMetrics(t *testing.T) {
 	}
 	assertMetrics(metricsGenesis)
 
-	if subsidy, ok := n.tipState().FoundationSubsidy(); ok {
+	if subsidy, ok := n.TipState().FoundationSubsidy(); ok {
 		circulatingSupply = circulatingSupply.Add(subsidy.Value)
 	}
 	metrics1 := explorer.Metrics{
 		CirculatingSupply: circulatingSupply,
 	}
 
-	n.mineTransactions(t)
+	n.MineTransactions(t)
 
 	assertMetrics(metrics1)
 
 	// form two contracts
-	fc := prepareContract(addr1, n.tipState().Index.Height+3)
+	fc := testchain.PrepareContract(addr1, n.TipState().Index.Height+3)
 	txn1 := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
-			ParentID:         n.genesis().Transactions[0].SiacoinOutputID(0),
+			ParentID:         n.Genesis().Transactions[0].SiacoinOutputID(0),
 			UnlockConditions: uc1,
 		}},
 		SiacoinOutputs: []types.SiacoinOutput{{
@@ -81,9 +82,9 @@ func TestMetrics(t *testing.T) {
 		}},
 		FileContracts: []types.FileContract{fc, fc},
 	}
-	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+	testutil.SignTransaction(n.TipState(), pk1, &txn1)
 
-	n.mineTransactions(t, txn1)
+	n.MineTransactions(t, txn1)
 
 	// funds now locked in contract so circulating supply goes down
 	circulatingSupply = circulatingSupply.Sub(fc.Payout.Mul64(2))
@@ -105,9 +106,9 @@ func TestMetrics(t *testing.T) {
 			FileContract:     fcRevision1,
 		}},
 	}
-	signRevisions(n.tipState(), &txn2, pk1)
+	signRevisions(n.TipState(), &txn2, pk1)
 
-	n.mineTransactions(t, txn2)
+	n.MineTransactions(t, txn2)
 
 	metrics3 := explorer.Metrics{
 		ActiveContracts:    2,
@@ -122,7 +123,7 @@ func TestMetrics(t *testing.T) {
 			ParentID: txn1.FileContractID(1),
 		}},
 	}
-	n.mineTransactions(t, txn3)
+	n.MineTransactions(t, txn3)
 
 	// valid proof outputs created after proof successful
 	var contractRevenue types.Currency
@@ -140,8 +141,8 @@ func TestMetrics(t *testing.T) {
 	assertMetrics(metrics4)
 
 	// resolve first contract unsuccessfully
-	for i := n.tipState().Index.Height; i < fc.WindowEnd; i++ {
-		n.mineTransactions(t)
+	for i := n.TipState().Index.Height; i < fc.WindowEnd; i++ {
+		n.MineTransactions(t)
 	}
 
 	// missed proof outputs created after failed resolution
@@ -158,26 +159,26 @@ func TestMetrics(t *testing.T) {
 	assertMetrics(metrics5)
 
 	// go back to before failed resolution
-	for i := n.tipState().Index.Height; i >= fc.WindowEnd; i-- {
+	for i := n.TipState().Index.Height; i >= fc.WindowEnd; i-- {
 		assertMetrics(metrics5)
-		n.revertBlock(t)
+		n.RevertBlock(t)
 	}
 
 	assertMetrics(metrics4)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	assertMetrics(metrics3)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	assertMetrics(metrics2)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	assertMetrics(metrics1)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	assertMetrics(metricsGenesis)
 }
@@ -192,7 +193,7 @@ func TestMetricsTotalHosts(t *testing.T) {
 	assertMetrics := func(expectedHosts uint64) {
 		t.Helper()
 
-		got, err := n.db.Metrics(n.tipState().Index.ID)
+		got, err := n.DB.Metrics(n.TipState().Index.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -208,9 +209,9 @@ func TestMetricsTotalHosts(t *testing.T) {
 		},
 	}
 
-	n.mineTransactions(t, txn1)
+	n.MineTransactions(t, txn1)
 
-	n.assertTransactions(t, txn1)
+	n.AssertTransactions(t, txn1)
 	// 1 host announced in txn1
 	assertMetrics(1)
 
@@ -220,9 +221,9 @@ func TestMetricsTotalHosts(t *testing.T) {
 		},
 	}
 
-	n.mineTransactions(t, txn2)
+	n.MineTransactions(t, txn2)
 
-	n.assertTransactions(t, txn1, txn2)
+	n.AssertTransactions(t, txn1, txn2)
 	// host announced in txn2 has same pubkey as existing host so count
 	// shouldn't go up
 	assertMetrics(1)
@@ -238,23 +239,23 @@ func TestMetricsTotalHosts(t *testing.T) {
 		},
 	}
 
-	n.mineTransactions(t, txn3, txn4)
+	n.MineTransactions(t, txn3, txn4)
 
-	n.assertTransactions(t, txn1, txn2, txn3, txn4)
+	n.AssertTransactions(t, txn1, txn2, txn3, txn4)
 	// 2 hosts with new publickeys announced; 1 + 2 = 3
 	assertMetrics(3)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
-	n.assertTransactions(t, txn1, txn2)
+	n.AssertTransactions(t, txn1, txn2)
 	assertMetrics(1)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
-	n.assertTransactions(t, txn1)
+	n.AssertTransactions(t, txn1)
 	assertMetrics(1)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	assertMetrics(0)
 }
@@ -271,17 +272,17 @@ func TestV2Metrics(t *testing.T) {
 	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
-	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+	val := n.Genesis().Transactions[0].SiacoinOutputs[0].Value
 
 	assertMetrics := func(expected explorer.Metrics) {
 		t.Helper()
 
-		got, err := n.db.Metrics(n.tipState().Index.ID)
+		got, err := n.DB.Metrics(n.TipState().Index.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		cs := n.tipState()
+		cs := n.TipState()
 		testutil.Equal(t, "Index", cs.Index, got.Index)
 		testutil.Equal(t, "Difficulty", cs.Difficulty, got.Difficulty)
 		testutil.Equal(t, "SiafundTaxRevenue", cs.SiafundTaxRevenue, got.SiafundTaxRevenue)
@@ -296,7 +297,7 @@ func TestV2Metrics(t *testing.T) {
 	}
 
 	var circulatingSupply types.Currency
-	for _, txn := range n.genesis().Transactions {
+	for _, txn := range n.Genesis().Transactions {
 		for _, sco := range txn.SiacoinOutputs {
 			circulatingSupply = circulatingSupply.Add(sco.Value)
 		}
@@ -306,23 +307,23 @@ func TestV2Metrics(t *testing.T) {
 	}
 	assertMetrics(metricsGenesis)
 
-	if subsidy, ok := n.tipState().FoundationSubsidy(); ok {
+	if subsidy, ok := n.TipState().FoundationSubsidy(); ok {
 		circulatingSupply = circulatingSupply.Add(subsidy.Value)
 	}
 	metrics1 := explorer.Metrics{
 		CirculatingSupply: circulatingSupply,
 	}
 
-	n.mineTransactions(t)
+	n.MineTransactions(t)
 
 	assertMetrics(metrics1)
 
 	// form two contracts
-	fc, payout := prepareV2Contract(renterPK, hostPK, n.tipState().Index.Height+2)
+	fc, payout := testchain.PrepareV2Contract(renterPK, hostPK, n.TipState().Index.Height+2)
 	fc.Capacity = proto4.SectorSize
 	txn1 := types.V2Transaction{
 		SiacoinInputs: []types.V2SiacoinInput{{
-			Parent:          getSCE(t, n.db, n.genesis().Transactions[0].SiacoinOutputID(0)),
+			Parent:          getSCE(t, n.DB, n.Genesis().Transactions[0].SiacoinOutputID(0)),
 			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
 		}},
 		SiacoinOutputs: []types.SiacoinOutput{{
@@ -331,9 +332,9 @@ func TestV2Metrics(t *testing.T) {
 		}},
 		FileContracts: []types.V2FileContract{fc, fc},
 	}
-	testutil.SignV2TransactionWithContracts(n.tipState(), pk1, renterPK, hostPK, &txn1)
+	testutil.SignV2TransactionWithContracts(n.TipState(), pk1, renterPK, hostPK, &txn1)
 
-	n.mineV2Transactions(t, txn1)
+	n.MineV2Transactions(t, txn1)
 
 	// funds now locked in contract so circulating supply goes down
 	circulatingSupply = circulatingSupply.Sub(payout.Mul64(2))
@@ -351,13 +352,13 @@ func TestV2Metrics(t *testing.T) {
 	fcRevision1.RevisionNumber++
 	txn2 := types.V2Transaction{
 		FileContractRevisions: []types.V2FileContractRevision{{
-			Parent:   getFCE(t, n.db, fcID1),
+			Parent:   getFCE(t, n.DB, fcID1),
 			Revision: fcRevision1,
 		}},
 	}
-	testutil.SignV2TransactionWithContracts(n.tipState(), pk1, renterPK, hostPK, &txn2)
+	testutil.SignV2TransactionWithContracts(n.TipState(), pk1, renterPK, hostPK, &txn2)
 
-	n.mineV2Transactions(t, txn2)
+	n.MineV2Transactions(t, txn2)
 
 	metrics3 := explorer.Metrics{
 		ActiveContracts:    2,
@@ -368,15 +369,15 @@ func TestV2Metrics(t *testing.T) {
 
 	// resolve second contract successfully
 	sp := &types.V2StorageProof{
-		ProofIndex: getCIE(t, n.db, n.tipState().Index.ID),
+		ProofIndex: getCIE(t, n.DB, n.TipState().Index.ID),
 	}
 	txn3 := types.V2Transaction{
 		FileContractResolutions: []types.V2FileContractResolution{{
-			Parent:     getFCE(t, n.db, fcID1),
+			Parent:     getFCE(t, n.DB, fcID1),
 			Resolution: sp,
 		}},
 	}
-	n.mineV2Transactions(t, txn3)
+	n.MineV2Transactions(t, txn3)
 
 	// valid proof outputs created after proof successful
 	var contractRevenue types.Currency
@@ -394,16 +395,16 @@ func TestV2Metrics(t *testing.T) {
 	assertMetrics(metrics4)
 
 	// resolve first contract unsuccessfully
-	for i := n.tipState().Index.Height; i < fc.ExpirationHeight; i++ {
-		n.mineV2Transactions(t)
+	for i := n.TipState().Index.Height; i < fc.ExpirationHeight; i++ {
+		n.MineV2Transactions(t)
 	}
 	txn4 := types.V2Transaction{
 		FileContractResolutions: []types.V2FileContractResolution{{
-			Parent:     getFCE(t, n.db, fcID2),
+			Parent:     getFCE(t, n.DB, fcID2),
 			Resolution: &types.V2FileContractExpiration{},
 		}},
 	}
-	n.mineV2Transactions(t, txn4)
+	n.MineV2Transactions(t, txn4)
 
 	// missed proof outputs created after failed resolution
 	circulatingSupply = circulatingSupply.Add(fc.RenterOutput.Value)
@@ -418,25 +419,25 @@ func TestV2Metrics(t *testing.T) {
 	assertMetrics(metrics5)
 
 	// go back to before failed resolution
-	for i := n.tipState().Index.Height; i > fc.ExpirationHeight; i-- {
+	for i := n.TipState().Index.Height; i > fc.ExpirationHeight; i-- {
 		assertMetrics(metrics5)
-		n.revertBlock(t)
+		n.RevertBlock(t)
 	}
 	assertMetrics(metrics4)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	assertMetrics(metrics3)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	assertMetrics(metrics2)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	assertMetrics(metrics1)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	assertMetrics(metricsGenesis)
 }
@@ -473,7 +474,7 @@ func TestDifficultyMetrics(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := n.db.DifficultyMetrics(tt.start, tt.end, tt.step, n.tipState().Network)
+			result, err := n.DB.DifficultyMetrics(tt.start, tt.end, tt.step, n.TipState().Network)
 			if tt.err != "" {
 				if err == nil || !strings.Contains(err.Error(), tt.err) {
 					t.Fatalf("Expected %v, got %v", tt.err, err)
