@@ -90,11 +90,15 @@ func (s *Store) transaction(fn func(*txn) error) error {
 			return err
 		}
 
+		if attempt == maxRetryAttempts {
+			// no more retries; don't waste a backoff before reporting failure.
+			break
+		}
 		sleep := min(time.Duration(math.Pow(factor, float64(attempt)))*time.Millisecond, maxBackoff)
 		log.Debug("retryable database error", zap.Duration("elapsed", time.Since(attemptStart)), zap.Duration("totalElapsed", time.Since(start)), zap.Duration("retry", sleep), zap.Error(err))
 		time.Sleep(sleep + time.Duration(rand.Int63n(int64(sleep/2))))
 	}
-	return fmt.Errorf("transaction failed (attempt %d): %w", attempt, err)
+	return fmt.Errorf("transaction failed (attempt %d): %w", maxRetryAttempts, err)
 }
 
 func (s *Store) doTransaction(log *zap.Logger, fn func(*txn) error) error {
