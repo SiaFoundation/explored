@@ -27,6 +27,7 @@ import (
 	"go.sia.tech/explored/exchangerates"
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/syncerutil"
+	"go.sia.tech/explored/persist/postgres"
 	"go.sia.tech/explored/persist/sqlite"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -106,6 +107,10 @@ func tryLoadConfig() {
 	dec.KnownFields(true)
 
 	checkFatalError("failed to decode config file", dec.Decode(&cfg))
+
+	if v := os.Getenv("EXPLORED_POSTGRES_PASSWORD"); v != "" {
+		cfg.Database.Postgres.Password = v
+	}
 }
 
 // jsonEncoder returns a zapcore.Encoder that encodes logs as JSON intended for
@@ -209,9 +214,20 @@ func runRootCmd(ctx context.Context, log *zap.Logger) error {
 	}
 	cm := chain.NewManager(dbstore, tipState, chain.WithLog(log.Named("chain")))
 
-	store, err := sqlite.OpenDatabase(filepath.Join(cfg.Directory, "explored.sqlite3"), log.Named("sqlite3"))
-	if err != nil {
-		return fmt.Errorf("failed to open sqlite database: %w", err)
+	var store explorer.Store
+	switch cfg.Database.Type {
+	case "postgres":
+		ps, err := postgres.NewStore(ctx, postgres.ConnectionInfo(cfg.Database.Postgres), log.Named("postgres"))
+		if err != nil {
+			return fmt.Errorf("failed to open postgres database: %w", err)
+		}
+		store = ps
+	default:
+		ss, err := sqlite.OpenDatabase(filepath.Join(cfg.Directory, "explored.sqlite3"), log.Named("sqlite3"))
+		if err != nil {
+			return fmt.Errorf("failed to open sqlite database: %w", err)
+		}
+		store = ss
 	}
 	defer store.Close()
 
