@@ -77,6 +77,8 @@ func (s *Store) Contracts(ids []types.FileContractID) (result []explorer.Extende
 // ContractRevisions implements explorer.Store.
 func (s *Store) ContractRevisions(id types.FileContractID) (revisions []explorer.ExtendedFileContract, err error) {
 	err = s.transaction(func(tx *txn) error {
+		revisions = revisions[:0]
+
 		query := `SELECT fc.id, fc.contract_id, rev.resolved, rev.valid, fc.transaction_id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.proof_height, rev.proof_block_id, rev.proof_transaction_id, fc.filesize, fc.file_merkle_root, fc.window_start, fc.window_end, fc.payout, fc.unlock_hash, fc.revision_number
 			FROM file_contract_elements fc
 			JOIN last_contract_revision rev ON rev.contract_id = fc.contract_id
@@ -110,6 +112,8 @@ func (s *Store) ContractRevisions(id types.FileContractID) (revisions []explorer
 // ContractsKey implements explorer.Store.
 func (s *Store) ContractsKey(key types.PublicKey, offset, limit uint64) (result []explorer.ExtendedFileContract, err error) {
 	err = s.transaction(func(tx *txn) error {
+		result = result[:0]
+
 		query := `SELECT fc1.id, fc1.contract_id, rev.resolved, rev.valid, fc1.transaction_id, rev.confirmation_height, rev.confirmation_block_id, rev.confirmation_transaction_id, rev.proof_height, rev.proof_block_id, rev.proof_transaction_id, fc1.filesize, fc1.file_merkle_root, fc1.window_start, fc1.window_end, fc1.payout, fc1.unlock_hash, fc1.revision_number
 			FROM file_contract_elements fc1
 			INNER JOIN last_contract_revision rev ON rev.contract_element_id = fc1.id

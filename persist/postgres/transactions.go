@@ -16,6 +16,8 @@ import (
 // result will be nil,nil.
 func (s *Store) TransactionChainIndices(txnID types.TransactionID, offset, limit uint64) (indices []types.ChainIndex, err error) {
 	err = s.transaction(func(tx *txn) error {
+		indices = indices[:0]
+
 		rows, err := tx.Query(`SELECT DISTINCT b.id, b.height FROM blocks b
 INNER JOIN block_transactions bt ON bt.block_id = b.id
 INNER JOIN transactions t ON t.id = bt.transaction_id

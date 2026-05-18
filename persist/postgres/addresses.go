@@ -142,6 +142,8 @@ func scanSiafundOutput(s scanner) (sfo explorer.SiafundOutput, err error) {
 // UnspentSiacoinOutputs implements explorer.Store.
 func (s *Store) UnspentSiacoinOutputs(address types.Address, offset, limit uint64) (result []explorer.SiacoinOutput, err error) {
 	err = s.transaction(func(tx *txn) error {
+		result = result[:0]
+
 		rows, err := tx.Query(`SELECT output_id, leaf_index, source, spent_index, maturity_height, address, value FROM siacoin_elements WHERE address = $1 AND spent_index IS NULL LIMIT $2 OFFSET $3`, encode(address), limit, offset)
 		if err != nil {
 			return fmt.Errorf("failed to query siacoin outputs: %w", err)
@@ -166,6 +168,8 @@ func (s *Store) UnspentSiacoinOutputs(address types.Address, offset, limit uint6
 // UnspentSiafundOutputs implements explorer.Store.
 func (s *Store) UnspentSiafundOutputs(address types.Address, offset, limit uint64) (result []explorer.SiafundOutput, err error) {
 	err = s.transaction(func(tx *txn) error {
+		result = result[:0]
+
 		rows, err := tx.Query(`SELECT output_id, leaf_index, spent_index, claim_start, address, value FROM siafund_elements WHERE address = $1 AND spent_index IS NULL LIMIT $2 OFFSET $3`, encode(address), limit, offset)
 		if err != nil {
 			return fmt.Errorf("failed to query siafund outputs: %w", err)
@@ -306,6 +310,8 @@ func (s *Store) Balance(address types.Address) (sc types.Currency, immatureSC ty
 // by balance.
 func (s *Store) TopSiacoinAddresses(limit, offset int) (result []explorer.TopSiacoin, err error) {
 	err = s.transaction(func(tx *txn) error {
+		result = result[:0]
+
 		rows, err := tx.Query(`SELECT address, siacoin_balance FROM address_balance ORDER BY siacoin_balance DESC LIMIT $1 OFFSET $2`, limit, offset)
 		if err != nil {
 			return fmt.Errorf("failed to query top siacoin addresses: %w", err)
@@ -331,6 +337,8 @@ func (s *Store) TopSiacoinAddresses(limit, offset int) (result []explorer.TopSia
 // by balance.
 func (s *Store) TopSiafundAddresses(limit, offset int) (result []explorer.TopSiafund, err error) {
 	err = s.transaction(func(tx *txn) error {
+		result = result[:0]
+
 		rows, err := tx.Query(`SELECT address, siafund_balance FROM address_balance ORDER BY siafund_balance DESC LIMIT $1 OFFSET $2`, limit, offset)
 		if err != nil {
 			return fmt.Errorf("failed to query top siafund addresses: %w", err)
