@@ -1,10 +1,11 @@
-package sqlite
+package postgres
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/wallet"
@@ -15,9 +16,6 @@ import (
 // it is skipped.
 func (s *Store) Events(eventIDs []types.Hash256) (events []explorer.Event, err error) {
 	err = s.transaction(func(tx *txn) error {
-		// sqlite doesn't have easy support for IN clauses, use a statement since
-		// the number of event IDs is likely to be small instead of dynamically
-		// building the query
 		const query = `
 WITH last_chain_index (height) AS (
     SELECT MAX(height) FROM blocks
@@ -48,7 +46,7 @@ WHERE ev.event_id = $1`
 		events = make([]explorer.Event, 0, len(eventIDs))
 		for _, id := range eventIDs {
 			event, _, err := scanEvent(tx, stmt.QueryRow(encode(id)))
-			if errors.Is(err, sql.ErrNoRows) {
+			if errors.Is(err, pgx.ErrNoRows) {
 				continue
 			} else if err != nil {
 				return fmt.Errorf("failed to query event %q: %w", id, err)
@@ -92,7 +90,7 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
 		err := tx.QueryRow(`SELECT ev.missed, fc.contract_id
 			FROM v1_contract_resolution_events ev
 			INNER JOIN file_contract_elements fc ON ev.parent_id = fc.id
-			WHERE ev.event_id = ?`, eventID).Scan(&missed, decode(&fcID))
+			WHERE ev.event_id = $1`, eventID).Scan(&missed, decode(&fcID))
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v1 resolution event: %w", err)
 		}
@@ -125,7 +123,7 @@ func scanEvent(tx *txn, s scanner) (ev explorer.Event, eventID int64, err error)
             FROM v2_contract_resolution_events ev
             INNER JOIN v2_file_contract_elements fc ON ev.parent_id = fc.id
             INNER JOIN v2_last_contract_revision rev ON fc.contract_id = rev.contract_id
-            WHERE ev.event_id = ?`, eventID).Scan(&resolution.Missed, decode(&fcID), decode(&resolutionTransactionID))
+            WHERE ev.event_id = $1`, eventID).Scan(&resolution.Missed, decode(&fcID), decode(&resolutionTransactionID))
 		if err != nil {
 			return explorer.Event{}, 0, fmt.Errorf("failed to retrieve v2 resolution event: %w", err)
 		}

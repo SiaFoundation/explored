@@ -81,6 +81,24 @@ type (
 		File   LogFile `yaml:"file,omitempty"`
 	}
 
+	// Database contains the configuration for the database backend.
+	Database struct {
+		Type     string         `yaml:"type,omitempty"`
+		Postgres ConnectionInfo `yaml:"postgres,omitempty"`
+	}
+
+	// ConnectionInfo contains the information needed to connect to a PostgreSQL
+	// database.
+	ConnectionInfo struct {
+		Host        string `json:"host" yaml:"host"`
+		Port        int    `json:"port" yaml:"port"`
+		User        string `json:"user" yaml:"user"`
+		Password    string `json:"password" yaml:"password"`
+		Database    string `json:"database" yaml:"database"`
+		SSLMode     string `json:"sslmode" yaml:"sslmode"`
+		SSLRootCert string `json:"sslrootcert" yaml:"sslrootcert"`
+	}
+
 	// Config contains the configuration for the host.
 	Config struct {
 		Directory     string `yaml:"directory,omitempty"`
@@ -93,5 +111,6 @@ type (
 		ExchangeRates ExchangeRates `yaml:"exchangeRates,omitempty"`
 		Log           Log           `yaml:"log,omitempty"`
 		Index         Index         `yaml:"index,omitempty"`
+		Database      Database      `yaml:"database,omitempty"`
 	}
 )

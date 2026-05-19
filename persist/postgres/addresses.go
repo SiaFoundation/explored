@@ -1,16 +1,20 @@
-package sqlite
+package postgres
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
+
+	"github.com/jackc/pgx/v5"
 
 	"go.sia.tech/core/types"
 	"go.sia.tech/explored/explorer"
 )
 
 func getAddressEvents(tx *txn, address types.Address, offset, limit uint64) (eventIDs []int64, err error) {
-	const query = `SELECT DISTINCT ea.event_id
+	// event_addresses is keyed by (event_id, address_id), so filtering by a
+	// single address already yields distinct event_ids; no DISTINCT needed
+	// (postgres would also reject it with this ORDER BY).
+	const query = `SELECT ea.event_id
 FROM event_addresses ea
 INNER JOIN address_balance sa ON ea.address_id = sa.id
 WHERE sa.address = $1
@@ -66,7 +70,7 @@ WHERE ev.id=$2`)
 	events = make([]explorer.Event, 0, len(eventIDs))
 	for i, id := range eventIDs {
 		event, _, err := scanEvent(tx, stmt.QueryRow(scanHeight, id))
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			continue
 		} else if err != nil {
 			return nil, fmt.Errorf("failed to query event %d: %w", i, err)
@@ -83,14 +87,14 @@ func (s *Store) AddressCheckpoint(address types.Address) (checkpoint types.Chain
 		const query = `SELECT b.id, b.height
 FROM blocks b 
 WHERE b.height = (
-    SELECT MAX(MIN(ea.event_maturity_height) - 144, 0) -- subtract 1 day for maturity delay
+    SELECT GREATEST(MIN(ea.event_maturity_height) - 144, 0) -- subtract 1 day for maturity delay
     FROM event_addresses ea
     INNER JOIN address_balance ab ON ab.id = ea.address_id
     WHERE ab.address=$1
 );`
 		return tx.QueryRow(query, encode(address)).Scan(decode(&checkpoint.ID), decode(&checkpoint.Height))
 	})
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return types.ChainIndex{}, nil
 	}
 	return
@@ -140,7 +144,7 @@ func (s *Store) UnspentSiacoinOutputs(address types.Address, offset, limit uint6
 	err = s.transaction(func(tx *txn) error {
 		result = result[:0]
 
-		rows, err := tx.Query(`SELECT output_id, leaf_index, source, spent_index, maturity_height, address, value FROM siacoin_elements WHERE address = ? AND spent_index IS NULL LIMIT ? OFFSET ?`, encode(address), limit, offset)
+		rows, err := tx.Query(`SELECT output_id, leaf_index, source, spent_index, maturity_height, address, value FROM siacoin_elements WHERE address = $1 AND spent_index IS NULL LIMIT $2 OFFSET $3`, encode(address), limit, offset)
 		if err != nil {
 			return fmt.Errorf("failed to query siacoin outputs: %w", err)
 		}
@@ -166,7 +170,7 @@ func (s *Store) UnspentSiafundOutputs(address types.Address, offset, limit uint6
 	err = s.transaction(func(tx *txn) error {
 		result = result[:0]
 
-		rows, err := tx.Query(`SELECT output_id, leaf_index, spent_index, claim_start, address, value FROM siafund_elements WHERE address = ? AND spent_index IS NULL LIMIT ? OFFSET ?`, encode(address), limit, offset)
+		rows, err := tx.Query(`SELECT output_id, leaf_index, spent_index, claim_start, address, value FROM siafund_elements WHERE address = $1 AND spent_index IS NULL LIMIT $2 OFFSET $3`, encode(address), limit, offset)
 		if err != nil {
 			return fmt.Errorf("failed to query siafund outputs: %w", err)
 		}
@@ -188,12 +192,15 @@ func (s *Store) UnspentSiafundOutputs(address types.Address, offset, limit uint6
 }
 
 func getSiacoinElements(tx *txn, ids []types.SiacoinOutputID, includeProof bool) (result []explorer.SiacoinOutput, err error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
 	var encoded []any
 	for _, id := range ids {
 		encoded = append(encoded, encode(id))
 	}
 
-	rows, err := tx.Query(`SELECT output_id, leaf_index, source, spent_index, maturity_height, address, value FROM siacoin_elements WHERE output_id IN (`+queryPlaceHolders(len(encoded))+`)`, encoded...)
+	rows, err := tx.Query(`SELECT output_id, leaf_index, source, spent_index, maturity_height, address, value FROM siacoin_elements WHERE output_id IN (`+queryPlaceHolders(1, len(encoded))+`)`, encoded...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query siacoin outputs: %w", err)
 	}
@@ -227,12 +234,15 @@ func getSiacoinElements(tx *txn, ids []types.SiacoinOutputID, includeProof bool)
 }
 
 func getSiafundElements(tx *txn, ids []types.SiafundOutputID, includeProof bool) (result []explorer.SiafundOutput, err error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
 	var encoded []any
 	for _, id := range ids {
 		encoded = append(encoded, encode(id))
 	}
 
-	rows, err := tx.Query(`SELECT output_id, leaf_index, spent_index, claim_start, address, value FROM siafund_elements WHERE output_id IN (`+queryPlaceHolders(len(encoded))+`)`, encoded...)
+	rows, err := tx.Query(`SELECT output_id, leaf_index, spent_index, claim_start, address, value FROM siafund_elements WHERE output_id IN (`+queryPlaceHolders(1, len(encoded))+`)`, encoded...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query siafund outputs: %w", err)
 	}
@@ -285,8 +295,8 @@ func (s *Store) SiafundElements(ids []types.SiafundOutputID) (result []explorer.
 // Balance implements explorer.Store.
 func (s *Store) Balance(address types.Address) (sc types.Currency, immatureSC types.Currency, sf uint64, err error) {
 	err = s.transaction(func(tx *txn) error {
-		err = tx.QueryRow(`SELECT siacoin_balance, immature_siacoin_balance, siafund_balance FROM address_balance WHERE address = ?`, encode(address)).Scan(decode(&sc), decode(&immatureSC), decode(&sf))
-		if err == sql.ErrNoRows {
+		err = tx.QueryRow(`SELECT siacoin_balance, immature_siacoin_balance, siafund_balance FROM address_balance WHERE address = $1`, encode(address)).Scan(decode(&sc), decode(&immatureSC), decode(&sf))
+		if err == pgx.ErrNoRows {
 			return nil
 		} else if err != nil {
 			return fmt.Errorf("failed to query balances: %w", err)

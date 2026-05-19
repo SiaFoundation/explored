@@ -29,6 +29,8 @@ func (s *Store) LastSuccessScan() (lastScan time.Time, err error) {
 // FailedInteractionsStreak fields are populated.
 func (s *Store) HostsForScanning(minLastAnnouncement time.Time, limit uint64) (result []explorer.UnscannedHost, err error) {
 	err = s.transaction(func(tx *txn) error {
+		result = result[:0]
+
 		rows, err := tx.Query(`SELECT public_key, v2, net_address, failed_interactions_streak FROM host_info WHERE next_scan <= ? AND last_announcement >= ? ORDER BY next_scan ASC LIMIT ?`, encode(types.CurrentTimestamp()), encode(minLastAnnouncement), limit)
 		if err != nil {
 			return fmt.Errorf("failed to query hosts: %w", err)
@@ -83,7 +85,12 @@ func (s *Store) HostsForScanning(minLastAnnouncement time.Time, limit uint64) (r
 // QueryHosts returns the hosts matching the query parameters in the order
 // specified by dir.
 func (st *Store) QueryHosts(params explorer.HostQuery, sortBy explorer.HostSortColumn, dir explorer.HostSortDir, offset, limit uint64) (result []explorer.Host, err error) {
+	if dir != explorer.HostSortAsc && dir != explorer.HostSortDesc {
+		return nil, fmt.Errorf("invalid HostSortDir: %s", dir)
+	}
 	err = st.transaction(func(tx *txn) error {
+		result = result[:0]
+
 		var args []any
 		var filters []string
 

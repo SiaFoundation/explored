@@ -1,4 +1,6 @@
-package sqlite
+//go:build testing
+
+package storetest
 
 import (
 	"math"
@@ -9,37 +11,6 @@ import (
 	"go.sia.tech/explored/explorer"
 	"go.sia.tech/explored/internal/testutil"
 )
-
-// assertSCE asserts the Siacoin element in the db has the right source, index and output
-func (n *testChain) assertSCE(t testing.TB, scID types.SiacoinOutputID, index *types.ChainIndex, sco types.SiacoinOutput) {
-	t.Helper()
-
-	sces, err := n.db.SiacoinElements([]types.SiacoinOutputID{scID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	testutil.Equal(t, "len(sces)", 1, len(sces))
-
-	sce := sces[0]
-	testutil.Equal(t, "sce.Source", explorer.SourceTransaction, sce.Source)
-	testutil.Equal(t, "sce.SpentIndex", index, sce.SpentIndex)
-	testutil.Equal(t, "sce.SiacoinElement.SiacoinOutput", sco, sce.SiacoinOutput)
-}
-
-// assertSFE asserts the Siafund element in the db has the right source, index and output
-func (n *testChain) assertSFE(t testing.TB, sfID types.SiafundOutputID, index *types.ChainIndex, sfo types.SiafundOutput) {
-	t.Helper()
-
-	sfes, err := n.db.SiafundElements([]types.SiafundOutputID{sfID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	testutil.Equal(t, "len(sfes)", 1, len(sfes))
-
-	sfe := sfes[0]
-	testutil.Equal(t, "sfe.SpentIndex", index, sfe.SpentIndex)
-	testutil.Equal(t, "sfe.SiafundElement.SiafundOutput", sfo, sfe.SiafundOutput)
-}
 
 func TestSiacoinOutput(t *testing.T) {
 	pk1 := types.GeneratePrivateKey()
@@ -53,12 +24,12 @@ func TestSiacoinOutput(t *testing.T) {
 	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
-	scID := n.genesis().Transactions[0].SiacoinOutputID(0)
-	genesisOutput := n.genesis().Transactions[0].SiacoinOutputs[0]
+	scID := n.Genesis().Transactions[0].SiacoinOutputID(0)
+	genesisOutput := n.Genesis().Transactions[0].SiacoinOutputs[0]
 
 	// genesis output should be unspent
 	// so spentIndex = nil
-	n.assertSCE(t, scID, nil, genesisOutput)
+	n.AssertSCE(t, scID, nil, genesisOutput)
 
 	txn1 := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
@@ -70,29 +41,29 @@ func TestSiacoinOutput(t *testing.T) {
 			Value:   genesisOutput.Value,
 		}},
 	}
-	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+	testutil.SignTransaction(n.TipState(), pk1, &txn1)
 
-	n.mineTransactions(t, txn1)
+	n.MineTransactions(t, txn1)
 
-	n.assertTransactions(t, txn1)
+	n.AssertTransactions(t, txn1)
 
 	// genesis output should be spent
-	tip := n.tipState().Index
-	n.assertSCE(t, scID, &tip, genesisOutput)
+	tip := n.TipState().Index
+	n.AssertSCE(t, scID, &tip, genesisOutput)
 
 	// the output from txn1 should exist now that the block with txn1 was
 	// mined
-	n.assertSCE(t, txn1.SiacoinOutputID(0), nil, txn1.SiacoinOutputs[0])
+	n.AssertSCE(t, txn1.SiacoinOutputID(0), nil, txn1.SiacoinOutputs[0])
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	// the genesis output should be unspent now because we reverted the block
 	// containing txn1 which spent it
-	n.assertSCE(t, scID, nil, genesisOutput)
+	n.AssertSCE(t, scID, nil, genesisOutput)
 
 	// the output from txn1 should not exist after txn1 reverted
 	{
-		sces, err := n.db.SiacoinElements([]types.SiacoinOutputID{txn1.SiacoinOutputID(0)})
+		sces, err := n.DB.SiacoinElements([]types.SiacoinOutputID{txn1.SiacoinOutputID(0)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -112,12 +83,12 @@ func TestEphemeralSiacoinOutput(t *testing.T) {
 	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
-	scID := n.genesis().Transactions[0].SiacoinOutputID(0)
-	genesisOutput := n.genesis().Transactions[0].SiacoinOutputs[0]
+	scID := n.Genesis().Transactions[0].SiacoinOutputID(0)
+	genesisOutput := n.Genesis().Transactions[0].SiacoinOutputs[0]
 
 	// genesis output should be unspent
 	// so spentIndex = nil
-	n.assertSCE(t, scID, nil, genesisOutput)
+	n.AssertSCE(t, scID, nil, genesisOutput)
 
 	txn1 := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
@@ -129,7 +100,7 @@ func TestEphemeralSiacoinOutput(t *testing.T) {
 			Value:   genesisOutput.Value,
 		}},
 	}
-	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+	testutil.SignTransaction(n.TipState(), pk1, &txn1)
 
 	txn2 := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
@@ -141,29 +112,29 @@ func TestEphemeralSiacoinOutput(t *testing.T) {
 			Value:   txn1.SiacoinOutputs[0].Value,
 		}},
 	}
-	testutil.SignTransaction(n.tipState(), pk2, &txn2)
+	testutil.SignTransaction(n.TipState(), pk2, &txn2)
 
-	n.mineTransactions(t, txn1, txn2)
+	n.MineTransactions(t, txn1, txn2)
 
-	n.assertTransactions(t, txn1, txn2)
+	n.AssertTransactions(t, txn1, txn2)
 
-	tip := n.tipState().Index
+	tip := n.TipState().Index
 	// genesis output should be spent
-	n.assertSCE(t, scID, &tip, genesisOutput)
+	n.AssertSCE(t, scID, &tip, genesisOutput)
 
 	// now that txn1 and txn2 are mined the outputs from them should exist
-	n.assertSCE(t, txn1.SiacoinOutputID(0), &tip, txn1.SiacoinOutputs[0])
-	n.assertSCE(t, txn2.SiacoinOutputID(0), nil, txn2.SiacoinOutputs[0])
+	n.AssertSCE(t, txn1.SiacoinOutputID(0), &tip, txn1.SiacoinOutputs[0])
+	n.AssertSCE(t, txn2.SiacoinOutputID(0), nil, txn2.SiacoinOutputs[0])
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	// genesis output should be unspent now that we reverted
-	n.assertSCE(t, scID, nil, genesisOutput)
+	n.AssertSCE(t, scID, nil, genesisOutput)
 
 	// outputs from txn1 and txn2 should not exist because those transactions
 	// were reverted
 	{
-		sces, err := n.db.SiacoinElements([]types.SiacoinOutputID{txn1.SiacoinOutputID(0), txn2.SiacoinOutputID(0)})
+		sces, err := n.DB.SiacoinElements([]types.SiacoinOutputID{txn1.SiacoinOutputID(0), txn2.SiacoinOutputID(0)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -183,11 +154,11 @@ func TestSiafundOutput(t *testing.T) {
 	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
 	})
-	sfID := n.genesis().Transactions[0].SiafundOutputID(0)
+	sfID := n.Genesis().Transactions[0].SiafundOutputID(0)
 
 	// genesis output should be unspent
 	// so spentIndex = nil
-	n.assertSFE(t, sfID, nil, n.genesis().Transactions[0].SiafundOutputs[0])
+	n.AssertSFE(t, sfID, nil, n.Genesis().Transactions[0].SiafundOutputs[0])
 
 	txn1 := types.Transaction{
 		SiafundInputs: []types.SiafundInput{{
@@ -196,32 +167,32 @@ func TestSiafundOutput(t *testing.T) {
 		}},
 		SiafundOutputs: []types.SiafundOutput{{
 			Address: addr2,
-			Value:   n.genesis().Transactions[0].SiafundOutputs[0].Value,
+			Value:   n.Genesis().Transactions[0].SiafundOutputs[0].Value,
 		}},
 	}
-	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+	testutil.SignTransaction(n.TipState(), pk1, &txn1)
 
-	n.mineTransactions(t, txn1)
+	n.MineTransactions(t, txn1)
 
-	n.assertTransactions(t, txn1)
+	n.AssertTransactions(t, txn1)
 
 	// genesis output should be spent
-	tip := n.tipState().Index
-	n.assertSFE(t, sfID, &tip, n.genesis().Transactions[0].SiafundOutputs[0])
+	tip := n.TipState().Index
+	n.AssertSFE(t, sfID, &tip, n.Genesis().Transactions[0].SiafundOutputs[0])
 
 	// the output from txn1 should exist now that the block with txn1 was
 	// mined
-	n.assertSFE(t, txn1.SiafundOutputID(0), nil, txn1.SiafundOutputs[0])
+	n.AssertSFE(t, txn1.SiafundOutputID(0), nil, txn1.SiafundOutputs[0])
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	// the genesis output should be unspent now because we reverted the block
 	// containing txn1 which spent it
-	n.assertSFE(t, sfID, nil, n.genesis().Transactions[0].SiafundOutputs[0])
+	n.AssertSFE(t, sfID, nil, n.Genesis().Transactions[0].SiafundOutputs[0])
 
 	// the output from txn1 should not exist after txn1 reverted
 	{
-		sfes, err := n.db.SiafundElements([]types.SiafundOutputID{txn1.SiafundOutputID(0)})
+		sfes, err := n.DB.SiafundElements([]types.SiafundOutputID{txn1.SiafundOutputID(0)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -241,11 +212,11 @@ func TestEphemeralSiafundOutput(t *testing.T) {
 	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
 	})
-	sfID := n.genesis().Transactions[0].SiafundOutputID(0)
+	sfID := n.Genesis().Transactions[0].SiafundOutputID(0)
 
 	// genesis output should be unspent
 	// so spentIndex = nil
-	n.assertSFE(t, sfID, nil, n.genesis().Transactions[0].SiafundOutputs[0])
+	n.AssertSFE(t, sfID, nil, n.Genesis().Transactions[0].SiafundOutputs[0])
 
 	txn1 := types.Transaction{
 		SiafundInputs: []types.SiafundInput{{
@@ -254,10 +225,10 @@ func TestEphemeralSiafundOutput(t *testing.T) {
 		}},
 		SiafundOutputs: []types.SiafundOutput{{
 			Address: addr2,
-			Value:   n.genesis().Transactions[0].SiafundOutputs[0].Value,
+			Value:   n.Genesis().Transactions[0].SiafundOutputs[0].Value,
 		}},
 	}
-	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+	testutil.SignTransaction(n.TipState(), pk1, &txn1)
 
 	txn2 := types.Transaction{
 		SiafundInputs: []types.SiafundInput{{
@@ -269,29 +240,29 @@ func TestEphemeralSiafundOutput(t *testing.T) {
 			Value:   txn1.SiafundOutputs[0].Value,
 		}},
 	}
-	testutil.SignTransaction(n.tipState(), pk2, &txn2)
+	testutil.SignTransaction(n.TipState(), pk2, &txn2)
 
-	n.mineTransactions(t, txn1, txn2)
+	n.MineTransactions(t, txn1, txn2)
 
-	n.assertTransactions(t, txn1, txn2)
+	n.AssertTransactions(t, txn1, txn2)
 
-	tip := n.tipState().Index
+	tip := n.TipState().Index
 	// genesis output should be spent
-	n.assertSFE(t, sfID, &tip, n.genesis().Transactions[0].SiafundOutputs[0])
+	n.AssertSFE(t, sfID, &tip, n.Genesis().Transactions[0].SiafundOutputs[0])
 
 	// now that txn1 and txn2 are mined the outputs from them should exist
-	n.assertSFE(t, txn1.SiafundOutputID(0), &tip, txn1.SiafundOutputs[0])
-	n.assertSFE(t, txn2.SiafundOutputID(0), nil, txn2.SiafundOutputs[0])
+	n.AssertSFE(t, txn1.SiafundOutputID(0), &tip, txn1.SiafundOutputs[0])
+	n.AssertSFE(t, txn2.SiafundOutputID(0), nil, txn2.SiafundOutputs[0])
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	// genesis output should be unspent now that we reverted
-	n.assertSFE(t, sfID, nil, n.genesis().Transactions[0].SiafundOutputs[0])
+	n.AssertSFE(t, sfID, nil, n.Genesis().Transactions[0].SiafundOutputs[0])
 
 	// outputs from txn1 and txn2 should not exist because those transactions
 	// were reverted
 	{
-		sfes, err := n.db.SiafundElements([]types.SiafundOutputID{txn1.SiafundOutputID(0), txn2.SiafundOutputID(0)})
+		sfes, err := n.DB.SiafundElements([]types.SiafundOutputID{txn1.SiafundOutputID(0), txn2.SiafundOutputID(0)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -311,12 +282,12 @@ func TestSiacoinBalance(t *testing.T) {
 	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
-	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+	val := n.Genesis().Transactions[0].SiacoinOutputs[0].Value
 
 	checkBalance := func(addr types.Address, expectedSC, expectedImmatureSC types.Currency) {
 		t.Helper()
 
-		sc, immatureSC, sf, err := n.db.Balance(addr)
+		sc, immatureSC, sf, err := n.DB.Balance(addr)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -332,7 +303,7 @@ func TestSiacoinBalance(t *testing.T) {
 
 	txn1 := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
-			ParentID:         n.genesis().Transactions[0].SiacoinOutputID(0),
+			ParentID:         n.Genesis().Transactions[0].SiacoinOutputID(0),
 			UnlockConditions: uc1,
 		}},
 		SiacoinOutputs: []types.SiacoinOutput{{
@@ -340,11 +311,11 @@ func TestSiacoinBalance(t *testing.T) {
 			Value:   val,
 		}},
 	}
-	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+	testutil.SignTransaction(n.TipState(), pk1, &txn1)
 
 	// send addr1 output to addr2
-	b := testutil.MineBlock(n.tipState(), []types.Transaction{txn1}, types.VoidAddress)
-	n.applyBlock(t, b)
+	b := testutil.MineBlock(n.TipState(), []types.Transaction{txn1}, types.VoidAddress)
+	n.ApplyBlock(t, b)
 
 	// addr2 should have SC and the void address should have immature SC from
 	// block
@@ -352,7 +323,7 @@ func TestSiacoinBalance(t *testing.T) {
 	checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency)
 	checkBalance(addr2, val, types.ZeroCurrency)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	// after revert, addr1 should have funds again and the void address should
 	// have nothing
@@ -373,12 +344,12 @@ func TestSiafundBalance(t *testing.T) {
 	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
 	})
-	val := n.genesis().Transactions[0].SiafundOutputs[0].Value
+	val := n.Genesis().Transactions[0].SiafundOutputs[0].Value
 
 	checkBalance := func(addr types.Address, expectedSF uint64) {
 		t.Helper()
 
-		sc, immatureSC, sf, err := n.db.Balance(addr)
+		sc, immatureSC, sf, err := n.DB.Balance(addr)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -396,7 +367,7 @@ func TestSiafundBalance(t *testing.T) {
 
 	txn1 := types.Transaction{
 		SiafundInputs: []types.SiafundInput{{
-			ParentID:         n.genesis().Transactions[0].SiafundOutputID(0),
+			ParentID:         n.Genesis().Transactions[0].SiafundOutputID(0),
 			UnlockConditions: uc1,
 		}},
 		SiafundOutputs: []types.SiafundOutput{{
@@ -404,17 +375,17 @@ func TestSiafundBalance(t *testing.T) {
 			Value:   val,
 		}},
 	}
-	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+	testutil.SignTransaction(n.TipState(), pk1, &txn1)
 
 	// send addr1 SF to addr2
-	n.mineTransactions(t, txn1)
+	n.MineTransactions(t, txn1)
 
 	// addr2 should have SF now
 	checkBalance(types.VoidAddress, 0)
 	checkBalance(addr1, 0)
 	checkBalance(addr2, val)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	// after revert, addr1 should have SF again
 	checkBalance(types.VoidAddress, 0)
@@ -438,12 +409,12 @@ func TestEphemeralSiacoinBalance(t *testing.T) {
 	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
-	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+	val := n.Genesis().Transactions[0].SiacoinOutputs[0].Value
 
 	checkBalance := func(addr types.Address, expectedSC types.Currency) {
 		t.Helper()
 
-		sc, immatureSC, sf, err := n.db.Balance(addr)
+		sc, immatureSC, sf, err := n.DB.Balance(addr)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -459,7 +430,7 @@ func TestEphemeralSiacoinBalance(t *testing.T) {
 
 	txn1 := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
-			ParentID:         n.genesis().Transactions[0].SiacoinOutputID(0),
+			ParentID:         n.Genesis().Transactions[0].SiacoinOutputID(0),
 			UnlockConditions: uc1,
 		}},
 		SiacoinOutputs: []types.SiacoinOutput{{
@@ -467,7 +438,7 @@ func TestEphemeralSiacoinBalance(t *testing.T) {
 			Value:   val,
 		}},
 	}
-	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+	testutil.SignTransaction(n.TipState(), pk1, &txn1)
 
 	txn2 := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
@@ -479,17 +450,17 @@ func TestEphemeralSiacoinBalance(t *testing.T) {
 			Value:   val,
 		}},
 	}
-	testutil.SignTransaction(n.tipState(), pk2, &txn2)
+	testutil.SignTransaction(n.TipState(), pk2, &txn2)
 
 	// net effect of txn1 and txn2 is to send addr1 output to addr3
-	n.mineTransactions(t, txn1, txn2)
+	n.MineTransactions(t, txn1, txn2)
 
 	// addr3 should have all the value now
 	checkBalance(addr1, types.ZeroCurrency)
 	checkBalance(addr2, types.ZeroCurrency)
 	checkBalance(addr3, val)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	// after revert, addr1 should have funds again and the others should
 	// have nothing
@@ -514,12 +485,12 @@ func TestEphemeralSiafundBalance(t *testing.T) {
 	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
 	})
-	val := n.genesis().Transactions[0].SiafundOutputs[0].Value
+	val := n.Genesis().Transactions[0].SiafundOutputs[0].Value
 
 	checkBalance := func(addr types.Address, expectedSF uint64) {
 		t.Helper()
 
-		sc, immatureSC, sf, err := n.db.Balance(addr)
+		sc, immatureSC, sf, err := n.DB.Balance(addr)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -535,7 +506,7 @@ func TestEphemeralSiafundBalance(t *testing.T) {
 
 	txn1 := types.Transaction{
 		SiafundInputs: []types.SiafundInput{{
-			ParentID:         n.genesis().Transactions[0].SiafundOutputID(0),
+			ParentID:         n.Genesis().Transactions[0].SiafundOutputID(0),
 			UnlockConditions: uc1,
 		}},
 		SiafundOutputs: []types.SiafundOutput{{
@@ -543,7 +514,7 @@ func TestEphemeralSiafundBalance(t *testing.T) {
 			Value:   val,
 		}},
 	}
-	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+	testutil.SignTransaction(n.TipState(), pk1, &txn1)
 
 	txn2 := types.Transaction{
 		SiafundInputs: []types.SiafundInput{{
@@ -555,17 +526,17 @@ func TestEphemeralSiafundBalance(t *testing.T) {
 			Value:   val,
 		}},
 	}
-	testutil.SignTransaction(n.tipState(), pk2, &txn2)
+	testutil.SignTransaction(n.TipState(), pk2, &txn2)
 
 	// net effect of txn1 and txn2 is to send addr1 output to addr3
-	n.mineTransactions(t, txn1, txn2)
+	n.MineTransactions(t, txn1, txn2)
 
 	// addr3 should have all the value now
 	checkBalance(addr1, 0)
 	checkBalance(addr2, 0)
 	checkBalance(addr3, val)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	// after revert, addr1 should have funds again and the others should
 	// have nothing
@@ -584,7 +555,7 @@ func TestMaturedSiacoinBalance(t *testing.T) {
 	checkBalance := func(addr types.Address, expectedSC, expectedImmatureSC types.Currency) {
 		t.Helper()
 
-		sc, immatureSC, sf, err := n.db.Balance(addr)
+		sc, immatureSC, sf, err := n.DB.Balance(addr)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -595,24 +566,24 @@ func TestMaturedSiacoinBalance(t *testing.T) {
 
 	checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency)
 
-	b := testutil.MineBlock(n.tipState(), nil, addr1)
-	n.applyBlock(t, b)
+	b := testutil.MineBlock(n.TipState(), nil, addr1)
+	n.ApplyBlock(t, b)
 
 	val := b.MinerPayouts[0].Value
 
-	for range n.network.MaturityDelay {
+	for range n.Network.MaturityDelay {
 		checkBalance(addr1, types.ZeroCurrency, val)
-		n.mineTransactions(t)
+		n.MineTransactions(t)
 	}
 
 	checkBalance(addr1, val, types.ZeroCurrency)
 
-	for range n.network.MaturityDelay {
-		n.revertBlock(t)
+	for range n.Network.MaturityDelay {
+		n.RevertBlock(t)
 		checkBalance(addr1, types.ZeroCurrency, val)
 	}
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 	checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency)
 }
 
@@ -632,13 +603,13 @@ func TestUnspentSiacoinOutputs(t *testing.T) {
 	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
-	scID := n.genesis().Transactions[0].SiacoinOutputID(0)
-	genesisOutput := n.genesis().Transactions[0].SiacoinOutputs[0]
+	scID := n.Genesis().Transactions[0].SiacoinOutputID(0)
+	genesisOutput := n.Genesis().Transactions[0].SiacoinOutputs[0]
 
 	checkSiacoinOutputs := func(addr types.Address, expected ...explorer.SiacoinOutput) {
 		t.Helper()
 
-		scos, err := n.db.UnspentSiacoinOutputs(addr, 0, math.MaxInt64)
+		scos, err := n.DB.UnspentSiacoinOutputs(addr, 0, math.MaxInt64)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -672,7 +643,7 @@ func TestUnspentSiacoinOutputs(t *testing.T) {
 			Value:   genesisOutput.Value,
 		}},
 	}
-	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+	testutil.SignTransaction(n.TipState(), pk1, &txn1)
 
 	txn2 := types.Transaction{
 		SiacoinInputs: []types.SiacoinInput{{
@@ -684,10 +655,10 @@ func TestUnspentSiacoinOutputs(t *testing.T) {
 			Value:   genesisOutput.Value,
 		}},
 	}
-	testutil.SignTransaction(n.tipState(), pk2, &txn2)
+	testutil.SignTransaction(n.TipState(), pk2, &txn2)
 
 	// net effect of txn1 and txn2 is to send addr1 output to addr3
-	n.mineTransactions(t, txn1, txn2)
+	n.MineTransactions(t, txn1, txn2)
 
 	// addr3 should have all the value now
 	checkSiacoinOutputs(addr1)
@@ -700,7 +671,7 @@ func TestUnspentSiacoinOutputs(t *testing.T) {
 		},
 	})
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	// after revert, addr1 should have the output again and the others should
 	// have nothing
@@ -731,13 +702,13 @@ func TestUnspentSiafundOutputs(t *testing.T) {
 	n := newTestChain(t, false, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
 	})
-	genesisOutput := n.genesis().Transactions[0].SiafundOutputs[0]
-	sfID := n.genesis().Transactions[0].SiafundOutputID(0)
+	genesisOutput := n.Genesis().Transactions[0].SiafundOutputs[0]
+	sfID := n.Genesis().Transactions[0].SiafundOutputID(0)
 
 	checkSiafundOutputs := func(addr types.Address, expected ...explorer.SiafundOutput) {
 		t.Helper()
 
-		sfos, err := n.db.UnspentSiafundOutputs(addr, 0, math.MaxInt64)
+		sfos, err := n.DB.UnspentSiafundOutputs(addr, 0, math.MaxInt64)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -769,7 +740,7 @@ func TestUnspentSiafundOutputs(t *testing.T) {
 			Value:   genesisOutput.Value,
 		}},
 	}
-	testutil.SignTransaction(n.tipState(), pk1, &txn1)
+	testutil.SignTransaction(n.TipState(), pk1, &txn1)
 
 	txn2 := types.Transaction{
 		SiafundInputs: []types.SiafundInput{{
@@ -781,10 +752,10 @@ func TestUnspentSiafundOutputs(t *testing.T) {
 			Value:   genesisOutput.Value,
 		}},
 	}
-	testutil.SignTransaction(n.tipState(), pk2, &txn2)
+	testutil.SignTransaction(n.TipState(), pk2, &txn2)
 
 	// net effect of txn1 and txn2 is to send addr1 output to addr3
-	n.mineTransactions(t, txn1, txn2)
+	n.MineTransactions(t, txn1, txn2)
 
 	// addr3 should have all the value now
 	checkSiafundOutputs(addr1)
@@ -796,7 +767,7 @@ func TestUnspentSiafundOutputs(t *testing.T) {
 		},
 	})
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	// after revert, addr1 should have the output again and the others should
 	// have nothing
@@ -823,16 +794,16 @@ func TestV2SiacoinOutput(t *testing.T) {
 	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
-	scID := n.genesis().Transactions[0].SiacoinOutputID(0)
-	genesisOutput := n.genesis().Transactions[0].SiacoinOutputs[0]
+	scID := n.Genesis().Transactions[0].SiacoinOutputID(0)
+	genesisOutput := n.Genesis().Transactions[0].SiacoinOutputs[0]
 
 	// genesis output should be unspent
 	// so spentIndex = nil
-	n.assertSCE(t, scID, nil, genesisOutput)
+	n.AssertSCE(t, scID, nil, genesisOutput)
 
 	txn1 := types.V2Transaction{
 		SiacoinInputs: []types.V2SiacoinInput{{
-			Parent:          getSCE(t, n.db, scID),
+			Parent:          getSCE(t, n.DB, scID),
 			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
 		}},
 		SiacoinOutputs: []types.SiacoinOutput{{
@@ -840,29 +811,29 @@ func TestV2SiacoinOutput(t *testing.T) {
 			Value:   genesisOutput.Value,
 		}},
 	}
-	testutil.SignV2Transaction(n.tipState(), pk1, &txn1)
+	testutil.SignV2Transaction(n.TipState(), pk1, &txn1)
 
-	n.mineV2Transactions(t, txn1)
+	n.MineV2Transactions(t, txn1)
 
-	n.assertV2Transactions(t, txn1)
+	n.AssertV2Transactions(t, txn1)
 
 	// genesis output should be spent
-	tip := n.tipState().Index
-	n.assertSCE(t, scID, &tip, genesisOutput)
+	tip := n.TipState().Index
+	n.AssertSCE(t, scID, &tip, genesisOutput)
 
 	// the output from txn1 should exist now that the block with txn1 was
 	// mined
-	n.assertSCE(t, txn1.SiacoinOutputID(txn1.ID(), 0), nil, txn1.SiacoinOutputs[0])
+	n.AssertSCE(t, txn1.SiacoinOutputID(txn1.ID(), 0), nil, txn1.SiacoinOutputs[0])
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	// the genesis output should be unspent now because we reverted the block
 	// containing txn1 which spent it
-	n.assertSCE(t, scID, nil, genesisOutput)
+	n.AssertSCE(t, scID, nil, genesisOutput)
 
 	// the output from txn1 should not exist after txn1 reverted
 	{
-		sces, err := n.db.SiacoinElements([]types.SiacoinOutputID{txn1.SiacoinOutputID(txn1.ID(), 0)})
+		sces, err := n.DB.SiacoinElements([]types.SiacoinOutputID{txn1.SiacoinOutputID(txn1.ID(), 0)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -884,16 +855,16 @@ func TestV2EphemeralSiacoinOutput(t *testing.T) {
 	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
-	scID := n.genesis().Transactions[0].SiacoinOutputID(0)
-	genesisOutput := n.genesis().Transactions[0].SiacoinOutputs[0]
+	scID := n.Genesis().Transactions[0].SiacoinOutputID(0)
+	genesisOutput := n.Genesis().Transactions[0].SiacoinOutputs[0]
 
 	// genesis output should be unspent
 	// so spentIndex = nil
-	n.assertSCE(t, scID, nil, genesisOutput)
+	n.AssertSCE(t, scID, nil, genesisOutput)
 
 	txn1 := types.V2Transaction{
 		SiacoinInputs: []types.V2SiacoinInput{{
-			Parent:          getSCE(t, n.db, scID),
+			Parent:          getSCE(t, n.DB, scID),
 			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
 		}},
 		SiacoinOutputs: []types.SiacoinOutput{{
@@ -901,7 +872,7 @@ func TestV2EphemeralSiacoinOutput(t *testing.T) {
 			Value:   genesisOutput.Value,
 		}},
 	}
-	testutil.SignV2Transaction(n.tipState(), pk1, &txn1)
+	testutil.SignV2Transaction(n.TipState(), pk1, &txn1)
 
 	txn2 := types.V2Transaction{
 		SiacoinInputs: []types.V2SiacoinInput{{
@@ -913,29 +884,29 @@ func TestV2EphemeralSiacoinOutput(t *testing.T) {
 			Value:   txn1.SiacoinOutputs[0].Value,
 		}},
 	}
-	testutil.SignV2Transaction(n.tipState(), pk2, &txn2)
+	testutil.SignV2Transaction(n.TipState(), pk2, &txn2)
 
-	n.mineV2Transactions(t, txn1, txn2)
+	n.MineV2Transactions(t, txn1, txn2)
 
-	n.assertV2Transactions(t, txn1, txn2)
+	n.AssertV2Transactions(t, txn1, txn2)
 
-	tip := n.tipState().Index
+	tip := n.TipState().Index
 	// genesis output should be spent
-	n.assertSCE(t, scID, &tip, genesisOutput)
+	n.AssertSCE(t, scID, &tip, genesisOutput)
 
 	// now that txn1 and txn2 are mined the outputs from them should exist
-	n.assertSCE(t, txn1.SiacoinOutputID(txn1.ID(), 0), &tip, txn1.SiacoinOutputs[0])
-	n.assertSCE(t, txn2.SiacoinOutputID(txn2.ID(), 0), nil, txn2.SiacoinOutputs[0])
+	n.AssertSCE(t, txn1.SiacoinOutputID(txn1.ID(), 0), &tip, txn1.SiacoinOutputs[0])
+	n.AssertSCE(t, txn2.SiacoinOutputID(txn2.ID(), 0), nil, txn2.SiacoinOutputs[0])
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	// genesis output should be unspent now that we reverted
-	n.assertSCE(t, scID, nil, genesisOutput)
+	n.AssertSCE(t, scID, nil, genesisOutput)
 
 	// outputs from txn1 and txn2 should not exist because those transactions
 	// were reverted
 	{
-		sces, err := n.db.SiacoinElements([]types.SiacoinOutputID{txn1.SiacoinOutputID(txn1.ID(), 0), txn2.SiacoinOutputID(txn2.ID(), 0)})
+		sces, err := n.DB.SiacoinElements([]types.SiacoinOutputID{txn1.SiacoinOutputID(txn1.ID(), 0), txn2.SiacoinOutputID(txn2.ID(), 0)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -956,16 +927,16 @@ func TestV2SiafundOutput(t *testing.T) {
 	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
 	})
-	sfID := n.genesis().Transactions[0].SiafundOutputID(0)
-	genesisOutput := n.genesis().Transactions[0].SiafundOutputs[0]
+	sfID := n.Genesis().Transactions[0].SiafundOutputID(0)
+	genesisOutput := n.Genesis().Transactions[0].SiafundOutputs[0]
 
 	// genesis output should be unspent
 	// so spentIndex = nil
-	n.assertSFE(t, sfID, nil, genesisOutput)
+	n.AssertSFE(t, sfID, nil, genesisOutput)
 
 	txn1 := types.V2Transaction{
 		SiafundInputs: []types.V2SiafundInput{{
-			Parent:          getSFE(t, n.db, sfID),
+			Parent:          getSFE(t, n.DB, sfID),
 			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
 		}},
 		SiafundOutputs: []types.SiafundOutput{{
@@ -973,29 +944,29 @@ func TestV2SiafundOutput(t *testing.T) {
 			Value:   genesisOutput.Value,
 		}},
 	}
-	testutil.SignV2Transaction(n.tipState(), pk1, &txn1)
+	testutil.SignV2Transaction(n.TipState(), pk1, &txn1)
 
-	n.mineV2Transactions(t, txn1)
+	n.MineV2Transactions(t, txn1)
 
-	n.assertV2Transactions(t, txn1)
+	n.AssertV2Transactions(t, txn1)
 
 	// genesis output should be spent
-	tip := n.tipState().Index
-	n.assertSFE(t, sfID, &tip, genesisOutput)
+	tip := n.TipState().Index
+	n.AssertSFE(t, sfID, &tip, genesisOutput)
 
 	// the output from txn1 should exist now that the block with txn1 was
 	// mined
-	n.assertSFE(t, txn1.SiafundOutputID(txn1.ID(), 0), nil, txn1.SiafundOutputs[0])
+	n.AssertSFE(t, txn1.SiafundOutputID(txn1.ID(), 0), nil, txn1.SiafundOutputs[0])
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	// the genesis output should be unspent now because we reverted the block
 	// containing txn1 which spent it
-	n.assertSFE(t, sfID, nil, genesisOutput)
+	n.AssertSFE(t, sfID, nil, genesisOutput)
 
 	// the output from txn1 should not exist after txn1 reverted
 	{
-		sfes, err := n.db.SiafundElements([]types.SiafundOutputID{txn1.SiafundOutputID(txn1.ID(), 0)})
+		sfes, err := n.DB.SiafundElements([]types.SiafundOutputID{txn1.SiafundOutputID(txn1.ID(), 0)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1017,16 +988,16 @@ func TestV2EphemeralSiafundOutput(t *testing.T) {
 	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
 	})
-	sfID := n.genesis().Transactions[0].SiafundOutputID(0)
-	genesisOutput := n.genesis().Transactions[0].SiafundOutputs[0]
+	sfID := n.Genesis().Transactions[0].SiafundOutputID(0)
+	genesisOutput := n.Genesis().Transactions[0].SiafundOutputs[0]
 
 	// genesis output should be unspent
 	// so spentIndex = nil
-	n.assertSFE(t, sfID, nil, genesisOutput)
+	n.AssertSFE(t, sfID, nil, genesisOutput)
 
 	txn1 := types.V2Transaction{
 		SiafundInputs: []types.V2SiafundInput{{
-			Parent:          getSFE(t, n.db, sfID),
+			Parent:          getSFE(t, n.DB, sfID),
 			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
 		}},
 		SiafundOutputs: []types.SiafundOutput{{
@@ -1034,7 +1005,7 @@ func TestV2EphemeralSiafundOutput(t *testing.T) {
 			Value:   genesisOutput.Value,
 		}},
 	}
-	testutil.SignV2Transaction(n.tipState(), pk1, &txn1)
+	testutil.SignV2Transaction(n.TipState(), pk1, &txn1)
 
 	txn2 := types.V2Transaction{
 		SiafundInputs: []types.V2SiafundInput{{
@@ -1046,29 +1017,29 @@ func TestV2EphemeralSiafundOutput(t *testing.T) {
 			Value:   txn1.SiafundOutputs[0].Value,
 		}},
 	}
-	testutil.SignV2Transaction(n.tipState(), pk2, &txn2)
+	testutil.SignV2Transaction(n.TipState(), pk2, &txn2)
 
-	n.mineV2Transactions(t, txn1, txn2)
+	n.MineV2Transactions(t, txn1, txn2)
 
-	n.assertV2Transactions(t, txn1, txn2)
+	n.AssertV2Transactions(t, txn1, txn2)
 
-	tip := n.tipState().Index
+	tip := n.TipState().Index
 	// genesis output should be spent
-	n.assertSFE(t, sfID, &tip, genesisOutput)
+	n.AssertSFE(t, sfID, &tip, genesisOutput)
 
 	// now that txn1 and txn2 are mined the outputs from them should exist
-	n.assertSFE(t, txn1.SiafundOutputID(txn1.ID(), 0), &tip, txn1.SiafundOutputs[0])
-	n.assertSFE(t, txn2.SiafundOutputID(txn2.ID(), 0), nil, txn2.SiafundOutputs[0])
+	n.AssertSFE(t, txn1.SiafundOutputID(txn1.ID(), 0), &tip, txn1.SiafundOutputs[0])
+	n.AssertSFE(t, txn2.SiafundOutputID(txn2.ID(), 0), nil, txn2.SiafundOutputs[0])
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	// genesis output should be unspent now that we reverted
-	n.assertSFE(t, sfID, nil, genesisOutput)
+	n.AssertSFE(t, sfID, nil, genesisOutput)
 
 	// outputs from txn1 and txn2 should not exist because those transactions
 	// were reverted
 	{
-		sfes, err := n.db.SiafundElements([]types.SiafundOutputID{txn1.SiafundOutputID(txn1.ID(), 0), txn2.SiafundOutputID(txn2.ID(), 0)})
+		sfes, err := n.DB.SiafundElements([]types.SiafundOutputID{txn1.SiafundOutputID(txn1.ID(), 0), txn2.SiafundOutputID(txn2.ID(), 0)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1089,12 +1060,12 @@ func TestV2SiacoinBalance(t *testing.T) {
 	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
-	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+	val := n.Genesis().Transactions[0].SiacoinOutputs[0].Value
 
 	checkBalance := func(addr types.Address, expectedSC, expectedImmatureSC types.Currency) {
 		t.Helper()
 
-		sc, immatureSC, sf, err := n.db.Balance(addr)
+		sc, immatureSC, sf, err := n.DB.Balance(addr)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1110,7 +1081,7 @@ func TestV2SiacoinBalance(t *testing.T) {
 
 	txn1 := types.V2Transaction{
 		SiacoinInputs: []types.V2SiacoinInput{{
-			Parent:          getSCE(t, n.db, n.genesis().Transactions[0].SiacoinOutputID(0)),
+			Parent:          getSCE(t, n.DB, n.Genesis().Transactions[0].SiacoinOutputID(0)),
 			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
 		}},
 		SiacoinOutputs: []types.SiacoinOutput{{
@@ -1118,11 +1089,11 @@ func TestV2SiacoinBalance(t *testing.T) {
 			Value:   val,
 		}},
 	}
-	testutil.SignV2Transaction(n.tipState(), pk1, &txn1)
+	testutil.SignV2Transaction(n.TipState(), pk1, &txn1)
 
 	// send addr1 output to addr2
-	b := testutil.MineV2Block(n.tipState(), nil, []types.V2Transaction{txn1}, types.VoidAddress)
-	n.applyBlock(t, b)
+	b := testutil.MineV2Block(n.TipState(), nil, []types.V2Transaction{txn1}, types.VoidAddress)
+	n.ApplyBlock(t, b)
 
 	// addr2 should have SC and the void address should have immature SC from
 	// block
@@ -1130,7 +1101,7 @@ func TestV2SiacoinBalance(t *testing.T) {
 	checkBalance(addr1, types.ZeroCurrency, types.ZeroCurrency)
 	checkBalance(addr2, val, types.ZeroCurrency)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	// after revert, addr1 should have funds again and the void address should
 	// have nothing
@@ -1152,12 +1123,12 @@ func TestV2SiafundBalance(t *testing.T) {
 	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
 	})
-	val := n.genesis().Transactions[0].SiafundOutputs[0].Value
+	val := n.Genesis().Transactions[0].SiafundOutputs[0].Value
 
 	checkBalance := func(addr types.Address, expectedSF uint64) {
 		t.Helper()
 
-		sc, immatureSC, sf, err := n.db.Balance(addr)
+		sc, immatureSC, sf, err := n.DB.Balance(addr)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1175,7 +1146,7 @@ func TestV2SiafundBalance(t *testing.T) {
 
 	txn1 := types.V2Transaction{
 		SiafundInputs: []types.V2SiafundInput{{
-			Parent:          getSFE(t, n.db, n.genesis().Transactions[0].SiafundOutputID(0)),
+			Parent:          getSFE(t, n.DB, n.Genesis().Transactions[0].SiafundOutputID(0)),
 			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
 		}},
 		SiafundOutputs: []types.SiafundOutput{{
@@ -1183,17 +1154,17 @@ func TestV2SiafundBalance(t *testing.T) {
 			Value:   val,
 		}},
 	}
-	testutil.SignV2Transaction(n.tipState(), pk1, &txn1)
+	testutil.SignV2Transaction(n.TipState(), pk1, &txn1)
 
 	// send addr1 SF to addr2
-	n.mineV2Transactions(t, txn1)
+	n.MineV2Transactions(t, txn1)
 
 	// addr2 should have SF now
 	checkBalance(types.VoidAddress, 0)
 	checkBalance(addr1, 0)
 	checkBalance(addr2, val)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	// after revert, addr1 should have SF again
 	checkBalance(types.VoidAddress, 0)
@@ -1219,12 +1190,12 @@ func TestV2EphemeralSiacoinBalance(t *testing.T) {
 	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
-	val := n.genesis().Transactions[0].SiacoinOutputs[0].Value
+	val := n.Genesis().Transactions[0].SiacoinOutputs[0].Value
 
 	checkBalance := func(addr types.Address, expectedSC types.Currency) {
 		t.Helper()
 
-		sc, immatureSC, sf, err := n.db.Balance(addr)
+		sc, immatureSC, sf, err := n.DB.Balance(addr)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1240,7 +1211,7 @@ func TestV2EphemeralSiacoinBalance(t *testing.T) {
 
 	txn1 := types.V2Transaction{
 		SiacoinInputs: []types.V2SiacoinInput{{
-			Parent:          getSCE(t, n.db, n.genesis().Transactions[0].SiacoinOutputID(0)),
+			Parent:          getSCE(t, n.DB, n.Genesis().Transactions[0].SiacoinOutputID(0)),
 			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
 		}},
 		SiacoinOutputs: []types.SiacoinOutput{{
@@ -1248,7 +1219,7 @@ func TestV2EphemeralSiacoinBalance(t *testing.T) {
 			Value:   val,
 		}},
 	}
-	testutil.SignV2Transaction(n.tipState(), pk1, &txn1)
+	testutil.SignV2Transaction(n.TipState(), pk1, &txn1)
 
 	txn2 := types.V2Transaction{
 		SiacoinInputs: []types.V2SiacoinInput{{
@@ -1260,17 +1231,17 @@ func TestV2EphemeralSiacoinBalance(t *testing.T) {
 			Value:   val,
 		}},
 	}
-	testutil.SignV2Transaction(n.tipState(), pk2, &txn2)
+	testutil.SignV2Transaction(n.TipState(), pk2, &txn2)
 
 	// net effect of txn1 and txn2 is to send addr1 output to addr3
-	n.mineV2Transactions(t, txn1, txn2)
+	n.MineV2Transactions(t, txn1, txn2)
 
 	// addr3 should have all the value now
 	checkBalance(addr1, types.ZeroCurrency)
 	checkBalance(addr2, types.ZeroCurrency)
 	checkBalance(addr3, val)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	// after revert, addr1 should have funds again and the others should
 	// have nothing
@@ -1297,12 +1268,12 @@ func TestV2EphemeralSiafundBalance(t *testing.T) {
 	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
 	})
-	val := n.genesis().Transactions[0].SiafundOutputs[0].Value
+	val := n.Genesis().Transactions[0].SiafundOutputs[0].Value
 
 	checkBalance := func(addr types.Address, expectedSF uint64) {
 		t.Helper()
 
-		sc, immatureSC, sf, err := n.db.Balance(addr)
+		sc, immatureSC, sf, err := n.DB.Balance(addr)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1318,7 +1289,7 @@ func TestV2EphemeralSiafundBalance(t *testing.T) {
 
 	txn1 := types.V2Transaction{
 		SiafundInputs: []types.V2SiafundInput{{
-			Parent:          getSFE(t, n.db, n.genesis().Transactions[0].SiafundOutputID(0)),
+			Parent:          getSFE(t, n.DB, n.Genesis().Transactions[0].SiafundOutputID(0)),
 			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
 		}},
 		SiafundOutputs: []types.SiafundOutput{{
@@ -1326,7 +1297,7 @@ func TestV2EphemeralSiafundBalance(t *testing.T) {
 			Value:   val,
 		}},
 	}
-	testutil.SignV2Transaction(n.tipState(), pk1, &txn1)
+	testutil.SignV2Transaction(n.TipState(), pk1, &txn1)
 
 	txn2 := types.V2Transaction{
 		SiafundInputs: []types.V2SiafundInput{{
@@ -1338,17 +1309,17 @@ func TestV2EphemeralSiafundBalance(t *testing.T) {
 			Value:   val,
 		}},
 	}
-	testutil.SignV2Transaction(n.tipState(), pk2, &txn2)
+	testutil.SignV2Transaction(n.TipState(), pk2, &txn2)
 
 	// net effect of txn1 and txn2 is to send addr1 output to addr3
-	n.mineV2Transactions(t, txn1, txn2)
+	n.MineV2Transactions(t, txn1, txn2)
 
 	// addr3 should have all the value now
 	checkBalance(addr1, 0)
 	checkBalance(addr2, 0)
 	checkBalance(addr3, val)
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	// after revert, addr1 should have funds again and the others should
 	// have nothing
@@ -1375,13 +1346,13 @@ func TestV2UnspentSiacoinOutputs(t *testing.T) {
 	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
-	scID := n.genesis().Transactions[0].SiacoinOutputID(0)
-	genesisOutput := n.genesis().Transactions[0].SiacoinOutputs[0]
+	scID := n.Genesis().Transactions[0].SiacoinOutputID(0)
+	genesisOutput := n.Genesis().Transactions[0].SiacoinOutputs[0]
 
 	checkSiacoinOutputs := func(addr types.Address, expected ...explorer.SiacoinOutput) {
 		t.Helper()
 
-		scos, err := n.db.UnspentSiacoinOutputs(addr, 0, math.MaxInt64)
+		scos, err := n.DB.UnspentSiacoinOutputs(addr, 0, math.MaxInt64)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1407,7 +1378,7 @@ func TestV2UnspentSiacoinOutputs(t *testing.T) {
 
 	txn1 := types.V2Transaction{
 		SiacoinInputs: []types.V2SiacoinInput{{
-			Parent:          getSCE(t, n.db, n.genesis().Transactions[0].SiacoinOutputID(0)),
+			Parent:          getSCE(t, n.DB, n.Genesis().Transactions[0].SiacoinOutputID(0)),
 			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
 		}},
 		SiacoinOutputs: []types.SiacoinOutput{{
@@ -1415,7 +1386,7 @@ func TestV2UnspentSiacoinOutputs(t *testing.T) {
 			Value:   genesisOutput.Value,
 		}},
 	}
-	testutil.SignV2Transaction(n.tipState(), pk1, &txn1)
+	testutil.SignV2Transaction(n.TipState(), pk1, &txn1)
 
 	txn2 := types.V2Transaction{
 		SiacoinInputs: []types.V2SiacoinInput{{
@@ -1427,10 +1398,10 @@ func TestV2UnspentSiacoinOutputs(t *testing.T) {
 			Value:   genesisOutput.Value,
 		}},
 	}
-	testutil.SignV2Transaction(n.tipState(), pk2, &txn2)
+	testutil.SignV2Transaction(n.TipState(), pk2, &txn2)
 
 	// net effect of txn1 and txn2 is to send addr1 output to addr3
-	n.mineV2Transactions(t, txn1, txn2)
+	n.MineV2Transactions(t, txn1, txn2)
 
 	// addr3 should have all the value now
 	checkSiacoinOutputs(addr1)
@@ -1443,7 +1414,7 @@ func TestV2UnspentSiacoinOutputs(t *testing.T) {
 		},
 	})
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	// after revert, addr1 should have the output again and the others should
 	// have nothing
@@ -1476,13 +1447,13 @@ func TestV2UnspentSiafundOutputs(t *testing.T) {
 	n := newTestChain(t, true, func(network *consensus.Network, genesisBlock types.Block) {
 		genesisBlock.Transactions[0].SiafundOutputs[0].Address = addr1
 	})
-	sfID := n.genesis().Transactions[0].SiafundOutputID(0)
-	genesisOutput := n.genesis().Transactions[0].SiafundOutputs[0]
+	sfID := n.Genesis().Transactions[0].SiafundOutputID(0)
+	genesisOutput := n.Genesis().Transactions[0].SiafundOutputs[0]
 
 	checkSiafundOutputs := func(addr types.Address, expected ...explorer.SiafundOutput) {
 		t.Helper()
 
-		sfos, err := n.db.UnspentSiafundOutputs(addr, 0, math.MaxInt64)
+		sfos, err := n.DB.UnspentSiafundOutputs(addr, 0, math.MaxInt64)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1506,7 +1477,7 @@ func TestV2UnspentSiafundOutputs(t *testing.T) {
 
 	txn1 := types.V2Transaction{
 		SiafundInputs: []types.V2SiafundInput{{
-			Parent:          getSFE(t, n.db, n.genesis().Transactions[0].SiafundOutputID(0)),
+			Parent:          getSFE(t, n.DB, n.Genesis().Transactions[0].SiafundOutputID(0)),
 			SatisfiedPolicy: types.SatisfiedPolicy{Policy: addr1Policy},
 		}},
 		SiafundOutputs: []types.SiafundOutput{{
@@ -1514,7 +1485,7 @@ func TestV2UnspentSiafundOutputs(t *testing.T) {
 			Value:   genesisOutput.Value,
 		}},
 	}
-	testutil.SignV2Transaction(n.tipState(), pk1, &txn1)
+	testutil.SignV2Transaction(n.TipState(), pk1, &txn1)
 
 	txn2 := types.V2Transaction{
 		SiafundInputs: []types.V2SiafundInput{{
@@ -1526,10 +1497,10 @@ func TestV2UnspentSiafundOutputs(t *testing.T) {
 			Value:   genesisOutput.Value,
 		}},
 	}
-	testutil.SignV2Transaction(n.tipState(), pk2, &txn2)
+	testutil.SignV2Transaction(n.TipState(), pk2, &txn2)
 
 	// net effect of txn1 and txn2 is to send addr1 output to addr3
-	n.mineV2Transactions(t, txn1, txn2)
+	n.MineV2Transactions(t, txn1, txn2)
 
 	// addr3 should have all the value now
 	checkSiafundOutputs(addr1)
@@ -1541,7 +1512,7 @@ func TestV2UnspentSiafundOutputs(t *testing.T) {
 		},
 	})
 
-	n.revertBlock(t)
+	n.RevertBlock(t)
 
 	// after revert, addr1 should have the output again and the others should
 	// have nothing

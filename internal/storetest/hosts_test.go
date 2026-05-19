@@ -1,8 +1,9 @@
-package sqlite
+//go:build testing
+
+package storetest
 
 import (
 	"math"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -20,13 +21,19 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
+// hostSeeder is implemented by every backend store and is used to seed hosts
+// directly for tests that need a specific pre-existing host_info row.
+type hostSeeder interface {
+	SeedHosts(hosts []explorer.Host) error
+}
+
 func TestHostScan(t *testing.T) {
 	pk1 := types.GeneratePrivateKey()
 
 	n := newTestChain(t, false, nil)
 
 	assertHost := func(pubkey types.PublicKey, expected explorer.Host) {
-		hosts, err := n.db.QueryHosts(explorer.HostQuery{PublicKeys: []types.PublicKey{pubkey}}, explorer.HostSortPublicKey, explorer.HostSortAsc, 0, math.MaxInt64)
+		hosts, err := n.DB.QueryHosts(explorer.HostQuery{PublicKeys: []types.PublicKey{pubkey}}, explorer.HostSortPublicKey, explorer.HostSortAsc, 0, math.MaxInt64)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -43,9 +50,9 @@ func TestHostScan(t *testing.T) {
 		},
 	}
 
-	n.mineTransactions(t, txn1)
+	n.MineTransactions(t, txn1)
 
-	hosts, err := n.db.HostsForScanning(time.Unix(0, 0), 100)
+	hosts, err := n.DB.HostsForScanning(time.Unix(0, 0), 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,11 +75,11 @@ func TestHostScan(t *testing.T) {
 		PriceTable: priceTable,
 	}
 
-	if err := n.db.AddHostScans([]explorer.HostScan{scan1}...); err != nil {
+	if err := n.DB.AddHostScans([]explorer.HostScan{scan1}...); err != nil {
 		t.Fatal(err)
 	}
 
-	lastAnnouncement := n.tipBlock().Timestamp
+	lastAnnouncement := n.TipBlock().Timestamp
 	host1 := explorer.Host{
 		PublicKey:              hosts[0].PublicKey,
 		NetAddress:             netAddr1,
@@ -102,7 +109,7 @@ func TestHostScan(t *testing.T) {
 		}(),
 	}
 
-	if err := n.db.AddHostScans([]explorer.HostScan{scan2}...); err != nil {
+	if err := n.DB.AddHostScans([]explorer.HostScan{scan2}...); err != nil {
 		t.Fatal(err)
 	}
 	// previous settings and price table should be preserved in case of failure
@@ -122,7 +129,7 @@ func TestV2HostScan(t *testing.T) {
 	n := newTestChain(t, true, nil)
 
 	assertHost := func(pubkey types.PublicKey, expected explorer.Host) {
-		hosts, err := n.db.QueryHosts(explorer.HostQuery{PublicKeys: []types.PublicKey{pubkey}}, explorer.HostSortPublicKey, explorer.HostSortAsc, 0, math.MaxInt64)
+		hosts, err := n.DB.QueryHosts(explorer.HostQuery{PublicKeys: []types.PublicKey{pubkey}}, explorer.HostSortPublicKey, explorer.HostSortAsc, 0, math.MaxInt64)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -139,12 +146,12 @@ func TestV2HostScan(t *testing.T) {
 	}}
 
 	txn1 := types.V2Transaction{
-		Attestations: []types.Attestation{ha1.ToAttestation(n.tipState(), pk1)},
+		Attestations: []types.Attestation{ha1.ToAttestation(n.TipState(), pk1)},
 	}
 
-	n.mineV2Transactions(t, txn1)
+	n.MineV2Transactions(t, txn1)
 
-	hosts, err := n.db.HostsForScanning(time.Unix(0, 0), 100)
+	hosts, err := n.DB.HostsForScanning(time.Unix(0, 0), 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,11 +174,11 @@ func TestV2HostScan(t *testing.T) {
 		V2Settings: settings,
 	}
 
-	if err := n.db.AddHostScans([]explorer.HostScan{scan1}...); err != nil {
+	if err := n.DB.AddHostScans([]explorer.HostScan{scan1}...); err != nil {
 		t.Fatal(err)
 	}
 
-	lastAnnouncement := n.tipBlock().Timestamp
+	lastAnnouncement := n.TipBlock().Timestamp
 	host1 := explorer.Host{
 		V2:                     true,
 		PublicKey:              hosts[0].PublicKey,
@@ -201,7 +208,7 @@ func TestV2HostScan(t *testing.T) {
 		}(),
 	}
 
-	if err := n.db.AddHostScans([]explorer.HostScan{scan2}...); err != nil {
+	if err := n.DB.AddHostScans([]explorer.HostScan{scan2}...); err != nil {
 		t.Fatal(err)
 	}
 	// previous settings and price table should be preserved in case of failure
@@ -216,11 +223,7 @@ func TestV2HostScan(t *testing.T) {
 }
 
 func TestLastSuccessScan(t *testing.T) {
-	db, err := OpenDatabase(filepath.Join(t.TempDir(), "explored.sqlite3"), zaptest.NewLogger(t).Named("sqlite3"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := openStore(t, zaptest.NewLogger(t).Named("store"))
 
 	ts, err := db.LastSuccessScan()
 	if err != nil {
@@ -259,9 +262,7 @@ func TestLastSuccessScan(t *testing.T) {
 			},
 		},
 	}
-	if err := db.transaction(func(tx *txn) error {
-		return addHosts(tx, hosts)
-	}); err != nil {
+	if err := db.(hostSeeder).SeedHosts(hosts); err != nil {
 		t.Fatal(err)
 	}
 
@@ -290,13 +291,8 @@ func TestLastSuccessScan(t *testing.T) {
 
 func TestQueryHosts(t *testing.T) {
 	log := zaptest.NewLogger(t)
-	dir := t.TempDir()
 
-	db, err := OpenDatabase(filepath.Join(dir, "explored.sqlite3"), log.Named("sqlite3"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := openStore(t, log.Named("store"))
 
 	const (
 		netAddr1 = "host1.com:9982"
@@ -423,9 +419,7 @@ func TestQueryHosts(t *testing.T) {
 	}
 
 	// Add hosts to database
-	if err := db.transaction(func(tx *txn) error {
-		return addHosts(tx, hosts)
-	}); err != nil {
+	if err := db.(hostSeeder).SeedHosts(hosts); err != nil {
 		t.Fatal(err)
 	}
 
