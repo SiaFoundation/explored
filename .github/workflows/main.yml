@@ -10,19 +10,7 @@ env:
 
 jobs:
   test:
-    name: Test
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
-        with:
-          go-version: "1.26"
-      - name: Test
-        uses: n8maninger/action-golang-test@aa292dc81b16d34406a9551e629e0cdca00d9418 # v2.2.1
-        with:
-          args: -race;-failfast;-tags=testing
+    uses: SiaFoundation/workflows/.github/workflows/go-test.yml@dddded471aae1c7b6f0fbc388d603b8b16336f6f # master
 
   postgres:
     name: Test (postgres)
