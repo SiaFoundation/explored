@@ -3,7 +3,6 @@ package explorer
 import (
 	"context"
 	"fmt"
-	"math"
 	"net"
 	"sync"
 	"time"
@@ -17,6 +16,9 @@ import (
 	rhpv3 "go.sia.tech/explored/internal/rhp/v3"
 	"go.uber.org/zap"
 )
+
+// maxScanBackoff is the maximum duration between scan attempts
+const maxScanBackoff = 3 * 24 * time.Hour
 
 func isSynced(b Block) bool {
 	return time.Since(b.Timestamp) <= 3*time.Hour
@@ -106,6 +108,23 @@ func rhpv3PriceTable(ctx context.Context, publicKey types.PublicKey, netAddress 
 		return crhpv3.HostPriceTable{}, fmt.Errorf("failed to scan price table: %w", err)
 	}
 	return table, nil
+}
+
+func scanBackoff(interval, maxBackoff time.Duration, streak uint64) time.Duration {
+	if interval <= 0 || maxBackoff <= 0 {
+		return 0
+	}
+
+	if streak >= 62 {
+		return maxBackoff
+	}
+
+	shift := streak + 1
+	factor := time.Duration(1) << shift
+	if interval > maxBackoff/factor {
+		return maxBackoff
+	}
+	return interval * factor
 }
 
 func (e *Explorer) scanV1Host(ctx context.Context, host UnscannedHost) (HostScan, error) {
@@ -254,7 +273,7 @@ func (e *Explorer) scanLoop() {
 							return &str
 						}(),
 						Timestamp: now,
-						NextScan:  now.Add(e.scanCfg.ScanInterval * time.Duration(math.Pow(2, float64(host.FailedInteractionsStreak)+1))),
+						NextScan:  now.Add(scanBackoff(e.scanCfg.ScanInterval, maxScanBackoff, host.FailedInteractionsStreak)),
 					}
 					return
 				} else {
