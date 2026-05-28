@@ -115,6 +115,11 @@ func scanBackoff(interval, maxBackoff time.Duration, streak uint64) time.Duratio
 		return 0
 	}
 
+	// floor the cap to interval so failures never schedule sooner than successes
+	if maxBackoff < interval {
+		maxBackoff = interval
+	}
+
 	if streak >= 62 {
 		return maxBackoff
 	}
