@@ -35,6 +35,13 @@ func TestScanBackoff(t *testing.T) {
 			streak:     math.MaxUint64,
 			want:       time.Hour,
 		},
+		{
+			name:       "interval larger than max backoff floors the cap",
+			interval:   7 * 24 * time.Hour,
+			maxBackoff: 3 * 24 * time.Hour,
+			streak:     5,
+			want:       7 * 24 * time.Hour,
+		},
 	}
 
 	for _, tt := range tests {
