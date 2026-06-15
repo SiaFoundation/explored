@@ -206,6 +206,10 @@ func testV1Host(tb testing.TB, hostKey types.PrivateKey, hostSettings *proto2.Ho
 				}); err != nil {
 					tb.Fatal(err)
 				}
+
+				// block until renter closes the stream instead of closing the
+				// transport immediately
+				stream.ReadID()
 			}()
 		}
 	}()
