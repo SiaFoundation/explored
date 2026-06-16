@@ -1,37 +1,24 @@
 package sqlite
 
 import (
-	"errors"
 	"fmt"
-	"math"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"go.sia.tech/core/consensus"
-	proto2 "go.sia.tech/core/rhp/v2"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
-	ctestutil "go.sia.tech/coreutils/testutil"
 	"go.sia.tech/coreutils/wallet"
 	"go.sia.tech/explored/explorer"
+	"go.sia.tech/explored/internal/testchain"
 	"go.sia.tech/explored/internal/testutil"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 	"lukechampine.com/frand"
 )
 
-type testChain struct {
-	db    *Store
-	store *chain.DBStore
-
-	network     *consensus.Network
-	blocks      []types.Block
-	supplements []consensus.V1BlockSupplement
-	states      []consensus.State
-}
-
-func newTestChain(t testing.TB, v2 bool, modifyGenesis func(*consensus.Network, types.Block)) *testChain {
+func newTestChain(t testing.TB, v2 bool, modifyGenesis func(*consensus.Network, types.Block)) *testchain.Chain {
 	log := zaptest.NewLogger(t)
 	dir := t.TempDir()
 
@@ -43,351 +30,7 @@ func newTestChain(t testing.TB, v2 bool, modifyGenesis func(*consensus.Network, 
 		db.Close()
 	})
 
-	var network *consensus.Network
-	var genesisBlock types.Block
-	if v2 {
-		network, genesisBlock = ctestutil.V2Network()
-	} else {
-		network, genesisBlock = ctestutil.Network()
-	}
-	if v2 {
-		network.HardforkV2.AllowHeight = 1
-		network.HardforkV2.RequireHeight = 2
-		network.HardforkV2.FinalCutHeight = 3
-	}
-	if modifyGenesis != nil {
-		modifyGenesis(network, genesisBlock)
-	}
-
-	store, genesisState, err := chain.NewDBStore(chain.NewMemDB(), network, genesisBlock, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	bs := consensus.V1BlockSupplement{Transactions: make([]consensus.V1TransactionSupplement, len(genesisBlock.Transactions))}
-	_, au := consensus.ApplyBlock(network.GenesisState(), genesisBlock, bs, time.Time{})
-	if err := db.UpdateChainState(nil, []chain.ApplyUpdate{{
-		ApplyUpdate: au,
-		Block:       genesisBlock,
-		State:       genesisState,
-	}}); err != nil {
-		t.Fatal(err)
-	}
-
-	return &testChain{
-		db:    db,
-		store: store,
-
-		network:     network,
-		blocks:      []types.Block{genesisBlock},
-		supplements: []consensus.V1BlockSupplement{bs},
-		states:      []consensus.State{genesisState},
-	}
-}
-
-func (n *testChain) genesis() types.Block {
-	return n.blocks[0]
-}
-
-func (n *testChain) tipBlock() types.Block {
-	return n.blocks[len(n.blocks)-1]
-}
-
-func (n *testChain) tipState() consensus.State {
-	return n.states[len(n.states)-1]
-}
-
-func (n *testChain) applyBlock(t testing.TB, b types.Block) {
-	t.Helper()
-
-	cs := n.tipState()
-	bs := n.store.SupplementTipBlock(b)
-	if cs.Index.Height != math.MaxUint64 {
-		// don't validate genesis block
-		if err := consensus.ValidateBlock(cs, b, bs); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	cs, au := consensus.ApplyBlock(cs, b, bs, time.Time{})
-	if err := n.db.UpdateChainState(nil, []chain.ApplyUpdate{{
-		ApplyUpdate: au,
-		Block:       b,
-		State:       cs,
-	}}); err != nil {
-		t.Fatal(err)
-	}
-
-	n.store.AddState(cs)
-	n.store.AddBlock(b, &bs)
-	n.store.ApplyBlock(cs, au)
-
-	n.blocks = append(n.blocks, b)
-	n.supplements = append(n.supplements, bs)
-	n.states = append(n.states, cs)
-}
-
-func (n *testChain) revertBlock(t testing.TB) {
-	b := n.blocks[len(n.blocks)-1]
-	bs := n.supplements[len(n.supplements)-1]
-	prevState := n.states[len(n.states)-2]
-
-	ru := consensus.RevertBlock(prevState, b, bs)
-	if err := n.db.UpdateChainState([]chain.RevertUpdate{{
-		RevertUpdate: ru,
-		Block:        b,
-		State:        prevState,
-	}}, nil); err != nil {
-		t.Fatal(err)
-	}
-
-	n.store.RevertBlock(prevState, ru)
-
-	n.blocks = n.blocks[:len(n.blocks)-1]
-	n.supplements = n.supplements[:len(n.supplements)-1]
-	n.states = n.states[:len(n.states)-1]
-}
-
-func (n *testChain) mineTransactions(t testing.TB, txns ...types.Transaction) {
-	t.Helper()
-
-	b := testutil.MineBlock(n.tipState(), txns, types.VoidAddress)
-	n.applyBlock(t, b)
-}
-
-func (n *testChain) assertTransactions(t testing.TB, expected ...types.Transaction) {
-	t.Helper()
-
-	for _, txn := range expected {
-		txns, err := n.db.Transactions([]types.TransactionID{txn.ID()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "len(txns)", 1, len(txns))
-
-		testutil.CheckTransaction(t, txn, txns[0])
-	}
-}
-
-func (n *testChain) assertContractRevisions(t testing.TB, fcID types.FileContractID, expected ...explorer.ExtendedFileContract) {
-	t.Helper()
-
-	fces, err := n.db.ContractRevisions(fcID)
-	if len(expected) == 0 {
-		if !errors.Is(err, explorer.ErrContractNotFound) {
-			t.Fatal("should have got contract not found error")
-		}
-		return
-	} else if err != nil {
-		t.Fatal(err)
-	}
-	testutil.Equal(t, "len(fces)", len(expected), len(fces))
-
-	for i := range expected {
-		testutil.Equal(t, "ExtendedFileContract", expected[i], fces[i])
-	}
-}
-
-func (n *testChain) assertEvents(t testing.TB, addr types.Address, expected ...explorer.Event) {
-	t.Helper()
-
-	events, err := n.db.AddressEvents(addr, 0, math.MaxInt64)
-	if err != nil {
-		t.Fatal(err)
-	}
-	testutil.Equal(t, "len(events)", len(expected), len(events))
-
-	for i := range expected {
-		expected[i].Relevant = []types.Address{addr}
-		expected[i].Confirmations = n.tipState().Index.Height - expected[i].Index.Height
-		testutil.Equal(t, "Event", expected[i], events[i])
-	}
-
-	for i := range expected {
-		events, err := n.db.Events([]types.Hash256{expected[i].ID})
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "len(events)", 1, len(events))
-
-		expected[i].Relevant = nil
-		testutil.Equal(t, "Event", expected[i], events[0])
-	}
-}
-
-func (n *testChain) getSCE(t testing.TB, scID types.SiacoinOutputID) explorer.SiacoinOutput {
-	t.Helper()
-
-	sces, err := n.db.SiacoinElements([]types.SiacoinOutputID{scID})
-	if err != nil {
-		t.Fatal(err)
-	} else if len(sces) == 0 {
-		t.Fatal("can't find sce")
-	}
-	sces[0].StateElement.MerkleProof = nil
-	return sces[0]
-}
-
-func (n *testChain) getFCE(t testing.TB, fcID types.FileContractID) explorer.ExtendedFileContract {
-	t.Helper()
-
-	fces, err := n.db.Contracts([]types.FileContractID{fcID})
-	if err != nil {
-		t.Fatal(err)
-	} else if len(fces) == 0 {
-		t.Fatal("can't find fce")
-	}
-	return fces[0]
-}
-
-func (n *testChain) getTxn(t testing.TB, txnID types.TransactionID) explorer.Transaction {
-	t.Helper()
-
-	txns, err := n.db.Transactions([]types.TransactionID{txnID})
-	if err != nil {
-		t.Fatal(err)
-	} else if len(txns) == 0 {
-		t.Fatal("can't find txn")
-	}
-	return txns[0]
-}
-
-func prepareContract(addr types.Address, endHeight uint64) types.FileContract {
-	rk := types.GeneratePrivateKey().PublicKey()
-	rAddr := types.StandardUnlockHash(rk)
-	hk := types.GeneratePrivateKey().PublicKey()
-	hs := proto2.HostSettings{
-		WindowSize: 1,
-		Address:    types.StandardUnlockHash(hk),
-	}
-	sc := types.Siacoins(1)
-	fc := proto2.PrepareContractFormation(rk, hk, sc.Mul64(5), sc.Mul64(5), endHeight, hs, rAddr)
-	fc.UnlockHash = addr
-	return fc
-}
-
-func (n *testChain) assertBlock(t testing.TB, cs consensus.State, block types.Block) {
-	got, err := n.db.Block(block.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	testutil.Equal(t, "ParentID", block.ParentID, got.ParentID)
-	testutil.Equal(t, "Nonce", block.Nonce, got.Nonce)
-	testutil.Equal(t, "Timestamp", block.Timestamp, got.Timestamp)
-	testutil.Equal(t, "Height", cs.Index.Height, got.Height)
-
-	testutil.Equal(t, "len(MinerPayouts)", len(block.MinerPayouts), len(got.MinerPayouts))
-	for i, sco := range got.MinerPayouts {
-		testutil.Equal(t, "Source", explorer.SourceMinerPayout, sco.Source)
-		testutil.Equal(t, "SpentIndex", nil, sco.SpentIndex)
-		testutil.Equal(t, "SiacoinOutput", block.MinerPayouts[i], sco.SiacoinOutput)
-	}
-
-	testutil.Equal(t, "len(Transactions)", len(block.Transactions), len(got.Transactions))
-	for i, txn := range got.Transactions {
-		testutil.CheckTransaction(t, block.Transactions[i], txn)
-	}
-
-	if block.V2 != nil {
-		testutil.Equal(t, "Height", block.V2.Height, got.V2.Height)
-		testutil.Equal(t, "Commitment", block.V2.Commitment, got.V2.Commitment)
-
-		testutil.Equal(t, "len(V2Transactions)", len(block.V2.Transactions), len(got.V2.Transactions))
-		for i, txn := range got.V2.Transactions {
-			testutil.CheckV2Transaction(t, block.V2.Transactions[i], txn)
-		}
-	}
-}
-
-func TestTip(t *testing.T) {
-	n := newTestChain(t, false, nil)
-
-	checkTips := func() {
-		t.Helper()
-
-		tip, err := n.db.Tip()
-		if err != nil {
-			t.Fatal(err)
-		}
-		testutil.Equal(t, "tip", n.tipState().Index, tip)
-
-		for _, state := range n.states {
-			best, err := n.db.BestTip(state.Index.Height)
-			if err != nil {
-				t.Fatal(err)
-			}
-			testutil.Equal(t, "best tip", state.Index, best)
-		}
-	}
-	checkTips()
-
-	n.mineTransactions(t)
-	checkTips()
-
-	n.mineTransactions(t)
-	checkTips()
-
-	n.revertBlock(t)
-	checkTips()
-
-	n.revertBlock(t)
-	checkTips()
-}
-
-func TestMissingTip(t *testing.T) {
-	n := newTestChain(t, false, nil)
-
-	_, err := n.db.BestTip(n.tipState().Index.Height)
-	if err != nil {
-		t.Fatalf("error retrieving tip known to exist: %v", err)
-	}
-
-	_, err = n.db.BestTip(n.tipState().Index.Height + 1)
-	if !errors.Is(err, explorer.ErrNoTip) {
-		t.Fatalf("should have got ErrNoTip retrieving: %v", err)
-	}
-}
-
-func TestMissingBlock(t *testing.T) {
-	n := newTestChain(t, false, nil)
-
-	id := n.tipState().Index.ID
-	_, err := n.db.Block(id)
-	if err != nil {
-		t.Fatalf("error retrieving genesis block: %v", err)
-	}
-
-	id[0] ^= 255
-	_, err = n.db.Block(id)
-	if !errors.Is(err, explorer.ErrNoBlock) {
-		t.Fatalf("did not get ErrNoBlock retrieving missing block: %v", err)
-	}
-}
-
-func TestBlock(t *testing.T) {
-	n := newTestChain(t, false, nil)
-
-	checkBlocks := func(count int) {
-		t.Helper()
-
-		testutil.Equal(t, "blocks", count, len(n.blocks))
-		for i := range n.blocks {
-			testutil.Equal(t, "block height", uint64(i), n.states[i].Index.Height)
-			testutil.Equal(t, "block ID", n.blocks[i].ID(), n.states[i].Index.ID)
-			n.assertBlock(t, n.states[i], n.blocks[i])
-		}
-	}
-
-	checkBlocks(1)
-
-	n.mineTransactions(t, types.Transaction{ArbitraryData: [][]byte{{0}}})
-
-	checkBlocks(2)
-
-	n.revertBlock(t)
-
-	checkBlocks(1)
+	return testchain.New(t, db, v2, modifyGenesis)
 }
 
 func BenchmarkTransactions(b *testing.B) {
@@ -398,7 +41,7 @@ func BenchmarkTransactions(b *testing.B) {
 	// add random transactions that are either empty, contain arbitrary
 	// or contain a contract formation
 	var ids []types.TransactionID
-	err := n.db.transaction(func(tx *txn) error {
+	err := n.DB.(*Store).transaction(func(tx *txn) error {
 		fceStmt, err := tx.Prepare(`INSERT INTO file_contract_elements(block_id, transaction_id, contract_id, leaf_index, filesize, file_merkle_root, window_start, window_end, payout, unlock_hash, revision_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 		if err != nil {
 			return err
@@ -426,7 +69,7 @@ func BenchmarkTransactions(b *testing.B) {
 		arbitraryData := make([]byte, 64)
 		frand.Read(arbitraryData)
 
-		bid := encode(n.tipState().Index.ID)
+		bid := encode(n.TipState().Index.ID)
 		leafIndex := encode(uint64(0))
 		filesize, fileMerkleRoot, windowStart, windowEnd, payout, unlockHash, revisionNumber := encode(uint64(0)), encode(types.Hash256{}), encode(uint64(0)), encode(uint64(0)), encode(types.NewCurrency64(1)), encode(types.Address{}), encode(uint64(0))
 		for i := range nTransactions {
@@ -486,7 +129,7 @@ func BenchmarkTransactions(b *testing.B) {
 				offset := frand.Intn(len(ids) - limit)
 				txnIDs := ids[offset : offset+limit]
 
-				txns, err := n.db.Transactions(txnIDs)
+				txns, err := n.DB.Transactions(txnIDs)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -506,15 +149,15 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 
 	// add a bunch of random outputs
 	var ids []types.SiacoinOutputID
-	err := n.db.transaction(func(tx *txn) error {
+	err := n.DB.(*Store).transaction(func(tx *txn) error {
 		stmt, err := tx.Prepare(`INSERT INTO siacoin_elements(block_id, output_id, leaf_index, spent_index, source, maturity_height, address, value) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
 		if err != nil {
 			return err
 		}
 		defer stmt.Close()
 
-		spentIndex := encode(n.tipState().Index)
-		bid := encode(n.tipState().Index.ID)
+		spentIndex := encode(n.TipState().Index)
+		bid := encode(n.TipState().Index.ID)
 		val := encode(types.NewCurrency64(1))
 
 		var addr types.Address
@@ -568,7 +211,7 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 			for b.Loop() {
 				offset := frand.Uint64n(1000 - limit + 1)
 
-				sces, err := n.db.UnspentSiacoinOutputs(addr1, offset, limit)
+				sces, err := n.DB.UnspentSiacoinOutputs(addr1, offset, limit)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -585,7 +228,7 @@ func BenchmarkSiacoinOutputs(b *testing.B) {
 				offset := frand.Intn(len(ids) - limit)
 				scIDs := ids[offset : offset+limit]
 
-				sces, err := n.db.SiacoinElements(scIDs)
+				sces, err := n.DB.SiacoinElements(scIDs)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -605,15 +248,15 @@ func BenchmarkSiafundOutputs(b *testing.B) {
 
 	// add a bunch of random outputs
 	var ids []types.SiafundOutputID
-	err := n.db.transaction(func(tx *txn) error {
+	err := n.DB.(*Store).transaction(func(tx *txn) error {
 		stmt, err := tx.Prepare(`INSERT INTO siafund_elements(block_id, output_id, leaf_index, spent_index, claim_start, address, value) VALUES (?, ?, ?, ?, ?, ?, ?)`)
 		if err != nil {
 			return err
 		}
 		defer stmt.Close()
 
-		spentIndex := encode(n.tipState().Index)
-		bid := encode(n.tipState().Index.ID)
+		spentIndex := encode(n.TipState().Index)
+		bid := encode(n.TipState().Index.ID)
 		val := encode(types.NewCurrency64(1))
 
 		var addr types.Address
@@ -667,7 +310,7 @@ func BenchmarkSiafundOutputs(b *testing.B) {
 			for b.Loop() {
 				offset := frand.Uint64n(1000 - limit + 1)
 
-				sfes, err := n.db.UnspentSiafundOutputs(addr1, offset, limit)
+				sfes, err := n.DB.UnspentSiafundOutputs(addr1, offset, limit)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -684,7 +327,7 @@ func BenchmarkSiafundOutputs(b *testing.B) {
 				offset := frand.Intn(len(ids) - limit)
 				scIDs := ids[offset : offset+limit]
 
-				sfes, err := n.db.SiafundElements(scIDs)
+				sfes, err := n.DB.SiafundElements(scIDs)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -703,7 +346,7 @@ func BenchmarkAddressEvents(b *testing.B) {
 			n := newTestChain(b, false, nil)
 
 			var addrs []types.Address
-			err := n.db.transaction(func(tx *txn) error {
+			err := n.DB.(*Store).transaction(func(tx *txn) error {
 				txnStmt, err := tx.Prepare(`INSERT INTO transactions(transaction_id) VALUES (?)`)
 				if err != nil {
 					return err
@@ -737,7 +380,7 @@ func BenchmarkAddressEvents(b *testing.B) {
 				for range addresses {
 					addr := types.Address(frand.Entropy256())
 					addrs = append(addrs, addr)
-					bid := n.tipState().Index.ID
+					bid := n.TipState().Index.ID
 
 					var addressID int64
 					err = addrStmt.QueryRow(encode(addr), encode(types.ZeroCurrency)).Scan(&addressID)
@@ -783,7 +426,7 @@ func BenchmarkAddressEvents(b *testing.B) {
 			for b.Loop() {
 				const limit = 100
 				offset := frand.Intn(eventsPerAddress - min(eventsPerAddress, limit) + 1)
-				events, err := n.db.AddressEvents(addrs[i%len(addrs)], uint64(offset), limit)
+				events, err := n.DB.AddressEvents(addrs[i%len(addrs)], uint64(offset), limit)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -828,7 +471,7 @@ func BenchmarkApplyRevert(b *testing.B) {
 		network.HardforkV2.FinalCutHeight = 1_000_001
 		genesisBlock.Transactions[0].SiacoinOutputs[0].Address = addr1
 	})
-	genesisTxn := n.genesis().Transactions[0]
+	genesisTxn := n.Genesis().Transactions[0]
 
 	val := genesisTxn.SiacoinOutputs[0].Value
 	scID := genesisTxn.SiacoinOutputID(0)
@@ -841,7 +484,7 @@ func BenchmarkApplyRevert(b *testing.B) {
 			ArbitraryData: [][]byte{data},
 		}
 
-		fc := prepareContract(addr1, n.tipState().Index.Height+1)
+		fc := testchain.PrepareContract(addr1, n.TipState().Index.Height+1)
 		// create file contract
 		txn2 := types.Transaction{
 			SiacoinInputs: []types.SiacoinInput{{
@@ -854,7 +497,7 @@ func BenchmarkApplyRevert(b *testing.B) {
 			}},
 			FileContracts: []types.FileContract{fc},
 		}
-		testutil.SignTransaction(n.tipState(), pk1, &txn2)
+		testutil.SignTransaction(n.TipState(), pk1, &txn2)
 
 		scID = txn2.SiacoinOutputID(0)
 		val = txn2.SiacoinOutputs[0].Value
@@ -877,12 +520,12 @@ func BenchmarkApplyRevert(b *testing.B) {
 				Value:   val,
 			}},
 		}
-		testutil.SignV2Transaction(n.tipState(), pk1, &txn3)
+		testutil.SignV2Transaction(n.TipState(), pk1, &txn3)
 
 		scID = txn3.SiacoinOutputID(txn3.ID(), 0)
 		val = txn3.SiacoinOutputs[0].Value
 
-		v2FC, payout := prepareV2Contract(pk1, pk1, n.tipState().Index.Height+1)
+		v2FC, payout := testchain.PrepareV2Contract(pk1, pk1, n.TipState().Index.Height+1)
 		txn4 := types.V2Transaction{
 			SiacoinInputs: []types.V2SiacoinInput{{
 				Parent: types.SiacoinElement{
@@ -900,12 +543,12 @@ func BenchmarkApplyRevert(b *testing.B) {
 			}},
 			FileContracts: []types.V2FileContract{v2FC},
 		}
-		testutil.SignV2TransactionWithContracts(n.tipState(), pk1, pk1, pk1, &txn4)
+		testutil.SignV2TransactionWithContracts(n.TipState(), pk1, pk1, pk1, &txn4)
 
 		scID = txn4.SiacoinOutputID(txn4.ID(), 0)
 		val = txn4.SiacoinOutputs[0].Value
 
-		return testutil.MineV2Block(n.tipState(), []types.Transaction{txn1, txn2}, []types.V2Transaction{txn3, txn4}, types.VoidAddress)
+		return testutil.MineV2Block(n.TipState(), []types.Transaction{txn1, txn2}, []types.V2Transaction{txn3, txn4}, types.VoidAddress)
 	}
 
 	for i := range nBlocks {
@@ -913,12 +556,12 @@ func BenchmarkApplyRevert(b *testing.B) {
 			b.Logf("Mined %d blocks", i)
 		}
 
-		n.applyBlock(b, generateBlock())
+		n.ApplyBlock(b, generateBlock())
 	}
 
 	block := generateBlock()
-	bs := n.store.SupplementTipBlock(block)
-	prevState := n.states[len(n.states)-1]
+	bs := n.Store.SupplementTipBlock(block)
+	prevState := n.States[len(n.States)-1]
 
 	if err := consensus.ValidateBlock(prevState, block, bs); err != nil {
 		b.Fatal(err)
@@ -940,7 +583,7 @@ func BenchmarkApplyRevert(b *testing.B) {
 	b.Run("apply", func(b *testing.B) {
 		log := zap.NewNop()
 		for b.Loop() {
-			err := n.db.transaction(func(tx *txn) error {
+			err := n.DB.(*Store).transaction(func(tx *txn) error {
 				utx := &updateTx{tx: tx}
 				return explorer.UpdateChainState(utx, nil, caus, log)
 			})
@@ -949,7 +592,7 @@ func BenchmarkApplyRevert(b *testing.B) {
 			}
 
 			b.StopTimer()
-			err = n.db.transaction(func(tx *txn) error {
+			err = n.DB.(*Store).transaction(func(tx *txn) error {
 				utx := &updateTx{tx: tx}
 				return explorer.UpdateChainState(utx, crus, nil, log)
 			})
@@ -960,9 +603,9 @@ func BenchmarkApplyRevert(b *testing.B) {
 		}
 	})
 
-	block = n.blocks[len(n.blocks)-1]
-	bs = n.supplements[len(n.supplements)-1]
-	prevState = n.states[len(n.states)-2]
+	block = n.Blocks[len(n.Blocks)-1]
+	bs = n.Supplements[len(n.Supplements)-1]
+	prevState = n.States[len(n.States)-2]
 
 	ru = consensus.RevertBlock(prevState, block, bs)
 	crus = []chain.RevertUpdate{{
@@ -984,13 +627,13 @@ func BenchmarkApplyRevert(b *testing.B) {
 	b.Run("revert", func(b *testing.B) {
 		log := zap.NewNop()
 		for b.Loop() {
-			err := n.db.transaction(func(tx *txn) error {
+			err := n.DB.(*Store).transaction(func(tx *txn) error {
 				utx := &updateTx{tx: tx}
 				return explorer.UpdateChainState(utx, crus, nil, log)
 			})
 
 			b.StopTimer()
-			err = n.db.transaction(func(tx *txn) error {
+			err = n.DB.(*Store).transaction(func(tx *txn) error {
 				utx := &updateTx{tx: tx}
 				return explorer.UpdateChainState(utx, nil, caus, log)
 			})

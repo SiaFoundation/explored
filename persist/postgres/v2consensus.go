@@ -1,27 +1,28 @@
-package sqlite
+package postgres
 
 import (
-	"database/sql"
 	"fmt"
+
+	"github.com/jackc/pgx/v5"
 
 	"go.sia.tech/core/types"
 	"go.sia.tech/explored/explorer"
 )
 
 func addV2Transactions(tx *txn, bid types.BlockID, txns []types.V2Transaction) (map[types.TransactionID]bool, error) {
-	checkTransactionStmt, err := tx.Prepare(`SELECT id FROM v2_transactions WHERE transaction_id = ?`)
+	checkTransactionStmt, err := tx.Prepare(`SELECT id FROM v2_transactions WHERE transaction_id = $1`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare check v2_transaction statement: %v", err)
 	}
 	defer checkTransactionStmt.Close()
 
-	insertTransactionStmt, err := tx.Prepare(`INSERT INTO v2_transactions (transaction_id, new_foundation_address, miner_fee, arbitrary_data) VALUES (?, ?, ?, ?)`)
+	insertTransactionStmt, err := tx.Prepare(`INSERT INTO v2_transactions (transaction_id, new_foundation_address, miner_fee, arbitrary_data) VALUES ($1, $2, $3, $4) RETURNING id`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare insert v2_transaction statement: %v", err)
 	}
 	defer insertTransactionStmt.Close()
 
-	blockTransactionsStmt, err := tx.Prepare(`INSERT INTO v2_block_transactions(block_id, transaction_id, block_order) VALUES (?, ?, ?);`)
+	blockTransactionsStmt, err := tx.Prepare(`INSERT INTO v2_block_transactions(block_id, transaction_id, block_order) VALUES ($1, $2, $3);`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare v2_block_transactions statement: %w", err)
 	}
@@ -32,7 +33,7 @@ func addV2Transactions(tx *txn, bid types.BlockID, txns []types.V2Transaction) (
 		var exist bool
 		var dbID int64
 		txnID := txn.ID()
-		if err := checkTransactionStmt.QueryRow(encode(txnID)).Scan(&dbID); err != nil && err != sql.ErrNoRows {
+		if err := checkTransactionStmt.QueryRow(encode(txnID)).Scan(&dbID); err != nil && err != pgx.ErrNoRows {
 			return nil, fmt.Errorf("failed to insert v2 transaction ID: %w", err)
 		} else if err == nil {
 			exist = true
@@ -44,13 +45,8 @@ func addV2Transactions(tx *txn, bid types.BlockID, txns []types.V2Transaction) (
 				newFoundationAddress = encode(txn.NewFoundationAddress)
 			}
 
-			result, err := insertTransactionStmt.Exec(encode(txnID), newFoundationAddress, encode(txn.MinerFee), txn.ArbitraryData)
-			if err != nil {
+			if err := insertTransactionStmt.QueryRow(encode(txnID), newFoundationAddress, encode(txn.MinerFee), txn.ArbitraryData).Scan(&dbID); err != nil {
 				return nil, fmt.Errorf("failed to insert into v2_transactions: %w", err)
-			}
-			dbID, err = result.LastInsertId()
-			if err != nil {
-				return nil, fmt.Errorf("failed to get v2 transaction ID: %w", err)
 			}
 		}
 
@@ -71,9 +67,9 @@ func addV2Transactions(tx *txn, bid types.BlockID, txns []types.V2Transaction) (
 
 func updateV2FileContractElements(tx *txn, revert bool, index types.ChainIndex, b types.Block, fces []explorer.V2FileContractUpdate) error {
 	stmt, err := tx.Prepare(`INSERT INTO v2_file_contract_elements(contract_id, block_id, transaction_id, leaf_index, capacity, filesize, file_merkle_root, proof_height, expiration_height, renter_output_address, renter_output_value, host_output_address, host_output_value, missed_host_value, total_collateral, renter_public_key, host_public_key, revision_number, renter_signature, host_signature)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
         ON CONFLICT (contract_id, revision_number)
-        DO UPDATE SET leaf_index = ?
+        DO UPDATE SET leaf_index = $21
         RETURNING id;`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare main statement: %w", err)
@@ -81,9 +77,9 @@ func updateV2FileContractElements(tx *txn, revert bool, index types.ChainIndex, 
 	defer stmt.Close()
 
 	revisionStmt, err := tx.Prepare(`INSERT INTO v2_last_contract_revision(contract_id, contract_element_id, confirmation_height, confirmation_block_id, confirmation_transaction_id)
-    VALUES (?, ?, COALESCE(?, X''), COALESCE(?, X''), COALESCE(?, X''))
+    VALUES ($1, $2, COALESCE($3, 0), COALESCE($4, ''::bytea), COALESCE($5, ''::bytea))
     ON CONFLICT (contract_id)
-    DO UPDATE SET contract_element_id = ?, confirmation_height = COALESCE(?, confirmation_height), confirmation_block_id = COALESCE(?, confirmation_block_id), confirmation_transaction_id = COALESCE(?, confirmation_transaction_id)`)
+    DO UPDATE SET contract_element_id = $6, confirmation_height = COALESCE($7, v2_last_contract_revision.confirmation_height), confirmation_block_id = COALESCE($8, v2_last_contract_revision.confirmation_block_id), confirmation_transaction_id = COALESCE($9, v2_last_contract_revision.confirmation_transaction_id)`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare last_contract_revision statement: %w", err)
 	}
@@ -127,9 +123,10 @@ func updateV2FileContractElements(tx *txn, revert bool, index types.ChainIndex, 
 		// only update if it's the most recent revision which will come from
 		// running ForEachFileContractElement on the update
 		if lastRevision {
-			var encodedHeight, encodedBlockID, encodedConfirmationTransactionID []byte
+			var encodedHeight any
+			var encodedBlockID, encodedConfirmationTransactionID []byte
 			if confirmationTransactionID != nil {
-				encodedHeight = encode(index.Height).([]byte)
+				encodedHeight = encode(index.Height)
 				encodedBlockID = encode(index.ID).([]byte)
 				encodedConfirmationTransactionID = encode(*confirmationTransactionID).([]byte)
 			}
@@ -242,13 +239,13 @@ func updateV2FileContractElements(tx *txn, revert bool, index types.ChainIndex, 
 }
 
 func updateV2FileContractIndices(tx *txn, revert bool, index types.ChainIndex, fces []explorer.V2FileContractUpdate) error {
-	resolutionIndexStmt, err := tx.Prepare(`UPDATE v2_last_contract_revision SET resolution_type = ?, resolution_height = ?, resolution_block_id = ?, resolution_transaction_id = ?, renewed_to = ? WHERE contract_id = ?`)
+	resolutionIndexStmt, err := tx.Prepare(`UPDATE v2_last_contract_revision SET resolution_type = $1, resolution_height = $2, resolution_block_id = $3, resolution_transaction_id = $4, renewed_to = $5 WHERE contract_id = $6`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare resolution index statement: %w", err)
 	}
 	defer resolutionIndexStmt.Close()
 
-	renewedFromStmt, err := tx.Prepare(`UPDATE v2_last_contract_revision SET renewed_from = ? WHERE contract_id = ?`)
+	renewedFromStmt, err := tx.Prepare(`UPDATE v2_last_contract_revision SET renewed_from = $1 WHERE contract_id = $2`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare renewed from statement: %w", err)
 	}
@@ -292,7 +289,7 @@ func addV2SiacoinInputs(tx *txn, dbID int64, siacoinInputs []types.V2SiacoinInpu
 		return nil
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_siacoin_inputs(transaction_id, transaction_order, satisfied_policy, parent_id) VALUES (?, ?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?))`)
+	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_siacoin_inputs(transaction_id, transaction_order, satisfied_policy, parent_id) VALUES ($1, $2, $3, (SELECT id FROM siacoin_elements WHERE output_id = $4))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -311,7 +308,7 @@ func addV2SiacoinOutputs(tx *txn, dbID int64, txnID types.TransactionID, txn typ
 		return nil
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_siacoin_outputs(transaction_id, transaction_order, output_id) VALUES (?, ?, (SELECT id FROM siacoin_elements WHERE output_id = ?))`)
+	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_siacoin_outputs(transaction_id, transaction_order, output_id) VALUES ($1, $2, (SELECT id FROM siacoin_elements WHERE output_id = $3))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -330,7 +327,7 @@ func addV2SiafundInputs(tx *txn, dbID int64, siafundInputs []types.V2SiafundInpu
 		return nil
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_siafund_inputs(transaction_id, transaction_order, claim_address, satisfied_policy, parent_id) VALUES (?, ?, ?, ?, (SELECT id FROM siafund_elements WHERE output_id = ?))`)
+	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_siafund_inputs(transaction_id, transaction_order, claim_address, satisfied_policy, parent_id) VALUES ($1, $2, $3, $4, (SELECT id FROM siafund_elements WHERE output_id = $5))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -349,7 +346,7 @@ func addV2SiafundOutputs(tx *txn, dbID int64, txnID types.TransactionID, txn typ
 		return nil
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_siafund_outputs(transaction_id, transaction_order, output_id) VALUES (?, ?, (SELECT id FROM siafund_elements WHERE output_id = ?))`)
+	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_siafund_outputs(transaction_id, transaction_order, output_id) VALUES ($1, $2, (SELECT id FROM siafund_elements WHERE output_id = $3))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -368,7 +365,7 @@ func addV2FileContracts(tx *txn, dbID int64, txnID types.TransactionID, txn type
 		return nil
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contracts(transaction_id, transaction_order, contract_id) VALUES (?, ?, (SELECT id FROM v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
+	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contracts(transaction_id, transaction_order, contract_id) VALUES ($1, $2, (SELECT id FROM v2_file_contract_elements WHERE contract_id = $3 AND revision_number = $4))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -387,7 +384,7 @@ func addV2FileContractRevisions(tx *txn, dbID int64, fileContractRevisions []typ
 		return nil
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_revisions(transaction_id, transaction_order, parent_contract_id, revision_contract_id) VALUES (?, ?, (SELECT id FROM v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?), (SELECT id FROM v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
+	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_revisions(transaction_id, transaction_order, parent_contract_id, revision_contract_id) VALUES ($1, $2, (SELECT id FROM v2_file_contract_elements WHERE contract_id = $3 AND revision_number = $4), (SELECT id FROM v2_file_contract_elements WHERE contract_id = $5 AND revision_number = $6))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -406,19 +403,19 @@ func addV2FileContractResolutions(tx *txn, dbID int64, fileContractResolutions [
 		return nil
 	}
 
-	renewalStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_resolutions(transaction_id, transaction_order, resolution_type, renewal_final_renter_output_address, renewal_final_renter_output_value, renewal_final_host_output_address, renewal_final_host_output_value, renewal_renter_rollover, renewal_host_rollover, renewal_renter_signature, renewal_host_signature, parent_contract_id, renewal_new_contract_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT id FROM v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?), (SELECT id FROM v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
+	renewalStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_resolutions(transaction_id, transaction_order, resolution_type, renewal_final_renter_output_address, renewal_final_renter_output_value, renewal_final_host_output_address, renewal_final_host_output_value, renewal_renter_rollover, renewal_host_rollover, renewal_renter_signature, renewal_host_signature, parent_contract_id, renewal_new_contract_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, (SELECT id FROM v2_file_contract_elements WHERE contract_id = $12 AND revision_number = $13), (SELECT id FROM v2_file_contract_elements WHERE contract_id = $14 AND revision_number = $15))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare renewal statement: %w", err)
 	}
 	defer renewalStmt.Close()
 
-	storageProofStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_resolutions(transaction_id, transaction_order, resolution_type, storage_proof_proof_index, storage_proof_leaf, storage_proof_proof, parent_contract_id) VALUES (?, ?, ?, ?, ?, ?, (SELECT id FROM v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
+	storageProofStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_resolutions(transaction_id, transaction_order, resolution_type, storage_proof_proof_index, storage_proof_leaf, storage_proof_proof, parent_contract_id) VALUES ($1, $2, $3, $4, $5, $6, (SELECT id FROM v2_file_contract_elements WHERE contract_id = $7 AND revision_number = $8))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare storage proof statement: %w", err)
 	}
 	defer storageProofStmt.Close()
 
-	expirationStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_resolutions(transaction_id, transaction_order, resolution_type, parent_contract_id) VALUES (?, ?, ?, (SELECT id FROM v2_file_contract_elements WHERE contract_id = ? AND revision_number = ?))`)
+	expirationStmt, err := tx.Prepare(`INSERT INTO v2_transaction_file_contract_resolutions(transaction_id, transaction_order, resolution_type, parent_contract_id) VALUES ($1, $2, $3, (SELECT id FROM v2_file_contract_elements WHERE contract_id = $4 AND revision_number = $5))`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare expiration statement: %w", err)
 	}
@@ -449,7 +446,7 @@ func addV2Attestations(tx *txn, dbID int64, attestations []types.Attestation) er
 		return nil
 	}
 
-	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_attestations(transaction_id, transaction_order, public_key, key, value, signature) VALUES (?, ?, ?, ?, ?, ?)`)
+	stmt, err := tx.Prepare(`INSERT INTO v2_transaction_attestations(transaction_id, transaction_order, public_key, key, value, signature) VALUES ($1, $2, $3, $4, $5, $6)`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -464,7 +461,7 @@ func addV2Attestations(tx *txn, dbID int64, attestations []types.Attestation) er
 }
 
 func addV2TransactionFields(tx *txn, txns []types.V2Transaction, txnSeen map[types.TransactionID]bool) error {
-	stmt, err := tx.Prepare(`SELECT id FROM v2_transactions WHERE transaction_id = ?`)
+	stmt, err := tx.Prepare(`SELECT id FROM v2_transactions WHERE transaction_id = $1`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare transaction ID statement: %w", err)
 	}

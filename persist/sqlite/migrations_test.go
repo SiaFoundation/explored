@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 )
 
+// nolint:misspell
 const initialSchema = `CREATE TABLE global_settings (
 	id INTEGER PRIMARY KEY NOT NULL DEFAULT 0 CHECK (id = 0), -- enforce a single row
 	db_version INTEGER NOT NULL -- used for migrations
@@ -604,38 +604,20 @@ CREATE INDEX host_info_v2_netaddresses_public_key ON host_info_v2_netaddresses(p
 CREATE INDEX host_info_v2_netaddresses_address ON host_info_v2_netaddresses(address);`
 
 func TestMigrationConsistency(t *testing.T) {
-	log := zaptest.NewLogger(t)
-
-	// manually initialize a sqlite database with the
-	// initial explored schema
+	// init db
 	fp := filepath.Join(t.TempDir(), "explored.sqlite3")
 	db, err := sql.Open("sqlite3", sqliteFilepath(fp))
 	if err != nil {
 		t.Fatal(err)
-	}
-	defer db.Close()
-
-	if _, err := db.Exec(initialSchema); err != nil {
+	} else if _, err := db.Exec(initialSchema); err != nil {
+		t.Fatal(err)
+	} else if _, err := db.Exec("INSERT INTO global_settings(id, db_version) VALUES (0, 1);"); err != nil {
 		t.Fatal(err)
 	}
-
-	tx, err := db.Begin()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tx.Rollback()
-
-	if err := initializeSettings(&txn{tx, log}, 1); err != nil {
-		t.Fatal(err)
-	} else if err := tx.Commit(); err != nil {
-		t.Fatal(err)
-	} else if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
+	db.Close()
 
 	expectedVersion := int64(len(migrations) + 1)
-
-	// open the database to trigger migrations
+	log := zaptest.NewLogger(t)
 	store, err := OpenDatabase(fp, log)
 	if err != nil {
 		t.Fatal(err)
@@ -659,16 +641,14 @@ func TestMigrationConsistency(t *testing.T) {
 		t.Fatalf("expected version %d, got %d", expectedVersion, v)
 	}
 
-	// initialize a new database with the updated schema
+	// prepare the baseline database
 	fp2 := filepath.Join(t.TempDir(), "explored.sqlite3")
-	baseline, err := OpenDatabase(fp2, zap.NewNop())
+	baseline, err := OpenDatabase(fp2, log)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer baseline.Close()
 
-	// compare the baseline database with the migrated database
-	// to ensure they have the same indices, tables, and columns
 	getTableIndices := func(db *sql.DB) (map[string]bool, error) {
 		const query = `SELECT name, tbl_name, sql FROM sqlite_schema WHERE type='index'`
 		rows, err := db.Query(query)
@@ -759,7 +739,6 @@ func TestMigrationConsistency(t *testing.T) {
 		}
 	}
 
-	// ensure each table has the same columns as the baseline
 	getTableColumns := func(db *sql.DB, table string) (map[string]bool, error) {
 		query := fmt.Sprintf(`PRAGMA table_info(%s)`, table) // cannot use parameterized query for PRAGMA statements
 		rows, err := db.Query(query)
@@ -778,7 +757,6 @@ func TestMigrationConsistency(t *testing.T) {
 			if err := rows.Scan(&cid, &name, &colType, &notNull, &defaultValue, &primaryKey); err != nil {
 				return nil, err
 			}
-			// column ID is ignored since it may not match between the baseline and migrated databases
 			key := fmt.Sprintf("%s.%s.%s.%t.%d", name, colType, defaultValue.String, notNull, primaryKey)
 			columns[key] = true
 		}
@@ -808,6 +786,99 @@ func TestMigrationConsistency(t *testing.T) {
 			if !baselineColumns[c] {
 				t.Errorf("unexpected column %s.%s", k, c)
 			}
+		}
+	}
+
+	getForeignKeys := func(db *sql.DB, table string) (map[string]bool, error) {
+		query := fmt.Sprintf(`PRAGMA foreign_key_list(%s)`, table)
+		rows, err := db.Query(query)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		keys := make(map[string]bool)
+		for rows.Next() {
+			var id, seq int
+			var refTable, from, to, onUpdate, onDelete, match string
+			if err := rows.Scan(&id, &seq, &refTable, &from, &to, &onUpdate, &onDelete, &match); err != nil {
+				return nil, err
+			}
+			key := fmt.Sprintf("%d.%d.%s.%s.%s.%s.%s.%s", id, seq, refTable, from, to, onUpdate, onDelete, match)
+			keys[key] = true
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		return keys, nil
+	}
+
+	// ensure the migrated database has the same foreign keys as the baseline
+	for k := range baselineTables {
+		baselineFK, err := getForeignKeys(baseline.db, k)
+		if err != nil {
+			t.Fatal(err)
+		}
+		migratedFK, err := getForeignKeys(store.db, k)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for fk := range baselineFK {
+			if !migratedFK[fk] {
+				t.Errorf("missing foreign key %s.%s", k, fk)
+			}
+		}
+
+		for fk := range migratedFK {
+			if !baselineFK[fk] {
+				t.Errorf("unexpected foreign key %s.%s", k, fk)
+			}
+		}
+	}
+
+	getCheckConstraints := func(db *sql.DB) (map[string]bool, error) {
+		const query = `SELECT name, sql FROM sqlite_schema WHERE type='table' AND sql IS NOT NULL`
+		rows, err := db.Query(query)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		constraints := make(map[string]bool)
+		for rows.Next() {
+			var name, ddl string
+			if err := rows.Scan(&name, &ddl); err != nil {
+				return nil, err
+			}
+			constraints[fmt.Sprintf("%s.%s", name, ddl)] = true
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		return constraints, nil
+	}
+
+	// ensure the migrated database has the same check constraints as the baseline
+	baselineCheckConstraints, err := getCheckConstraints(baseline.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	migratedCheckConstraints, err := getCheckConstraints(store.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for cc := range baselineCheckConstraints {
+		if !migratedCheckConstraints[cc] {
+			t.Errorf("missing check constraint %s", cc)
+		}
+	}
+
+	for cc := range migratedCheckConstraints {
+		if !baselineCheckConstraints[cc] {
+			t.Errorf("unexpected check constraint %s", cc)
 		}
 	}
 }

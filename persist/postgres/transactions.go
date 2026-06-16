@@ -1,9 +1,10 @@
-package sqlite
+package postgres
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
+
+	"github.com/jackc/pgx/v5"
 
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
@@ -20,9 +21,9 @@ func (s *Store) TransactionChainIndices(txnID types.TransactionID, offset, limit
 		rows, err := tx.Query(`SELECT DISTINCT b.id, b.height FROM blocks b
 INNER JOIN block_transactions bt ON bt.block_id = b.id
 INNER JOIN transactions t ON t.id = bt.transaction_id
-WHERE t.transaction_id = ?
+WHERE t.transaction_id = $1
 ORDER BY b.height DESC
-LIMIT ? OFFSET ?`, encode(txnID), limit, offset)
+LIMIT $2 OFFSET $3`, encode(txnID), limit, offset)
 		if err != nil {
 			return fmt.Errorf("failed to query chain indices: %w", err)
 		}
@@ -47,7 +48,7 @@ LIMIT ? OFFSET ?`, encode(txnID), limit, offset)
 func decorateMinerFees(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
 	stmt, err := tx.Prepare(`SELECT fee
 FROM transaction_miner_fees
-WHERE transaction_id = ?
+WHERE transaction_id = $1
 ORDER BY transaction_order ASC`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
@@ -85,7 +86,7 @@ ORDER BY transaction_order ASC`)
 func decorateArbitraryData(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
 	stmt, err := tx.Prepare(`SELECT data
 FROM transaction_arbitrary_data
-WHERE transaction_id = ?
+WHERE transaction_id = $1
 ORDER BY transaction_order ASC`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
@@ -123,7 +124,7 @@ ORDER BY transaction_order ASC`)
 func decorateSignatures(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
 	stmt, err := tx.Prepare(`SELECT parent_id, public_key_index, timelock, covered_fields, signature
 FROM transaction_signatures
-WHERE transaction_id = ?
+WHERE transaction_id = $1
 ORDER BY transaction_order ASC`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
@@ -162,7 +163,7 @@ func decorateSiacoinOutputs(tx *txn, dbIDs []int64, txns []explorer.Transaction)
 	stmt, err := tx.Prepare(`SELECT sc.output_id, sc.leaf_index, sc.spent_index, sc.source, sc.maturity_height, sc.address, sc.value
 FROM siacoin_elements sc
 INNER JOIN transaction_siacoin_outputs ts ON ts.output_id = sc.id
-WHERE ts.transaction_id = ?
+WHERE ts.transaction_id = $1
 ORDER BY ts.transaction_order ASC`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
@@ -205,7 +206,7 @@ func decorateSiacoinInputs(tx *txn, dbIDs []int64, txns []explorer.Transaction) 
 	stmt, err := tx.Prepare(`SELECT sc.output_id, ts.unlock_conditions, sc.value
 FROM siacoin_elements sc
 INNER JOIN transaction_siacoin_inputs ts ON ts.parent_id = sc.id
-WHERE ts.transaction_id = ?
+WHERE ts.transaction_id = $1
 ORDER BY ts.transaction_order ASC`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
@@ -245,7 +246,7 @@ func decorateSiafundInputs(tx *txn, dbIDs []int64, txns []explorer.Transaction) 
 	stmt, err := tx.Prepare(`SELECT sf.output_id, ts.unlock_conditions, ts.claim_address, sf.value
 FROM siafund_elements sf
 INNER JOIN transaction_siafund_inputs ts ON ts.parent_id = sf.id
-WHERE ts.transaction_id = ?
+WHERE ts.transaction_id = $1
 ORDER BY ts.transaction_order ASC`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
@@ -285,7 +286,7 @@ func decorateSiafundOutputs(tx *txn, dbIDs []int64, txns []explorer.Transaction)
 	stmt, err := tx.Prepare(`SELECT sf.output_id, sf.leaf_index, sf.spent_index, sf.claim_start, sf.address, sf.value
 FROM siafund_elements sf
 INNER JOIN transaction_siafund_outputs ts ON ts.output_id = sf.id
-WHERE ts.transaction_id = ?
+WHERE ts.transaction_id = $1
 ORDER BY ts.transaction_order ASC`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
@@ -327,7 +328,7 @@ ORDER BY ts.transaction_order ASC`)
 func fileContractOutputs(tx *txn, contractID int64) (valid []explorer.ContractSiacoinOutput, missed []explorer.ContractSiacoinOutput, err error) {
 	validRows, err := tx.Query(`SELECT id, address, value
 	FROM file_contract_valid_proof_outputs
-	WHERE contract_id = ?
+	WHERE contract_id = $1
 	ORDER BY contract_order ASC`, contractID)
 	if err != nil {
 		return nil, nil, err
@@ -347,7 +348,7 @@ func fileContractOutputs(tx *txn, contractID int64) (valid []explorer.ContractSi
 
 	missedRows, err := tx.Query(`SELECT id, address, value
 FROM file_contract_missed_proof_outputs
-WHERE contract_id = ?
+WHERE contract_id = $1
 ORDER BY contract_order ASC`, contractID)
 	if err != nil {
 		return nil, nil, err
@@ -374,7 +375,7 @@ func decorateFileContracts(tx *txn, dbIDs []int64, txns []explorer.Transaction) 
 FROM file_contract_elements fc
 INNER JOIN transaction_file_contracts ts ON ts.contract_id = fc.id
 INNER JOIN last_contract_revision rev ON rev.contract_id = fc.contract_id
-WHERE ts.transaction_id = ?
+WHERE ts.transaction_id = $1
 ORDER BY ts.transaction_order ASC`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
@@ -382,6 +383,7 @@ ORDER BY ts.transaction_order ASC`)
 	defer stmt.Close()
 
 	for i, dbID := range dbIDs {
+		var contractIDs []int64
 		err := func() error {
 			rows, err := stmt.Query(dbID)
 			if err != nil {
@@ -390,19 +392,26 @@ ORDER BY ts.transaction_order ASC`)
 			defer rows.Close()
 
 			for rows.Next() {
-				fc, err := scanFileContract(tx, rows)
+				fc, cid, err := scanFileContractRow(rows)
 				if err != nil {
 					return fmt.Errorf("failed to scan file contract: %w", err)
 				}
+				contractIDs = append(contractIDs, cid)
 				txns[i].FileContracts = append(txns[i].FileContracts, fc)
 			}
-			if err := rows.Err(); err != nil {
-				return fmt.Errorf("failed to retrieve file contract rows: %w", err)
-			}
-			return nil
+			return rows.Err()
 		}()
 		if err != nil {
 			return err
+		}
+		offset := len(txns[i].FileContracts) - len(contractIDs)
+		for j, cid := range contractIDs {
+			valid, missed, err := fileContractOutputs(tx, cid)
+			if err != nil {
+				return fmt.Errorf("failed to get file contract outputs: %w", err)
+			}
+			txns[i].FileContracts[offset+j].ValidProofOutputs = valid
+			txns[i].FileContracts[offset+j].MissedProofOutputs = missed
 		}
 	}
 	return nil
@@ -414,7 +423,7 @@ func decorateFileContractRevisions(tx *txn, dbIDs []int64, txns []explorer.Trans
 FROM file_contract_elements fc
 INNER JOIN transaction_file_contract_revisions ts ON ts.contract_id = fc.id
 INNER JOIN last_contract_revision rev ON rev.contract_id = fc.contract_id
-WHERE ts.transaction_id = ?
+WHERE ts.transaction_id = $1
 ORDER BY ts.transaction_order ASC`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
@@ -422,6 +431,8 @@ ORDER BY ts.transaction_order ASC`)
 	defer stmt.Close()
 
 	for i, dbID := range dbIDs {
+		var contractIDs []int64
+		var revs []explorer.FileContractRevision
 		err := func() error {
 			rows, err := stmt.Query(dbID)
 			if err != nil {
@@ -438,28 +449,29 @@ ORDER BY ts.transaction_order ASC`)
 				if err := rows.Scan(&contractID, decode(&fc.ConfirmationIndex.Height), decode(&fc.ConfirmationIndex.ID), decode(&fc.ConfirmationTransactionID), decodeNull(&proofIndex.Height), decodeNull(&proofIndex.ID), decodeNull(&proofTransactionID), decode(&fc.ParentID), decode(&fc.UnlockConditions), decode(&fc.ID), &fc.Resolved, &fc.Valid, decode(&fc.TransactionID), decode(&fc.ExtendedFileContract.Filesize), decode(&fc.ExtendedFileContract.FileMerkleRoot), decode(&fc.ExtendedFileContract.WindowStart), decode(&fc.ExtendedFileContract.WindowEnd), decode(&fc.ExtendedFileContract.Payout), decode(&fc.ExtendedFileContract.UnlockHash), decode(&fc.ExtendedFileContract.RevisionNumber)); err != nil {
 					return fmt.Errorf("failed to scan file contract: %w", err)
 				}
-				fc.ValidProofOutputs, fc.MissedProofOutputs, err = fileContractOutputs(tx, contractID)
-				if err != nil {
-					return fmt.Errorf("failed to get contract proof outputs: %w", err)
-				}
-
 				if proofIndex != (types.ChainIndex{}) {
 					fc.ProofIndex = &proofIndex
 				}
 				if proofTransactionID != (types.TransactionID{}) {
 					fc.ProofTransactionID = &proofTransactionID
 				}
-
-				txns[i].FileContractRevisions = append(txns[i].FileContractRevisions, fc)
+				contractIDs = append(contractIDs, contractID)
+				revs = append(revs, fc)
 			}
-			if err := rows.Err(); err != nil {
-				return fmt.Errorf("failed to retrieve file contract revision rows: %w", err)
-			}
-			return nil
+			return rows.Err()
 		}()
 		if err != nil {
 			return err
 		}
+		for j, cid := range contractIDs {
+			valid, missed, err := fileContractOutputs(tx, cid)
+			if err != nil {
+				return fmt.Errorf("failed to get contract proof outputs: %w", err)
+			}
+			revs[j].ValidProofOutputs = valid
+			revs[j].MissedProofOutputs = missed
+		}
+		txns[i].FileContractRevisions = append(txns[i].FileContractRevisions, revs...)
 	}
 	return nil
 }
@@ -468,7 +480,7 @@ ORDER BY ts.transaction_order ASC`)
 func decorateStorageProofs(tx *txn, dbIDs []int64, txns []explorer.Transaction) error {
 	stmt, err := tx.Prepare(`SELECT parent_id, leaf, proof
 FROM transaction_storage_proofs
-WHERE transaction_id = ?
+WHERE transaction_id = $1
 ORDER BY transaction_order ASC`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
@@ -515,7 +527,7 @@ func blockTransactionIDs(tx *txn, blockID types.BlockID) (txnIDs []types.Transac
 	rows, err := tx.Query(`SELECT t.transaction_id
 FROM block_transactions bt
 INNER JOIN transactions t ON t.id = bt.transaction_id
-WHERE block_id = ? ORDER BY block_order ASC`, encode(blockID))
+WHERE block_id = $1 ORDER BY block_order ASC`, encode(blockID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query block transaction IDs: %w", err)
 	}
@@ -540,7 +552,7 @@ func blockMinerPayouts(tx *txn, blockID types.BlockID) ([]explorer.SiacoinOutput
 	query := `SELECT sc.output_id, sc.leaf_index, sc.spent_index, sc.source, sc.maturity_height, sc.address, sc.value
 FROM siacoin_elements sc
 INNER JOIN miner_payouts mp ON mp.output_id = sc.id
-WHERE mp.block_id = ?
+WHERE mp.block_id = $1
 ORDER BY mp.block_order ASC`
 	rows, err := tx.Query(query, encode(blockID))
 	if err != nil {
@@ -568,7 +580,7 @@ ORDER BY mp.block_order ASC`
 
 // transactionDatabaseIDs returns the database ID for each transaction.
 func transactionDatabaseIDs(tx *txn, txnIDs []types.TransactionID) (dbIDs []int64, txns []explorer.Transaction, err error) {
-	stmt, err := tx.Prepare(`SELECT id FROM transactions WHERE transaction_id = ?`)
+	stmt, err := tx.Prepare(`SELECT id FROM transactions WHERE transaction_id = $1`)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -576,7 +588,7 @@ func transactionDatabaseIDs(tx *txn, txnIDs []types.TransactionID) (dbIDs []int6
 
 	for _, txnID := range txnIDs {
 		var dbID int64
-		if err := stmt.QueryRow(encode(txnID)).Scan(&dbID); errors.Is(err, sql.ErrNoRows) {
+		if err := stmt.QueryRow(encode(txnID)).Scan(&dbID); errors.Is(err, pgx.ErrNoRows) {
 			continue
 		} else if err != nil {
 			return nil, nil, fmt.Errorf("failed to get transaction database ID: %w", err)
