@@ -23,3 +23,5 @@ jobs:
       macos-build-args: -tags=timetzdata -trimpath -a -ldflags '-s -w'
       cgo-enabled: 1
       project: explored
+      project-desc: "explored: An explorer for Sia"
+      version-tag: ${{ github.ref_name }}
