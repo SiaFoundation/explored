@@ -4,8 +4,8 @@ go 1.26.0
 
 require (
 	github.com/google/go-cmp v0.7.0
-	github.com/jackc/pgx/v5 v5.9.2
-	github.com/mattn/go-sqlite3 v1.14.45
+	github.com/jackc/pgx/v5 v5.10.0
+	github.com/mattn/go-sqlite3 v1.14.47
 	github.com/oschwald/geoip2-golang v1.13.0
 	go.sia.tech/core v0.21.1
 	go.sia.tech/coreutils v0.22.0
