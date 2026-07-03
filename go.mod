@@ -8,7 +8,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.47
 	github.com/oschwald/geoip2-golang v1.13.0
 	go.sia.tech/core v0.21.3-0.20260703153603-327be4a8d318
-	go.sia.tech/coreutils v0.22.2-0.20260703160732-3f486fb04201
+	go.sia.tech/coreutils v0.22.2-0.20260703161806-1cbfb0499be6
 	go.sia.tech/jape v0.14.1
 	go.uber.org/goleak v1.3.0
 	go.uber.org/zap v1.28.0
