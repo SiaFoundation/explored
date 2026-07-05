@@ -1,3 +1,17 @@
+## 0.4.2 (2026-07-05)
+
+### Features
+
+- Add basic postgres
+
+### Fixes
+
+- Update coreutils to v0.23.2 and core to v0.21.4
+
+#### Cap exponential scan backoff
+
+Cap the exponential backoff for failed host scans at 3 days. Previously the backoff was unbounded, which meant a host with a high failure streak could overflow `time.Duration` and be permanently excluded from scanning.
+
 ## 0.2.0 (2026-05-15)
 
 ### Breaking Changes
