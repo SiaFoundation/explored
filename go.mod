@@ -7,8 +7,8 @@ require (
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/mattn/go-sqlite3 v1.14.47
 	github.com/oschwald/geoip2-golang v1.13.0
-	go.sia.tech/core v0.21.4
-	go.sia.tech/coreutils v0.23.3
+	go.sia.tech/core v0.21.5
+	go.sia.tech/coreutils v0.23.4
 	go.sia.tech/jape v0.14.1
 	go.uber.org/goleak v1.3.0
 	go.uber.org/zap v1.28.0
@@ -27,7 +27,7 @@ require (
 	github.com/oschwald/maxminddb-golang v1.13.0 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.60.0 // indirect
-	github.com/quic-go/webtransport-go v0.11.0 // indirect
+	github.com/quic-go/webtransport-go v0.11.1 // indirect
 	go.etcd.io/bbolt v1.5.0 // indirect
 	go.sia.tech/mux v1.5.2 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
