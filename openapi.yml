@@ -2,14 +2,11 @@ openapi: "3.0.0"
 info:
   title: explored API
   description: >
-    The explored HTTP API surfaces explorer data, txpool access, and host metrics for the Sia
-    network. It is designed for block explorers and monitoring tools that need rich blockchain
-    context and insights into host behavior.
-  version: 1.0.0
+    The explored HTTP API surfaces explorer data, txpool access, and host metrics for the Sia network. It is designed for block explorers and monitoring tools that need rich blockchain context and insights into host behavior.
 
+  version: 0.4.4
 servers:
   - url: http://localhost:9980/api
-
 tags:
   - name: misc
     description: Health checks and daemon metadata.
@@ -39,7 +36,6 @@ tags:
     description: ID and address search helpers.
   - name: exchange
     description: Exchange rate lookups.
-
 paths:
   /health:
     get:
@@ -56,7 +52,6 @@ paths:
               schema:
                 type: object
                 nullable: true
-
   /state:
     get:
       tags:
@@ -71,7 +66,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StateResponse"
-
   /syncer/peers:
     get:
       tags:
@@ -88,7 +82,6 @@ paths:
                 type: array
                 items:
                   type: string
-
   /syncer/connect:
     post:
       tags:
@@ -115,7 +108,6 @@ paths:
                 nullable: true
         "401":
           description: Authentication failed.
-
   /syncer/broadcast/block:
     post:
       tags:
@@ -134,7 +126,6 @@ paths:
           description: Block accepted and broadcast.
         "400":
           description: Submitted block was invalid.
-
   /txpool/transactions:
     get:
       tags:
@@ -148,7 +139,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TxpoolTransactionsResponse"
-
   /txpool/fee:
     get:
       tags:
@@ -162,7 +152,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Currency"
-
   /txpool/broadcast:
     post:
       tags:
@@ -181,7 +170,6 @@ paths:
           description: Transactions accepted (no response body).
         "400":
           description: Invalid transaction set.
-
   /consensus/network:
     get:
       tags:
@@ -195,7 +183,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ConsensusNetwork"
-
   /consensus/state:
     get:
       tags:
@@ -209,7 +196,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ConsensusState"
-
   /consensus/tip:
     get:
       tags:
@@ -223,7 +209,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ChainIndex"
-
   /consensus/tip/{height}:
     get:
       tags:
@@ -247,7 +232,6 @@ paths:
                 $ref: "#/components/schemas/ChainIndex"
         "404":
           description: No block found at the requested height.
-
   /explorer/tip:
     get:
       tags:
@@ -261,7 +245,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ChainIndex"
-
   /blocks/{id}:
     get:
       tags:
@@ -279,7 +262,6 @@ paths:
                 $ref: "#/components/schemas/ExplorerBlock"
         "404":
           description: Block not found.
-
   /transactions/{id}:
     get:
       tags:
@@ -297,7 +279,6 @@ paths:
                 $ref: "#/components/schemas/ExplorerTransaction"
         "404":
           description: Transaction not found.
-
   /transactions:
     post:
       tags:
@@ -324,7 +305,6 @@ paths:
                   $ref: "#/components/schemas/ExplorerTransaction"
         "400":
           description: Too many IDs provided.
-
   /transactions/{id}/indices:
     get:
       tags:
@@ -344,7 +324,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ChainIndex"
-
   /v2/transactions/{id}:
     get:
       tags:
@@ -362,7 +341,6 @@ paths:
                 $ref: "#/components/schemas/ExplorerV2Transaction"
         "404":
           description: Transaction not found.
-
   /v2/transactions:
     post:
       tags:
@@ -389,7 +367,6 @@ paths:
                   $ref: "#/components/schemas/ExplorerV2Transaction"
         "400":
           description: Too many IDs provided.
-
   /v2/transactions/{id}/indices:
     get:
       tags:
@@ -409,7 +386,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ChainIndex"
-
   /addresses/{address}/utxos/siacoin:
     get:
       tags:
@@ -429,7 +405,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ExplorerSiacoinOutput"
-
   /addresses/{address}/utxos/siafund:
     get:
       tags:
@@ -449,7 +424,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ExplorerSiafundOutput"
-
   /addresses/{address}/events:
     get:
       tags:
@@ -469,7 +443,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ExplorerEvent"
-
   /addresses/{address}/events/unconfirmed:
     get:
       tags:
@@ -487,7 +460,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ExplorerEvent"
-
   /addresses/{address}/checkpoint:
     get:
       tags:
@@ -503,7 +475,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ChainIndex"
-
   /addresses/{address}/balance:
     get:
       tags:
@@ -519,7 +490,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AddressBalanceResponse"
-
   /events/{id}:
     get:
       tags:
@@ -537,7 +507,6 @@ paths:
                 $ref: "#/components/schemas/ExplorerEvent"
         "404":
           description: Event not found.
-
   /outputs/siacoin/{id}:
     get:
       tags:
@@ -555,7 +524,6 @@ paths:
                 $ref: "#/components/schemas/ExplorerSiacoinOutput"
         "404":
           description: Output not found.
-
   /outputs/siafund/{id}:
     get:
       tags:
@@ -573,7 +541,6 @@ paths:
                 $ref: "#/components/schemas/ExplorerSiafundOutput"
         "404":
           description: Output not found.
-
   /contracts/{id}:
     get:
       tags:
@@ -591,7 +558,6 @@ paths:
                 $ref: "#/components/schemas/ExplorerExtendedContract"
         "404":
           description: Contract not found.
-
   /contracts/{id}/revisions:
     get:
       tags:
@@ -611,7 +577,6 @@ paths:
                   $ref: "#/components/schemas/ExplorerExtendedContract"
         "404":
           description: Contract not found.
-
   /contracts:
     post:
       tags:
@@ -638,7 +603,6 @@ paths:
                   $ref: "#/components/schemas/ExplorerExtendedContract"
         "400":
           description: Too many IDs provided.
-
   /v2/contracts/{id}:
     get:
       tags:
@@ -656,7 +620,6 @@ paths:
                 $ref: "#/components/schemas/ExplorerV2Contract"
         "404":
           description: Contract not found.
-
   /v2/contracts/{id}/revisions:
     get:
       tags:
@@ -676,7 +639,6 @@ paths:
                   $ref: "#/components/schemas/ExplorerV2Contract"
         "404":
           description: Contract not found.
-
   /v2/contracts:
     post:
       tags:
@@ -703,7 +665,6 @@ paths:
                   $ref: "#/components/schemas/ExplorerV2Contract"
         "400":
           description: Too many IDs provided.
-
   /v2/pubkey/{key}/contracts:
     get:
       tags:
@@ -725,7 +686,6 @@ paths:
                   $ref: "#/components/schemas/ExplorerV2Contract"
         "404":
           description: No contracts found.
-
   /pubkey/{key}/contracts:
     get:
       tags:
@@ -747,7 +707,6 @@ paths:
                   $ref: "#/components/schemas/ExplorerExtendedContract"
         "404":
           description: No contracts found.
-
   /hosts/{key}:
     get:
       tags:
@@ -765,7 +724,6 @@ paths:
                 $ref: "#/components/schemas/ExplorerHost"
         "404":
           description: Host not found.
-
   /hosts/{key}/scan:
     post:
       tags:
@@ -787,7 +745,6 @@ paths:
           description: Authentication failed.
         "404":
           description: Host not found.
-
   /hosts:
     post:
       tags:
@@ -838,7 +795,6 @@ paths:
                   $ref: "#/components/schemas/ExplorerHost"
         "400":
           description: Invalid sorting column or parameters.
-
   /metrics/block:
     get:
       tags:
@@ -852,7 +808,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BlockMetrics"
-
   /metrics/block/{id}:
     get:
       tags:
@@ -868,7 +823,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BlockMetrics"
-
   /metrics/host:
     get:
       tags:
@@ -882,7 +836,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HostMetrics"
-
   /metrics/blocktime:
     get:
       tags:
@@ -896,7 +849,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BlockTimeMetrics"
-
   /metrics/difficulty:
     get:
       tags:
@@ -925,7 +877,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DifficultyMetrics"
-
   /search/{id}:
     get:
       tags:
@@ -950,7 +901,6 @@ paths:
           description: Unable to parse search string.
         "404":
           description: No results found.
-
   /exchange-rate/siacoin/{currency}:
     get:
       tags:
@@ -975,76 +925,62 @@ paths:
                 format: double
         "404":
           description: Unsupported currency.
-
 components:
   securitySchemes:
     basicAuth:
       type: http
       scheme: basic
-
   schemas:
     Hash256:
       type: string
       pattern: ^[0-9a-fA-F]{64}$
       description: A 256-bit blake2b hash.
-
     BlockHeight:
       type: integer
       format: uint64
       description: The height of a block.
       example: 92813
-
     BlockID:
       allOf:
         - $ref: "#/components/schemas/Hash256"
         - description: A unique identifier for a block.
-
     Currency:
       type: string
       pattern: "^\\d+$"
       maxLength: 39
       description: Amount of Hastings (1 Siacoin = 10^24 Hastings).
-
     Address:
       allOf:
         - $ref: "#/components/schemas/Hash256"
         - description: Hash of a set of unlock conditions.
-
     TransactionID:
       allOf:
         - $ref: "#/components/schemas/Hash256"
         - description: Unique identifier for a transaction.
-
     FileContractID:
       type: string
       pattern: "^fcid:[0-9a-fA-F]{64}$"
       description: Unique identifier for a file contract.
-
     PublicKey:
       type: string
       pattern: "^ed25519:[0-9a-fA-F]{64}$"
       description: Ed25519 public key.
-
     Signature:
       type: string
       pattern: "^[0-9a-fA-F]{128}$"
       description: Hex-encoded Ed25519 signature.
-
     SiacoinOutputID:
       allOf:
         - $ref: "#/components/schemas/Hash256"
         - description: Identifier for a siacoin output.
-
     SiafundOutputID:
       allOf:
         - $ref: "#/components/schemas/Hash256"
         - description: Identifier for a siafund output.
-
     Work:
       type: string
       description: Cumulative work value represented as a base-10 big integer string.
       example: "115792089237316195423570985008687907853269984665640564039457584007913129639935"
-
     ElementAccumulator:
       type: object
       description: Merkle accumulator state used for UTXO proofs.
@@ -1058,7 +994,6 @@ components:
           items:
             $ref: "#/components/schemas/Hash256"
       required: [numLeaves, trees]
-
     V2BlockData:
       type: object
       description: Additional data present when a block includes v2 transactions.
@@ -1073,12 +1008,10 @@ components:
           items:
             $ref: "#/components/schemas/V2Transaction"
       required: [height, commitment, transactions]
-
     UnlockKey:
       type: string
       description: Unlock key encoded as `<algorithm>:<hex public key>`.
       example: ed25519:29d666f502bd8e3f83ae599434662d9ef7eed1c61fbfd83bcdca15330434353a
-
     UnlockConditions:
       type: object
       properties:
@@ -1093,7 +1026,6 @@ components:
           type: integer
           format: uint64
       required: [timelock, publicKeys, signaturesRequired]
-
     SpendPolicy:
       type: object
       description: Polymorphic spend policy describing conditions required to spend a UTXO.
@@ -1106,7 +1038,6 @@ components:
           description: Policy-specific payload; structure depends on the `type`.
           nullable: true
       required: [type]
-
     ChainIndex:
       type: object
       properties:
@@ -1119,7 +1050,6 @@ components:
             - $ref: "#/components/schemas/BlockID"
             - description: Block ID.
       required: [height, id]
-
     ConsensusNetwork:
       type: object
       description: Parameters that define network-wide consensus constants.
@@ -1215,23 +1145,7 @@ components:
               type: integer
               format: uint64
           required: [allowHeight, requireHeight, finalCutHeight]
-      required:
-        [
-          name,
-          initialCoinbase,
-          minimumCoinbase,
-          initialTarget,
-          blockInterval,
-          maturityDelay,
-          hardforkDevAddr,
-          hardforkTax,
-          hardforkStorageProof,
-          hardforkOak,
-          hardforkASIC,
-          hardforkFoundation,
-          hardforkV2,
-        ]
-
+      required: [name, initialCoinbase, minimumCoinbase, initialTarget, blockInterval, maturityDelay, hardforkDevAddr, hardforkTax, hardforkStorageProof, hardforkOak, hardforkASIC, hardforkFoundation, hardforkV2]
     ConsensusState:
       type: object
       description: Snapshot of consensus-related state for the current tip.
@@ -1268,24 +1182,7 @@ components:
         attestations:
           type: integer
           format: uint64
-      required:
-        [
-          index,
-          prevTimestamps,
-          depth,
-          childTarget,
-          siafundTaxRevenue,
-          oakTime,
-          oakTarget,
-          foundationSubsidyAddress,
-          foundationManagementAddress,
-          totalWork,
-          difficulty,
-          oakWork,
-          elements,
-          attestations,
-        ]
-
+      required: [index, prevTimestamps, depth, childTarget, siafundTaxRevenue, oakTime, oakTarget, foundationSubsidyAddress, foundationManagementAddress, totalWork, difficulty, oakWork, elements, attestations]
     Block:
       type: object
       description: Block including v1 and optional v2 payloads.
@@ -1309,7 +1206,6 @@ components:
         v2:
           $ref: "#/components/schemas/V2BlockData"
       required: [parentID, nonce, timestamp, minerPayouts, transactions]
-
     ExplorerBlock:
       type: object
       properties:
@@ -1340,7 +1236,6 @@ components:
             - $ref: "#/components/schemas/ExplorerV2BlockData"
             - nullable: true
       required: [height, parentID, nonce, timestamp, leafIndex, minerPayouts, transactions]
-
     ExplorerV2BlockData:
       type: object
       properties:
@@ -1354,7 +1249,6 @@ components:
           items:
             $ref: "#/components/schemas/ExplorerV2Transaction"
       required: [height, commitment, transactions]
-
     ExplorerTransaction:
       type: object
       properties:
@@ -1408,7 +1302,6 @@ components:
           items:
             $ref: "#/components/schemas/ExplorerHostAnnouncement"
       required: [id]
-
     ExplorerV2Transaction:
       type: object
       properties:
@@ -1462,7 +1355,6 @@ components:
           items:
             $ref: "#/components/schemas/ExplorerV2HostAnnouncement"
       required: [id, minerFee]
-
     ExplorerSiacoinOutput:
       allOf:
         - $ref: "#/components/schemas/SiacoinElement"
@@ -1476,7 +1368,6 @@ components:
                 - $ref: "#/components/schemas/ChainIndex"
                 - nullable: true
           required: [source]
-
     ExplorerSiafundOutput:
       allOf:
         - $ref: "#/components/schemas/SiafundElement"
@@ -1486,7 +1377,6 @@ components:
               allOf:
                 - $ref: "#/components/schemas/ChainIndex"
                 - nullable: true
-
     ExplorerEvent:
       type: object
       properties:
@@ -1513,7 +1403,6 @@ components:
           items:
             $ref: "#/components/schemas/Address"
       required: [id, index, confirmations, type, data, maturityHeight, timestamp]
-
     ExplorerExtendedContract:
       type: object
       properties:
@@ -1563,25 +1452,7 @@ components:
         revisionNumber:
           type: integer
           format: uint64
-      required:
-        [
-          resolved,
-          valid,
-          transactionID,
-          confirmationIndex,
-          confirmationTransactionID,
-          id,
-          filesize,
-          fileMerkleRoot,
-          windowStart,
-          windowEnd,
-          payout,
-          validProofOutputs,
-          missedProofOutputs,
-          unlockHash,
-          revisionNumber,
-        ]
-
+      required: [resolved, valid, transactionID, confirmationIndex, confirmationTransactionID, id, filesize, fileMerkleRoot, windowStart, windowEnd, payout, validProofOutputs, missedProofOutputs, unlockHash, revisionNumber]
     ExplorerFileContractRevision:
       allOf:
         - $ref: "#/components/schemas/ExplorerExtendedContract"
@@ -1592,7 +1463,6 @@ components:
             unlockConditions:
               $ref: "#/components/schemas/UnlockConditions"
           required: [parentID, unlockConditions]
-
     ExplorerV2Contract:
       allOf:
         - $ref: "#/components/schemas/V2FileContractElement"
@@ -1624,13 +1494,7 @@ components:
               allOf:
                 - $ref: "#/components/schemas/TransactionID"
                 - nullable: true
-          required:
-            [
-              transactionID,
-              confirmationIndex,
-              confirmationTransactionID,
-            ]
-
+          required: [transactionID, confirmationIndex, confirmationTransactionID]
     ExplorerV2FileContractRevision:
       type: object
       properties:
@@ -1639,7 +1503,6 @@ components:
         revision:
           $ref: "#/components/schemas/ExplorerV2Contract"
       required: [parent, revision]
-
     ExplorerHost:
       type: object
       properties:
@@ -1687,25 +1550,7 @@ components:
           type: object
         v2Settings:
           type: object
-      required:
-        [
-          publicKey,
-          v2,
-          netAddress,
-          location,
-          knownSince,
-          lastScan,
-          lastScanSuccessful,
-          lastAnnouncement,
-          nextScan,
-          totalScans,
-          successfulInteractions,
-          failedInteractions,
-          settings,
-          priceTable,
-          v2Settings,
-        ]
-
+      required: [publicKey, v2, netAddress, location, knownSince, lastScan, lastScanSuccessful, lastAnnouncement, nextScan, totalScans, successfulInteractions, failedInteractions, settings, priceTable, v2Settings]
     ExplorerHostScan:
       type: object
       properties:
@@ -1730,18 +1575,7 @@ components:
           type: object
         v2Settings:
           type: object
-      required:
-        [
-          publicKey,
-          location,
-          success,
-          timestamp,
-          nextScan,
-          settings,
-          priceTable,
-          v2Settings,
-        ]
-
+      required: [publicKey, location, success, timestamp, nextScan, settings, priceTable, v2Settings]
     ExplorerLocation:
       type: object
       properties:
@@ -1752,7 +1586,6 @@ components:
         longitude:
           type: number
       required: [countryCode, latitude, longitude]
-
     ExplorerNetAddress:
       type: object
       properties:
@@ -1761,7 +1594,6 @@ components:
         address:
           type: string
       required: [protocol, address]
-
     ExplorerHostAnnouncement:
       type: object
       properties:
@@ -1770,7 +1602,6 @@ components:
         netAddress:
           type: string
       required: [publicKey, netAddress]
-
     ExplorerV2HostAnnouncement:
       type: object
       properties:
@@ -1781,7 +1612,6 @@ components:
           items:
             $ref: "#/components/schemas/ExplorerNetAddress"
       required: [publicKey, V2HostAnnouncement]
-
     ExplorerSiacoinInput:
       type: object
       properties:
@@ -1794,7 +1624,6 @@ components:
         unlockConditions:
           $ref: "#/components/schemas/UnlockConditions"
       required: [address, value, parentID, unlockConditions]
-
     ExplorerSiafundInput:
       type: object
       properties:
@@ -1810,7 +1639,6 @@ components:
         claimAddress:
           $ref: "#/components/schemas/Address"
       required: [address, value, parentID, unlockConditions, claimAddress]
-
     ExplorerContractSiacoinOutput:
       allOf:
         - $ref: "#/components/schemas/SiacoinOutput"
@@ -1819,11 +1647,9 @@ components:
             id:
               $ref: "#/components/schemas/SiacoinOutputID"
           required: [id]
-
     ExplorerV2Resolution:
       type: string
       enum: [invalid, renewal, storage_proof, expiration]
-
     BlockMetrics:
       type: object
       properties:
@@ -1855,21 +1681,7 @@ components:
           $ref: "#/components/schemas/Currency"
         contractRevenue:
           $ref: "#/components/schemas/Currency"
-      required:
-        [
-          index,
-          difficulty,
-          siafundTaxRevenue,
-          totalHosts,
-          numLeaves,
-          activeContracts,
-          failedContracts,
-          successfulContracts,
-          storageUtilization,
-          circulatingSupply,
-          contractRevenue,
-        ]
-
+      required: [index, difficulty, siafundTaxRevenue, totalHosts, numLeaves, activeContracts, failedContracts, successfulContracts, storageUtilization, circulatingSupply, contractRevenue]
     HostMetrics:
       type: object
       properties:
@@ -1888,9 +1700,7 @@ components:
           type: object
         v2Settings:
           type: object
-      required:
-        [activeHosts, totalStorage, remainingStorage, settings, priceTable, v2Settings]
-
+      required: [activeHosts, totalStorage, remainingStorage, settings, priceTable, v2Settings]
     BlockTimeMetrics:
       type: object
       properties:
@@ -1901,7 +1711,6 @@ components:
         month:
           type: string
       required: [day, week, month]
-
     DifficultyMetrics:
       type: object
       properties:
@@ -1921,7 +1730,6 @@ components:
           items:
             type: string
       required: [blocksPerStep, difficulties, blockTimes, drifts]
-
     TopSiacoin:
       type: object
       properties:
@@ -1930,7 +1738,6 @@ components:
         amount:
           $ref: "#/components/schemas/Currency"
       required: [address, amount]
-
     TopSiafund:
       type: object
       properties:
@@ -1940,7 +1747,6 @@ components:
           type: integer
           format: uint64
       required: [address, amount]
-
     SiacoinOutput:
       type: object
       properties:
@@ -1949,7 +1755,6 @@ components:
         address:
           $ref: "#/components/schemas/Address"
       required: [value, address]
-
     SiafundOutput:
       type: object
       properties:
@@ -1959,7 +1764,6 @@ components:
         address:
           $ref: "#/components/schemas/Address"
       required: [value, address]
-
     SiacoinOutputWithID:
       allOf:
         - $ref: "#/components/schemas/SiacoinOutput"
@@ -1968,7 +1772,6 @@ components:
             id:
               $ref: "#/components/schemas/SiacoinOutputID"
           required: [id]
-
     SiafundOutputWithID:
       allOf:
         - $ref: "#/components/schemas/SiafundOutput"
@@ -1977,7 +1780,6 @@ components:
             id:
               $ref: "#/components/schemas/SiafundOutputID"
           required: [id]
-
     CoveredFields:
       type: object
       properties:
@@ -2033,7 +1835,6 @@ components:
           items:
             type: integer
             format: uint64
-
     TransactionSignature:
       type: object
       properties:
@@ -2051,7 +1852,6 @@ components:
           type: string
           description: Hex-encoded signature.
       required: [parentID, publicKeyIndex, coveredFields, signature]
-
     SiacoinInput:
       type: object
       properties:
@@ -2062,7 +1862,6 @@ components:
         address:
           $ref: "#/components/schemas/Address"
       required: [parentID, unlockConditions, address]
-
     SiafundInput:
       type: object
       properties:
@@ -2075,7 +1874,6 @@ components:
         address:
           $ref: "#/components/schemas/Address"
       required: [parentID, unlockConditions, claimAddress, address]
-
     SatisfiedPolicy:
       type: object
       properties:
@@ -2091,7 +1889,6 @@ components:
             type: string
             pattern: "^[0-9a-fA-F]{64}$"
       required: [policy]
-
     Attestation:
       type: object
       properties:
@@ -2105,7 +1902,6 @@ components:
         signature:
           $ref: "#/components/schemas/Signature"
       required: [publicKey, key, value, signature]
-
     V2SiacoinInput:
       type: object
       properties:
@@ -2114,7 +1910,6 @@ components:
         satisfiedPolicy:
           $ref: "#/components/schemas/SatisfiedPolicy"
       required: [parent, satisfiedPolicy]
-
     V2SiafundInput:
       type: object
       properties:
@@ -2125,7 +1920,6 @@ components:
         satisfiedPolicy:
           $ref: "#/components/schemas/SatisfiedPolicy"
       required: [parent, claimAddress, satisfiedPolicy]
-
     FileContract:
       type: object
       properties:
@@ -2155,19 +1949,7 @@ components:
         revisionNumber:
           type: integer
           format: uint64
-      required:
-        [
-          filesize,
-          fileMerkleRoot,
-          windowStart,
-          windowEnd,
-          payout,
-          validProofOutputs,
-          missedProofOutputs,
-          unlockHash,
-          revisionNumber,
-        ]
-
+      required: [filesize, fileMerkleRoot, windowStart, windowEnd, payout, validProofOutputs, missedProofOutputs, unlockHash, revisionNumber]
     FileContractRevision:
       type: object
       properties:
@@ -2199,20 +1981,7 @@ components:
         revisionNumber:
           type: integer
           format: uint64
-      required:
-        [
-          parentID,
-          unlockConditions,
-          filesize,
-          fileMerkleRoot,
-          windowStart,
-          windowEnd,
-          validProofOutputs,
-          missedProofOutputs,
-          unlockHash,
-          revisionNumber,
-        ]
-
+      required: [parentID, unlockConditions, filesize, fileMerkleRoot, windowStart, windowEnd, validProofOutputs, missedProofOutputs, unlockHash, revisionNumber]
     StorageProof:
       type: object
       properties:
@@ -2226,7 +1995,6 @@ components:
           items:
             $ref: "#/components/schemas/Hash256"
       required: [parentID, leaf, proof]
-
     V2FileContract:
       type: object
       properties:
@@ -2263,24 +2031,7 @@ components:
           $ref: "#/components/schemas/Signature"
         hostSignature:
           $ref: "#/components/schemas/Signature"
-      required:
-        [
-          capacity,
-          filesize,
-          fileMerkleRoot,
-          proofHeight,
-          expirationHeight,
-          renterOutput,
-          hostOutput,
-          missedHostValue,
-          totalCollateral,
-          renterPublicKey,
-          hostPublicKey,
-          revisionNumber,
-          renterSignature,
-          hostSignature,
-        ]
-
+      required: [capacity, filesize, fileMerkleRoot, proofHeight, expirationHeight, renterOutput, hostOutput, missedHostValue, totalCollateral, renterPublicKey, hostPublicKey, revisionNumber, renterSignature, hostSignature]
     FileContractElement:
       type: object
       properties:
@@ -2291,7 +2042,6 @@ components:
         fileContract:
           $ref: "#/components/schemas/FileContract"
       required: [id, stateElement, fileContract]
-
     V2FileContractElement:
       type: object
       properties:
@@ -2302,7 +2052,6 @@ components:
         v2FileContract:
           $ref: "#/components/schemas/V2FileContract"
       required: [id, stateElement, v2FileContract]
-
     SiacoinElement:
       type: object
       properties:
@@ -2316,7 +2065,6 @@ components:
           type: integer
           format: uint64
       required: [id, stateElement, siacoinOutput, maturityHeight]
-
     SiafundElement:
       type: object
       properties:
@@ -2329,7 +2077,6 @@ components:
         claimStart:
           $ref: "#/components/schemas/Currency"
       required: [id, stateElement, siafundOutput, claimStart]
-
     StateElement:
       type: object
       properties:
@@ -2341,7 +2088,6 @@ components:
           items:
             $ref: "#/components/schemas/Hash256"
       required: [leafIndex]
-
     V2FileContractRevision:
       type: object
       properties:
@@ -2350,7 +2096,6 @@ components:
         revision:
           $ref: "#/components/schemas/V2FileContract"
       required: [parent, revision]
-
     V2FileContractRenewal:
       type: object
       properties:
@@ -2368,17 +2113,7 @@ components:
           $ref: "#/components/schemas/Signature"
         hostSignature:
           $ref: "#/components/schemas/Signature"
-      required:
-        [
-          finalRenterOutput,
-          finalHostOutput,
-          renterRollover,
-          hostRollover,
-          newContract,
-          renterSignature,
-          hostSignature,
-        ]
-
+      required: [finalRenterOutput, finalHostOutput, renterRollover, hostRollover, newContract, renterSignature, hostSignature]
     V2StorageProof:
       type: object
       properties:
@@ -2392,11 +2127,9 @@ components:
           items:
             $ref: "#/components/schemas/Hash256"
       required: [proofIndex, leaf, proof]
-
     V2FileContractExpiration:
       type: object
       description: Empty object used to signal a contract expiration event.
-
     V2FileContractResolution:
       type: object
       properties:
@@ -2410,7 +2143,6 @@ components:
             - $ref: "#/components/schemas/V2StorageProof"
             - $ref: "#/components/schemas/V2FileContractExpiration"
       required: [parent, type, resolution]
-
     StateResponse:
       type: object
       properties:
@@ -2427,7 +2159,6 @@ components:
           type: string
           format: date-time
       required: [version, commit, os, buildTime, startTime]
-
     Transaction:
       type: object
       properties:
@@ -2475,7 +2206,6 @@ components:
           items:
             $ref: "#/components/schemas/TransactionSignature"
       required: [id]
-
     V2Transaction:
       type: object
       properties:
@@ -2523,7 +2253,6 @@ components:
             - $ref: "#/components/schemas/Address"
             - nullable: true
       required: [id, minerFee]
-
     TxpoolBroadcastRequest:
       type: object
       properties:
@@ -2537,7 +2266,6 @@ components:
           description: V2 transactions to broadcast.
           items:
             $ref: "#/components/schemas/V2Transaction"
-
     TxpoolTransactionsResponse:
       type: object
       properties:
@@ -2550,7 +2278,6 @@ components:
           items:
             $ref: "#/components/schemas/V2Transaction"
       required: [transactions, v2transactions]
-
     AddressBalanceResponse:
       type: object
       properties:
@@ -2562,7 +2289,6 @@ components:
           type: integer
           format: uint64
       required: [unspentSiacoins, immatureSiacoins, unspentSiafunds]
-
     HostQuery:
       type: object
       properties:
@@ -2599,7 +2325,6 @@ components:
           type: boolean
         online:
           type: boolean
-
     SearchType:
       type: string
       description: Result classification returned by the search endpoint.
@@ -2614,7 +2339,6 @@ components:
         - contract
         - v2Contract
         - host
-
   parameters:
     OffsetParam:
       name: offset
@@ -2626,7 +2350,6 @@ components:
         format: uint64
         minimum: 0
         default: 0
-
     LimitParam:
       name: limit
       in: query
@@ -2638,7 +2361,6 @@ components:
         minimum: 1
         maximum: 500
         default: 100
-
     BlockIDParam:
       name: id
       in: path
@@ -2646,7 +2368,6 @@ components:
       description: Block ID to fetch.
       schema:
         $ref: "#/components/schemas/BlockID"
-
     TransactionIDParam:
       name: id
       in: path
@@ -2654,7 +2375,6 @@ components:
       description: Transaction ID to fetch.
       schema:
         $ref: "#/components/schemas/TransactionID"
-
     EventIDParam:
       name: id
       in: path
@@ -2662,7 +2382,6 @@ components:
       description: Event identifier.
       schema:
         $ref: "#/components/schemas/Hash256"
-
     AddressParam:
       name: address
       in: path
@@ -2670,7 +2389,6 @@ components:
       description: Address (unlock hash) to inspect.
       schema:
         $ref: "#/components/schemas/Address"
-
     FileContractIDParam:
       name: id
       in: path
@@ -2678,7 +2396,6 @@ components:
       description: File contract ID.
       schema:
         $ref: "#/components/schemas/FileContractID"
-
     PublicKeyParam:
       name: key
       in: path
@@ -2686,7 +2403,6 @@ components:
       description: Host public key.
       schema:
         $ref: "#/components/schemas/PublicKey"
-
     SiacoinOutputIDParam:
       name: id
       in: path
@@ -2694,7 +2410,6 @@ components:
       description: Siacoin output ID.
       schema:
         $ref: "#/components/schemas/SiacoinOutputID"
-
     SiafundOutputIDParam:
       name: id
       in: path
