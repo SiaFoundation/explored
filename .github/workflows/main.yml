@@ -10,7 +10,7 @@ env:
 
 jobs:
   test:
-    uses: SiaFoundation/workflows/.github/workflows/go-test.yml@dddded471aae1c7b6f0fbc388d603b8b16336f6f # master
+    uses: SiaFoundation/workflows/.github/workflows/go-test.yml@95130e8c532eb275d3e359b4c4ae97083ae96c8f # master
 
   postgres:
     name: Test (postgres)
@@ -43,6 +43,6 @@ jobs:
         with:
           go-version: "1.26"
       - name: Test
-        uses: n8maninger/action-golang-test@aa292dc81b16d34406a9551e629e0cdca00d9418 # v2.2.1
+        uses: n8maninger/action-golang-test@6d21a416337f76ddce0513e25949a5c456f02d38 # v2.3.0
         with:
           args: -race;-failfast;-tags=postgres,testing
