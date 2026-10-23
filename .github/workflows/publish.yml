@@ -64,20 +64,6 @@ jobs:
       cgo-enabled: 1
       project: explored
       ref: ${{ needs.tag.outputs.version }}
-  homebrew:
-    name: Dispatch Homebrew
-    if: needs.tag.outputs.version != '' && !contains(needs.tag.outputs.version, '-')
-    needs:
-      - tag
-      - build
-    permissions:
-      contents: read
-    uses: SiaFoundation/workflows/.github/workflows/homebrew-dispatch.yml@95130e8c532eb275d3e359b4c4ae97083ae96c8f # master
-    secrets: inherit
-    with:
-      project: explored
-      project-desc: "explored: An explorer for Sia"
-      version-tag: ${{ needs.tag.outputs.version }}
   release:
     name: Create GitHub Release
     if: needs.tag.outputs.version != ''
