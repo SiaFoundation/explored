@@ -4,7 +4,7 @@ info:
   description: >
     The explored HTTP API surfaces explorer data, txpool access, and host metrics for the Sia network. It is designed for block explorers and monitoring tools that need rich blockchain context and insights into host behavior.
 
-  version: 0.4.5
+  version: 0.4.6
 servers:
   - url: http://localhost:9980/api
 tags:
