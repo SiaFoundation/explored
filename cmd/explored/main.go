@@ -307,6 +307,7 @@ func runRootCmd(ctx context.Context, log *zap.Logger) error {
 			exchangerates.CurrencyCAD: exchangerates.CoinGeckoCurrencyCAD,
 			exchangerates.CurrencyAUD: exchangerates.CoinGeckoCurrencyAUD,
 			exchangerates.CurrencyGBP: exchangerates.CoinGeckoCurrencyGBP,
+			exchangerates.CurrencyCHF: exchangerates.CoinGeckoCurrencyCHF,
 			exchangerates.CurrencyJPY: exchangerates.CoinGeckoCurrencyJPY,
 			exchangerates.CurrencyCNY: exchangerates.CoinGeckoCurrencyCNY,
 			exchangerates.CurrencyETH: exchangerates.CoinGeckoCurrencyETH,

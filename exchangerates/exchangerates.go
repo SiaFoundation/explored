@@ -16,6 +16,8 @@ const (
 	CurrencyAUD = "AUD"
 	// CurrencyGBP represents British pounds.
 	CurrencyGBP = "GBP"
+	// CurrencyCHF represents Swiss francs.
+	CurrencyCHF = "CHF"
 	// CurrencyJPY represents Japanese yen.
 	CurrencyJPY = "JPY"
 	// CurrencyCNY represents Chinese yuan.

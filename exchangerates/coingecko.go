@@ -26,6 +26,8 @@ const (
 	CoinGeckoCurrencyAUD = "aud"
 	// CoinGeckoCurrencyGBP is the name of British pounds in CoinGecko.
 	CoinGeckoCurrencyGBP = "gbp"
+	// CoinGeckoCurrencyCHF is the name of Swiss francs in CoinGecko.
+	CoinGeckoCurrencyCHF = "chf"
 	// CoinGeckoCurrencyJPY is the name of Japanese yen in CoinGecko.
 	CoinGeckoCurrencyJPY = "jpy"
 	// CoinGeckoCurrencyCNY is the name of Chinese yuan in CoinGecko.
