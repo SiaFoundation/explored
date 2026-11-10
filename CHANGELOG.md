@@ -1,3 +1,11 @@
+## 0.4.7 (2026-11-10)
+
+### Features
+
+#### Add CHF exchange rate
+
+The `/exchange-rate/siacoin/chf` endpoint now returns the Siacoin price in Swiss francs. The rate is sourced from CoinGecko only, since Kraken does not list an SC/CHF pair.
+
 ## 0.4.6 (2026-10-30)
 
 ### Fixes
