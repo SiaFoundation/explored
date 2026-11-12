@@ -5,7 +5,7 @@ go 1.27.0
 require (
 	github.com/google/go-cmp v0.7.0
 	github.com/jackc/pgx/v5 v5.12.0
-	github.com/mattn/go-sqlite3 v1.14.52
+	github.com/mattn/go-sqlite3 v1.14.53
 	github.com/oschwald/geoip2-golang v1.13.0
 	go.sia.tech/core v0.21.8
 	go.sia.tech/coreutils v0.25.3
